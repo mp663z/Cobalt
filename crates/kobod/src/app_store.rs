@@ -193,7 +193,7 @@ pub fn refresh(root: &Path, channel: UpdateChannel) -> Result<Vec<AppInfo>, Devi
 
 /// Flags every quarantined application in a listing, so a shelf or store
 /// row can say so instead of offering a launch that will be refused.
-fn mark_quarantine(root: &Path, entries: &mut [AppInfo]) {
+pub fn mark_quarantine(root: &Path, entries: &mut [AppInfo]) {
     let health = crate::health::Health::new(root);
     for entry in entries {
         entry.quarantined = health.is_quarantined(&entry.id);
@@ -622,7 +622,9 @@ pub fn refresh_using_fault(
         return Err(DeviceError::Backend);
     }
     write_channel_catalog_cache(root, channel, &json, &signature)?;
-    catalog_info(root, &catalog, key)
+    let mut entries = catalog_info(root, &catalog, key)?;
+    mark_quarantine(root, &mut entries);
+    Ok(entries)
 }
 
 /// Fetches and atomically caches a signed catalog through an explicit

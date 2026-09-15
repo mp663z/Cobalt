@@ -51,8 +51,10 @@ impl Health {
         checked_name(application).map(|name| self.root.join("health").join(name))
     }
 
+    /// The saved state a recovery carries is the data directory the
+    /// launcher hands the application: `<root>/data/<name>`.
     fn state_dir(&self, application: &str) -> Result<PathBuf, String> {
-        checked_name(application).map(|name| self.root.join("state").join(name))
+        checked_name(application).map(|name| self.root.join("data").join(name))
     }
 
     /// The recorded consecutive crash count. An absent or unreadable ledger
@@ -326,7 +328,7 @@ mod tests {
     fn launch_without_state_sets_state_aside_without_losing_it() {
         let scratch = Scratch::new("aside");
         let health = Health::new(&scratch.0);
-        let state = scratch.0.join("state/todo");
+        let state = scratch.0.join("data/todo");
         fs::create_dir_all(&state).unwrap();
         fs::write(state.join("items"), "buy milk\n").unwrap();
         let outcome = health
@@ -335,7 +337,7 @@ mod tests {
         assert!(outcome.contains("set aside"), "{outcome}");
         assert!(!state.exists());
         assert_eq!(
-            fs::read_to_string(scratch.0.join("state/todo.held/items")).unwrap(),
+            fs::read_to_string(scratch.0.join("data/todo.held/items")).unwrap(),
             "buy milk\n"
         );
         // A second quarantine never overwrites the first aside copy.
@@ -345,7 +347,7 @@ mod tests {
             .recover("todo", Recovery::LaunchWithoutState, &scratch.0.join("exports"))
             .unwrap();
         assert_eq!(
-            fs::read_to_string(scratch.0.join("state/todo.held.2/items")).unwrap(),
+            fs::read_to_string(scratch.0.join("data/todo.held.2/items")).unwrap(),
             "buy eggs\n"
         );
     }
@@ -354,7 +356,7 @@ mod tests {
     fn export_copies_state_and_names_conflicts_deterministically() {
         let scratch = Scratch::new("export");
         let health = Health::new(&scratch.0);
-        let state = scratch.0.join("state/reader");
+        let state = scratch.0.join("data/reader");
         fs::create_dir_all(state.join("notes")).unwrap();
         fs::write(state.join("notes/one"), "first\n").unwrap();
         fs::write(state.join("position"), "42\n").unwrap();
@@ -375,7 +377,7 @@ mod tests {
     fn reset_removes_state_and_recovers_from_corrupt_contents() {
         let scratch = Scratch::new("reset");
         let health = Health::new(&scratch.0);
-        let state = scratch.0.join("state/reader");
+        let state = scratch.0.join("data/reader");
         fs::create_dir_all(&state).unwrap();
         // A torn write leaves whatever it leaves; reset owes no parse.
         fs::write(state.join("position"), [0xff, 0x00, 0x41]).unwrap();
