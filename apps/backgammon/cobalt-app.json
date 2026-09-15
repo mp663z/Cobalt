@@ -6,5 +6,33 @@
   "version": "0.1.6",
   "release_notes": "Dice come from the operating system rather than from a counter, the board says whose move it is and marks where a checker may go, and every roll is written down.",
   "glyph": "circle",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants a real board game on their Kobo, alone or with a friend.",
+  "job": "Play complete backgammon, solo against the device or pass-and-play, with every turn written down.",
+  "offline": "The whole game runs on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the record of recent turns",
+      "location": "the app's private storage on the reader",
+      "export": "plain text (.txt) from Match, Export record",
+      "on_remove": "deleted"
+    },
+    {
+      "kind": "the game in progress",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-played game continues",
+      "on_remove": "deleted"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "profiles": [
+    "clara-bw-391"
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "non_goals": [
+    "It does not play against a remote opponent over the network.",
+    "It does not keep statistics across matches."
+  ]
 }

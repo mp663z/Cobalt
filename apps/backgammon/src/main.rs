@@ -1,5 +1,6 @@
 //! Complete, touch-first backgammon rules for a portrait Kobo panel.
 use kobo_sdk::entropy::{Entropy, FixtureEntropy, SystemEntropy};
+use kobo_sdk::exports::{Export, Format as ExportFormat};
 use kobo_sdk::{
     action_id, ActionId, Context, KoboApp, PictureHandle, Screen, ScreenBuilder, StoreResult,
     TilePicture,
@@ -460,6 +461,10 @@ struct Game {
     played: Vec<String>,
     /// The moves of the turn in progress, which become one line of that record.
     turn_moves: Vec<String>,
+    /// A copy of the record being offered to the owner's computer. Never
+    /// saved: an offer is rebuilt from the record it copies.
+    export: Option<Export>,
+    export_started: bool,
     phase: Phase,
     history: Vec<Snapshot>,
     message: String,
@@ -486,6 +491,8 @@ impl Default for Game {
             dice_source: Dice::open(),
             played: Vec::new(),
             turn_moves: Vec::new(),
+            export: None,
+            export_started: false,
             phase: Phase::Playing,
             history: Vec::new(),
             message: "Tap Roll to begin.".into(),
@@ -607,6 +614,49 @@ impl Game {
         self.point_page = 0;
         self.history.clear();
         self.turn = self.turn.other();
+    }
+
+    /// The record of this match as plain text the owner can keep.
+    fn record_text(&self) -> String {
+        let mut text = format!(
+            "Backgammon turn record\nPlayers: {} · Plays to {} · Score: White {} · Black {}\n",
+            self.mode.label(),
+            self.match_to,
+            self.score[0],
+            self.score[1]
+        );
+        if let Some(provenance) = self.dice_source.provenance() {
+            // The dice source belongs in the copy for the same reason it is
+            // named on screen: a recorded game that hides a seed is a lie.
+            text.push_str(&provenance);
+            text.push('\n');
+        }
+        text.push('\n');
+        for line in &self.played {
+            text.push_str(line);
+            text.push('\n');
+        }
+        text
+    }
+
+    /// Stages the record for `kobo export`; nothing leaves until the owner
+    /// confirms on the offer screen.
+    fn offer_record(&mut self) {
+        if self.played.is_empty() {
+            self.message = "Nothing recorded yet.".into();
+            return;
+        }
+        match Export::new(
+            "Backgammon turn record",
+            ExportFormat::Text,
+            self.record_text().into_bytes(),
+        ) {
+            Ok(export) => {
+                self.export = Some(export);
+                self.export_started = false;
+            }
+            Err(error) => self.message = error,
+        }
     }
 
     /// Writes down what this side just did, in the notation a board uses.
@@ -897,6 +947,8 @@ impl Game {
             dice_source: Dice::open(),
             played: saved_history(fields[12]),
             turn_moves: Vec::new(),
+            export: None,
+            export_started: false,
             opening: saved_flag(fields[13])?,
             phase,
             history: Vec::new(),
@@ -1463,6 +1515,9 @@ fn board_pixels(game: &Game) -> Vec<u8> {
 }
 
 fn screen(game: &Game, picture: Option<TilePicture>) -> Screen {
+    if let Some(export) = &game.export {
+        return export.screen();
+    }
     if game.view == View::Match {
         return match_screen(game);
     }
@@ -1667,6 +1722,7 @@ fn match_screen(game: &Game) -> Screen {
         for line in game.played.iter().rev().take(6) {
             screen = screen.text(line.clone());
         }
+        screen = screen.grid(1, false, [("export-record", "Export record")]);
     }
     screen
         .grid(
@@ -1711,12 +1767,41 @@ impl KoboApp for Game {
         self.show(context);
     }
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
+        if self.export.is_some()
+            && (action == action_id("export-confirm") || action == action_id("export-retry"))
+        {
+            let export = self.export.as_mut().expect("export offer");
+            self.export_started |= export.begin(context);
+            self.show(context);
+            return;
+        }
         if let Some(persisted) = self.apply_action(action) {
             if persisted {
                 context.store().save(SAVE, self.encode());
             }
             self.show(context);
         }
+    }
+    fn on_save(&mut self, context: &mut Context, key: &str, result: StoreResult) {
+        if let Some(export) = &mut self.export {
+            if export.on_save(context, key, &result) {
+                self.show(context);
+                return;
+            }
+        }
+        self.on_store(context, result);
+    }
+    fn on_shelf(&mut self, context: &mut Context, name: &str, result: StoreResult) {
+        if let Some(export) = &mut self.export {
+            if export.on_shelf(context, name, &result) {
+                self.show(context);
+                return;
+            }
+        }
+        self.on_store(context, result);
+    }
+    fn can_suspend(&self) -> bool {
+        !self.export_started || self.export.as_ref().is_some_and(Export::is_ready)
     }
     fn on_store(&mut self, context: &mut Context, result: StoreResult) {
         if let StoreResult::Loaded { key, value } = result {
@@ -1805,6 +1890,10 @@ fn view_action(game: &mut Game, action: ActionId) -> Option<()> {
             // Nothing else on the rules screen does anything.
             Some(())
         }
+        View::Match if action == action_id("export-record") => {
+            game.offer_record();
+            Some(())
+        }
         View::Match if action == action_id("close-match") || action == ActionId::BACK => {
             game.view = View::Board;
             Some(())
@@ -1822,6 +1911,14 @@ fn view_action(game: &mut Game, action: ActionId) -> Option<()> {
 }
 
 fn game_action(game: &mut Game, action: ActionId) -> Option<()> {
+    if game.export.is_some() {
+        if action == ActionId::BACK {
+            // The staged copy stays on the shelf; the offer screen closes.
+            game.export = None;
+            game.export_started = false;
+        }
+        return Some(());
+    }
     if game.view == View::Help {
         return view_action(game, action).filter(|()| game.view != View::Help);
     }
@@ -2538,6 +2635,40 @@ mod tests {
         game_action(&mut game, action_id("undo"));
         assert_eq!(game.turn, Player::Black);
         assert_eq!(game.message, "No move to undo.");
+    }
+
+    #[test]
+    fn the_record_of_play_is_offered_as_plain_text() {
+        let mut game = Game::default();
+        game.played = vec!["White 8/5 6/5".into(), "Black 6/1 4/2".into()];
+        game.score = [2, 1];
+        let text = game.record_text();
+        assert!(text.starts_with("Backgammon turn record\n"));
+        assert!(text.contains("Score: White 2 · Black 1"));
+        assert!(text.ends_with("White 8/5 6/5\nBlack 6/1 4/2\n"));
+
+        game_action(&mut game, action_id("match"));
+        game_action(&mut game, action_id("export-record"));
+        let export = game.export.as_ref().expect("offer built from the record");
+        assert_eq!(export.offer().title, "Backgammon turn record");
+        assert!(!game.export_started);
+
+        // While the offer is up the board does not answer, and Back closes it.
+        game_action(&mut game, action_id("roll"));
+        assert!(game.dice.is_empty());
+        game_action(&mut game, ActionId::BACK);
+        assert!(game.export.is_none());
+        assert_eq!(game.view, View::Match);
+        assert_eq!(game.played.len(), 2, "closing the offer keeps the record");
+    }
+
+    #[test]
+    fn an_empty_record_is_not_exportable() {
+        let mut game = Game::default();
+        game_action(&mut game, action_id("match"));
+        game_action(&mut game, action_id("export-record"));
+        assert!(game.export.is_none());
+        assert_eq!(game.message, "Nothing recorded yet.");
     }
 
     #[test]

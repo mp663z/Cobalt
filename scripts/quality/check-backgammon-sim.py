@@ -155,6 +155,30 @@ def main():
                 assert record.group(0)[6:].strip() in words(reopened), words(reopened)
                 checks.append('the record of play survives a restart')
 
+                # The record leaves with the owner, as plain text, only after
+                # the owner confirms on the reader.
+                destination = private/'received'
+                receive = [str(cli), 'export', '--app', 'backgammon', '--sim',
+                           '--out', str(destination)]
+                drive('tap-id export-record', 'wait-idle')
+                offered = capture('09-export-offer')
+                assert 'Save a copy' in words(offered), words(offered)
+                before = subprocess.run(receive, env=env, cwd=ROOT,
+                                        capture_output=True, timeout=30)
+                assert before.returncode != 0 and not destination.exists(), \
+                    'the record was available before owner confirmation'
+                drive('tap-id export-confirm', 'wait-idle')
+                ready = capture('10-export-ready')
+                assert 'Ready for your computer' in words(ready), words(ready)
+                subprocess.run(receive, env=env, cwd=ROOT, stdout=log, stderr=log,
+                               check=True, timeout=30)
+                files = list(destination.iterdir())
+                assert len(files) == 1 and files[0].suffix == '.txt', files
+                text = files[0].read_text()
+                assert record.group(0)[6:].strip() in text, text
+                assert f'Fixture dice, seed {SEED}' in text, text
+                checks.append('the record exports as plain text, only after the owner confirms')
+
                 (output/'result.json').write_text(json.dumps({
                     'status': 'passed', 'scale': args.scale, 'seed': SEED,
                     'fixture': 'seeded-backgammon', 'checks': checks}, indent=2)+'\n')
