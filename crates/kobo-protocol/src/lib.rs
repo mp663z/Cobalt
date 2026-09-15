@@ -1861,6 +1861,13 @@ pub enum DeviceError {
     Backend = 6,
     /// Downloaded bytes did not match the digest they were promised under.
     Integrity = 7,
+    /// The package was staged but its launch canary - handshake and first
+    /// screen against this exact runtime - failed, so the install rolled
+    /// back and the previous version stayed in place.
+    ///
+    /// Wire-gated on [`STORE_PROVENANCE_VERSION`]: older sessions receive
+    /// [`DeviceError::Backend`] in its place.
+    Canary = 8,
 }
 
 impl DeviceError {
@@ -1882,6 +1889,7 @@ impl DeviceError {
             Self::InvalidInput => "the data received was not usable",
             Self::Backend => "the reader could not complete the request",
             Self::Integrity => "the download did not match its published digest",
+            Self::Canary => "the app could not start after install, so the previous version was kept",
         }
     }
 }
@@ -1904,6 +1912,7 @@ impl TryFrom<u8> for DeviceError {
             5 => Ok(Self::InvalidInput),
             6 => Ok(Self::Backend),
             7 => Ok(Self::Integrity),
+            8 => Ok(Self::Canary),
             _ => Err(ProtocolError::InvalidValue("device error")),
         }
     }
@@ -3528,6 +3537,12 @@ fn encode_device_result(
             }
         }
         DeviceResult::Failed(error) => {
+            // A session that predates the launch canary still fails the
+            // install, just without the stage in the reason.
+            let error = match error {
+                DeviceError::Canary if version < STORE_PROVENANCE_VERSION => &DeviceError::Backend,
+                other => other,
+            };
             output.extend_from_slice(&[8, *error as u8]);
         }
         DeviceResult::Audio {
@@ -3831,7 +3846,13 @@ fn decode_device_result(
                 networks,
             })
         }
-        8 => Ok(DeviceResult::Failed(DeviceError::try_from(reader.u8()?)?)),
+        8 => {
+            let error = DeviceError::try_from(reader.u8()?)?;
+            if error == DeviceError::Canary && version < STORE_PROVENANCE_VERSION {
+                return Err(ProtocolError::InvalidValue("device error"));
+            }
+            Ok(DeviceResult::Failed(error))
+        }
         9 => decode_audio_result(reader),
         12 => decode_apps_result(reader, version),
         13 => decode_dictionary_result(reader),
@@ -8454,6 +8475,42 @@ mod tests {
             decode(&downgraded).is_err(),
             "tag 53 means nothing to an older session"
         );
+    }
+
+    #[test]
+    fn the_canary_error_is_stage_preserving_only_for_sessions_that_speak_it() {
+        let modern = Frame {
+            version: STORE_PROVENANCE_VERSION,
+            request_id: 9,
+            message: Message::DeviceResult(DeviceResult::Failed(DeviceError::Canary)),
+        };
+        assert_eq!(
+            decode(&encode(&modern).expect("encode modern")).expect("decode modern"),
+            modern,
+            "a new session hears the launch-canary stage"
+        );
+
+        // An older session still fails the install, as a backend failure.
+        let legacy = Frame {
+            version: SERVER_ACCOUNT_VERSION,
+            request_id: 9,
+            message: Message::DeviceResult(DeviceResult::Failed(DeviceError::Canary)),
+        };
+        let legacy_bytes = encode(&legacy).expect("legacy encode maps the stage away");
+        assert_eq!(
+            decode(&legacy_bytes).expect("decode legacy"),
+            Frame {
+                version: SERVER_ACCOUNT_VERSION,
+                request_id: 9,
+                message: Message::DeviceResult(DeviceResult::Failed(DeviceError::Backend)),
+            },
+            "older sessions receive Backend in place of the canary stage"
+        );
+
+        // A forged canary tag means nothing to an older session.
+        let mut forged = encode(&modern).expect("encode modern");
+        forged[4] = SERVER_ACCOUNT_VERSION;
+        assert!(decode(&forged).is_err(), "forged canary tag refused");
     }
 
     fn defaulted_with(entries: Vec<AppInfo>) -> AppInfo {

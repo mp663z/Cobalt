@@ -1322,6 +1322,7 @@ fn failure_code(error: DeviceError) -> &'static str {
         DeviceError::InvalidInput => "invalid-input",
         DeviceError::Backend => "backend",
         DeviceError::Integrity => "integrity",
+        DeviceError::Canary => "launch-canary",
     }
 }
 
