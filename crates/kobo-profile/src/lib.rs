@@ -3,6 +3,7 @@
 use std::fmt;
 
 pub mod observation;
+pub mod ownership;
 pub mod provisional;
 
 /// Which panel-controller interface the device's framebuffer speaks.
@@ -300,6 +301,19 @@ pub const CLARA_BW_391: DeviceProfile = DeviceProfile {
     // replacement to complete association because a stale route can linger.
     reap_nickel_supplicant: true,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(
+            &["/usr/bin/wmt_launcher"],
+            ownership::Evidence::Measured,
+        ),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&["/usr/bin/wmt_launcher"], ownership::Evidence::Measured),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// The 2025 P365 hardware refresh of the Clara BW. Kobo lists N365 and P365
@@ -374,6 +388,16 @@ pub const CLARA_BW_395: DeviceProfile = DeviceProfile {
     // fix never ran on the refreshed hardware that needed it just as much.
     reap_nickel_supplicant: true,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// The Kobo Clara HD, added upstream without i.MX6 hardware to test on.
@@ -443,6 +467,16 @@ pub const CLARA_HD_376: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &[],
     reap_nickel_supplicant: false,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// Kobo Clara Colour, whose measured framebuffer geometry, HWTCON interface,
@@ -463,6 +497,17 @@ pub const CLARA_COLOUR_393: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &[],
     reap_nickel_supplicant: false,
     colour_panel: true,
+
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
     ..CLARA_BW_391
 };
 
@@ -524,6 +569,16 @@ pub const ELIPSA_2E_389: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &[],
     reap_nickel_supplicant: false,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// Kobo Libra 2, codename `io`, an i.MX6SLL Mark 7 device driven by
@@ -619,6 +674,19 @@ pub const LIBRA_2_388: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &["/bin/wpa_supplicant"],
     reap_nickel_supplicant: true,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(
+            &["/bin/wpa_supplicant"],
+            ownership::Evidence::Measured,
+        ),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&["/bin/wpa_supplicant"], ownership::Evidence::Measured),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// Kobo Libra Colour, a `MediaTek` HWTCON device like the Clara BW, and the
@@ -715,6 +783,16 @@ pub const LIBRA_COLOUR_390: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &[],
     reap_nickel_supplicant: false,
     colour_panel: true,
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 /// Kobo Libra Colour on firmware 4.46.23836. The doctor report and attended
@@ -726,6 +804,20 @@ pub const LIBRA_COLOUR_390_446: DeviceProfile = DeviceProfile {
     write_ready: true,
     leftover_radio_daemons: &["/bin/wpa_supplicant"],
     reap_nickel_supplicant: true,
+
+    ownership: &[
+        ownership::panel_via_reader_restart(
+            &["/bin/wpa_supplicant"],
+            ownership::Evidence::Measured,
+        ),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&["/bin/wpa_supplicant"], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
     ..LIBRA_COLOUR_390
 };
 
@@ -847,6 +939,16 @@ pub const LIBRA_H2O_384: DeviceProfile = DeviceProfile {
     leftover_radio_daemons: &[],
     reap_nickel_supplicant: false,
     colour_panel: false,
+    ownership: &[
+        ownership::panel_via_reader_restart(&[], ownership::Evidence::Measured),
+        ownership::touch_borrowed(ownership::Evidence::Measured),
+        ownership::wifi_reap(&[], ownership::Evidence::Unverified),
+        ownership::unverified(ownership::ResourceKind::Bluetooth),
+        ownership::unverified(ownership::ResourceKind::Audio),
+        ownership::unverified(ownership::ResourceKind::Usb),
+        ownership::unverified(ownership::ResourceKind::PowerWatchdog),
+        ownership::unverified(ownership::ResourceKind::Pty),
+    ],
 };
 
 pub const SUPPORTED_PROFILES: &[&DeviceProfile] = &[
@@ -1161,6 +1263,13 @@ pub struct DeviceProfile {
     /// leftover radio process to reap, while this flag is the measured
     /// two-supplicant collision on `wlan0`.
     pub reap_nickel_supplicant: bool,
+    /// The ownership contract for every hardware resource Cobalt touches on
+    /// this device: owner before entry, how it is taken, bounded hand-back
+    /// steps, and the observation that proves the stock software resumed.
+    /// Records are measured facts; an unmeasured resource says
+    /// [`ownership::Evidence::Unverified`] rather than inheriting a sibling's
+    /// evidence. See docs/quality/contracts/device-resource-ownership.md.
+    pub ownership: &'static [ownership::ResourceOwnership],
     /// Whether the panel has a colour filter array over its greyscale layer.
     ///
     /// A Kaleido panel reports exactly the same framebuffer as its greyscale

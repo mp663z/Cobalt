@@ -18,6 +18,7 @@ required-features = ["device-write"]
 
 [dependencies]
 kobo-hal = { path = "../kobo-hal", default-features = false }
+kobo-profile = { path = "../kobo-profile" }
 
 [lints]
 workspace = true

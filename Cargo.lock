@@ -1116,6 +1116,7 @@ name = "kobo-handoff"
 version = "0.3.15"
 dependencies = [
  "kobo-hal",
+ "kobo-profile",
 ]
 
 [[package]]
