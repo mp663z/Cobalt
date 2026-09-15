@@ -402,8 +402,7 @@ impl Store {
         if entry.quarantined {
             screen = screen.facts([(
                 "Status",
-                "Quarantined after repeated crashes. Opening is paused until you choose a recovery."
-                    .to_owned(),
+                "Quarantined after repeated crashes. Opening is paused.".to_owned(),
             )]);
         }
         screen = if entry.quarantined {
@@ -446,7 +445,7 @@ impl Store {
             .top_bar(format!("Recover {title}"))
             .owns_back(true)
             .text(
-                "This app crashed repeatedly and is paused. Pick how to continue; each choice asks once more before anything changes.",
+                "This app crashed repeatedly and is paused. Each choice asks first.",
             )
             .button(
                 recover_choice(id, AppRecovery::LaunchWithoutState),

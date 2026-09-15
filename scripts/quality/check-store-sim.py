@@ -103,13 +103,30 @@ def main():
                 drive('tap-id app-quality-fixture', 'tap-id install-quality-fixture',
                       'expect installed successfully', 'shot reinstalled')
                 assert installed() == '1.1.0'
+                # Quarantine journey: five recorded crashes flag the listing, the
+                # Store offers the recovery flow, and a reset clears the flag.
+                health = fixture / 'installed/health'
+                health.mkdir(parents=True)
+                (health / 'quality-fixture').write_text('crashes=5\n')
+                drive('tap-id refresh', 'expect Quarantined · 1.1.0', 'shot quarantined',
+                      'tap-id app-quality-fixture', 'expect Recovery options',
+                      'shot quarantined-detail',
+                      'tap-id recovery-quality-fixture', 'expect Reset saved state',
+                      'shot quarantined-recovery',
+                      'tap-id recover-reset-quality-fixture', 'expect Confirm recovery',
+                      'shot quarantined-confirm',
+                      'tap-id recovery-confirm', 'expect state was reset',
+                      'expect Installed · 1.1.0', 'shot quarantined-cleared')
+                assert not (health / 'quality-fixture').exists()
+                assert not notes.exists(), 'reset removes the saved state'
                 with urllib.request.urlopen(f'http://{address}/simulation', timeout=5) as response:
                     simulation = json.load(response)
                 result = dict(status='passed', basis='store-app-sdk-ipc-and-runtime-transactions',
                               original_fixture=True, fixture_payload='inert; not a launch validation',
                               scale=args.scale, app_store=simulation['appStore'],
                               checks=['install', 'disk-full preserves version', 'update', 'process restart',
-                                      'remove preserves data', 'reinstall'],
+                                      'remove preserves data', 'reinstall',
+                                      'quarantine flags the listing', 'recovery flow', 'reset clears the flag'],
                               cli_sha256=hashlib.sha256(cli.read_bytes()).hexdigest(),
                               builder_sha256=hashlib.sha256(builder.read_bytes()).hexdigest(),
                               source_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
