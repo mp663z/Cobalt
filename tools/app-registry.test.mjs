@@ -179,6 +179,7 @@ const quality = () => ({
   capabilities_optional: [
     { name: "bluetooth", gates: "reading aloud over headphones." }
   ],
+  capabilities: ["network", "bluetooth"],
   profiles: ["clara-bw-391"],
   maintainer: "The Cobalt app maintainers.",
   support: "the issue tracker",
@@ -228,5 +229,21 @@ test("capabilities are purposes in user-facing language, not flags", () => {
   assert.throws(
     () => normalizeContribution(manifest(wrong), "notes"),
     /gates must be 12 to 280 meaningful characters/
+  );
+});
+
+test("an explicit empty array is an honest none, and quality names must be declared capabilities", () => {
+  const none = quality();
+  none.data = [];
+  none.capabilities_required = [];
+  none.capabilities_optional = [];
+  const app = normalizeContribution(manifest(none), "notes");
+  assert.equal(app.id, "notes");
+
+  const foreign = quality();
+  foreign.capabilities_required[0].name = "camera";
+  assert.throws(
+    () => normalizeContribution(manifest(foreign), "notes"),
+    /'camera' is not one of the app's declared capabilities/
   );
 });
