@@ -674,8 +674,43 @@ pub fn install_using_fault(
     id: &str,
     channel: UpdateChannel,
     key: &Ed25519PublicKey,
+    fetch: impl FnMut(&str, u32) -> Result<Vec<u8>, DeviceError>,
+    fault: Option<AppWriteFault>,
+) -> Result<(), DeviceError> {
+    install_full(root, id, channel, key, fetch, fault, None)
+}
+
+/// The install transaction with a post-install launch canary: the staged
+/// package is run against this runtime and must complete a handshake and
+/// draw its first screen before the swap commits it. A failed canary keeps
+/// the previous version in place, sets the staged package aside with its
+/// diagnostics, and answers [`DeviceError::Canary`].
+///
+/// # Errors
+///
+/// As [`install_using`], plus [`DeviceError::Canary`] when the package
+/// itself cannot launch on this runtime.
+pub fn install_with_canary(
+    root: &Path,
+    id: &str,
+    channel: UpdateChannel,
+    key: &Ed25519PublicKey,
+    fetch: impl FnMut(&str, u32) -> Result<Vec<u8>, DeviceError>,
+    fault: Option<AppWriteFault>,
+    canary: &dyn Fn(&Path, &Manifest) -> Result<String, String>,
+) -> Result<(), DeviceError> {
+    install_full(root, id, channel, key, fetch, fault, Some(canary))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn install_full(
+    root: &Path,
+    id: &str,
+    channel: UpdateChannel,
+    key: &Ed25519PublicKey,
     mut fetch: impl FnMut(&str, u32) -> Result<Vec<u8>, DeviceError>,
     fault: Option<AppWriteFault>,
+    canary: Option<&dyn Fn(&Path, &Manifest) -> Result<String, String>>,
 ) -> Result<(), DeviceError> {
     if !kobo_protocol::valid_app_id(id) || kobo_app_store::is_public_reserved_app_id(id) {
         return Err(DeviceError::InvalidInput);
@@ -723,7 +758,13 @@ pub fn install_using_fault(
     if fault.is_some() {
         return Err(DeviceError::Backend);
     }
-    stage_and_swap(root, bundle.manifest(), bundle.signature(), bundle.binary())
+    stage_and_swap(
+        root,
+        bundle.manifest(),
+        bundle.signature(),
+        bundle.binary(),
+        canary,
+    )
 }
 
 /// Installs through the runtime's verified package transaction using an
@@ -1055,6 +1096,7 @@ fn stage_and_swap(
     manifest: &Manifest,
     signature: DetachedSignature,
     binary: &[u8],
+    canary: Option<&dyn Fn(&Path, &Manifest) -> Result<String, String>>,
 ) -> Result<(), DeviceError> {
     let apps = apps_root(root);
     fs::create_dir_all(&apps).map_err(|_| DeviceError::Backend)?;
@@ -1062,6 +1104,8 @@ fn stage_and_swap(
     let current = apps.join(manifest.id());
     let staging = apps.join(format!("{}.next", manifest.id()));
     let previous = apps.join(format!("{}.prev", manifest.id()));
+    // A candidate superseded by this install is no longer evidence.
+    remove_directory(&apps.join(format!("{}.failed", manifest.id())))?;
     remove_directory(&staging)?;
     fs::create_dir_all(staging.join("bin")).map_err(|_| DeviceError::Backend)?;
     write_synced(
@@ -1079,6 +1123,20 @@ fn stage_and_swap(
     sync_directory(&staging.join("bin"))?;
     sync_directory(&staging)?;
     sync_directory(&apps)?;
+    if let Some(canary) = canary {
+        if let Err(diagnostics) = canary(&binary_path, manifest) {
+            // The failed package is quarantined, not deleted: it stays under
+            // `<id>.failed` with what the canary saw, and the current
+            // installation was never touched.
+            let failed = apps.join(format!("{}.failed", manifest.id()));
+            remove_directory(&failed)?;
+            if fs::rename(&staging, &failed).is_ok() {
+                let _ignored = write_synced(&failed.join("DIAGNOSTICS"), diagnostics.as_bytes());
+                sync_directory(&apps)?;
+            }
+            return Err(DeviceError::Canary);
+        }
+    }
     remove_directory(&previous)?;
     let retired = if safe_directory(&current)? {
         rename_synced(&current, &previous, &apps)?;
@@ -2179,4 +2237,94 @@ mod tests {
         assert!(!kobo_app_store::cobalt_version_at_least("0.1.8", "0.1.9"));
         assert!(!kobo_app_store::cobalt_version_at_least("nightly", "0.1.9"));
     }
+    #[test]
+    fn a_failed_launch_canary_keeps_the_previous_version_and_quarantines_the_candidate() {
+        let root = root();
+        let seed = [12_u8; 32];
+        let key = derive_public_key(&seed).expect("key");
+        let (json, signature, package) = release_for(&seed, "word-count", "1.0.0");
+        let fetched = |url: &str, _: u32| match url {
+            CATALOG_URL => Ok(json.clone()),
+            CATALOG_SIGNATURE_URL => Ok(signature.clone()),
+            "https://example.test/word-count.cobalt-app" => Ok(package.clone()),
+            _ => Err(DeviceError::NotFound),
+        };
+        refresh_with(&root, &key, fetched).expect("refresh");
+        install_with(&root, "word-count", &key, |url, _| {
+            if url.ends_with(".cobalt-app") {
+                Ok(package.clone())
+            } else {
+                Err(DeviceError::NotFound)
+            }
+        })
+        .expect("install 1.0.0");
+
+        // The 1.1.0 candidate fails its canary: the previous version stays
+        // active and the staged package is set aside with its diagnostics.
+        let (json, signature, package) = release_for(&seed, "word-count", "1.1.0");
+        let fetched = |url: &str, _: u32| match url {
+            CATALOG_URL => Ok(json.clone()),
+            CATALOG_SIGNATURE_URL => Ok(signature.clone()),
+            "https://example.test/word-count.cobalt-app" => Ok(package.clone()),
+            _ => Err(DeviceError::NotFound),
+        };
+        refresh_with(&root, &key, fetched).expect("refresh 1.1.0");
+        let result = install_with_canary(
+            &root,
+            "word-count",
+            UpdateChannel::Stable,
+            &key,
+            |url, _| {
+                if url.ends_with(".cobalt-app") {
+                    Ok(package.clone())
+                } else {
+                    Err(DeviceError::NotFound)
+                }
+            },
+            None,
+            &|binary, manifest| {
+                assert!(binary.is_file(), "the canary gets the staged binary");
+                assert_eq!(manifest.id(), "word-count");
+                Err("no first screen within 5s".to_owned())
+            },
+        );
+        assert_eq!(result, Err(DeviceError::Canary));
+        let failed = apps_root(&root).join("word-count.failed");
+        assert!(failed.is_dir(), "the failed candidate is kept aside");
+        assert_eq!(
+            fs::read_to_string(failed.join("DIAGNOSTICS")).expect("diagnostics"),
+            "no first screen within 5s"
+        );
+        assert!(
+            !apps_root(&root).join("word-count.next").exists(),
+            "no staging left behind"
+        );
+        let current = installed_manifests(&root, &key).expect("installed");
+        assert_eq!(current.len(), 1);
+        assert_eq!(current[0].version(), "1.0.0", "the previous version stayed");
+
+        // A candidate that passes its canary commits, and clears the record
+        // of the failed one.
+        let result = install_with_canary(
+            &root,
+            "word-count",
+            UpdateChannel::Stable,
+            &key,
+            |url, _| {
+                if url.ends_with(".cobalt-app") {
+                    Ok(package.clone())
+                } else {
+                    Err(DeviceError::NotFound)
+                }
+            },
+            None,
+            &|_binary, _manifest| Ok("handshake at protocol 15, first screen drawn".to_owned()),
+        );
+        assert_eq!(result, Ok(()));
+        let current = installed_manifests(&root, &key).expect("installed");
+        assert_eq!(current[0].version(), "1.1.0");
+        assert!(!failed.exists(), "a passing candidate supersedes the record");
+        let _ignored = fs::remove_dir_all(root);
+    }
+
 }
