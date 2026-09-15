@@ -2762,8 +2762,12 @@ fn host_applications(
                                     }
                                     kobo_protocol::DeviceRequest::InstallApp { id } => {
                                         let root = Path::new(COBALT_ROOT);
-                                        let result =
-                                            crate::app_store::install(root, id, store_channel);
+                                        let result = crate::app_store::install_checked(
+                                            root,
+                                            id,
+                                            store_channel,
+                                            &launch_canary,
+                                        );
                                         if result.is_ok() {
                                             stop_named_application(&mut apps, id);
                                         }
@@ -3526,7 +3530,7 @@ fn apply_auto_update(plan: crate::autoupdate::Plan, apps: &mut [Hosted], front: 
                 trace(&format!("{id} is on the panel, so its update waits"));
                 continue;
             }
-            match crate::app_store::install(root, &id, chosen.channel) {
+            match crate::app_store::install_checked(root, &id, chosen.channel, &launch_canary) {
                 Ok(()) => {
                     stop_named_application(apps, &id);
                     trace(&format!("{id} was updated in the background"));
@@ -3554,6 +3558,26 @@ fn apply_auto_update(plan: crate::autoupdate::Plan, apps: &mut [Hosted], front: 
 
 /// Finds an application by name, starting it only if it is not already running.
 #[allow(clippy::too_many_arguments)]
+/// The launch canary every install runs: the staged candidate must complete
+/// a handshake and draw its first screen on this panel before it may replace
+/// the version the owner has. Ten seconds is generous for a first screen even
+/// on the slowest admitted reader, and a candidate that needs longer is not
+/// one the owner should be handed.
+fn launch_canary(binary: &Path, manifest: &kobo_app_store::Manifest) -> Result<String, String> {
+    let metrics = crate::device_metrics();
+    kobod::canary::run(
+        binary,
+        manifest.id(),
+        kobod::canary::Panel {
+            width: u16::try_from(metrics.width).unwrap_or(u16::MAX),
+            height: u16::try_from(metrics.height).unwrap_or(u16::MAX),
+            pixels_per_inch: u16::try_from(metrics.pixels_per_inch).unwrap_or(u16::MAX),
+            text_scale: metrics.text_scale,
+        },
+        Duration::from_secs(10),
+    )
+}
+
 fn open_application(
     apps: &mut Vec<Hosted>,
     next_id: &mut u64,

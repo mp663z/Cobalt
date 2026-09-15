@@ -292,6 +292,31 @@ pub fn install(root: &Path, id: &str, channel: UpdateChannel) -> Result<(), Devi
     })
 }
 
+/// The device install with its launch canary: the staged candidate must
+/// complete a handshake and first screen against this runtime before the
+/// swap commits it. See [`install_with_canary`].
+///
+/// # Errors
+///
+/// As [`install`], plus [`DeviceError::Canary`] when the candidate cannot
+/// launch on this runtime.
+pub fn install_checked(
+    root: &Path,
+    id: &str,
+    channel: UpdateChannel,
+    canary: &dyn Fn(&Path, &Manifest) -> Result<String, String>,
+) -> Result<(), DeviceError> {
+    install_with_canary(
+        root,
+        id,
+        channel,
+        &public_key()?,
+        |url, maximum| kobo_net::fetch(url, maximum).map_err(network_error),
+        None,
+        canary,
+    )
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteInstallPlan {
     pub outcome: RemoteInstallOutcome,
