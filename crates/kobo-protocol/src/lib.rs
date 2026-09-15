@@ -65,7 +65,10 @@ pub const MAGIC: [u8; 4] = *b"KOBO";
 /// A colour picture travels the same way: a grey picture still uses the tags it
 /// always did, byte for byte, and a colour one uses tags of its own that an
 /// older runtime refuses rather than misreads.
-pub const VERSION: u8 = 14;
+pub const VERSION: u8 = 15;
+/// Version adding app provenance, package size and permission-change facts to
+/// catalog listings, so the Store can label Stable, Beta and local packages.
+pub const STORE_PROVENANCE_VERSION: u8 = 15;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1629,6 +1632,27 @@ pub struct AppInfo {
     /// The installed version when present. A different `version` means an
     /// update is available.
     pub installed_version: Option<String>,
+    /// Where this listing came from: the signed catalog being browsed, or
+    /// the set of applications already on the device. Wire-gated on
+    /// [`STORE_PROVENANCE_VERSION`]; older sessions decode as `Catalog`.
+    pub provenance: AppProvenance,
+    /// Signed catalog's package size in bytes, when known. Wire-gated on
+    /// [`STORE_PROVENANCE_VERSION`].
+    pub package_bytes: Option<u64>,
+    /// The catalog entry declares capabilities the installed copy does not
+    /// have. Only meaningful when `installed_version` is present and differs
+    /// from `version`. Wire-gated on [`STORE_PROVENANCE_VERSION`].
+    pub permissions_changed: bool,
+}
+
+/// Where a listed application came from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppProvenance {
+    /// Present in the signed catalog the Store session is browsing.
+    Catalog,
+    /// On the device but absent from that catalog: a developer or local
+    /// install the signed release metadata makes no claim about.
+    Local,
 }
 
 impl AppInfo {
@@ -1962,7 +1986,11 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -2011,7 +2039,9 @@ pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
         Message::DeviceRequest(request) => {
             encode_device_request(&mut payload, request, frame.version)?;
         }
-        Message::DeviceResult(result) => encode_device_result(&mut payload, result)?,
+        Message::DeviceResult(result) => {
+            encode_device_result(&mut payload, result, frame.version)?;
+        }
         Message::Spawn { .. } | Message::Cancel { .. } | Message::TaskOutcome { .. } => {
             encode_task_message(&mut payload, &frame.message)?;
         }
@@ -2629,7 +2659,7 @@ fn encoded_message_layout(message: &Message, version: u8) -> Result<(u8, usize),
             Ok((12, length))
         }
         Message::DeviceRequest(request) => Ok((7, device_request_len(request, version)?)),
-        Message::DeviceResult(result) => Ok((8, device_result_len(result)?)),
+        Message::DeviceResult(result) => Ok((8, device_result_len(result, version)?)),
         Message::Spawn { work, .. } => {
             if matches!(work, Task::Update { .. }) && version < UPDATE_TASK_VERSION {
                 return Err(ProtocolError::UnsupportedVersion(version));
@@ -2984,9 +3014,9 @@ fn device_request_len(request: &DeviceRequest, version: u8) -> Result<usize, Pro
     Ok(encoded.len())
 }
 
-fn device_result_len(result: &DeviceResult) -> Result<usize, ProtocolError> {
+fn device_result_len(result: &DeviceResult, version: u8) -> Result<usize, ProtocolError> {
     let mut encoded = Vec::new();
-    encode_device_result(&mut encoded, result)?;
+    encode_device_result(&mut encoded, result, version)?;
     Ok(encoded.len())
 }
 
@@ -3332,7 +3362,11 @@ fn fixed_argument(reader: &mut Reader<'_>, expected: u32) -> Result<(), Protocol
     clippy::too_many_lines,
     reason = "one explicit bounded result tag table"
 )]
-fn encode_device_result(output: &mut Vec<u8>, result: &DeviceResult) -> Result<(), ProtocolError> {
+fn encode_device_result(
+    output: &mut Vec<u8>,
+    result: &DeviceResult,
+    version: u8,
+) -> Result<(), ProtocolError> {
     match result {
         DeviceResult::Done => output.push(1),
         DeviceResult::Granted { seconds } => {
@@ -3439,7 +3473,7 @@ fn encode_device_result(output: &mut Vec<u8>, result: &DeviceResult) -> Result<(
                 u16::try_from(entries.len()).map_err(|_| ProtocolError::FrameTooLarge)?,
             );
             for entry in entries {
-                encode_app_info(output, entry)?;
+                encode_app_info(output, entry, version)?;
             }
         }
         DeviceResult::Dictionary { word, entries } => {
@@ -3574,7 +3608,11 @@ fn encode_remote_install(
     Ok(())
 }
 
-fn encode_app_info(output: &mut Vec<u8>, entry: &AppInfo) -> Result<(), ProtocolError> {
+fn encode_app_info(
+    output: &mut Vec<u8>,
+    entry: &AppInfo,
+    version: u8,
+) -> Result<(), ProtocolError> {
     validate_app_info(entry)?;
     for text in [
         &entry.id,
@@ -3592,11 +3630,25 @@ fn encode_app_info(output: &mut Vec<u8>, entry: &AppInfo) -> Result<(), Protocol
         push_string(output, capability)?;
     }
     match &entry.installed_version {
-        Some(version) => {
+        Some(installed) => {
             output.push(1);
-            push_string(output, version)?;
+            push_string(output, installed)?;
         }
         None => output.push(0),
+    }
+    if version >= STORE_PROVENANCE_VERSION {
+        output.push(match entry.provenance {
+            AppProvenance::Catalog => 0,
+            AppProvenance::Local => 1,
+        });
+        match entry.package_bytes {
+            Some(bytes) => {
+                output.push(1);
+                output.extend_from_slice(&bytes.to_be_bytes());
+            }
+            None => output.push(0),
+        }
+        output.push(u8::from(entry.permissions_changed));
     }
     Ok(())
 }
@@ -3642,7 +3694,10 @@ fn valid_cobalt_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-fn decode_device_result(reader: &mut Reader<'_>) -> Result<DeviceResult, ProtocolError> {
+fn decode_device_result(
+    reader: &mut Reader<'_>,
+    version: u8,
+) -> Result<DeviceResult, ProtocolError> {
     match reader.u8()? {
         1 => Ok(DeviceResult::Done),
         2 => Ok(DeviceResult::Granted {
@@ -3695,7 +3750,7 @@ fn decode_device_result(reader: &mut Reader<'_>) -> Result<DeviceResult, Protoco
         }
         8 => Ok(DeviceResult::Failed(DeviceError::try_from(reader.u8()?)?)),
         9 => decode_audio_result(reader),
-        12 => decode_apps_result(reader),
+        12 => decode_apps_result(reader, version),
         13 => decode_dictionary_result(reader),
         14 => decode_app_link(reader),
         15 => decode_remote_install(reader),
@@ -3956,7 +4011,10 @@ fn decode_dictionary_result(reader: &mut Reader<'_>) -> Result<DeviceResult, Pro
     Ok(DeviceResult::Dictionary { word, entries })
 }
 
-fn decode_apps_result(reader: &mut Reader<'_>) -> Result<DeviceResult, ProtocolError> {
+fn decode_apps_result(
+    reader: &mut Reader<'_>,
+    wire_version: u8,
+) -> Result<DeviceResult, ProtocolError> {
     let count = usize::from(reader.u16()?);
     if count > MAX_APP_CATALOG_ENTRIES {
         return Err(ProtocolError::InvalidValue("too many applications"));
@@ -3986,6 +4044,23 @@ fn decode_apps_result(reader: &mut Reader<'_>) -> Result<DeviceResult, ProtocolE
             1 => Some(reader.string()?),
             _ => return Err(ProtocolError::InvalidValue("installed application flag")),
         };
+        let (provenance, package_bytes, permissions_changed) =
+            if wire_version >= STORE_PROVENANCE_VERSION {
+                let provenance = match reader.u8()? {
+                    0 => AppProvenance::Catalog,
+                    1 => AppProvenance::Local,
+                    _ => return Err(ProtocolError::InvalidValue("application provenance")),
+                };
+                let package_bytes = match reader.u8()? {
+                    0 => None,
+                    1 => Some(reader.u64()?),
+                    _ => return Err(ProtocolError::InvalidValue("package size flag")),
+                };
+                let permissions_changed = read_boolean(reader, "permissions changed")?;
+                (provenance, package_bytes, permissions_changed)
+            } else {
+                (AppProvenance::Catalog, None, false)
+            };
         let entry = AppInfo {
             id,
             title,
@@ -3996,6 +4071,9 @@ fn decode_apps_result(reader: &mut Reader<'_>) -> Result<DeviceResult, ProtocolE
             glyph,
             capabilities,
             installed_version,
+            provenance,
+            package_bytes,
+            permissions_changed,
         };
         validate_app_info(&entry)?;
         entries.push(entry);
@@ -4549,7 +4627,11 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -4611,7 +4693,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
             name: reader.string()?,
         },
         7 => Message::DeviceRequest(decode_device_request(&mut reader, version)?),
-        8 => Message::DeviceResult(decode_device_result(&mut reader)?),
+        8 => Message::DeviceResult(decode_device_result(&mut reader, version)?),
         9 => {
             let task = TaskId(reader.u32()?);
             let work = match reader.u8()? {
@@ -5027,7 +5109,11 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -7648,6 +7734,9 @@ mod tests {
                     glyph: Glyph::Note,
                     capabilities: vec!["shared-files".to_owned()],
                     installed_version: Some("1.1.0".to_owned()),
+                    provenance: AppProvenance::Catalog,
+                    package_bytes: None,
+                    permissions_changed: false,
                 }],
             },
             DeviceResult::Library {
@@ -8029,6 +8118,9 @@ mod tests {
                     glyph: Glyph::App,
                     capabilities: Vec::new(),
                     installed_version: None,
+                    provenance: AppProvenance::Catalog,
+                    package_bytes: None,
+                    permissions_changed: false,
                 })
                 .collect(),
         };
@@ -8049,6 +8141,9 @@ mod tests {
             glyph: Glyph::App,
             capabilities: Vec::new(),
             installed_version: None,
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
         };
         assert!(encode(&Frame {
             version: VERSION,
@@ -8080,6 +8175,9 @@ mod tests {
             glyph: Glyph::App,
             capabilities: Vec::new(),
             installed_version: None,
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
         };
         assert!(app.is_compatible_with("0.3.0"));
         assert!(app.is_compatible_with("0.3"));
@@ -8105,12 +8203,79 @@ mod tests {
             glyph: Glyph::App,
             capabilities: Vec::new(),
             installed_version: Some(installed.to_owned()),
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
         };
         assert!(app("1.2.0", "1.1.9").has_update());
         assert!(!app("1.2.0", "1.2.0").has_update());
         assert!(!app("1.1.9", "1.2.0").has_update());
         assert!(!app("stable", "1.2.0").has_update());
         assert!(!app("1.2.0", "beta").has_update());
+    }
+
+    /// Provenance, package size and the permission-change flag exist only on
+    /// sessions that greeted with STORE_PROVENANCE_VERSION: a newer runtime
+    /// keeps sending the old shape to older apps, byte for byte, and an older
+    /// runtime's answer decodes to the defaults a new app can rely on.
+    #[test]
+    fn app_provenance_rides_only_sessions_that_speak_it() {
+        let rich = AppInfo {
+            id: "word-count".to_owned(),
+            title: "Word Count".to_owned(),
+            label: "Words".to_owned(),
+            summary: "Counts words in a note.".to_owned(),
+            version: "1.2.0".to_owned(),
+            minimum_cobalt_version: "0.3.0".to_owned(),
+            glyph: Glyph::Note,
+            capabilities: vec!["shared-files".to_owned()],
+            installed_version: Some("1.1.0".to_owned()),
+            provenance: AppProvenance::Local,
+            package_bytes: Some(245_678),
+            permissions_changed: true,
+        };
+        let plain = AppInfo {
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
+            ..rich.clone()
+        };
+        let frame = |entry: AppInfo, version: u8| Frame {
+            version,
+            request_id: 11,
+            message: Message::DeviceResult(DeviceResult::Apps {
+                entries: vec![entry],
+            }),
+        };
+
+        let modern = frame(rich.clone(), STORE_PROVENANCE_VERSION);
+        assert_eq!(
+            decode(&encode(&modern).expect("encode modern")).expect("decode modern"),
+            modern,
+            "sessions that speak provenance keep every field"
+        );
+
+        let legacy = frame(rich, SERVER_ACCOUNT_VERSION);
+        let expected = frame(plain, SERVER_ACCOUNT_VERSION);
+        let legacy_bytes = encode(&legacy).expect("legacy sessions get the old shape");
+        assert_eq!(
+            legacy_bytes,
+            encode(&expected).expect("defaults encode"),
+            "the legacy encoding must not depend on fields it cannot carry"
+        );
+        assert_eq!(
+            decode(&legacy_bytes).expect("decode legacy"),
+            expected,
+            "an old-shape answer decodes to the defaults a new app relies on"
+        );
+    }
+
+    fn defaulted_with(entries: Vec<AppInfo>) -> AppInfo {
+        let mut entry = entries.into_iter().next().expect("one entry");
+        entry.provenance = AppProvenance::Catalog;
+        entry.package_bytes = None;
+        entry.permissions_changed = false;
+        entry
     }
 
     #[test]

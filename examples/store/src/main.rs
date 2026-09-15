@@ -818,6 +818,9 @@ mod tests {
             glyph: Glyph::App,
             capabilities: vec!["network".to_owned()],
             installed_version: installed.map(str::to_owned),
+            provenance: kobo_sdk::AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
         }
     }
 
@@ -1046,6 +1049,9 @@ mod tests {
                 glyph: Glyph::App,
                 capabilities: entry.capabilities,
                 installed_version: None,
+                provenance: kobo_sdk::AppProvenance::Catalog,
+                package_bytes: None,
+                permissions_changed: false,
             })
             .collect::<Vec<_>>();
         for panel in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
