@@ -19,6 +19,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--scale', default='extra-large')
+    parser.add_argument('--profile', default='clara-bw-391',
+                        help='kobo-profile device ID, e.g. clara-bw-391 or elipsa-2e-389')
     args = parser.parse_args()
     cli = ROOT / 'target/debug/kobo'
     builder = ROOT / 'target/debug/examples/signed-store'
@@ -31,7 +33,7 @@ def main():
         fixture = Path(private) / 'fixture'
         env = dict(os.environ, TMPDIR=private, CARGO_TARGET_DIR=str(ROOT / 'target'),
                    CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0',
-                   KOBO_SIM_PROFILE='clara-bw-391', KOBO_TEXT_SCALE=args.scale,
+                   KOBO_SIM_PROFILE=args.profile, KOBO_TEXT_SCALE=args.scale,
                    KOBO_SIM_APP_STORE=str(fixture), KOBO_SIM_FIXTURE='original-signed-store',
                    # Installs in this journey face the launch canary: the
                    # packaged payload is the real quality-fixture application.
@@ -87,7 +89,12 @@ def main():
                     return json.loads((fixture / 'installed/apps/quality-fixture/manifest.json').read_text())['version']
 
                 drive('wait-idle', 'expect-state /simulation#/appStore/mode "signed-local"',
-                      'tap-id app-quality-fixture', 'shot available',
+                      'tap-id app-quality-fixture', 'expect What it can do', 'shot available',
+                      'tap-id quality-quality-fixture',
+                      'expect Everything the fixture does works without the network',
+                      'expect Checks for a newer fixture package once a day',
+                      'expect stays on this Kobo', 'shot quality',
+                      'tap back',
                       'tap-id install-quality-fixture', 'expect installed successfully', 'shot installed')
                 assert installed() == '1.0.0'
                 notes = fixture / 'installed/data/quality-fixture/notes'
@@ -104,12 +111,31 @@ def main():
                 address = start()
                 drive('wait-idle', 'expect Installed · 1.1.0', 'shot reopened',
                       'tap-id app-quality-fixture', 'tap-id remove-quality-fixture',
+                      'expect stays on this Kobo', 'shot uninstall-confirm',
+                      'tap-id uninstall-cancel', 'expect Quality fixture',
+                      'tap-id remove-quality-fixture', 'tap-id uninstall-confirm',
                       'expect removed successfully', 'shot removed')
                 assert not (fixture / 'installed/apps/quality-fixture').exists()
                 assert notes.read_text() == 'Original owner fixture note\n'
                 drive('tap-id app-quality-fixture', 'tap-id install-quality-fixture',
                       'expect installed successfully', 'shot reinstalled')
                 assert installed() == '1.1.0'
+                # Quarantine journey: five recorded crashes flag the listing, the
+                # Store offers the recovery flow, and a reset clears the flag.
+                health = fixture / 'installed/health'
+                health.mkdir(parents=True)
+                (health / 'quality-fixture').write_text('crashes=5\n')
+                drive('tap-id refresh', 'expect Quarantined · 1.1.0', 'shot quarantined',
+                      'tap-id app-quality-fixture', 'expect Recovery options',
+                      'shot quarantined-detail',
+                      'tap-id recovery-quality-fixture', 'expect Reset saved state',
+                      'shot quarantined-recovery',
+                      'tap-id recover-reset-quality-fixture', 'expect Confirm recovery',
+                      'shot quarantined-confirm',
+                      'tap-id recovery-confirm', 'expect state was reset',
+                      'expect Installed · 1.1.0', 'shot quarantined-cleared')
+                assert not (health / 'quality-fixture').exists()
+                assert not notes.exists(), 'reset removes the saved state'
                 # A candidate that cannot launch never replaces what runs:
                 # the canary refuses it, the store says so, 1.1.0 stays.
                 publish('1.2.0', live=False)
@@ -125,9 +151,14 @@ def main():
                 result = dict(status='passed', basis='store-app-sdk-ipc-and-runtime-transactions',
                               original_fixture=True,
                               fixture_payload='quality-fixture example; every install passes the launch canary',
-                              scale=args.scale, app_store=simulation['appStore'],
-                              checks=['install', 'disk-full preserves version', 'update', 'process restart',
+                              scale=args.scale, profile=args.profile,
+                              app_store=simulation['appStore'],
+                              checks=['install', 'quality screen renders offline, purposes and retention',
+                                      'uninstall confirmation states data retention',
+                                      'cancel keeps the app installed',
+                                      'disk-full preserves version', 'update', 'process restart',
                                       'remove preserves data', 'reinstall',
+                                      'quarantine flags the listing', 'recovery flow', 'reset clears the flag',
                                       'launch canary passes on every install',
                                       'failed canary keeps the previous version'],
                               cli_sha256=hashlib.sha256(cli.read_bytes()).hexdigest(),
