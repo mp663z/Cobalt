@@ -66,12 +66,6 @@ enum View {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Availability {
-    Available,
-    Unavailable,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Switch {
     Off,
     On,
@@ -107,8 +101,8 @@ pub struct AudioPlayer {
     duration_ms: u32,
     volume: u8,
     loaded: LoadState,
-    audio_available: Availability,
-    bluetooth_available: Availability,
+    audio_available: crate::capability::Capability,
+    bluetooth_available: crate::capability::Capability,
     bluetooth_enabled: Switch,
     /// Whether the runtime has said that leaving will reboot the reader.
     restart_on_exit: bool,
@@ -136,8 +130,8 @@ impl AudioPlayer {
             duration_ms: 0,
             volume: 70,
             loaded: LoadState::Unloaded,
-            audio_available: Availability::Available,
-            bluetooth_available: Availability::Available,
+            audio_available: crate::capability::Capability::available(),
+            bluetooth_available: crate::capability::Capability::available(),
             bluetooth_enabled: Switch::Off,
             restart_on_exit: false,
             devices: Vec::new(),
@@ -329,7 +323,7 @@ impl AudioPlayer {
             ]),
             None => screen.bottom_action_marked(OUTPUT, "Bluetooth audio output", Glyph::Bluetooth),
         };
-        if self.audio_available == Availability::Unavailable {
+        if self.audio_available.state() == crate::capability::CapabilityState::Unsupported {
             screen = screen.banner(
                 BannerLevel::Attention,
                 "Audio playback is unavailable on this firmware.",
@@ -360,7 +354,7 @@ impl AudioPlayer {
                     "Turn Bluetooth on"
                 },
             );
-        if self.bluetooth_available == Availability::Unavailable {
+        if self.bluetooth_available.state() == crate::capability::CapabilityState::Unsupported {
             screen = screen.banner(
                 BannerLevel::Attention,
                 "Bluetooth is unavailable on this firmware.",
@@ -582,9 +576,14 @@ impl AudioPlayer {
                 volume,
             } => {
                 self.audio_available = if *available {
-                    Availability::Available
+                    crate::capability::Capability::available()
                 } else {
-                    Availability::Unavailable
+                    // The backend answered and said not usable: that is its
+                    // own evidence, not a profile assumption, so the report
+                    // says exactly what the answer said.
+                    crate::capability::Capability::unsupported(
+                        "the device audio answer reported not available on this firmware",
+                    )
                 };
                 self.volume = *volume;
                 if matches!(request, DeviceRequest::LoadAudio { .. }) {
@@ -619,9 +618,11 @@ impl AudioPlayer {
             }
             DeviceResult::Denied(reason) => {
                 self.audio_available = if *reason == DenyReason::Unsupported {
-                    Availability::Unavailable
+                    crate::capability::Capability::unsupported(
+                        "the device refused audio as unsupported",
+                    )
                 } else {
-                    Availability::Available
+                    crate::capability::Capability::available()
                 };
                 self.trouble = Some(format!("Audio was refused: {reason}."));
                 self.autoplay = PlayIntent::Manual;
@@ -648,9 +649,11 @@ impl AudioPlayer {
                 restart_on_exit,
             } => {
                 self.bluetooth_available = if *available {
-                    Availability::Available
+                    crate::capability::Capability::available()
                 } else {
-                    Availability::Unavailable
+                    crate::capability::Capability::unsupported(
+                        "the device bluetooth answer reported not available on this firmware",
+                    )
                 };
                 self.bluetooth_enabled = if *enabled { Switch::On } else { Switch::Off };
                 // Latched, never cleared. Once the shared radio has been
@@ -690,9 +693,11 @@ impl AudioPlayer {
             }
             DeviceResult::Denied(reason) => {
                 self.bluetooth_available = if *reason == DenyReason::Unsupported {
-                    Availability::Unavailable
+                    crate::capability::Capability::unsupported(
+                        "the device refused bluetooth as unsupported",
+                    )
                 } else {
-                    Availability::Available
+                    crate::capability::Capability::available()
                 };
                 self.trouble = Some(format!("Bluetooth was refused: {reason}."));
             }
