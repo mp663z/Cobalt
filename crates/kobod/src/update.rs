@@ -1163,6 +1163,7 @@ mod tests {
     use std::process::Command;
 
     /// A tar member for the archives these tests publish.
+    #[derive(Clone)]
     struct Member<'a> {
         path: String,
         kind: u8,
@@ -1241,9 +1242,17 @@ mod tests {
             container.extend_from_slice(&(!length).to_le_bytes());
             container.extend_from_slice(chunk);
         }
-        // The reader stops at the final deflate block, so the trailer only
-        // has to be present.
-        container.extend_from_slice(&[0u8; 8]);
+        // A real trailer: lanes without a Rust toolchain replay these
+        // archives, and their gzip readers hold the CRC32 to account.
+        let mut crc = 0xffff_ffffu32;
+        for &byte in bytes {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 { (crc >> 1) ^ 0xedb8_8320 } else { crc >> 1 };
+            }
+        }
+        container.extend_from_slice(&(!crc).to_le_bytes());
+        container.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
         container
     }
 
@@ -1344,6 +1353,221 @@ mod tests {
     fn recorded_refusal(adds: &std::path::Path) -> String {
         fs::read_to_string(adds.join("cobalt/state/last-update-error"))
             .expect("the reason the update was refused")
+    }
+
+    /// Where the committed update-graph fixtures live.
+    fn graph_dir() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../scripts/fixtures/update-graph")
+    }
+
+    fn json_escape(text: &str) -> String {
+        text.replace('\\', "\\\\").replace('"', "\\\"")
+    }
+
+    /// The members of a full archive: the standalone launcher first, unless
+    /// the edge publishes the pre-bootstrap layout.
+    fn full_archive<'a>(members: &[Member<'a>], bootstrap: bool) -> (Vec<u8>, String, Vec<Member<'a>>) {
+        let mut complete = Vec::with_capacity(members.len() + 1);
+        if bootstrap {
+            complete.push(launch_bootstrap());
+        }
+        complete.extend(members.iter().map(|member| Member {
+            path: member.path.clone(),
+            kind: member.kind,
+            payload: member.payload,
+            mode: member.mode,
+        }));
+        let archive = gzip(&tar(&complete));
+        let digest = kobo_net::sha256::hex_digest(&archive);
+        (archive, digest, complete)
+    }
+
+    fn member_descriptors(members: &[Member<'_>]) -> String {
+        members
+            .iter()
+            .map(|member| {
+                format!(
+                    "{{\"path\":\"{}\",\"kind\":{},\"bytes\":{},\"sha256\":\"{}\"}}",
+                    json_escape(&member.path),
+                    member.kind,
+                    member.payload.len(),
+                    kobo_net::sha256::hex_digest(member.payload),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    /// Runs one archive edge against the real updater and returns its
+    /// fixture record plus the exact archive bytes.
+    fn archive_edge(
+        id: &str,
+        members: &[Member<'_>],
+        bootstrap: bool,
+        manifest: Option<&str>,
+    ) -> (String, Vec<u8>) {
+        let adds = scratch(&format!("graph-{id}"));
+        // Refusals record beside an installation, so every edge starts from
+        // one: a reader that is updating has Cobalt by definition.
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest, complete) = full_archive(members, bootstrap);
+        let outcome = match install(&archive, &digest, &adds) {
+            Ok(()) => "\"result\":\"installed\"".to_owned(),
+            Err(_) => {
+                let ledger = fs::read_to_string(adds.join("cobalt/state/last-update-error"))
+                    .expect("a refusal records its reason");
+                let stage = ledger.split(':').next().expect("a staged ledger line");
+                format!(
+                    "\"result\":\"refused\",\"stage\":\"{}\",\"ledger\":\"{}\"",
+                    json_escape(stage),
+                    json_escape(ledger.trim_end()),
+                )
+            }
+        };
+        let _ignored = fs::remove_dir_all(&adds);
+        let manifest_field = match manifest {
+            Some(text) => format!("\"manifest\":{}", text),
+            None => "\"manifest\":null".to_owned(),
+        };
+        let record = format!(
+            "{{\"id\":\"{id}\",\"archive\":\"{id}.tgz\",\"archive_sha256\":\"{}\",\"members\":[{}],{},\"outcome\":{{{}}}}}",
+            kobo_net::sha256::hex_digest(&archive),
+            member_descriptors(&complete),
+            manifest_field,
+            outcome,
+        );
+        (record, archive)
+    }
+
+    /// The interruption edge: power lost after each transaction checkpoint,
+    /// then ordinary startup recovery.
+    fn interruption_edge() -> String {
+        let trace_root = transaction_fixture("graph-interrupt-trace");
+        let mut boundaries = Vec::new();
+        swap_with_fault(&trace_root, &trace_root.join("cobalt.next"), &mut |step| {
+            boundaries.push(step);
+            Ok(())
+        })
+        .expect("trace transaction");
+        let _ignored = fs::remove_dir_all(trace_root);
+
+        let mut checkpoints = Vec::new();
+        for (failure, boundary) in boundaries.iter().copied().enumerate() {
+            let adds = transaction_fixture(&format!("graph-interrupt-{failure}"));
+            let mut seen = 0usize;
+            let interrupted = swap_with_fault(&adds, &adds.join("cobalt.next"), &mut |_step| {
+                let interrupt = seen == failure;
+                seen += 1;
+                if interrupt {
+                    Err(TransactionFailure::Interrupted)
+                } else {
+                    Ok(())
+                }
+            });
+            assert!(interrupted.is_err(), "boundary {boundary:?} did not interrupt");
+            recover_interrupted_update(&adds).expect("startup recovery");
+            let start = fs::read_to_string(adds.join("cobalt/start.sh")).expect("active release");
+            let recovered = if start.contains("# release new") { "new" } else { "old" };
+            assert!(!adds.join(JOURNAL).exists(), "recovery clears the journal");
+            checkpoints.push(format!(
+                "{{\"step\":\"{}\",\"recovered\":\"{recovered}\"}}",
+                json_escape(&format!("{boundary:?}")),
+            ));
+            let _ignored = fs::remove_dir_all(adds);
+        }
+        format!(
+            "{{\"id\":\"interrupted-at-every-checkpoint\",\"archive\":null,\"checkpoints\":[{}],\"outcome\":{{\"result\":\"recovered\"}}}}",
+            checkpoints.join(","),
+        )
+    }
+
+    /// The device-side update graph as committed fixtures. Each edge runs
+    /// against the real updater and is compared byte for byte with the record
+    /// under scripts/fixtures/update-graph; scripts/fixtures/update-graph/
+    /// check.py replays the same archives in lanes without a Rust toolchain.
+    /// A drift in either is a contract change, not a fixture refresh.
+    /// Regenerate from a known-good tree with KOBO_BLESS=1.
+    #[test]
+    fn update_graph_edges_match_the_committed_contract() {
+        let current = launch_files(b"#!/bin/sh\n# release candidate\n");
+        let mut with_manifest = current.clone();
+        with_manifest.push(folder(""));
+        with_manifest.push(file(
+            "release.json",
+            br#"{"schema":1,"requiresUpdater":1,"roots":["cobalt","launcher"],"migrations":["nickelmenu"]}"#,
+        ));
+        let mut future_schema = current.clone();
+        future_schema.push(folder(""));
+        future_schema.push(file("release.json", br#"{"schema":2}"#));
+        let mut future_updater = current.clone();
+        future_updater.push(folder(""));
+        future_updater.push(file("release.json", br#"{"schema":1,"requiresUpdater":2}"#));
+        let mut unknown_migration = current.clone();
+        unknown_migration.push(folder(""));
+        unknown_migration.push(file(
+            "release.json",
+            br#"{"schema":1,"migrations":["repartition"]}"#,
+        ));
+        let mut old_layout = launch_files(b"#!/bin/sh\n# release candidate\n");
+        old_layout.push(folder(""));
+
+        let edges = vec![
+            archive_edge("stable-to-candidate", &with_manifest, true, Some(
+                r#"{"schema":1,"requiresUpdater":1,"roots":["cobalt","launcher"],"migrations":["nickelmenu"]}"#,
+            )),
+            archive_edge("pre-bootstrap-layout-to-current-bootstrap", &old_layout, false, None),
+            archive_edge("future-schema-refused-before-apply", &future_schema, true, Some(r#"{"schema":2}"#)),
+            archive_edge(
+                "future-updater-capability-refused-before-apply",
+                &future_updater,
+                true,
+                Some(r#"{"schema":1,"requiresUpdater":2}"#),
+            ),
+            archive_edge(
+                "unknown-migration-refused-before-apply",
+                &unknown_migration,
+                true,
+                Some(r#"{"schema":1,"migrations":["repartition"]}"#),
+            ),
+        ];
+
+        let mut records: Vec<String> =
+            edges.iter().map(|(record, _)| record.clone()).collect();
+        records.push(interruption_edge());
+        let index = format!("{{\"contract\":\"update-graph\",\"edges\":[{}]}}\n", records.join(","));
+
+        let dir = graph_dir();
+        if std::env::var_os("KOBO_BLESS").is_some() {
+            fs::create_dir_all(&dir).expect("fixture directory");
+            fs::write(dir.join("edges.json"), &index).expect("write edges");
+            for (record, archive) in &edges {
+                let id = record
+                    .split("\"id\":\"")
+                    .nth(1)
+                    .and_then(|rest| rest.split('\"').next())
+                    .expect("edge id");
+                fs::write(dir.join(format!("{id}.tgz")), archive).expect("write archive");
+            }
+            return;
+        }
+
+        let committed = fs::read_to_string(dir.join("edges.json"))
+            .expect("committed edges.json (bless with KOBO_BLESS=1)");
+        assert_eq!(index, committed, "update-graph edges drifted");
+        for (_, archive) in &edges {
+            let digest = kobo_net::sha256::hex_digest(archive);
+            let matches = fs::read_dir(&dir)
+                .expect("fixture directory")
+                .filter_map(std::result::Result::ok)
+                .any(|entry| {
+                    entry.path().extension().is_some_and(|ext| ext == "tgz")
+                        && fs::read(entry.path())
+                            .map(|bytes| kobo_net::sha256::hex_digest(&bytes) == digest)
+                            .unwrap_or(false)
+                });
+            assert!(matches, "no committed archive matches digest {digest}");
+        }
     }
 
     #[test]
