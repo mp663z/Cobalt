@@ -328,7 +328,11 @@ impl Gallery {
                 Gallery::pencil_page,
             ],
             (Tab::Lists, _) => &[Gallery::icons_page],
-            (Tab::Input, 0) => &[Gallery::buttons_page, Gallery::stepper_page],
+            (Tab::Input, 0) => &[
+                Gallery::buttons_page,
+                Gallery::stepper_page,
+                Gallery::toggles_page,
+            ],
             (Tab::Input, 1) => &[Gallery::groups_page, Gallery::section_rows_page],
             (Tab::Input, 2) => &[
                 Gallery::input_page,
@@ -817,6 +821,20 @@ impl Gallery {
             .buttons([("button-one", "Keep"), ("button-two", "Discard")])
             .button_with_state("button-second", "Keep both", ControlState::Enabled)
             .disabled_button("button-off", "Nothing to save")
+    }
+
+    /// Standing choices, drawn as switches, including one that says no by
+    /// how it is drawn rather than by refusing a tap.
+    fn toggles_page(_: &Self, screen: ScreenBuilder) -> ScreenBuilder {
+        screen
+            .section("Standing choices")
+            .toggle("toggle-wifi", "Wi-Fi", true)
+            .toggle_with_state(
+                "toggle-bluetooth",
+                "Bluetooth",
+                false,
+                ControlState::Disabled,
+            )
     }
 
     /// A stepper, and the bar that pins two verbs to the foot of a panel.
