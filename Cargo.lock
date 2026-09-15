@@ -1116,6 +1116,7 @@ version = "0.3.16"
 dependencies = [
  "kobo-abi",
  "kobo-doc",
+ "kobo-handoff",
  "kobo-profile",
  "kobo-protocol",
  "minimp3",
