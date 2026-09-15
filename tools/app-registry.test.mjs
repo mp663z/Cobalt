@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { collectRegistry, currentProtocolVersion, deriveMinimumCobalt, normalizeContribution } from "./app-registry.mjs";
+import { collectRegistry, currentProtocolVersion, deriveMinimumCobalt, normalizeContribution, qualityComplete } from "./app-registry.mjs";
 import {
   contributionPlan,
   manifestForBinary,
@@ -157,4 +157,76 @@ test("no workflow checks the empty base catalog instead of the collected registr
       );
     }
   }
+});
+
+// App quality manifest (docs/quality/contracts/app-quality-manifest.md):
+// completeness is all or nothing, and every declared field is validated.
+const quality = () => ({
+  user: "A reader who keeps papers on their Kobo.",
+  job: "Browse, keep, and read papers offline.",
+  offline: "Every kept paper opens and reads with no network at all.",
+  data: [
+    {
+      kind: "kept papers",
+      location: "the app's own folder on the reader",
+      export: "the original PDF bytes",
+      on_remove: "retained"
+    }
+  ],
+  capabilities_required: [
+    { name: "network", purpose: "search and download papers from the source." }
+  ],
+  capabilities_optional: [
+    { name: "bluetooth", gates: "reading aloud over headphones." }
+  ],
+  profiles: ["clara-bw-391"],
+  maintainer: "The Cobalt app maintainers.",
+  support: "the issue tracker",
+  non_goals: ["It does not sync a reading position between devices."]
+});
+
+test("a complete quality manifest validates and reads complete", () => {
+  const app = normalizeContribution(manifest(quality()), "notes");
+  assert.equal(app.id, "notes");
+  assert.equal(qualityComplete({ ...manifest(), ...quality() }), true);
+});
+
+test("a manifest without quality fields stays valid and incomplete", () => {
+  const app = normalizeContribution(manifest(), "notes");
+  assert.equal(app.id, "notes");
+  assert.equal(qualityComplete(manifest()), false);
+});
+
+test("a half-declared quality manifest is rejected with the missing fields named", () => {
+  const partial = quality();
+  delete partial.non_goals;
+  delete partial.support;
+  assert.throws(
+    () => normalizeContribution(manifest(partial), "notes"),
+    /missing: support, non_goals/
+  );
+});
+
+test("retention is one of the contract's three values", () => {
+  const bad = quality();
+  bad.data[0].on_remove = "archived";
+  assert.throws(
+    () => normalizeContribution(manifest(bad), "notes"),
+    /on_remove must be one of: retained, exported-then-deleted, deleted/
+  );
+});
+
+test("capabilities are purposes in user-facing language, not flags", () => {
+  const bad = quality();
+  bad.capabilities_required[0].purpose = "net";
+  assert.throws(
+    () => normalizeContribution(manifest(bad), "notes"),
+    /purpose must be 12 to 280 meaningful characters/
+  );
+  const wrong = quality();
+  wrong.capabilities_optional[0].gates = undefined;
+  assert.throws(
+    () => normalizeContribution(manifest(wrong), "notes"),
+    /gates must be 12 to 280 meaningful characters/
+  );
 });

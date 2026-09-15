@@ -17,7 +17,17 @@ const APP_FIELDS = new Set([
   "minimum_cobalt_version",
   "glyph",
   "capabilities",
-  "setup"
+  "setup",
+  "user",
+  "job",
+  "offline",
+  "data",
+  "capabilities_required",
+  "capabilities_optional",
+  "profiles",
+  "maintainer",
+  "support",
+  "non_goals"
 ]);
 
 function object(value, label) {
@@ -136,6 +146,7 @@ export function normalizeContribution(value, directoryName) {
     throw new Error(`${app.id} release_notes must be 12 to 240 meaningful characters`);
   }
   validatedSetup(app);
+  validateQuality(app, directoryName);
   const derivedMinimum = deriveMinimumCobalt(app.capabilities);
   const minimum_cobalt_version =
     app.minimum_cobalt_version === undefined
@@ -157,6 +168,93 @@ export function normalizeContribution(value, directoryName) {
     capabilities: app.capabilities,
     ...(app.setup === undefined ? {} : { setup: app.setup })
   };
+}
+
+// The app quality manifest contract
+// (docs/quality/contracts/app-quality-manifest.md): a manifest is complete
+// or it is not. Declaring any quality field declares all of them, so no app
+// slips a half-finished manifest through the gate.
+const QUALITY_FIELDS = [
+  "user",
+  "job",
+  "offline",
+  "data",
+  "capabilities_required",
+  "capabilities_optional",
+  "profiles",
+  "maintainer",
+  "support",
+  "non_goals"
+];
+const RETENTION = new Set(["retained", "exported-then-deleted", "deleted"]);
+
+function sentence(value, label, max = 280) {
+  if (typeof value !== "string" || value.trim().length < 12 || value.length > max) {
+    throw new Error(`${label} must be 12 to ${max} meaningful characters`);
+  }
+  return value;
+}
+
+function sentenceList(value, label) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label} must be a non-empty array`);
+  }
+  value.forEach((item, index) => sentence(item, `${label}[${index}]`));
+  return value;
+}
+
+export function qualityComplete(app) {
+  return QUALITY_FIELDS.every(field => app[field] !== undefined);
+}
+
+function validateQuality(app, directoryName) {
+  const declared = QUALITY_FIELDS.filter(field => app[field] !== undefined);
+  if (declared.length === 0) return;
+  const missing = QUALITY_FIELDS.filter(field => app[field] === undefined);
+  if (missing.length > 0) {
+    throw new Error(
+      `${directoryName}/cobalt-app.json declares ${declared.length} quality fields but is missing: ${missing.join(", ")}`
+    );
+  }
+  const label = field => `${app.id} ${field}`;
+  sentence(app.user, label("user"));
+  sentence(app.job, label("job"));
+  sentence(app.offline, label("offline"));
+  if (!Array.isArray(app.data) || app.data.length === 0) {
+    throw new Error(`${label("data")} must name each kind of user-created data`);
+  }
+  for (const [index, item] of app.data.entries()) {
+    const at = `${label("data")}[${index}]`;
+    object(item, at);
+    sentence(item.kind, `${at}.kind`, 80);
+    sentence(item.location, `${at}.location`);
+    sentence(item.export, `${at}.export`, 120);
+    if (!RETENTION.has(item.on_remove)) {
+      throw new Error(
+        `${at}.on_remove must be one of: ${[...RETENTION].join(", ")}`
+      );
+    }
+  }
+  for (const [field, purposeKey] of [
+    ["capabilities_required", "purpose"],
+    ["capabilities_optional", "gates"]
+  ]) {
+    if (!Array.isArray(app[field]) || app[field].length === 0) {
+      throw new Error(`${label(field)} must be a non-empty array`);
+    }
+    for (const [index, item] of app[field].entries()) {
+      const at = `${label(field)}[${index}]`;
+      object(item, at);
+      if (typeof item.name !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(item.name)) {
+        throw new Error(`${at}.name must be a capability name`);
+      }
+      sentence(item[purposeKey], `${at}.${purposeKey}`);
+    }
+  }
+  sentenceList(app.profiles, label("profiles"));
+  sentence(app.maintainer, label("maintainer"), 120);
+  sentence(app.support, label("support"), 200);
+  sentenceList(app.non_goals, label("non_goals"));
 }
 
 export function collectRegistry({
