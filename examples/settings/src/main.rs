@@ -443,30 +443,9 @@ impl Settings {
             return screen;
         };
         screen = screen
-            .section_with_value(
-                "Update Cobalt automatically",
-                if cobalt { "On" } else { "Off" },
-            )
-            .button(
-                AUTO_COBALT,
-                if cobalt {
-                    "Stop updating Cobalt automatically"
-                } else {
-                    "Update Cobalt automatically"
-                },
-            )
-            .section_with_value(
-                "Update apps automatically",
-                if apps { "On" } else { "Off" },
-            )
-            .button(
-                AUTO_APPS,
-                if apps {
-                    "Stop updating apps automatically"
-                } else {
-                    "Update apps automatically"
-                },
-            );
+            .section("Automatic updates")
+            .toggle(AUTO_COBALT, "Update Cobalt automatically", cobalt)
+            .toggle(AUTO_APPS, "Update apps automatically", apps);
         // Both channel choices live one level down, side by side: this
         // screen is already full, and the two choices belong next to each
         // other so neither can be mistaken for the other.
@@ -490,31 +469,22 @@ impl Settings {
         let mut screen = ScreenBuilder::new("settings-channels")
             .top_bar("Channels")
             .owns_back(true)
-            .section_with_value(
-                "Update channel",
-                format!("{} · Cobalt {VERSION}", channel_name(channel)),
-            )
-            .text("Beta is selected only here, after stable installation. Changing back to Stable needs no USB cable and preserves installed apps, state, and secrets.")
-            .button(
+            .section_with_value("Cobalt updates", format!("Cobalt {VERSION}"))
+            .toggle(
                 BETA_UPDATES,
-                if channel == UpdateChannel::Beta {
-                    "Change to Stable"
-                } else {
-                    "Change to Beta"
-                },
-            );
+                "Beta updates",
+                channel == UpdateChannel::Beta,
+            )
+            .text("Beta is selected only here, after stable installation. Changing back to Stable needs no USB cable and preserves installed apps, state, and secrets.");
         if let Some(app_channel) = self.app_channel {
             screen = screen
-                .section_with_value("App catalog channel", channel_name(app_channel))
-                .text("The Store browses this signed catalog. It is chosen separately from the Cobalt platform channel and never moves with it.")
-                .button(
+                .section("App catalog")
+                .toggle(
                     APP_CHANNEL,
-                    if app_channel == UpdateChannel::Beta {
-                        "Browse the Stable catalog"
-                    } else {
-                        "Browse the Beta catalog"
-                    },
-                );
+                    "Beta apps",
+                    app_channel == UpdateChannel::Beta,
+                )
+                .text("The Store browses this signed catalog. It is chosen separately from the Cobalt platform channel and never moves with it.");
         }
         screen.build()
     }
@@ -1752,7 +1722,10 @@ mod tests {
         assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_some());
         let text = text_of(&channels);
         assert!(
-            facts_of(&channels).contains(&format!("Beta · Cobalt {VERSION}")),
+            channels.nodes.iter().any(|node| matches!(
+                node,
+                Node::Toggle { label, on: true, .. } if label == "Beta updates"
+            )),
             "{:?}",
             channels.nodes
         );
@@ -1836,14 +1809,22 @@ mod tests {
             let text = text_of(&choice);
             assert!(text.contains("chosen separately"), "{text}");
             // Both channels are on one screen but stay separate choices with
-            // separate values: the platform channel is still Beta here.
+            // separate switches: the platform channel is still Beta here, and
+            // the catalog switch shows the current choice rather than a guess.
             assert!(
-                facts_of(&choice).contains(&format!("Beta · Cobalt {VERSION}")),
+                choice.nodes.iter().any(|node| matches!(
+                    node,
+                    Node::Toggle { label, on: true, .. } if label == "Beta updates"
+                )),
                 "{:?}",
                 choice.nodes
             );
             assert!(
-                facts_of(&choice).contains(&channel_name(current).to_owned()),
+                choice.nodes.iter().any(|node| matches!(
+                    node,
+                    Node::Toggle { label, on, .. }
+                        if label == "Beta apps" && *on == (current == UpdateChannel::Beta)
+                )),
                 "{:?}",
                 choice.nodes
             );
