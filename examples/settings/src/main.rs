@@ -23,6 +23,7 @@ const AUTO_APPS: &str = "auto-apps";
 const BETA_UPDATES: &str = "beta-updates";
 const CONFIRM_CHANNEL: &str = "confirm-channel";
 const CANCEL_CHANNEL: &str = "cancel-channel";
+const CHANNELS: &str = "channels";
 const APP_CHANNEL: &str = "app-channel";
 const CONFIRM_APP_CHANNEL: &str = "confirm-app-channel";
 const CANCEL_APP_CHANNEL: &str = "cancel-app-channel";
@@ -69,6 +70,7 @@ enum View {
     Battery,
     About,
     Update,
+    Channels,
     UpdateChannelConfirm,
     AppChannelConfirm,
 }
@@ -247,6 +249,7 @@ impl Settings {
             View::Battery => self.battery(),
             View::About => self.about(),
             View::Update => self.update(),
+            View::Channels => self.channels(),
             View::UpdateChannelConfirm => self.update_channel_confirmation(),
             View::AppChannelConfirm => self.app_channel_confirmation(),
         };
@@ -441,6 +444,53 @@ impl Settings {
         };
         screen = screen
             .section_with_value(
+                "Update Cobalt automatically",
+                if cobalt { "On" } else { "Off" },
+            )
+            .button(
+                AUTO_COBALT,
+                if cobalt {
+                    "Stop updating Cobalt automatically"
+                } else {
+                    "Update Cobalt automatically"
+                },
+            )
+            .section_with_value(
+                "Update apps automatically",
+                if apps { "On" } else { "Off" },
+            )
+            .button(
+                AUTO_APPS,
+                if apps {
+                    "Stop updating apps automatically"
+                } else {
+                    "Update apps automatically"
+                },
+            );
+        // Both channel choices live one level down, side by side: this
+        // screen is already full, and the two choices belong next to each
+        // other so neither can be mistaken for the other.
+        let apps_value = self
+            .app_channel
+            .map(|app_channel| format!(" · apps {}", channel_name(app_channel)))
+            .unwrap_or_default();
+        screen = screen.rows([(
+            CHANNELS,
+            "Channels",
+            format!("Cobalt {}{apps_value}", channel_name(channel)),
+            RowLead::from(Glyph::App),
+        )]);
+        screen
+    }
+
+    fn channels(&self) -> Screen {
+        let Some(channel) = self.update_channel else {
+            return self.update();
+        };
+        let mut screen = ScreenBuilder::new("settings-channels")
+            .top_bar("Channels")
+            .owns_back(true)
+            .section_with_value(
                 "Update channel",
                 format!("{} · Cobalt {VERSION}", channel_name(channel)),
             )
@@ -466,32 +516,7 @@ impl Settings {
                     },
                 );
         }
-        screen = screen
-            .section_with_value(
-                "Update Cobalt automatically",
-                if cobalt { "On" } else { "Off" },
-            )
-            .button(
-                AUTO_COBALT,
-                if cobalt {
-                    "Stop updating Cobalt automatically"
-                } else {
-                    "Update Cobalt automatically"
-                },
-            )
-            .section_with_value(
-                "Update apps automatically",
-                if apps { "On" } else { "Off" },
-            )
-            .button(
-                AUTO_APPS,
-                if apps {
-                    "Stop updating apps automatically"
-                } else {
-                    "Update apps automatically"
-                },
-            );
-        screen
+        screen.build()
     }
 
     fn update_channel_confirmation(&self) -> Screen {
@@ -929,7 +954,7 @@ impl Settings {
 
     fn update_channel_action(&mut self, context: &mut Context, action: ActionId) -> bool {
         if action == action_id(BETA_UPDATES) {
-            if self.update_channel.is_some() {
+            if self.update_channel.is_some() && self.view == View::Channels {
                 self.view = View::UpdateChannelConfirm;
                 self.show(context);
             }
@@ -937,7 +962,7 @@ impl Settings {
         }
         if action == action_id(CONFIRM_CHANNEL) && self.view == View::UpdateChannelConfirm {
             if let Some(channel) = self.update_channel {
-                self.view = View::Update;
+                self.view = View::Channels;
                 context
                     .device()
                     .set_update_channel(opposite_channel(channel));
@@ -946,12 +971,19 @@ impl Settings {
             return true;
         }
         if action == action_id(CANCEL_CHANNEL) && self.view == View::UpdateChannelConfirm {
-            self.view = View::Update;
+            self.view = View::Channels;
             self.show(context);
             return true;
         }
+        if action == action_id(CHANNELS) {
+            if self.update_channel.is_some() {
+                self.view = View::Channels;
+                self.show(context);
+            }
+            return true;
+        }
         if action == action_id(APP_CHANNEL) {
-            if self.app_channel.is_some() {
+            if self.app_channel.is_some() && self.view == View::Channels {
                 self.view = View::AppChannelConfirm;
                 self.show(context);
             }
@@ -959,14 +991,14 @@ impl Settings {
         }
         if action == action_id(CONFIRM_APP_CHANNEL) && self.view == View::AppChannelConfirm {
             if let Some(channel) = self.app_channel {
-                self.view = View::Update;
+                self.view = View::Channels;
                 context.device().set_app_channel(opposite_channel(channel));
                 self.show(context);
             }
             return true;
         }
         if action == action_id(CANCEL_APP_CHANNEL) && self.view == View::AppChannelConfirm {
-            self.view = View::Update;
+            self.view = View::Channels;
             self.show(context);
             return true;
         }
@@ -1095,6 +1127,7 @@ impl Settings {
             | View::Battery
             | View::About
             | View::Update
+            | View::Channels
             | View::UpdateChannelConfirm
             | View::AppChannelConfirm => return,
         };
@@ -1201,10 +1234,10 @@ impl KoboApp for Settings {
             return;
         }
         if action == ActionId::BACK {
-            self.view = if matches!(self.view, View::UpdateChannelConfirm | View::AppChannelConfirm) {
-                View::Update
-            } else {
-                View::Home
+            self.view = match self.view {
+                View::UpdateChannelConfirm | View::AppChannelConfirm => View::Channels,
+                View::Channels => View::Update,
+                _ => View::Home,
             };
             self.show(context);
         } else if action == action_id(BLUETOOTH) {
@@ -1249,6 +1282,7 @@ impl KoboApp for Settings {
                 | View::Battery
                 | View::About
                 | View::Update
+                | View::Channels
                 | View::UpdateChannelConfirm
                 | View::AppChannelConfirm => {}
             }
@@ -1269,6 +1303,7 @@ impl KoboApp for Settings {
                 View::Home
                 | View::WifiPassword
                 | View::Update
+                | View::Channels
                 | View::UpdateChannelConfirm
                 | View::AppChannelConfirm => {}
             }
@@ -1670,7 +1705,8 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        RadioState, Settings, View, APP_CHANNEL, AUTO_APPS, AUTO_COBALT, BETA_UPDATES,
+        RadioState, Settings, View, APP_CHANNEL, AUTO_APPS, AUTO_COBALT, BETA_UPDATES, CHANNELS,
+        channel_name,
         CANCEL_CHANNEL, CONFIRM_APP_CHANNEL, CONFIRM_CHANNEL, DEVICE_ACTIONS, MORE,
         NETWORK_ACTIONS, PREVIOUS, RESCAN, TOGGLE, VERSION,
     };
@@ -1704,12 +1740,21 @@ mod tests {
         let layout = screen.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
         assert!(layout.rect_of_action(action_id(AUTO_COBALT)).is_some());
         assert!(layout.rect_of_action(action_id(AUTO_APPS)).is_some());
+        assert!(layout.rect_of_action(action_id(CHANNELS)).is_some());
+        // The channel choices themselves sit one level down, on their own
+        // screen: this one is already full.
+        assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_none());
+
+        let channels = settings.channels();
+        let issues = channels.validate(&CLARA_BW_METRICS);
+        assert!(issues.is_empty(), "{issues:?}");
+        let layout = channels.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
         assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_some());
-        let text = text_of(&screen);
+        let text = text_of(&channels);
         assert!(
-            facts_of(&screen).contains(&format!("Beta · Cobalt {VERSION}")),
+            facts_of(&channels).contains(&format!("Beta · Cobalt {VERSION}")),
             "{:?}",
-            screen.nodes
+            channels.nodes
         );
         assert!(text.contains("selected only here"), "{text}");
         assert!(text.contains("preserves installed apps, state, and secrets"));
@@ -1756,9 +1801,52 @@ mod tests {
             let issues = screen.validate(&CLARA_BW_METRICS);
             assert!(issues.is_empty(), "{issues:?}");
             let layout = screen.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
+            // The update screen carries only the row into the channels screen:
+            // both switches live one level down.
+            assert!(layout.rect_of_action(action_id(CHANNELS)).is_some());
+            assert!(layout.rect_of_action(action_id(APP_CHANNEL)).is_none());
+            assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_none());
+            // The row itself names both channels, so the split is visible
+            // before the tap: the platform stays Beta throughout.
+            let row_summary = screen
+                .nodes
+                .iter()
+                .find_map(|node| match node {
+                    Node::Rows { rows, .. } => rows
+                        .iter()
+                        .find(|row| row.title == "Channels")
+                        .map(|row| row.summary.clone()),
+                    _ => None,
+                })
+                .expect("channels row");
+            assert!(row_summary.contains("Cobalt Beta"), "{row_summary}");
+
+            let choice = Settings {
+                view: View::Channels,
+                update_channel: Some(UpdateChannel::Beta),
+                app_channel: Some(current),
+                ..Settings::default()
+            }
+            .channels();
+            let issues = choice.validate(&CLARA_BW_METRICS);
+            assert!(issues.is_empty(), "{issues:?}");
+            let layout = choice.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
             assert!(layout.rect_of_action(action_id(APP_CHANNEL)).is_some());
-            // The platform channel stays Beta throughout: only the catalog moves.
-            assert!(facts_of(&screen).contains(&format!("Beta · Cobalt {VERSION}")));
+            assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_some());
+            let text = text_of(&choice);
+            assert!(text.contains("chosen separately"), "{text}");
+            // Both channels are on one screen but stay separate choices with
+            // separate values: the platform channel is still Beta here.
+            assert!(
+                facts_of(&choice).contains(&format!("Beta · Cobalt {VERSION}")),
+                "{:?}",
+                choice.nodes
+            );
+            assert!(
+                facts_of(&choice).contains(&channel_name(current).to_owned()),
+                "{:?}",
+                choice.nodes
+            );
 
             let confirm = Settings {
                 view: View::AppChannelConfirm,
@@ -1790,6 +1878,7 @@ mod tests {
         assert!(layout.rect_of_action(action_id(AUTO_COBALT)).is_none());
         assert!(layout.rect_of_action(action_id(AUTO_APPS)).is_none());
         assert!(layout.rect_of_action(action_id(BETA_UPDATES)).is_none());
+        assert!(layout.rect_of_action(action_id(CHANNELS)).is_none());
     }
 
     #[test]
