@@ -3100,6 +3100,9 @@ fn simulated_app_request(
         | DeviceRequest::RefreshAppCatalog
         | DeviceRequest::InstallApp { .. }
         | DeviceRequest::UninstallApp { .. } => caller == "store",
+        // A recovery rewrites another application's saved state, so the
+        // simulator gates it the way the device runtime does.
+        DeviceRequest::RecoverApp { .. } => matches!(caller, "settings" | "store"),
         _ => return Ok(None),
     };
     if !authorized || scenario == Scenario::PermissionDenied {
@@ -3116,7 +3119,7 @@ fn simulated_app_request(
     if let Some(signed) = &apps.signed {
         return Ok(Some(signed.request(request, scenario)));
     }
-    let result = match request {
+    let mut result = match request {
         DeviceRequest::ListInstalledApps => DeviceResult::Apps {
             entries: apps
                 .catalog
@@ -3165,9 +3168,58 @@ fn simulated_app_request(
                 DeviceResult::Failed(DeviceError::NotFound)
             }
         }
+        DeviceRequest::RecoverApp { name, recovery } => {
+            let health = kobod::health::Health::new(&host_data_root());
+            let exports = host_data_root().join("exports");
+            let carried = match recovery {
+                kobo_protocol::AppRecovery::RemoveApp => {
+                    if matches!(name.as_str(), "settings" | "terminal") {
+                        return Ok(Some(DeviceResult::Failed(DeviceError::InvalidInput)));
+                    }
+                    match apps.catalog.iter_mut().find(|entry| entry.id == *name) {
+                        Some(entry) => {
+                            entry.installed_version = None;
+                            health.recover(name, kobod::health::Recovery::ResetState, &exports)
+                        }
+                        None => Err(format!("unknown app {name}")),
+                    }
+                }
+                kobo_protocol::AppRecovery::LaunchWithoutState => {
+                    health.recover(name, kobod::health::Recovery::LaunchWithoutState, &exports)
+                }
+                kobo_protocol::AppRecovery::ExportState => {
+                    health.recover(name, kobod::health::Recovery::ExportState, &exports)
+                }
+                kobo_protocol::AppRecovery::ResetState => {
+                    health.recover(name, kobod::health::Recovery::ResetState, &exports)
+                }
+            };
+            match carried.and_then(|outcome| health.release(name).map(|()| outcome)) {
+                Ok(outcome) => {
+                    eprintln!("recover {name}: {outcome}");
+                    DeviceResult::Done
+                }
+                Err(error) => {
+                    eprintln!("recover {name} failed: {error}");
+                    DeviceResult::Failed(DeviceError::Backend)
+                }
+            }
+        }
         _ => return Ok(None),
     };
+    // A developer can quarantine a simulated app by writing a crash ledger
+    // under the host data root; listings then report it like the reader does.
+    if let DeviceResult::Apps { entries } = &mut result {
+        kobod::app_store::mark_quarantine(&host_data_root(), entries);
+    }
     Ok(Some(result))
+}
+
+/// The simulator's stand-in for the reader's data partition: crash ledgers,
+/// saved state and exports live under here, so quarantine and recovery work
+/// at a desk exactly the way they do on the device.
+fn host_data_root() -> PathBuf {
+    std::env::temp_dir().join("cobalt-host-data")
 }
 
 /// Delivers a finished task as soon as it finishes.

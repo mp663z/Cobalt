@@ -2,7 +2,7 @@
 //! The explicit fixture key is never installed as a device trust key.
 use crate::Scenario;
 use kobo_app_store::Ed25519PublicKey;
-use kobo_protocol::{DeviceError, DeviceRequest, DeviceResult, UpdateChannel};
+use kobo_protocol::{AppRecovery, DeviceError, DeviceRequest, DeviceResult, UpdateChannel};
 use kobod::app_store::{self as runtime, AppWriteFault};
 use std::fs;
 use std::io::{self, Read};
@@ -108,6 +108,9 @@ impl SignedStore {
             DeviceRequest::UninstallApp { id } => {
                 return done(runtime::uninstall_using(&self.root, id, &self.key))
             }
+            DeviceRequest::RecoverApp { name, recovery } => {
+                return recover(&self.root, name, *recovery, &self.key)
+            }
             _ => return DeviceResult::Failed(DeviceError::InvalidInput),
         };
         entries.map_or_else(DeviceResult::Failed, |entries| DeviceResult::Apps {
@@ -118,6 +121,40 @@ impl SignedStore {
 
 fn done(result: Result<(), DeviceError>) -> DeviceResult {
     result.map_or_else(DeviceResult::Failed, |()| DeviceResult::Done)
+}
+
+/// Carries out a recovery against the same root the listings read, so the
+/// app stops reporting quarantined on the next catalog read. This mirrors
+/// the device runtime's handler: the state choice is applied, removing the
+/// app first when that is the choice, and the crash ledger is released only
+/// once everything succeeded.
+fn recover(root: &Path, name: &str, recovery: AppRecovery, key: &Ed25519PublicKey) -> DeviceResult {
+    let health = kobod::health::Health::new(root);
+    let exports = root.join("exports");
+    let carried = match recovery {
+        AppRecovery::RemoveApp => runtime::uninstall_using(root, name, key)
+            .map_err(|error| format!("remove {name}: {error:?}"))
+            .and_then(|()| health.recover(name, kobod::health::Recovery::ResetState, &exports)),
+        AppRecovery::LaunchWithoutState => {
+            health.recover(name, kobod::health::Recovery::LaunchWithoutState, &exports)
+        }
+        AppRecovery::ExportState => {
+            health.recover(name, kobod::health::Recovery::ExportState, &exports)
+        }
+        AppRecovery::ResetState => {
+            health.recover(name, kobod::health::Recovery::ResetState, &exports)
+        }
+    };
+    match carried.and_then(|outcome| health.release(name).map(|()| outcome)) {
+        Ok(outcome) => {
+            eprintln!("recover {name}: {outcome}");
+            DeviceResult::Done
+        }
+        Err(error) => {
+            eprintln!("recover {name} failed: {error}");
+            DeviceResult::Failed(DeviceError::Backend)
+        }
+    }
 }
 
 fn read(path: &Path, maximum: u64) -> io::Result<Vec<u8>> {
