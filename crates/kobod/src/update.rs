@@ -42,7 +42,7 @@ fn trace(_event: &str) {}
 /// Best-effort throughout: a reader that cannot write this still gets the
 /// error it was going to get, because failing to record a failure is not worth
 /// turning into a second one.
-fn record_failure(adds: &Path, reason: &str) {
+fn record_failure(adds: &Path, stage: UpdateStage, reason: &str) {
     // Only ever written beside an installation that already exists. A failed
     // update must leave a tree that has no Cobalt in it exactly as it found
     // it, which is what `a_download_that_does_not_match_its_digest_writes_nothing`
@@ -57,8 +57,57 @@ fn record_failure(adds: &Path, reason: &str) {
     if fs::create_dir_all(&state).is_err() {
         return;
     }
-    let _ignored = fs::write(state.join("last-update-error"), format!("{reason}\n"));
+    let _ignored = fs::write(
+        state.join("last-update-error"),
+        format!("{}: {reason}\n", stage.label()),
+    );
 }
+/// The stage of an update a failure belongs to.
+///
+/// The contract these labels serve: an update that cannot proceed says which
+/// part of the system said no - discovery, signature, archive policy, disk,
+/// migration, activation, launch canary or hand-back - and never maps one
+/// stage's failure onto another stage's words. `Dns` and `Tls` exist for a
+/// transport that can tell them apart; the one in use today reports a single
+/// unreachable, and nothing here guesses a finer stage than the evidence
+/// carries. The full set is named once so the ledger, the trace and every
+/// future caller speak the same taxonomy.
+// The callers that hand back, migrate and canary platform releases land in
+// the update-graph lanes that follow; the taxonomy is complete on purpose so
+// the ledger format never has to change under them.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateStage {
+    Discovery,
+    Dns,
+    Tls,
+    Signature,
+    ArchivePolicy,
+    Disk,
+    Migration,
+    Activation,
+    LaunchCanary,
+    HandBack,
+}
+
+impl UpdateStage {
+    /// The label the failure ledger and the trace record.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Discovery => "discovery",
+            Self::Dns => "dns",
+            Self::Tls => "tls",
+            Self::Signature => "signature",
+            Self::ArchivePolicy => "archive policy",
+            Self::Disk => "disk",
+            Self::Migration => "migration",
+            Self::Activation => "activation",
+            Self::LaunchCanary => "launch canary",
+            Self::HandBack => "hand-back",
+        }
+    }
+}
+
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path};
@@ -151,7 +200,11 @@ pub fn apply(url: &str, sha256: &str) -> Result<(), DeviceError> {
             ),
         };
         trace(&format!("platform update: download failed: {reason}"));
-        record_failure(Path::new(ADDS), &format!("download failed: {reason}"));
+        record_failure(
+            Path::new(ADDS),
+            UpdateStage::Discovery,
+            &format!("download failed: {reason}"),
+        );
         mapped
     })?;
     trace(&format!(
@@ -161,6 +214,102 @@ pub fn apply(url: &str, sha256: &str) -> Result<(), DeviceError> {
     install(&archive, sha256, Path::new(ADDS)).inspect_err(|error| {
         trace(&format!("platform update: install failed: {error}"));
     })
+}
+
+/// The release manifest schema this updater reads.
+const RELEASE_SCHEMA: i64 = 1;
+
+/// The updater capability this build carries. An archive whose manifest asks
+/// for more is refused before a staging write, not halfway through a swap.
+const UPDATER_CAPABILITY: i64 = 1;
+
+/// The manifest member, relative to the installation prefix, when an archive
+/// carries one. Archives without it predate the manifest and install exactly
+/// as they always have.
+const RELEASE_MANIFEST: &str = "release.json";
+
+/// Reads the release manifest out of an expanded archive, if it carries one.
+fn release_manifest(tar: &[u8]) -> Result<Option<kobo_json::Value>, String> {
+    let mut offset = 0usize;
+    while offset + BLOCK <= tar.len() {
+        let block = &tar[offset..offset + BLOCK];
+        if block.iter().all(|&byte| byte == 0) {
+            break;
+        }
+        let size = read_octal(&block[124..136])
+            .map_err(|_| "the archive carries a member header this updater cannot read".to_owned())?;
+        let size =
+            usize::try_from(size).map_err(|_| "the archive declares a member too large".to_owned())?;
+        let payload_at = offset + BLOCK;
+        if payload_at + size > tar.len() {
+            return Err("the archive ends inside a member".to_owned());
+        }
+        if block[156] == b'0' && installed_path(&read_string(&block[0..100])) == Some(Path::new(RELEASE_MANIFEST))
+        {
+            let text = std::str::from_utf8(&tar[payload_at..payload_at + size])
+                .map_err(|_| "the release manifest is not UTF-8".to_owned())?;
+            let value = kobo_json::parse(text)
+                .map_err(|_| "the release manifest is not readable JSON".to_owned())?;
+            return Ok(Some(value));
+        }
+        offset = payload_at + size.div_ceil(BLOCK) * BLOCK;
+    }
+    Ok(None)
+}
+
+/// Refuses an archive whose manifest asks for more than this updater is, or
+/// that declares work this updater does not know. Runs before any staging
+/// write, so a refusal leaves the installation exactly as it stood, and the
+/// recorded reason names the way back.
+fn check_release_manifest(tar: &[u8]) -> Result<(), String> {
+    let Some(manifest) = release_manifest(tar)? else {
+        return Ok(());
+    };
+    let schema = manifest
+        .get("schema")
+        .and_then(kobo_json::Value::as_i64)
+        .ok_or_else(|| "the release manifest does not declare a readable schema".to_owned())?;
+    if schema > RELEASE_SCHEMA {
+        return Err(format!(
+            "the archive declares release schema {schema} and this updater reads up to {RELEASE_SCHEMA}; install the current release package by hand once, then update again"
+        ));
+    }
+    let required = manifest
+        .get("requiresUpdater")
+        .and_then(kobo_json::Value::as_i64)
+        .unwrap_or(0);
+    if required > UPDATER_CAPABILITY {
+        return Err(format!(
+            "the archive needs updater capability {required} and this updater carries {UPDATER_CAPABILITY}; install the current release package by hand once, then update again"
+        ));
+    }
+    let listed = |key: &str| -> Vec<String> {
+        manifest
+            .get(key)
+            .and_then(kobo_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    for root in listed("roots") {
+        if !matches!(root.as_str(), "cobalt" | "launcher") {
+            return Err(format!(
+                "the archive declares writes below {root}, which no allowed release root covers"
+            ));
+        }
+    }
+    for migration in listed("migrations") {
+        if migration != "nickelmenu" {
+            return Err(format!(
+                "the archive asks for a {migration} migration this updater does not know"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Verifies `archive` against `sha256` and installs it under `adds`.
@@ -174,8 +323,8 @@ fn install(archive: &[u8], sha256: &str, adds: &Path) -> Result<(), DeviceError>
             "the {} downloaded bytes do not match the published digest",
             archive.len()
         );
-        trace(&format!("platform update: {reason}"));
-        record_failure(adds, &reason);
+        trace(&format!("platform update: signature: {reason}"));
+        record_failure(adds, UpdateStage::Signature, &reason);
         return Err(DeviceError::Integrity);
     }
     // The digest matched, so these bytes are exactly what was published. A
@@ -192,37 +341,83 @@ fn install(archive: &[u8], sha256: &str, adds: &Path) -> Result<(), DeviceError>
             "could not expand the {} byte archive, ceiling {EXPANDED_LIMIT}",
             archive.len()
         );
-        trace(&format!("platform update: {reason}"));
-        record_failure(adds, &reason);
+        trace(&format!("platform update: archive policy: {reason}"));
+        record_failure(adds, UpdateStage::ArchivePolicy, &reason);
         DeviceError::InvalidInput
     })?;
     trace(&format!(
         "platform update: expanded to {} bytes, writing staging copy",
         tar.len()
     ));
-    ensure_launch_bootstrap(adds)?;
-    recover_interrupted_update(adds)?;
+    // The manifest gate stands before any staging write: an archive that
+    // asks for more updater than this build is refused here, with the
+    // recovery path on record and the installation left exactly as it stood.
+    if let Err(reason) = check_release_manifest(&tar) {
+        trace(&format!("platform update: archive policy: {reason}"));
+        record_failure(adds, UpdateStage::ArchivePolicy, &reason);
+        return Err(DeviceError::InvalidInput);
+    }
+    if let Err(error) = ensure_launch_bootstrap(adds) {
+        record_failure(
+            adds,
+            UpdateStage::Activation,
+            "the launch bootstrap could not be written",
+        );
+        return Err(error);
+    }
+    if let Err(error) = recover_interrupted_update(adds) {
+        record_failure(
+            adds,
+            UpdateStage::Activation,
+            "an interrupted update could not be recovered before staging",
+        );
+        return Err(error);
+    }
     let staging = adds.join("cobalt.next");
     if staging.exists() {
         fs::remove_dir_all(&staging).map_err(|_| DeviceError::Backend)?;
     }
-    let unpacked = unpack(&tar, &staging);
-    if unpacked.is_err() {
+    if let Err(error) = unpack(&tar, &staging) {
         // A half-written staging folder is not left behind to be mistaken
         // for progress by the next attempt.
         let _ignored = fs::remove_dir_all(&staging);
+        let (stage, reason) = if error == DeviceError::Backend {
+            (
+                UpdateStage::Disk,
+                "the book partition refused a write while staging the release",
+            )
+        } else {
+            (
+                UpdateStage::ArchivePolicy,
+                "the archive breaks the release layout policy",
+            )
+        };
+        trace(&format!("platform update: {}: {reason}", stage.label()));
+        record_failure(adds, stage, reason);
+        return Err(error);
     }
-    unpacked?;
     if !complete_launch_chain(&staging) {
         let _ignored = fs::remove_dir_all(&staging);
+        let reason = "the archive does not carry a launchable Cobalt (start.sh and bin/kobod)";
+        trace(&format!("platform update: archive policy: {reason}"));
+        record_failure(adds, UpdateStage::ArchivePolicy, reason);
         return Err(DeviceError::InvalidInput);
     }
     if has_owner_folders(&staging) {
         let _ignored = fs::remove_dir_all(&staging);
+        let reason = "the archive tries to carry owner data folders, which an update never touches";
+        trace(&format!("platform update: archive policy: {reason}"));
+        record_failure(adds, UpdateStage::ArchivePolicy, reason);
         return Err(DeviceError::Backend);
     }
 
-    swap(adds, &staging)
+    swap(adds, &staging).inspect_err(|_| {
+        record_failure(
+            adds,
+            UpdateStage::Activation,
+            "the staged release could not be swapped into place",
+        );
+    })
 }
 
 fn complete_launch_chain(release: &Path) -> bool {
@@ -1131,6 +1326,123 @@ mod tests {
         let read = |path: &str| fs::read(adds.join("cobalt").join(path)).expect("installed file");
         assert_eq!(read("bin/kobod"), b"daemon");
         assert_eq!(read("start.sh"), b"#!/bin/sh\n");
+        assert!(!adds.join("cobalt.next").exists());
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    /// An archive like the ones the release workflow publishes, with an
+    /// optional release manifest member.
+    fn release_archive(manifest: Option<&str>) -> (Vec<u8>, String) {
+        let mut members = launch_files(b"#!/bin/sh\n");
+        members.push(folder(""));
+        if let Some(json) = manifest {
+            members.push(file("release.json", json.as_bytes()));
+        }
+        published(&members)
+    }
+
+    fn recorded_refusal(adds: &std::path::Path) -> String {
+        fs::read_to_string(adds.join("cobalt/state/last-update-error"))
+            .expect("the reason the update was refused")
+    }
+
+    #[test]
+    fn a_manifest_asking_for_a_newer_updater_is_refused_before_staging() {
+        let adds = scratch("manifest-newer-updater");
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest) =
+            release_archive(Some(r#"{"schema":1,"requiresUpdater":2,"roots":["cobalt"]}"#));
+        let error = install(&archive, &digest, &adds).expect_err("refused before staging");
+        assert_eq!(error, DeviceError::InvalidInput);
+        assert!(!adds.join("cobalt.next").exists());
+        let recorded = recorded_refusal(&adds);
+        assert!(
+            recorded.contains("archive policy:"),
+            "the refusal is staged: {recorded}"
+        );
+        assert!(
+            recorded.contains("updater capability 2"),
+            "the refusal says what the archive asked for: {recorded}"
+        );
+        assert!(
+            recorded.contains("by hand once"),
+            "the refusal names the recovery path: {recorded}"
+        );
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    #[test]
+    fn a_manifest_with_a_schema_this_updater_cannot_read_is_refused() {
+        let adds = scratch("manifest-newer-schema");
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest) = release_archive(Some(r#"{"schema":2}"#));
+        let error = install(&archive, &digest, &adds).expect_err("refused before staging");
+        assert_eq!(error, DeviceError::InvalidInput);
+        assert!(!adds.join("cobalt.next").exists());
+        let recorded = recorded_refusal(&adds);
+        assert!(
+            recorded.contains("release schema 2"),
+            "the refusal names the schema: {recorded}"
+        );
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    #[test]
+    fn a_manifest_with_an_unknown_migration_is_refused() {
+        let adds = scratch("manifest-unknown-migration");
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest) =
+            release_archive(Some(r#"{"schema":1,"migrations":["repartition"]}"#));
+        let error = install(&archive, &digest, &adds).expect_err("refused before staging");
+        assert_eq!(error, DeviceError::InvalidInput);
+        let recorded = recorded_refusal(&adds);
+        assert!(
+            recorded.contains("repartition"),
+            "the refusal names the migration: {recorded}"
+        );
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    #[test]
+    fn a_manifest_declaring_a_root_no_release_may_write_is_refused() {
+        let adds = scratch("manifest-unknown-root");
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest) =
+            release_archive(Some(r#"{"schema":1,"roots":["cobalt","nickel"]}"#));
+        let error = install(&archive, &digest, &adds).expect_err("refused before staging");
+        assert_eq!(error, DeviceError::InvalidInput);
+        let recorded = recorded_refusal(&adds);
+        assert!(
+            recorded.contains("nickel"),
+            "the refusal names the root: {recorded}"
+        );
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    #[test]
+    fn a_manifest_without_a_readable_schema_is_refused() {
+        let adds = scratch("manifest-no-schema");
+        fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
+        let (archive, digest) = release_archive(Some(r#"{"requiresUpdater":1}"#));
+        let error = install(&archive, &digest, &adds).expect_err("refused before staging");
+        assert_eq!(error, DeviceError::InvalidInput);
+        let recorded = recorded_refusal(&adds);
+        assert!(
+            recorded.contains("does not declare a readable schema"),
+            "the refusal says what is missing: {recorded}"
+        );
+        let _ignored = fs::remove_dir_all(&adds);
+    }
+
+    #[test]
+    fn a_well_formed_manifest_installs_and_stays_with_the_release() {
+        let adds = scratch("manifest-installs");
+        let (archive, digest) = release_archive(Some(
+            r#"{"schema":1,"requiresUpdater":1,"roots":["cobalt"],"migrations":["nickelmenu"]}"#,
+        ));
+        install(&archive, &digest, &adds).expect("install succeeds");
+        let manifest = fs::read(adds.join("cobalt/release.json")).expect("manifest installed");
+        assert!(std::str::from_utf8(&manifest).unwrap().contains("nickelmenu"));
         assert!(!adds.join("cobalt.next").exists());
         let _ignored = fs::remove_dir_all(&adds);
     }
