@@ -23,6 +23,9 @@ const AUTO_APPS: &str = "auto-apps";
 const BETA_UPDATES: &str = "beta-updates";
 const CONFIRM_CHANNEL: &str = "confirm-channel";
 const CANCEL_CHANNEL: &str = "cancel-channel";
+const APP_CHANNEL: &str = "app-channel";
+const CONFIRM_APP_CHANNEL: &str = "confirm-app-channel";
+const CANCEL_APP_CHANNEL: &str = "cancel-app-channel";
 const RESCAN: &str = "rescan";
 const MORE: &str = "more";
 const PREVIOUS: &str = "previous";
@@ -67,6 +70,7 @@ enum View {
     About,
     Update,
     UpdateChannelConfirm,
+    AppChannelConfirm,
 }
 
 /// `Unavailable` is a confirmed hardware fact: it is only ever produced by
@@ -193,6 +197,8 @@ fn update_screen_owns(request: &DeviceRequest) -> bool {
             | DeviceRequest::SetAutoUpdate { .. }
             | DeviceRequest::ReadUpdateChannel
             | DeviceRequest::SetUpdateChannel { .. }
+            | DeviceRequest::ReadAppChannel
+            | DeviceRequest::SetAppChannel { .. }
     )
 }
 
@@ -224,6 +230,7 @@ struct Settings {
     /// rather than a guess that a tap would then contradict.
     auto_update: Option<(bool, bool)>,
     update_channel: Option<UpdateChannel>,
+    app_channel: Option<UpdateChannel>,
     pending: Option<Pending>,
     delayed: Option<TaskId>,
     trouble: Option<(Topic, String)>,
@@ -241,6 +248,7 @@ impl Settings {
             View::About => self.about(),
             View::Update => self.update(),
             View::UpdateChannelConfirm => self.update_channel_confirmation(),
+            View::AppChannelConfirm => self.app_channel_confirmation(),
         };
         context.set_screen(screen);
     }
@@ -444,7 +452,21 @@ impl Settings {
                 } else {
                     "Change to Beta"
                 },
-            )
+            );
+        if let Some(app_channel) = self.app_channel {
+            screen = screen
+                .section_with_value("App catalog channel", channel_name(app_channel))
+                .text("The Store browses this signed catalog. It is chosen separately from the Cobalt platform channel and never moves with it.")
+                .button(
+                    APP_CHANNEL,
+                    if app_channel == UpdateChannel::Beta {
+                        "Browse the Stable catalog"
+                    } else {
+                        "Browse the Beta catalog"
+                    },
+                );
+        }
+        screen = screen
             .section_with_value(
                 "Update Cobalt automatically",
                 if cobalt { "On" } else { "Off" },
@@ -497,6 +519,33 @@ impl Settings {
                 format!("Use {} updates", channel_name(chosen)),
             )
             .button(CANCEL_CHANNEL, "Cancel")
+            .build()
+    }
+
+    fn app_channel_confirmation(&self) -> Screen {
+        let current = self.app_channel.unwrap_or_default();
+        let chosen = opposite_channel(current);
+        let explanation = match chosen {
+            UpdateChannel::Beta => {
+                "The Store browses the signed Beta catalog. Beta apps may be less stable. Installed apps, their state, and secrets are preserved, and Cobalt platform updates are unchanged."
+            }
+            UpdateChannel::Stable => {
+                "The Store returns to the signed Stable catalog. Apps that are also published there keep updating; Beta-only apps stay installed and read Local. Cobalt platform updates are unchanged."
+            }
+        };
+        ScreenBuilder::new("settings-app-channel-confirm")
+            .top_bar("Confirm app catalog channel")
+            .owns_back(true)
+            .facts([
+                ("Current catalog", channel_name(current).to_owned()),
+                ("New catalog", channel_name(chosen).to_owned()),
+            ])
+            .text(explanation)
+            .primary_button(
+                CONFIRM_APP_CHANNEL,
+                format!("Browse {} apps", channel_name(chosen)),
+            )
+            .button(CANCEL_APP_CHANNEL, "Cancel")
             .build()
     }
 
@@ -831,6 +880,7 @@ impl Settings {
         context.device().read_battery_detail();
         context.device().read_auto_update();
         context.device().read_update_channel();
+        context.device().read_app_channel();
     }
 
     /// Asks GitHub what the newest published release is. Nothing is
@@ -896,6 +946,26 @@ impl Settings {
             return true;
         }
         if action == action_id(CANCEL_CHANNEL) && self.view == View::UpdateChannelConfirm {
+            self.view = View::Update;
+            self.show(context);
+            return true;
+        }
+        if action == action_id(APP_CHANNEL) {
+            if self.app_channel.is_some() {
+                self.view = View::AppChannelConfirm;
+                self.show(context);
+            }
+            return true;
+        }
+        if action == action_id(CONFIRM_APP_CHANNEL) && self.view == View::AppChannelConfirm {
+            if let Some(channel) = self.app_channel {
+                self.view = View::Update;
+                context.device().set_app_channel(opposite_channel(channel));
+                self.show(context);
+            }
+            return true;
+        }
+        if action == action_id(CANCEL_APP_CHANNEL) && self.view == View::AppChannelConfirm {
             self.view = View::Update;
             self.show(context);
             return true;
@@ -1025,7 +1095,8 @@ impl Settings {
             | View::Battery
             | View::About
             | View::Update
-            | View::UpdateChannelConfirm => return,
+            | View::UpdateChannelConfirm
+            | View::AppChannelConfirm => return,
         };
         *page = if forward {
             (*page + 1).min(pages - 1)
@@ -1100,6 +1171,13 @@ impl Settings {
     }
 
     fn took_update_channel(&mut self, request: &DeviceRequest, channel: UpdateChannel) {
+        if matches!(
+            request,
+            DeviceRequest::ReadAppChannel | DeviceRequest::SetAppChannel { .. }
+        ) {
+            self.app_channel = Some(channel);
+            return;
+        }
         self.update_channel = Some(channel);
         if matches!(request, DeviceRequest::SetUpdateChannel { .. }) {
             self.update = UpdateFlow::Idle;
@@ -1123,7 +1201,7 @@ impl KoboApp for Settings {
             return;
         }
         if action == ActionId::BACK {
-            self.view = if self.view == View::UpdateChannelConfirm {
+            self.view = if matches!(self.view, View::UpdateChannelConfirm | View::AppChannelConfirm) {
                 View::Update
             } else {
                 View::Home
@@ -1171,7 +1249,8 @@ impl KoboApp for Settings {
                 | View::Battery
                 | View::About
                 | View::Update
-                | View::UpdateChannelConfirm => {}
+                | View::UpdateChannelConfirm
+                | View::AppChannelConfirm => {}
             }
         } else if action == action_id(RESCAN) {
             match self.view {
@@ -1187,7 +1266,11 @@ impl KoboApp for Settings {
                 }
                 View::Battery => context.device().read_battery_detail(),
                 View::About => context.device().read_identity(),
-                View::Home | View::WifiPassword | View::Update | View::UpdateChannelConfirm => {}
+                View::Home
+                | View::WifiPassword
+                | View::Update
+                | View::UpdateChannelConfirm
+                | View::AppChannelConfirm => {}
             }
             self.show(context);
         } else if action == action_id(MORE) {
@@ -1587,8 +1670,9 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        RadioState, Settings, View, AUTO_APPS, AUTO_COBALT, BETA_UPDATES, CANCEL_CHANNEL,
-        CONFIRM_CHANNEL, DEVICE_ACTIONS, MORE, NETWORK_ACTIONS, PREVIOUS, RESCAN, TOGGLE, VERSION,
+        RadioState, Settings, View, APP_CHANNEL, AUTO_APPS, AUTO_COBALT, BETA_UPDATES,
+        CANCEL_CHANNEL, CONFIRM_APP_CHANNEL, CONFIRM_CHANNEL, DEVICE_ACTIONS, MORE,
+        NETWORK_ACTIONS, PREVIOUS, RESCAN, TOGGLE, VERSION,
     };
     use kobo_sdk::{
         action_id, BannerLevel, BatteryDetail, BluetoothDevice, BluetoothDeviceKind, Chrome,
@@ -1652,6 +1736,45 @@ mod tests {
             assert!(facts_of(&screen).contains(&format!("Cobalt {VERSION}")));
             assert!(text.contains(chosen), "{text}");
             assert!(text.contains("preserved"), "{text}");
+        }
+    }
+
+    #[test]
+    fn the_app_catalog_channel_is_chosen_separately_with_confirmation() {
+        for (current, chosen) in [
+            (UpdateChannel::Stable, "Beta"),
+            (UpdateChannel::Beta, "Stable"),
+        ] {
+            let settings = Settings {
+                view: View::Update,
+                auto_update: Some((true, true)),
+                update_channel: Some(UpdateChannel::Beta),
+                app_channel: Some(current),
+                ..Settings::default()
+            };
+            let screen = settings.update();
+            let issues = screen.validate(&CLARA_BW_METRICS);
+            assert!(issues.is_empty(), "{issues:?}");
+            let layout = screen.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
+            assert!(layout.rect_of_action(action_id(APP_CHANNEL)).is_some());
+            // The platform channel stays Beta throughout: only the catalog moves.
+            assert!(facts_of(&screen).contains(&format!("Beta · Cobalt {VERSION}")));
+
+            let confirm = Settings {
+                view: View::AppChannelConfirm,
+                app_channel: Some(current),
+                ..Settings::default()
+            }
+            .app_channel_confirmation();
+            let issues = confirm.validate(&CLARA_BW_METRICS);
+            assert!(issues.is_empty(), "{issues:?}");
+            let layout = confirm.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
+            assert!(layout
+                .rect_of_action(action_id(CONFIRM_APP_CHANNEL))
+                .is_some());
+            let text = text_of(&confirm);
+            assert!(text.contains(chosen), "{text}");
+            assert!(text.contains("platform updates are unchanged"), "{text}");
         }
     }
 
