@@ -188,9 +188,9 @@ const QUALITY_FIELDS = [
 ];
 const RETENTION = new Set(["retained", "exported-then-deleted", "deleted"]);
 
-function sentence(value, label, max = 280) {
-  if (typeof value !== "string" || value.trim().length < 12 || value.length > max) {
-    throw new Error(`${label} must be 12 to ${max} meaningful characters`);
+function sentence(value, label, max = 280, min = 12) {
+  if (typeof value !== "string" || value.trim().length < min || value.length > max) {
+    throw new Error(`${label} must be ${min} to ${max} meaningful characters`);
   }
   return value;
 }
@@ -226,7 +226,8 @@ function validateQuality(app, directoryName) {
   for (const [index, item] of app.data.entries()) {
     const at = `${label("data")}[${index}]`;
     object(item, at);
-    sentence(item.kind, `${at}.kind`, 80);
+    // A data kind is a name ("kept papers", "high scores"), not a sentence.
+    sentence(item.kind, `${at}.kind`, 80, 2);
     sentence(item.location, `${at}.location`);
     sentence(item.export, `${at}.export`, 120);
     if (!RETENTION.has(item.on_remove)) {
