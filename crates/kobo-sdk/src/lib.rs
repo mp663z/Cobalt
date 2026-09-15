@@ -2582,6 +2582,19 @@ impl Device<'_> {
         self.request(DeviceRequest::SetUpdateChannel { channel });
     }
 
+    /// Asks which signed catalog channel the Store browses, answered as
+    /// [`DeviceResult::UpdateChannel`] for [`DeviceRequest::ReadAppChannel`].
+    pub fn read_app_channel(&mut self) {
+        self.request(DeviceRequest::ReadAppChannel);
+    }
+
+    /// Selects the signed catalog channel the Store browses. Independent of
+    /// the platform update channel by design.
+    #[cfg(feature = "runtime-settings")]
+    pub fn set_app_channel(&mut self, channel: UpdateChannel) {
+        self.request(DeviceRequest::SetAppChannel { channel });
+    }
+
     fn bluetooth_address(
         &mut self,
         address: impl Into<String>,
