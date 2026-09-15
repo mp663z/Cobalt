@@ -5198,6 +5198,50 @@ mod tests {
     }
 
     #[test]
+    fn a_nonzero_exit_after_an_escape_counts_as_a_crash() {
+        let (mut hosted, _client, root) = hosted_peer(kobo_protocol::VERSION);
+        hosted.child = super::ApplicationChild::ordinary(
+            std::process::Command::new("/usr/bin/false")
+                .spawn()
+                .expect("a failing stand-in process"),
+        );
+        let health = kobod::health::Health::new(&root);
+        super::record_exit(&health, &mut hosted);
+        assert_eq!(health.crashes("todo"), 1);
+    }
+
+    #[test]
+    fn a_clean_exit_after_an_escape_heals_the_ledger() {
+        let (mut hosted, _client, root) = hosted_peer(kobo_protocol::VERSION);
+        let health = kobod::health::Health::new(&root);
+        health.record_crash("todo").expect("first crash");
+        health.record_crash("todo").expect("second crash");
+        // hosted_peer's stand-in is /usr/bin/true: a clean exit.
+        super::record_exit(&health, &mut hosted);
+        assert_eq!(health.crashes("todo"), 0);
+    }
+
+    #[test]
+    fn a_child_that_outlives_the_reap_deadline_counts_as_a_crash() {
+        let (mut hosted, _client, root) = hosted_peer(kobo_protocol::VERSION);
+        let mut sleeper = std::process::Command::new("/usr/bin/sleep")
+            .arg("30")
+            .spawn()
+            .expect("a stubborn stand-in process");
+        hosted.child = super::ApplicationChild::ordinary(sleeper);
+        let health = kobod::health::Health::new(&root);
+        let started = std::time::Instant::now();
+        super::record_exit(&health, &mut hosted);
+        assert_eq!(health.crashes("todo"), 1);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the reap deadline did not hold"
+        );
+        let _ignored = hosted.child.process.kill();
+        let _ignored = hosted.child.process.wait();
+    }
+
+    #[test]
     fn an_application_cannot_change_protocol_version_after_greeting() {
         let (runtime, mut application) =
             std::os::unix::net::UnixStream::pair().expect("socket pair");
