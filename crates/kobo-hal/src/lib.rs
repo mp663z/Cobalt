@@ -33,6 +33,10 @@ pub mod input;
 #[cfg(feature = "device-write")]
 pub mod network;
 pub mod observe;
+/// Probing who owns each hardware resource, never inferring it. Read-only:
+/// it inspects the process table and declared nodes, so it needs no write
+/// feature. Actuation stays with the owner-attended kobo-handoff binary.
+pub mod ownership;
 pub mod power_source;
 pub mod probe;
 /// Stopping and restarting the stock reader. Available only with

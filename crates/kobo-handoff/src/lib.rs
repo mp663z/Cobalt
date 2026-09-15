@@ -13,6 +13,8 @@
 //! machine enforces order, evidence and the single-owner invariant.
 
 use kobo_profile::ownership::{Evidence, ResourceOwnership};
+
+pub use kobo_profile::ownership::Driver;
 use std::fmt;
 
 /// Who currently owns the resource, as far as the machine has proven.
@@ -95,36 +97,6 @@ impl fmt::Display for HandoffError {
 
 impl std::error::Error for HandoffError {}
 
-/// The hardware side of a handoff. Every method returns the observation it
-/// made, which the machine journals; a transition without an observation is
-/// an assumption, and this machine does not make them.
-pub trait Driver {
-    /// Probe who owns the resource now, as process/node identities.
-    ///
-    /// # Errors
-    ///
-    /// Returns the probe failure; acquisition treats it as a failed step.
-    fn probe_owners(&mut self) -> Result<Vec<String>, String>;
-    /// Run one hand-back step within its timeout, returning what happened.
-    ///
-    /// # Errors
-    ///
-    /// Returns the step failure; the machine then rolls back.
-    fn run_step(&mut self, action: &'static str, timeout_seconds: u32) -> Result<String, String>;
-    /// Make the observation the profile names as resume evidence.
-    ///
-    /// # Errors
-    ///
-    /// Returns why the observation could not be made; the resume is unproven.
-    fn observe_resume(&mut self) -> Result<String, String>;
-    /// Roll back a failed hand-back and capture diagnostics.
-    ///
-    /// # Errors
-    ///
-    /// Returns why rollback itself failed; the machine records that instead.
-    fn rollback(&mut self) -> Result<String, String>;
-}
-
 /// A handoff of one resource under one profile record.
 pub struct Handoff<'a> {
     record: &'a ResourceOwnership,
@@ -189,7 +161,7 @@ impl<'a> Handoff<'a> {
                 error,
                 diagnostics: String::new(),
             })?;
-        if found.len() == 1 && found[0] == self.record.owner_before_entry {
+        if found.len() == 1 && self.record.owns(&found[0]) {
             let observation = format!("probed: sole owner is {}", found[0]);
             self.record_transition(Phase::Held, observation);
             return Ok(());

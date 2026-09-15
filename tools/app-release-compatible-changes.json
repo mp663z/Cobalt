@@ -308,7 +308,7 @@
         {
           "path": "Cargo.lock",
           "base_blob": "e07e1ade0355155e92ff024f4ae7518372cd1ce8",
-          "compatible_blob": "e7e200fce5daafa6a5e02791f76bcc4813ed78dc"
+          "compatible_blob": "2675fe130582a38620d63c7b9cdb7baf101cf01e"
         }
       ]
     }

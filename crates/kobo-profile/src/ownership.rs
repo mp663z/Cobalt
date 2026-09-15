@@ -60,6 +60,11 @@ pub struct ResourceOwnership {
     pub evidence: Evidence,
     /// The process or subsystem owning the resource before Cobalt entry.
     pub owner_before_entry: &'static str,
+    /// The exact executable path whose presence in the process table means
+    /// the stock owner holds the resource, or empty when the owner is not a
+    /// process. This is what a real probe matches; `owner_before_entry` is
+    /// the human name for the same fact.
+    pub owner_process: &'static str,
     /// Process/device nodes whose inspection establishes who owns it.
     pub nodes: &'static [&'static str],
     pub acquisition: Acquisition,
@@ -73,6 +78,41 @@ pub struct ResourceOwnership {
     pub firmware_exceptions: &'static [&'static str],
     /// What runs when any step fails: rollback plus diagnostic capture.
     pub rollback: &'static str,
+}
+
+/// The hardware side of a handoff. Every method returns the observation it
+/// made, which the machine journals; a transition without an observation is
+/// an assumption, and this machine does not make them.
+pub trait Driver {
+    //
+    // Implementations live in kobo-hal (the real device probes) and in test
+    // fixtures. The trait sits here, beside the records it probes against,
+    // because kobo-handoff already depends on kobo-hal and a trait here is
+    // the only placement that lets both crates see it without a cycle.
+    /// Probe who owns the resource now, as process/node identities.
+    ///
+    /// # Errors
+    ///
+    /// Returns the probe failure; acquisition treats it as a failed step.
+    fn probe_owners(&mut self) -> Result<Vec<String>, String>;
+    /// Run one hand-back step within its timeout, returning what happened.
+    ///
+    /// # Errors
+    ///
+    /// Returns the step failure; the machine then rolls back.
+    fn run_step(&mut self, action: &'static str, timeout_seconds: u32) -> Result<String, String>;
+    /// Make the observation the profile names as resume evidence.
+    ///
+    /// # Errors
+    ///
+    /// Returns why the observation could not be made; the resume is unproven.
+    fn observe_resume(&mut self) -> Result<String, String>;
+    /// Roll back a failed hand-back and capture diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns why rollback itself failed; the machine records that instead.
+    fn rollback(&mut self) -> Result<String, String>;
 }
 
 /// The record set for hardware nobody has measured: every resource
@@ -97,6 +137,7 @@ pub const fn unverified(resource: ResourceKind) -> ResourceOwnership {
         resource,
         evidence: Evidence::Unverified,
         owner_before_entry: "",
+        owner_process: "",
         nodes: &[],
         acquisition: Acquisition::Borrow,
         prerequisites: &[],
@@ -118,6 +159,7 @@ pub const fn panel_via_reader_restart(
         resource: ResourceKind::Panel,
         evidence,
         owner_before_entry: "nickel (the stock reader process)",
+        owner_process: "/usr/local/Kobo/nickel",
         nodes: &["/dev/fb0", "/proc/*/exe -> /usr/local/Kobo/nickel"],
         acquisition: Acquisition::Stop,
         prerequisites: &[
@@ -155,6 +197,7 @@ pub const fn touch_borrowed(evidence: Evidence) -> ResourceOwnership {
         resource: ResourceKind::Touch,
         evidence,
         owner_before_entry: "nickel (events are shared, never grabbed)",
+        owner_process: "/usr/local/Kobo/nickel",
         nodes: &["/proc/bus/input/devices", "/dev/input/event*"],
         acquisition: Acquisition::Borrow,
         prerequisites: &["open the discovered touch node read-only; never EVIOCGRAB"],
@@ -179,6 +222,7 @@ pub const fn wifi_reap(
         resource: ResourceKind::Wifi,
         evidence,
         owner_before_entry: "nickel's wpa_supplicant (or the MediaTek wmt_launcher)",
+        owner_process: "/bin/wpa_supplicant",
         nodes: &["/sys/class/net/wlan0", "/var/run/wpa_supplicant", "/dev/stpwmt"],
         acquisition: Acquisition::Reap,
         prerequisites: &["record the running supplicant's exact process identity"],
@@ -206,6 +250,19 @@ pub const fn wifi_reap(
     }
 }
 
+impl ResourceOwnership {
+    /// Whether a probed identity names this record's stock owner: the exact
+    /// owner process (possibly with its pid attached), or the human name a
+    /// scripted driver reports.
+    #[must_use]
+    pub fn owns(&self, identity: &str) -> bool {
+        identity == self.owner_before_entry
+            || (!self.owner_process.is_empty()
+                && (identity == self.owner_process
+                    || identity.starts_with(&format!("{} (pid ", self.owner_process))))
+    }
+}
+
 /// The consistency rules a profile's ownership records must satisfy. Returns
 /// every violation so a test failure names them all at once.
 #[must_use]
@@ -226,6 +283,15 @@ pub fn check(records: &[ResourceOwnership]) -> Vec<String> {
                 if record.owner_before_entry.is_empty() {
                     violations.push(format!(
                         "{:?}: measured record names no owner",
+                        record.resource
+                    ));
+                }
+                if !record.nodes.iter().any(|node| node.contains("/proc/"))
+                    && record.owner_process.is_empty()
+                    && record.owner_before_entry.is_empty()
+                {
+                    violations.push(format!(
+                        "{:?}: measured record offers no way to probe its owner",
                         record.resource
                     ));
                 }
