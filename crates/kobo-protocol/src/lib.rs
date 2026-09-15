@@ -65,7 +65,14 @@ pub const MAGIC: [u8; 4] = *b"KOBO";
 /// A colour picture travels the same way: a grey picture still uses the tags it
 /// always did, byte for byte, and a colour one uses tags of its own that an
 /// older runtime refuses rather than misreads.
-pub const VERSION: u8 = 15;
+pub const VERSION: u8 = 16;
+/// Version adding reasoned capability availability: an application may ask
+/// the state of a capability and receives the state plus its human-readable
+/// reason, so a device that needs owner setup is never reported as
+/// unsupported hardware (docs/quality/contracts/capability-availability.md).
+/// Its device request tag 54 and device result tag 21 are refused by older
+/// runtimes rather than misread.
+pub const CAPABILITY_REASON_VERSION: u8 = 16;
 /// Version adding app provenance, package size and permission-change facts to
 /// catalog listings, so the Store can label Stable, Beta and local packages.
 /// Its beta node tag 35 carries the standing toggle switch; older runtimes
@@ -1159,6 +1166,10 @@ impl From<&str> for SecretValue {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeviceRequest {
+    /// Ask the availability of one declared capability: the reasoned state
+    /// plus the human-readable reason. Version-gated on
+    /// [`CAPABILITY_REASON_VERSION`].
+    ReadCapability { name: String },
     /// Report battery percentage and whether the device is charging.
     ReadBattery,
     /// Everything the gauge publishes, for a screen that shows it.
@@ -1576,6 +1587,13 @@ pub enum DeviceResult {
     AutoUpdate { cobalt: bool, apps: bool },
     /// What this runtime is and what it is running on. See [`DeviceIdentity`].
     Identity(DeviceIdentity),
+    /// The availability of one capability: state plus reason, never a bare
+    /// boolean. Version-gated on [`CAPABILITY_REASON_VERSION`].
+    Capability {
+        name: String,
+        state: CapabilityAvailability,
+        reason: String,
+    },
     /// The backend exists, but the requested operation failed.
     Failed(DeviceError),
     /// The request was refused, with the exact reason.
@@ -1970,6 +1988,51 @@ impl TryFrom<u8> for DenyReason {
     }
 }
 
+/// The availability state a capability report carries on the wire.
+///
+/// One reasoned state plus the reason string beside it replaces the boolean
+/// capable/incapable reading: a device that needs owner setup is never
+/// reported as unsupported hardware, and an `Unsupported` report carries
+/// probe evidence rather than an assumption
+/// (docs/quality/contracts/capability-availability.md).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum CapabilityAvailability {
+    /// Usable now.
+    Available = 1,
+    /// Usable after a named owner action; the report names the action.
+    OwnerSetupRequired = 2,
+    /// Transiently unusable; the report says what would change it.
+    TemporarilyUnavailable = 3,
+    /// The user or policy refused it; the report names the permission.
+    Denied = 4,
+    /// The hardware or firmware genuinely lacks it; the report carries the
+    /// probe evidence.
+    Unsupported = 5,
+}
+
+impl CapabilityAvailability {
+    #[must_use]
+    pub const fn wire(self) -> u8 {
+        self as u8
+    }
+}
+
+impl TryFrom<u8> for CapabilityAvailability {
+    type Error = ProtocolError;
+
+    fn try_from(value: u8) -> Result<Self, ProtocolError> {
+        match value {
+            1 => Ok(Self::Available),
+            2 => Ok(Self::OwnerSetupRequired),
+            3 => Ok(Self::TemporarilyUnavailable),
+            4 => Ok(Self::Denied),
+            5 => Ok(Self::Unsupported),
+            _ => Err(ProtocolError::InvalidValue("capability availability")),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum LogLevel {
@@ -2052,7 +2115,12 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | STORE_PROVENANCE_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -2980,6 +3048,15 @@ fn encode_device_request(
         DeviceRequest::SetUpdateChannel { channel } => {
             output.extend_from_slice(&[46, channel.wire()]);
         }
+        DeviceRequest::ReadCapability { name }
+            if version >= CAPABILITY_REASON_VERSION && valid_capability_name(name) =>
+        {
+            output.push(54);
+            push_string(output, name)?;
+        }
+        DeviceRequest::ReadCapability { .. } => {
+            return Err(ProtocolError::UnknownMessageType(54));
+        }
         DeviceRequest::ReadAppChannel if version >= STORE_PROVENANCE_VERSION => {
             output.push(51);
         }
@@ -3067,6 +3144,20 @@ fn is_hex_digest(digest: &str) -> bool {
         && digest
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// The longest reason a capability report may carry.
+pub const MAX_CAPABILITY_REASON_LEN: usize = 240;
+
+/// The capability vocabulary: the same lowercase-hyphen names manifests
+/// declare, so a report can never name something a manifest could not.
+fn valid_capability_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 32
+        && name
+            .bytes()
+            .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'-'))
+        && name.as_bytes()[0] != b'-'
 }
 
 /// Whether an identity can select only one application-owned directory.
@@ -3399,6 +3490,13 @@ fn decode_device_request(
             })
         }
         48 => Ok(DeviceRequest::ListLibrary),
+        54 if version >= CAPABILITY_REASON_VERSION => {
+            let name = reader.string()?;
+            if !valid_capability_name(&name) {
+                return Err(ProtocolError::InvalidValue("capability name"));
+            }
+            Ok(DeviceRequest::ReadCapability { name })
+        }
         49 => {
             let id = reader.string()?;
             if !valid_library_id(&id) {
@@ -3598,6 +3696,23 @@ fn encode_device_result(
         DeviceResult::Identity(identity) => {
             output.push(16);
             push_identity(output, identity)?;
+        }
+        DeviceResult::Capability {
+            name,
+            state,
+            reason,
+        } if version >= CAPABILITY_REASON_VERSION
+            && valid_capability_name(name)
+            && !reason.is_empty()
+            && reason.len() <= MAX_CAPABILITY_REASON_LEN =>
+        {
+            output.push(21);
+            push_string(output, name)?;
+            output.push(state.wire());
+            push_string(output, reason)?;
+        }
+        DeviceResult::Capability { .. } => {
+            return Err(ProtocolError::UnknownMessageType(21));
         }
         DeviceResult::AutoUpdate { cobalt, apps } => {
             output.extend_from_slice(&[17, radio_flags(*cobalt, *apps)]);
@@ -3861,6 +3976,22 @@ fn decode_device_result(
         18 => UpdateChannel::from_wire(reader.u8()?).map(DeviceResult::UpdateChannel),
         19 => decode_library_result(reader),
         20 => decode_library_document(reader),
+        21 if version >= CAPABILITY_REASON_VERSION => {
+            let name = reader.string()?;
+            let state = CapabilityAvailability::try_from(reader.u8()?)?;
+            let reason = reader.string()?;
+            if !valid_capability_name(&name)
+                || reason.is_empty()
+                || reason.len() > MAX_CAPABILITY_REASON_LEN
+            {
+                return Err(ProtocolError::InvalidValue("capability report"));
+            }
+            Ok(DeviceResult::Capability {
+                name,
+                state,
+                reason,
+            })
+        }
         _ => Err(ProtocolError::InvalidValue("device result")),
     }
 }
@@ -4740,7 +4871,12 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | STORE_PROVENANCE_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5218,7 +5354,12 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
+        LEGACY_VERSION
+            | FOLIO_VERSION
+            | SELECTED_GRID_VERSION
+            | SERVER_ACCOUNT_VERSION
+            | STORE_PROVENANCE_VERSION
+            | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -8028,6 +8169,103 @@ mod tests {
         };
         let bytes = encode(&read).expect("encode");
         assert_eq!(decode(&bytes).expect("decode"), read);
+    }
+
+    #[test]
+    fn capability_reports_round_trip_only_with_reason_aware_protocol() {
+        let request = Frame {
+            version: VERSION,
+            request_id: 9,
+            message: Message::DeviceRequest(DeviceRequest::ReadCapability {
+                name: "bluetooth".to_owned(),
+            }),
+        };
+        let bytes = encode(&request).expect("encode request");
+        assert_eq!(decode(&bytes).expect("decode request"), request);
+        for version in STORE_PROVENANCE_VERSION..CAPABILITY_REASON_VERSION {
+            assert!(
+                encode(&Frame {
+                    version,
+                    ..request.clone()
+                })
+                .is_err(),
+                "a reason-aware request must not encode at {version}"
+            );
+            let mut legacy = bytes.clone();
+            legacy[4] = version;
+            assert!(
+                decode(&legacy).is_err(),
+                "a reason-aware request must not decode at {version}"
+            );
+        }
+        for state in [
+            CapabilityAvailability::Available,
+            CapabilityAvailability::OwnerSetupRequired,
+            CapabilityAvailability::TemporarilyUnavailable,
+            CapabilityAvailability::Denied,
+            CapabilityAvailability::Unsupported,
+        ] {
+            let result = Frame {
+                version: VERSION,
+                request_id: 9,
+                message: Message::DeviceResult(DeviceResult::Capability {
+                    name: "wifi".to_owned(),
+                    state,
+                    reason: "enable Wi-Fi in Nickel first".to_owned(),
+                }),
+            };
+            let bytes = encode(&result).expect("encode result");
+            assert_eq!(decode(&bytes).expect("decode result"), result);
+            for version in STORE_PROVENANCE_VERSION..CAPABILITY_REASON_VERSION {
+                assert!(
+                    encode(&Frame {
+                        version,
+                        ..result.clone()
+                    })
+                    .is_err(),
+                    "a reasoned report must not encode at {version}"
+                );
+                let mut legacy = bytes.clone();
+                legacy[4] = version;
+                assert!(
+                    decode(&legacy).is_err(),
+                    "a reasoned report must not decode at {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn capability_reports_stay_inside_the_manifest_vocabulary() {
+        for name in ["", "Wi-Fi", "-wifi", &"w".repeat(33)] {
+            let frame = Frame {
+                version: VERSION,
+                request_id: 9,
+                message: Message::DeviceRequest(DeviceRequest::ReadCapability {
+                    name: name.to_owned(),
+                }),
+            };
+            assert!(encode(&frame).is_err(), "{name:?} must be refused");
+        }
+        let overlong_reason = Frame {
+            version: VERSION,
+            request_id: 9,
+            message: Message::DeviceResult(DeviceResult::Capability {
+                name: "wifi".to_owned(),
+                state: CapabilityAvailability::Unsupported,
+                reason: "x".repeat(MAX_CAPABILITY_REASON_LEN + 1),
+            }),
+        };
+        assert!(encode(&overlong_reason).is_err());
+        let empty_reason = Frame {
+            message: Message::DeviceResult(DeviceResult::Capability {
+                name: "wifi".to_owned(),
+                state: CapabilityAvailability::Available,
+                reason: String::new(),
+            }),
+            ..overlong_reason
+        };
+        assert!(encode(&empty_reason).is_err(), "a state without its reason");
     }
 
     #[test]

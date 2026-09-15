@@ -20,11 +20,12 @@ use std::io::{Read, Write};
 use std::thread;
 use std::time::Duration;
 
-const SUPPORTED: [u8; 5] = [
+const SUPPORTED: [u8; 6] = [
     kobo_protocol::LEGACY_VERSION,
     kobo_protocol::FOLIO_VERSION,
     kobo_protocol::SELECTED_GRID_VERSION,
     kobo_protocol::SERVER_ACCOUNT_VERSION,
+    kobo_protocol::STORE_PROVENANCE_VERSION,
     kobo_protocol::VERSION,
 ];
 
