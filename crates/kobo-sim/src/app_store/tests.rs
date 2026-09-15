@@ -285,3 +285,90 @@ fn fixture_configuration_refuses_release_keys_oversized_files_and_links() {
     std::os::unix::fs::symlink("format", fixture.0.join("key.hex")).unwrap();
     assert!(SignedStore::open(&fixture.0).is_err());
 }
+
+fn recover(recovery: kobo_protocol::AppRecovery) -> DeviceRequest {
+    DeviceRequest::RecoverApp {
+        name: "quality-fixture".into(),
+        recovery,
+    }
+}
+
+fn crash_ledger(fixture: &Fixture, crashes: u32) -> PathBuf {
+    let ledger = fixture.0.join("installed/health/quality-fixture");
+    fs::create_dir_all(ledger.parent().unwrap()).unwrap();
+    fs::write(&ledger, format!("crashes={crashes}\n")).unwrap();
+    ledger
+}
+
+#[test]
+fn quarantine_marks_listings_and_reset_clears_it() {
+    let fixture = Fixture::new();
+    fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
+    let state = fixture.state();
+    request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
+    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+    assert!(!entries(&state)[0].quarantined);
+    let data = fixture.0.join("installed/data/quality-fixture/notes");
+    fs::create_dir_all(data.parent().unwrap()).unwrap();
+    fs::write(&data, b"Owner's notes").unwrap();
+    let ledger = crash_ledger(&fixture, 5);
+    assert!(entries(&state)[0].quarantined, "ledger flags the listing");
+    assert_eq!(
+        request(&state, &recover(kobo_protocol::AppRecovery::ResetState), Scenario::Normal),
+        DeviceResult::Done
+    );
+    assert!(!ledger.exists(), "recovery releases the ledger");
+    assert!(!data.exists(), "reset removes the saved state");
+    let entry = &entries(&state)[0];
+    assert!(!entry.quarantined);
+    assert_eq!(entry.installed_version.as_deref(), Some("1.0.0"), "still installed");
+}
+
+#[test]
+fn export_keeps_state_and_remove_uninstalls() {
+    let fixture = Fixture::new();
+    fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
+    let state = fixture.state();
+    request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
+    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+    let data = fixture.0.join("installed/data/quality-fixture/notes");
+    fs::create_dir_all(data.parent().unwrap()).unwrap();
+    fs::write(&data, b"Owner's notes").unwrap();
+    let ledger = crash_ledger(&fixture, 6);
+    assert!(entries(&state)[0].quarantined);
+    assert_eq!(
+        request(&state, &recover(kobo_protocol::AppRecovery::ExportState), Scenario::Normal),
+        DeviceResult::Done
+    );
+    assert_eq!(
+        fs::read(fixture.0.join("installed/exports/quality-fixture-state/notes")).unwrap(),
+        b"Owner's notes"
+    );
+    assert!(data.exists(), "an export never mutates the original");
+    assert!(!entries(&state)[0].quarantined, "ledger released");
+    crash_ledger(&fixture, 5);
+    assert_eq!(
+        request(&state, &recover(kobo_protocol::AppRecovery::RemoveApp), Scenario::Normal),
+        DeviceResult::Done
+    );
+    assert!(!fixture.0.join("installed/apps/quality-fixture").exists(), "removed");
+    assert!(!ledger.exists());
+    assert!(!data.exists(), "remove takes the saved state with it");
+}
+
+#[test]
+fn only_the_store_or_settings_may_recover() {
+    let fixture = Fixture::new();
+    fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
+    let state = fixture.state();
+    assert!(matches!(
+        crate::simulated_app_request(
+            &state,
+            "launcher",
+            Scenario::Normal,
+            &recover(kobo_protocol::AppRecovery::ResetState),
+        )
+        .unwrap(),
+        Some(DeviceResult::Denied(kobo_protocol::DenyReason::NotDeclared))
+    ));
+}
