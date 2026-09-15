@@ -9,6 +9,8 @@
 //!
 //! Contract: docs/quality/contracts/capability-availability.md.
 
+use kobo_protocol::{CapabilityAvailability, DeviceResult};
+
 /// The availability state a capability report carries.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CapabilityState {
@@ -95,11 +97,72 @@ impl Capability {
     pub fn is_available(&self) -> bool {
         self.state == CapabilityState::Available
     }
+
+    /// The typed reading of a wire answer, or `None` when the answer was
+    /// about something else. Pair with
+    /// [`crate::Device::read_capability`]: the request asks, the runtime
+    /// answers, and this keeps the answer in states and reasons instead
+    /// of a boolean.
+    pub fn report(result: &DeviceResult) -> Option<Self> {
+        let DeviceResult::Capability { state, reason, .. } = result else {
+            return None;
+        };
+        Some(match state {
+            CapabilityAvailability::Available => Self::available(),
+            CapabilityAvailability::OwnerSetupRequired => {
+                Self::owner_setup_required(reason.clone())
+            }
+            CapabilityAvailability::TemporarilyUnavailable => {
+                Self::temporarily_unavailable(reason.clone())
+            }
+            CapabilityAvailability::Denied => Self::denied(reason.clone()),
+            CapabilityAvailability::Unsupported => Self::unsupported(reason.clone()),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Capability, CapabilityState};
+    use kobo_protocol::{CapabilityAvailability, DeviceResult};
+
+    #[test]
+    fn a_wire_answer_reads_back_as_states_and_reasons() {
+        let cases = [
+            (
+                CapabilityAvailability::Available,
+                CapabilityState::Available,
+            ),
+            (
+                CapabilityAvailability::OwnerSetupRequired,
+                CapabilityState::OwnerSetupRequired,
+            ),
+            (
+                CapabilityAvailability::TemporarilyUnavailable,
+                CapabilityState::TemporarilyUnavailable,
+            ),
+            (CapabilityAvailability::Denied, CapabilityState::Denied),
+            (
+                CapabilityAvailability::Unsupported,
+                CapabilityState::Unsupported,
+            ),
+        ];
+        for (wire, expected) in cases {
+            let result = DeviceResult::Capability {
+                name: "wifi".to_owned(),
+                state: wire,
+                reason: "the reason in the device's own words".to_owned(),
+            };
+            let report = Capability::report(&result).expect("a capability report");
+            assert_eq!(report.state(), expected);
+            if expected == CapabilityState::Available {
+                assert_eq!(report.reason(), "available");
+            } else {
+                assert_eq!(report.reason(), "the reason in the device's own words");
+            }
+        }
+        assert!(Capability::report(&DeviceResult::Done).is_none());
+    }
 
     #[test]
     fn every_state_carries_its_reason() {

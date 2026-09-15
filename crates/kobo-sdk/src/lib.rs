@@ -2252,6 +2252,17 @@ pub struct Device<'a> {
 }
 
 impl Device<'_> {
+    /// Asks the availability of one capability: the reasoned state plus
+    /// the reason that backs it, never a bare boolean
+    /// (docs/quality/contracts/capability-availability.md). The answer
+    /// arrives through `on_device_result` as [`DeviceResult::Capability`];
+    /// hand it to [`crate::capability::Capability::report`] for the typed
+    /// reading. Asking costs no declaration: an application that forgot to
+    /// declare hears that, with the fix named.
+    pub fn read_capability(&mut self, name: impl Into<String>) {
+        self.request(DeviceRequest::ReadCapability { name: name.into() });
+    }
+
     /// Asks for the battery percentage and charging state.
     pub fn read_battery(&mut self) {
         self.request(DeviceRequest::ReadBattery);
