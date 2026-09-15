@@ -1281,6 +1281,10 @@ pub enum DeviceRequest {
     /// Select which signed app catalog the Store browses. Wire-gated on
     /// [`STORE_PROVENANCE_VERSION`].
     SetAppChannel { channel: UpdateChannel },
+    /// Carry out the owner's chosen recovery for a quarantined application.
+    /// Wire-gated on [`STORE_PROVENANCE_VERSION`]; settings and the Store may
+    /// ask, nobody else.
+    RecoverApp { name: String, recovery: AppRecovery },
     /// Install or replace one runtime-owned credential for the calling app.
     ///
     /// The runtime authorizes the app/name pair before writing anything.
@@ -1650,6 +1654,10 @@ pub struct AppInfo {
     /// have. Only meaningful when `installed_version` is present and differs
     /// from `version`. Wire-gated on [`STORE_PROVENANCE_VERSION`].
     pub permissions_changed: bool,
+    /// The runtime has quarantined this application after repeated crashes;
+    /// launching is refused until the owner picks a recovery. Wire-gated on
+    /// [`STORE_PROVENANCE_VERSION`].
+    pub quarantined: bool,
 }
 
 /// Where a listed application came from.
@@ -1660,6 +1668,44 @@ pub enum AppProvenance {
     /// On the device but absent from that catalog: a developer or local
     /// install the signed release metadata makes no claim about.
     Local,
+}
+
+/// The recovery an owner picks for a quarantined application. Wire-gated on
+/// [`STORE_PROVENANCE_VERSION`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AppRecovery {
+    /// Saved state is set aside and the application starts clean. The aside
+    /// copy is kept until the owner removes it.
+    #[default]
+    LaunchWithoutState,
+    /// Saved state is copied to the exports directory, source untouched.
+    ExportState,
+    /// Saved state is deleted.
+    ResetState,
+    /// The application and its saved state leave the device.
+    RemoveApp,
+}
+
+impl AppRecovery {
+    #[must_use]
+    pub const fn wire(self) -> u8 {
+        match self {
+            Self::LaunchWithoutState => 0,
+            Self::ExportState => 1,
+            Self::ResetState => 2,
+            Self::RemoveApp => 3,
+        }
+    }
+
+    fn from_wire(value: u8) -> Result<Self, ProtocolError> {
+        match value {
+            0 => Ok(Self::LaunchWithoutState),
+            1 => Ok(Self::ExportState),
+            2 => Ok(Self::ResetState),
+            3 => Ok(Self::RemoveApp),
+            _ => Err(ProtocolError::InvalidValue("app recovery")),
+        }
+    }
 }
 
 impl AppInfo {
@@ -2931,8 +2977,18 @@ fn encode_device_request(
         DeviceRequest::SetAppChannel { channel } if version >= STORE_PROVENANCE_VERSION => {
             output.extend_from_slice(&[52, channel.wire()]);
         }
+        DeviceRequest::RecoverApp { name, recovery }
+            if version >= STORE_PROVENANCE_VERSION && valid_app_id(name) =>
+        {
+            output.push(53);
+            push_string(output, name)?;
+            output.push(recovery.wire());
+        }
         DeviceRequest::ReadAppChannel | DeviceRequest::SetAppChannel { .. } => {
             return Err(ProtocolError::UnknownMessageType(51));
+        }
+        DeviceRequest::RecoverApp { .. } => {
+            return Err(ProtocolError::UnknownMessageType(53));
         }
         DeviceRequest::SetSecret { name, value }
             if version >= FOLIO_VERSION
@@ -3295,6 +3351,10 @@ fn decode_device_request(
         51 if version >= STORE_PROVENANCE_VERSION => Ok(DeviceRequest::ReadAppChannel),
         52 if version >= STORE_PROVENANCE_VERSION => Ok(DeviceRequest::SetAppChannel {
             channel: UpdateChannel::from_wire(reader.u8()?)?,
+        }),
+        53 if version >= STORE_PROVENANCE_VERSION => Ok(DeviceRequest::RecoverApp {
+            name: reader.string()?,
+            recovery: AppRecovery::from_wire(reader.u8()?)?,
         }),
         47 if version >= FOLIO_VERSION => {
             let name = reader.string()?;
@@ -3669,6 +3729,7 @@ fn encode_app_info(
             None => output.push(0),
         }
         output.push(u8::from(entry.permissions_changed));
+        output.push(u8::from(entry.quarantined));
     }
     Ok(())
 }
@@ -4064,7 +4125,7 @@ fn decode_apps_result(
             1 => Some(reader.string()?),
             _ => return Err(ProtocolError::InvalidValue("installed application flag")),
         };
-        let (provenance, package_bytes, permissions_changed) =
+        let (provenance, package_bytes, permissions_changed, quarantined) =
             if wire_version >= STORE_PROVENANCE_VERSION {
                 let provenance = match reader.u8()? {
                     0 => AppProvenance::Catalog,
@@ -4077,9 +4138,10 @@ fn decode_apps_result(
                     _ => return Err(ProtocolError::InvalidValue("package size flag")),
                 };
                 let permissions_changed = read_boolean(reader, "permissions changed")?;
-                (provenance, package_bytes, permissions_changed)
+                let quarantined = read_boolean(reader, "application quarantined")?;
+                (provenance, package_bytes, permissions_changed, quarantined)
             } else {
-                (AppProvenance::Catalog, None, false)
+                (AppProvenance::Catalog, None, false, false)
             };
         let entry = AppInfo {
             id,
@@ -4094,6 +4156,7 @@ fn decode_apps_result(
             provenance,
             package_bytes,
             permissions_changed,
+            quarantined,
         };
         validate_app_info(&entry)?;
         entries.push(entry);
@@ -7757,6 +7820,7 @@ mod tests {
                     provenance: AppProvenance::Catalog,
                     package_bytes: None,
                     permissions_changed: false,
+            quarantined: false,
                 }],
             },
             DeviceResult::Library {
@@ -8141,6 +8205,7 @@ mod tests {
                     provenance: AppProvenance::Catalog,
                     package_bytes: None,
                     permissions_changed: false,
+            quarantined: false,
                 })
                 .collect(),
         };
@@ -8164,6 +8229,7 @@ mod tests {
             provenance: AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
+            quarantined: false,
         };
         assert!(encode(&Frame {
             version: VERSION,
@@ -8198,6 +8264,7 @@ mod tests {
             provenance: AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
+            quarantined: false,
         };
         assert!(app.is_compatible_with("0.3.0"));
         assert!(app.is_compatible_with("0.3"));
@@ -8226,6 +8293,7 @@ mod tests {
             provenance: AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
+            quarantined: false,
         };
         assert!(app("1.2.0", "1.1.9").has_update());
         assert!(!app("1.2.0", "1.2.0").has_update());
@@ -8253,11 +8321,13 @@ mod tests {
             provenance: AppProvenance::Local,
             package_bytes: Some(245_678),
             permissions_changed: true,
+            quarantined: true,
         };
         let plain = AppInfo {
             provenance: AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
+            quarantined: false,
             ..rich.clone()
         };
         let frame = |entry: AppInfo, version: u8| Frame {
@@ -8290,11 +8360,62 @@ mod tests {
         );
     }
 
+    #[test]
+    fn app_recovery_is_asked_only_by_sessions_that_speak_it() {
+        for recovery in [
+            AppRecovery::LaunchWithoutState,
+            AppRecovery::ExportState,
+            AppRecovery::ResetState,
+            AppRecovery::RemoveApp,
+        ] {
+            let frame = Frame {
+                version: STORE_PROVENANCE_VERSION,
+                request_id: 7,
+                message: Message::DeviceRequest(DeviceRequest::RecoverApp {
+                    name: "word-count".to_owned(),
+                    recovery,
+                }),
+            };
+            assert_eq!(
+                decode(&encode(&frame).expect("encode")).expect("decode"),
+                frame,
+                "{recovery:?} survives the round trip"
+            );
+        }
+
+        // An older session cannot ask, and a forged tag does not decode.
+        let legacy = Frame {
+            version: SERVER_ACCOUNT_VERSION,
+            request_id: 7,
+            message: Message::DeviceRequest(DeviceRequest::RecoverApp {
+                name: "word-count".to_owned(),
+                recovery: AppRecovery::ResetState,
+            }),
+        };
+        assert!(encode(&legacy).is_err(), "older sessions cannot ask");
+        let forged = encode(&Frame {
+            version: STORE_PROVENANCE_VERSION,
+            request_id: 7,
+            message: Message::DeviceRequest(DeviceRequest::RecoverApp {
+                name: "word-count".to_owned(),
+                recovery: AppRecovery::RemoveApp,
+            }),
+        })
+        .expect("encode modern");
+        let mut downgraded = forged;
+        downgraded[4] = SERVER_ACCOUNT_VERSION;
+        assert!(
+            decode(&downgraded).is_err(),
+            "tag 53 means nothing to an older session"
+        );
+    }
+
     fn defaulted_with(entries: Vec<AppInfo>) -> AppInfo {
         let mut entry = entries.into_iter().next().expect("one entry");
         entry.provenance = AppProvenance::Catalog;
         entry.package_bytes = None;
         entry.permissions_changed = false;
+        entry.quarantined = false;
         entry
     }
 

@@ -336,6 +336,9 @@ impl DeviceServices {
             | DeviceRequest::BeginAppLink
             | DeviceRequest::PollAppLink
             | DeviceRequest::DisconnectAppLink => DeviceResult::Denied(DenyReason::Unsupported),
+            // The simulator hosts no crash ledger: nothing is ever
+            // quarantined here, so a recovery has nothing to undo.
+            DeviceRequest::RecoverApp { .. } => DeviceResult::Done,
             request @ (DeviceRequest::ReadAutoUpdate
             | DeviceRequest::SetAutoUpdate { .. }
             | DeviceRequest::ReadUpdateChannel
@@ -735,6 +738,9 @@ pub fn request_capability(request: &DeviceRequest) -> Option<Capability> {
         | DeviceRequest::SetUpdateChannel { .. }
         | DeviceRequest::ReadAppChannel
         | DeviceRequest::SetAppChannel { .. }
+        // Recovery moves or deletes an application's saved state, so the
+        // runtime authorizes it by caller identity, not manifest capability.
+        | DeviceRequest::RecoverApp { .. }
         | DeviceRequest::SetSecret { .. }
         | DeviceRequest::SetServerSecret { .. } => return None,
         DeviceRequest::ListLibrary | DeviceRequest::ReadLibrary { .. } => Capability::Library,

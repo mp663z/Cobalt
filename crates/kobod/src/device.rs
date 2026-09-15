@@ -1647,7 +1647,7 @@ fn host_applications(
     let catalogue = application
         .parent()
         .map_or_else(|| PathBuf::from("/tmp"), Path::to_path_buf);
-    let health = crate::health::Health::new(Path::new(COBALT_ROOT));
+    let health = kobod::health::Health::new(Path::new(COBALT_ROOT));
     let home = application.to_path_buf();
     let (sender, events) = mpsc::channel();
     touch.set(Some(sender.clone()));
@@ -2854,6 +2854,79 @@ fn host_applications(
                                                 .app_channel,
                                         )
                                     }
+                                    kobo_protocol::DeviceRequest::RecoverApp {
+                                        name,
+                                        recovery,
+                                    } => {
+                                        let health =
+                                            kobod::health::Health::new(Path::new(COBALT_ROOT));
+                                        let exports = Path::new(COBALT_ROOT).join("exports");
+                                        let carried = (|| -> Result<String, String> {
+                                            match recovery {
+                                                kobo_protocol::AppRecovery::RemoveApp => {
+                                                    crate::app_store::uninstall(
+                                                        Path::new(COBALT_ROOT),
+                                                        name,
+                                                    )
+                                                    .map_err(|error| {
+                                                        format!(
+                                                            "remove {name}: {}",
+                                                            error.describe()
+                                                        )
+                                                    })?;
+                                                    health.recover(
+                                                        name,
+                                                        kobod::health::Recovery::ResetState,
+                                                        &exports,
+                                                    )?;
+                                                    Ok(format!("{name} removed with its saved state"))
+                                                }
+                                                kobo_protocol::AppRecovery::LaunchWithoutState => {
+                                                    health.recover(
+                                                        name,
+                                                        kobod::health::Recovery::LaunchWithoutState,
+                                                        &exports,
+                                                    )
+                                                }
+                                                kobo_protocol::AppRecovery::ExportState => health
+                                                    .recover(
+                                                        name,
+                                                        kobod::health::Recovery::ExportState,
+                                                        &exports,
+                                                    ),
+                                                kobo_protocol::AppRecovery::ResetState => health
+                                                    .recover(
+                                                        name,
+                                                        kobod::health::Recovery::ResetState,
+                                                        &exports,
+                                                    ),
+                                            }
+                                        })();
+                                        // The count clears only when the
+                                        // chosen recovery actually carried:
+                                        // a failed recovery leaves the
+                                        // quarantine standing.
+                                        match carried.and_then(|summary| {
+                                            health.release(name).map(|()| summary)
+                                        }) {
+                                            Ok(summary) => {
+                                                println!("recovered {name}: {summary}");
+                                                if matches!(
+                                                    recovery,
+                                                    kobo_protocol::AppRecovery::RemoveApp
+                                                ) {
+                                                    stop_named_application(&mut apps, name);
+                                                }
+                                                kobo_protocol::DeviceResult::Done
+                                            }
+                                            Err(error) => {
+                                                println!("recovery for {name} failed: {error}");
+                                                kobo_protocol::DeviceResult::Failed(
+                                                    kobo_protocol::DeviceError::Backend,
+                                                )
+                                            }
+                                        }
+                                    }
                                     kobo_protocol::DeviceRequest::SetAppChannel { channel } => {
                                         let current =
                                             crate::autoupdate::preferences(Path::new(COBALT_ROOT));
@@ -3306,6 +3379,9 @@ fn system_request_allowed(app: &str, request: &kobo_protocol::DeviceRequest) -> 
         | kobo_protocol::DeviceRequest::SetUpdateChannel { .. }
         | kobo_protocol::DeviceRequest::SetAppChannel { .. } => app == "settings",
         kobo_protocol::DeviceRequest::ReadAppChannel => app == "settings" || app == "store",
+        kobo_protocol::DeviceRequest::RecoverApp { .. } => {
+            matches!(app, "settings" | "store")
+        }
         kobo_protocol::DeviceRequest::ListInstalledApps => matches!(app, "launcher" | "store"),
         kobo_protocol::DeviceRequest::ReadAppCatalog
         | kobo_protocol::DeviceRequest::RefreshAppCatalog
@@ -3486,7 +3562,7 @@ fn open_application(
     whole_screen: Rect,
     sender: &Sender<Event>,
     front: u64,
-    health: &crate::health::Health,
+    health: &kobod::health::Health,
 ) -> Result<u64, String> {
     let path = resolve(catalogue, name)?;
     // The launcher is never quarantined: it is the way out.
@@ -3746,7 +3822,7 @@ fn report_what_an_application_says(name: String, stderr: std::process::ChildStde
 /// anything else - a signal, a nonzero status, a process that will not even
 /// answer for its own death - is a crash, and enough of those quarantine the
 /// application rather than the reader.
-fn record_exit(health: &crate::health::Health, app: &mut Hosted) {
+fn record_exit(health: &kobod::health::Health, app: &mut Hosted) {
     // The stream is already gone, so the process is on its way out; give it
     // a moment to be honest about how.
     let deadline = Instant::now() + Duration::from_millis(500);
@@ -3774,9 +3850,9 @@ fn record_exit(health: &crate::health::Health, app: &mut Hosted) {
     }
 }
 
-fn record_crash(health: &crate::health::Health, name: &str) {
+fn record_crash(health: &kobod::health::Health, name: &str) {
     match health.record_crash(name) {
-        Ok(count) if count >= crate::health::CONSECUTIVE_CRASH_LIMIT => {
+        Ok(count) if count >= kobod::health::CONSECUTIVE_CRASH_LIMIT => {
             println!("{name} is quarantined after {count} crashes in a row");
         }
         Ok(_) => {}

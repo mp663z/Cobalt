@@ -1206,7 +1206,8 @@ impl Default for SimulatedApps {
                     provenance: kobo_protocol::AppProvenance::Catalog,
                     package_bytes: None,
                     permissions_changed: false,
-                }
+                                quarantined: false,
+}
             })
             .collect::<Vec<_>>();
         catalog.extend([
@@ -1302,7 +1303,8 @@ fn simulated_app(
         provenance: kobo_protocol::AppProvenance::Local,
         package_bytes: None,
         permissions_changed: false,
-    }
+        quarantined: false,
+}
 }
 
 impl AppState {

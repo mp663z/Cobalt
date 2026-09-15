@@ -69,7 +69,9 @@ use std::process::ExitCode;
 mod app_link;
 mod app_store;
 mod autoupdate;
-mod health;
+
+// The binary shares modules with the library; keep the shared path working.
+pub(crate) use kobod::health;
 #[cfg(feature = "device-write")]
 mod blackbox;
 mod consent;

@@ -876,7 +876,8 @@ mod tests {
             provenance: kobo_sdk::AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
-        }
+                quarantined: false,
+}
     }
 
     #[test]
@@ -1115,7 +1116,8 @@ mod tests {
                 provenance: kobo_sdk::AppProvenance::Catalog,
                 package_bytes: None,
                 permissions_changed: false,
-            })
+                        quarantined: false,
+})
             .collect::<Vec<_>>();
         for panel in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
             for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
