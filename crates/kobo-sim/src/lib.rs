@@ -1242,6 +1242,19 @@ impl Default for SimulatedApps {
     }
 }
 
+/// The panel a launch canary describes to a candidate: exactly the
+/// simulator's own, so the first screen is measured for what the developer
+/// is looking at.
+fn canary_panel() -> kobod::canary::Panel {
+    let profile = selected_profile();
+    kobod::canary::Panel {
+        width: u16::try_from(profile.width).unwrap_or(u16::MAX),
+        height: u16::try_from(profile.height).unwrap_or(u16::MAX),
+        pixels_per_inch: profile.pixels_per_inch,
+        text_scale: profile_metrics().text_scale,
+    }
+}
+
 fn app_declaration(name: &str) -> kobo_policy::Declared {
     let catalog = SimulatedApps::default();
     let names = catalog

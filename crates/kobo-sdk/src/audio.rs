@@ -817,9 +817,12 @@ fn audio_error(error: DeviceError) -> &'static str {
         // Integrity is spelled out rather than folded into a wildcard so
         // that the next device error added is routed here deliberately. An
         // audio load never verifies a digest, so this is unreachable today.
-        DeviceError::Authentication | DeviceError::Backend | DeviceError::Integrity => {
-            "Audio playback failed"
-        }
+        // A canary failure belongs to an install, never to an audio load;
+        // routed here deliberately, as the comment above asks.
+        DeviceError::Authentication
+        | DeviceError::Backend
+        | DeviceError::Integrity
+        | DeviceError::Canary => "Audio playback failed",
     }
 }
 

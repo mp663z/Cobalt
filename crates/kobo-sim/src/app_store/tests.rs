@@ -372,3 +372,42 @@ fn only_the_store_or_settings_may_recover() {
         Some(DeviceResult::Denied(kobo_protocol::DenyReason::NotDeclared))
     ));
 }
+
+#[test]
+fn a_payload_that_cannot_launch_fails_its_canary_and_keeps_the_previous_version() {
+    let fixture = Fixture::new();
+    fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
+    let state = fixture.state();
+    request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
+    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+
+    // The 1.1.0 candidate is still the inert fixture payload: with the
+    // canary on, launching it fails honestly and the previous version stays.
+    fixture.release("1.1.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
+    let mut signed = SignedStore::open(&fixture.0).unwrap();
+    signed.canary = true;
+    let state = Arc::new(Mutex::new(AppState::with_apps(Arc::new(Mutex::new(
+        SimulatedApps {
+            catalog: vec![],
+            signed: Some(signed),
+        },
+    )))));
+    request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
+    assert!(entries(&state)[0].has_update());
+    assert_eq!(
+        request(&state, &install(), Scenario::Normal),
+        DeviceResult::Failed(DeviceError::Canary),
+        "an inert payload cannot complete a launch canary"
+    );
+    let failed = fixture.0.join("installed/apps/quality-fixture.failed");
+    assert!(failed.is_dir(), "the failed candidate is kept aside");
+    let diagnostics = fs::read_to_string(failed.join("DIAGNOSTICS")).unwrap();
+    assert!(!diagnostics.is_empty());
+    let entry = &entries(&state)[0];
+    assert_eq!(entry.installed_version.as_deref(), Some("1.0.0"), "previous stays");
+    assert!(entry.has_update(), "the update remains on offer");
+    assert!(
+        !fixture.0.join("installed/apps/quality-fixture.next").exists(),
+        "no staging left behind"
+    );
+}

@@ -922,6 +922,7 @@ fn app_failure(error: DeviceError) -> &'static str {
         DeviceError::InvalidInput => "This app needs a compatible Cobalt version. Refresh the app list and check for a Cobalt update.",
         DeviceError::Backend => "Couldn't finish saving the change. Check free space and the installed version before trying again.",
         DeviceError::Integrity => "The downloaded app could not be verified. Refresh the app list and try again.",
+        DeviceError::Canary => "The app could not start after install, so the previous version was kept.",
     }
 }
 
