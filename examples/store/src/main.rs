@@ -5,9 +5,10 @@
 //! it never receives a package URL or chooses an installation path.
 
 use kobo_sdk::{
-    action_id, ActionId, AppInfo, AppLinkState, Context, DenyReason, DeviceError, DeviceRequest,
-    DeviceResult, Glyph, Heartbeat, KoboApp, PictureHandle, Position, RemoteInstallOutcome,
-    AppProvenance, RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture, UpdateChannel,
+    action_id, ActionId, AppInfo, AppLinkState, AppProvenance, AppRecovery, Context, DenyReason,
+    DeviceError, DeviceRequest, DeviceResult, Glyph, Heartbeat, KoboApp, PictureHandle, Position,
+    RemoteInstallOutcome, RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture,
+    UpdateChannel,
 };
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::process::ExitCode;
@@ -19,6 +20,8 @@ const DISCONNECT_LINK: &str = "disconnect-link";
 const PREVIOUS: &str = "previous";
 const NEXT: &str = "next";
 const UPDATE_COBALT: &str = "update-cobalt";
+const RECOVERY_CONFIRM: &str = "recovery-confirm";
+const RECOVERY_CANCEL: &str = "recovery-cancel";
 const QR_HANDLE: PictureHandle = PictureHandle(1);
 const QR_SCALE: u32 = 7;
 const QR_QUIET_ZONE: i32 = 4;
@@ -32,6 +35,8 @@ enum View {
         id: String,
         action: &'static str,
     },
+    Recovery(String),
+    RecoveryConfirm { id: String, recovery: AppRecovery },
     AppLink,
 }
 
@@ -75,6 +80,8 @@ impl Store {
             View::Catalog => self.catalog(context),
             View::Detail(id) => self.detail(&id),
             View::Working { id, action } => self.working(&id, action),
+            View::Recovery(id) => self.recovery(&id),
+            View::RecoveryConfirm { id, recovery } => self.recovery_confirmation(&id, recovery),
             View::AppLink => self.app_link(),
         };
         context.set_screen(screen);
@@ -392,7 +399,16 @@ impl Store {
                     },
                 ),
             ]);
-        screen = if system {
+        if entry.quarantined {
+            screen = screen.facts([(
+                "Status",
+                "Quarantined after repeated crashes. Opening is paused until you choose a recovery."
+                    .to_owned(),
+            )]);
+        }
+        screen = if entry.quarantined {
+            screen.bottom_action_marked(recovery_action(id), "Recovery options", Glyph::Refresh)
+        } else if system {
             screen.bottom_action_marked(open_action(id), "Open", entry.glyph)
         } else if !compatible {
             if installed.is_some() {
@@ -421,6 +437,64 @@ impl Store {
             screen.bottom_action_marked(install_action(id), "Install", Glyph::Download)
         };
         screen.build()
+    }
+
+    fn recovery(&self, id: &str) -> Screen {
+        let entry = self.entries.iter().find(|entry| entry.id == id);
+        let title = entry.map_or(id, |entry| entry.title.as_str());
+        ScreenBuilder::new("store-recovery")
+            .top_bar(format!("Recover {title}"))
+            .owns_back(true)
+            .text(
+                "This app crashed repeatedly and is paused. Pick how to continue; each choice asks once more before anything changes.",
+            )
+            .button(
+                recover_choice(id, AppRecovery::LaunchWithoutState),
+                "Open without saved state",
+            )
+            .text("The saved state is set aside, not deleted, and the app starts clean.")
+            .button(recover_choice(id, AppRecovery::ExportState), "Export saved state")
+            .text("A copy of the saved state is written to the exports folder; the app stays paused.")
+            .button(recover_choice(id, AppRecovery::ResetState), "Reset saved state")
+            .text("The saved state is deleted. This cannot be undone.")
+            .button(recover_choice(id, AppRecovery::RemoveApp), "Remove app")
+            .text("The app and its saved state are removed. This cannot be undone.")
+            .build()
+    }
+
+    fn recovery_confirmation(&self, id: &str, recovery: AppRecovery) -> Screen {
+        let entry = self.entries.iter().find(|entry| entry.id == id);
+        let title = entry.map_or(id, |entry| entry.title.as_str());
+        let (action_label, message) = match recovery {
+            AppRecovery::LaunchWithoutState => (
+                "Open without state",
+                format!(
+                    "{title} starts clean. Its saved state is set aside and stays on this Kobo until you remove it."
+                ),
+            ),
+            AppRecovery::ExportState => (
+                "Export state",
+                format!(
+                    "A copy of the saved state is written to the exports folder. {title} stays paused until you pick another recovery."
+                ),
+            ),
+            AppRecovery::ResetState => (
+                "Reset state",
+                format!("The saved state of {title} is deleted. This cannot be undone."),
+            ),
+            AppRecovery::RemoveApp => (
+                "Remove app",
+                format!("{title} and its saved state are removed from this Kobo. This cannot be undone."),
+            ),
+        };
+        ScreenBuilder::new("store-recovery-confirm")
+            .top_bar("Confirm recovery")
+            .owns_back(true)
+            .facts([("App", title.to_owned())])
+            .text(message)
+            .primary_button(RECOVERY_CONFIRM, action_label)
+            .button(RECOVERY_CANCEL, "Cancel")
+            .build()
     }
 
     fn working(&self, id: &str, action: &str) -> Screen {
@@ -498,7 +572,45 @@ impl KoboApp for Store {
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         if action == ActionId::BACK {
-            self.view = View::Catalog;
+            self.view = match &self.view {
+                View::Recovery(id) | View::RecoveryConfirm { id, .. } => View::Detail(id.clone()),
+                _ => View::Catalog,
+            };
+            self.show(context);
+            return;
+        }
+        if action == action_id(RECOVERY_CANCEL) {
+            if let View::RecoveryConfirm { id, .. } = &self.view {
+                self.view = View::Recovery(id.clone());
+                self.show(context);
+            }
+            return;
+        }
+        if action == action_id(RECOVERY_CONFIRM) {
+            if let View::RecoveryConfirm { id, recovery } = self.view.clone() {
+                self.notice = None;
+                self.view = View::Working {
+                    id: id.clone(),
+                    action: "Recovering",
+                };
+                self.show(context);
+                context.device().recover_app(id, recovery);
+            }
+            return;
+        }
+        let recover_hit = self.entries.iter().find_map(|entry| {
+            [
+                AppRecovery::LaunchWithoutState,
+                AppRecovery::ExportState,
+                AppRecovery::ResetState,
+                AppRecovery::RemoveApp,
+            ]
+            .into_iter()
+            .find(|recovery| action == action_id(&recover_choice(&entry.id, *recovery)))
+            .map(|recovery| (entry.id.clone(), recovery))
+        });
+        if let Some((id, recovery)) = recover_hit {
+            self.view = View::RecoveryConfirm { id, recovery };
             self.show(context);
             return;
         }
@@ -545,6 +657,15 @@ impl KoboApp for Store {
             .find(|entry| action == action_id(&app_action(&entry.id)))
         {
             self.view = View::Detail(entry.id.clone());
+            self.show(context);
+            return;
+        }
+        if let Some(entry) = self
+            .entries
+            .iter()
+            .find(|entry| action == action_id(&recovery_action(&entry.id)))
+        {
+            self.view = View::Recovery(entry.id.clone());
             self.show(context);
             return;
         }
@@ -612,6 +733,35 @@ impl KoboApp for Store {
                     _ => "installed",
                 };
                 self.notice = Some(format!("{title} {outcome} successfully."));
+                self.view = View::Catalog;
+                context.applications().cached_catalog();
+            }
+            (DeviceRequest::RecoverApp { name, recovery }, DeviceResult::Done) => {
+                let title = self
+                    .entries
+                    .iter()
+                    .find(|entry| entry.id == name)
+                    .map_or_else(|| name.clone(), |entry| entry.title.clone());
+                let outcome = match recovery {
+                    AppRecovery::LaunchWithoutState => "opens with a clean slate",
+                    AppRecovery::ExportState => "state was exported",
+                    AppRecovery::ResetState => "state was reset",
+                    AppRecovery::RemoveApp => "was removed",
+                };
+                self.notice = Some(format!("{title}: {outcome}."));
+                self.view = View::Catalog;
+                context.applications().cached_catalog();
+            }
+            (DeviceRequest::RecoverApp { name, .. }, DeviceResult::Failed(error)) => {
+                let title = self
+                    .entries
+                    .iter()
+                    .find(|entry| entry.id == name)
+                    .map_or_else(|| name.clone(), |entry| entry.title.clone());
+                self.notice = Some(format!(
+                    "The recovery for {title} did not finish: {}",
+                    app_failure(error)
+                ));
                 self.view = View::Catalog;
                 context.applications().cached_catalog();
             }
@@ -777,6 +927,12 @@ fn app_failure(error: DeviceError) -> &'static str {
 }
 
 fn app_state(entry: &AppInfo) -> String {
+    if entry.quarantined {
+        return match &entry.installed_version {
+            Some(version) => format!("Quarantined · {version}"),
+            None => "Quarantined".to_owned(),
+        };
+    }
     if is_system_app(&entry.id) {
         return "Installed · system".to_owned();
     }
@@ -830,6 +986,20 @@ fn install_action(id: &str) -> String {
 
 fn remove_action(id: &str) -> String {
     format!("remove-{id}")
+}
+
+fn recovery_action(id: &str) -> String {
+    format!("recovery-{id}")
+}
+
+fn recover_choice(id: &str, recovery: AppRecovery) -> String {
+    let choice = match recovery {
+        AppRecovery::LaunchWithoutState => "launch",
+        AppRecovery::ExportState => "export",
+        AppRecovery::ResetState => "reset",
+        AppRecovery::RemoveApp => "remove",
+    };
+    format!("recover-{choice}-{id}")
 }
 
 fn open_action(id: &str) -> String {
@@ -1437,5 +1607,140 @@ mod tests {
         assert!(layout
             .rect_of_action(action_id(&remove_action("settings")))
             .is_none());
+    }
+
+    fn quarantined_app(id: &str) -> AppInfo {
+        let mut entry = app(id, Some("1.0.0"));
+        entry.quarantined = true;
+        entry
+    }
+
+    #[test]
+    fn a_quarantined_app_reads_quarantined_in_the_list() {
+        assert_eq!(app_state(&quarantined_app("notes")), "Quarantined · 1.0.0");
+        let mut no_version = quarantined_app("notes");
+        no_version.installed_version = None;
+        assert_eq!(app_state(&no_version), "Quarantined");
+    }
+
+    #[test]
+    fn a_quarantined_app_offers_recovery_instead_of_open() {
+        let store = Store {
+            entries: vec![quarantined_app("notes")],
+            view: View::Detail("notes".to_owned()),
+            ..Store::default()
+        };
+        let screen = store.detail("notes");
+        let layout = screen.layout_with(&CLARA_BW_METRICS, &Chrome::with_back(true));
+        assert!(layout
+            .rect_of_action(action_id(&recovery_action("notes")))
+            .is_some());
+        assert!(layout
+            .rect_of_action(action_id(&open_action("notes")))
+            .is_none());
+        assert!(layout
+            .rect_of_action(action_id(&install_action("notes")))
+            .is_none());
+        assert!(screen.validate(&CLARA_BW_METRICS).is_empty());
+    }
+
+    #[test]
+    fn every_recovery_choice_leads_to_its_own_confirmation() {
+        let mut runner = AppRunner::new(Store::default());
+        runner.start();
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![quarantined_app("notes")],
+        });
+        runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![quarantined_app("notes")],
+        });
+        runner.action(action_id(&app_action("notes")));
+        runner.action(action_id(&recovery_action("notes")));
+        assert!(matches!(runner.app().view, View::Recovery(ref id) if id == "notes"));
+        for recovery in [
+            AppRecovery::LaunchWithoutState,
+            AppRecovery::ExportState,
+            AppRecovery::ResetState,
+            AppRecovery::RemoveApp,
+        ] {
+            runner.action(action_id(&recover_choice("notes", recovery)));
+            assert!(matches!(
+                runner.app().view,
+                View::RecoveryConfirm { ref id, recovery: chosen } if id == "notes" && chosen == recovery
+            ));
+            let screen = runner.app().recovery_confirmation("notes", recovery);
+            assert!(screen.validate(&CLARA_BW_METRICS).is_empty());
+            runner.action(action_id(RECOVERY_CANCEL));
+            assert!(matches!(runner.app().view, View::Recovery(ref id) if id == "notes"));
+        }
+        runner.action(ActionId::BACK);
+        assert!(matches!(runner.app().view, View::Detail(ref id) if id == "notes"));
+    }
+
+    #[test]
+    fn a_confirmed_recovery_sends_the_request_and_reports_the_outcome() {
+        let mut runner = AppRunner::new(Store::default());
+        runner.start();
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![quarantined_app("notes")],
+        });
+        runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![quarantined_app("notes")],
+        });
+        runner.action(action_id(&app_action("notes")));
+        runner.action(action_id(&recovery_action("notes")));
+        runner.action(action_id(&recover_choice(
+            "notes",
+            AppRecovery::LaunchWithoutState,
+        )));
+        let commands = runner.action(action_id(RECOVERY_CONFIRM));
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            Command::Device(DeviceRequest::RecoverApp { name, recovery })
+                if name == "notes" && *recovery == AppRecovery::LaunchWithoutState
+        )));
+        runner.device_result(DeviceResult::Done);
+        assert_eq!(
+            runner.app().notice.as_deref(),
+            Some("notes app: opens with a clean slate.")
+        );
+        assert!(matches!(runner.app().view, View::Catalog));
+
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![quarantined_app("notes")],
+        });
+        runner.action(action_id(&app_action("notes")));
+        runner.action(action_id(&recovery_action("notes")));
+        runner.action(action_id(&recover_choice("notes", AppRecovery::RemoveApp)));
+        runner.action(action_id(RECOVERY_CONFIRM));
+        runner.device_result(DeviceResult::Failed(DeviceError::Backend));
+        assert_eq!(
+            runner.app().notice.as_deref(),
+            Some("The recovery for notes app did not finish: Couldn't finish saving the change. Check free space and the installed version before trying again.")
+        );
+    }
+
+    #[test]
+    fn recovery_screens_fit_the_smallest_supported_display() {
+        let store = Store {
+            entries: vec![quarantined_app("notes")],
+            ..Store::default()
+        };
+        for screen in [
+            store.recovery("notes"),
+            store.recovery_confirmation("notes", AppRecovery::LaunchWithoutState),
+            store.recovery_confirmation("notes", AppRecovery::ExportState),
+            store.recovery_confirmation("notes", AppRecovery::ResetState),
+            store.recovery_confirmation("notes", AppRecovery::RemoveApp),
+        ] {
+            assert!(
+                screen.validate(&ELIPSA_2E_METRICS).is_empty(),
+                "recovery screen overflows the Elipsa 2E"
+            );
+        }
     }
 }
