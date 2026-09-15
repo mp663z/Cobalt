@@ -5193,3 +5193,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod protocol_matrix_tests;
