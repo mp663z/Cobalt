@@ -1674,10 +1674,9 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        RadioState, Settings, View, APP_CHANNEL, AUTO_APPS, AUTO_COBALT, BETA_UPDATES, CHANNELS,
-        channel_name,
-        CANCEL_CHANNEL, CONFIRM_APP_CHANNEL, CONFIRM_CHANNEL, DEVICE_ACTIONS, MORE,
-        NETWORK_ACTIONS, PREVIOUS, RESCAN, TOGGLE, VERSION,
+        channel_name, RadioState, Settings, View, APP_CHANNEL, AUTO_APPS, AUTO_COBALT,
+        BETA_UPDATES, CANCEL_CHANNEL, CHANNELS, CONFIRM_APP_CHANNEL, CONFIRM_CHANNEL,
+        DEVICE_ACTIONS, MORE, NETWORK_ACTIONS, PREVIOUS, RESCAN, TOGGLE, VERSION,
     };
     use kobo_sdk::{
         action_id, BannerLevel, BatteryDetail, BluetoothDevice, BluetoothDeviceKind, Chrome,

@@ -36,7 +36,10 @@ enum View {
         action: &'static str,
     },
     Recovery(String),
-    RecoveryConfirm { id: String, recovery: AppRecovery },
+    RecoveryConfirm {
+        id: String,
+        recovery: AppRecovery,
+    },
     AppLink,
 }
 
@@ -444,17 +447,23 @@ impl Store {
         ScreenBuilder::new("store-recovery")
             .top_bar(format!("Recover {title}"))
             .owns_back(true)
-            .text(
-                "This app crashed repeatedly and is paused. Each choice asks first.",
-            )
+            .text("This app crashed repeatedly and is paused. Each choice asks first.")
             .button(
                 recover_choice(id, AppRecovery::LaunchWithoutState),
                 "Open without saved state",
             )
             .text("The saved state is set aside, not deleted, and the app starts clean.")
-            .button(recover_choice(id, AppRecovery::ExportState), "Export saved state")
-            .text("A copy of the saved state is written to the exports folder; the app stays paused.")
-            .button(recover_choice(id, AppRecovery::ResetState), "Reset saved state")
+            .button(
+                recover_choice(id, AppRecovery::ExportState),
+                "Export saved state",
+            )
+            .text(
+                "A copy of the saved state is written to the exports folder; the app stays paused.",
+            )
+            .button(
+                recover_choice(id, AppRecovery::ResetState),
+                "Reset saved state",
+            )
             .text("The saved state is deleted. This cannot be undone.")
             .button(recover_choice(id, AppRecovery::RemoveApp), "Remove app")
             .text("The app and its saved state are removed. This cannot be undone.")
@@ -1046,8 +1055,8 @@ mod tests {
             provenance: kobo_sdk::AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
-                quarantined: false,
-}
+            quarantined: false,
+        }
     }
 
     #[test]
@@ -1286,8 +1295,8 @@ mod tests {
                 provenance: kobo_sdk::AppProvenance::Catalog,
                 package_bytes: None,
                 permissions_changed: false,
-                        quarantined: false,
-})
+                quarantined: false,
+            })
             .collect::<Vec<_>>();
         for panel in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
             for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
@@ -1345,7 +1354,9 @@ mod tests {
 
         let mut runner = AppRunner::new(Store::default());
         runner.start();
-        runner.device_result(DeviceResult::Apps { entries: Vec::new() });
+        runner.device_result(DeviceResult::Apps {
+            entries: Vec::new(),
+        });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
         runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Beta));
         assert_eq!(runner.app().channel, Some(UpdateChannel::Beta));

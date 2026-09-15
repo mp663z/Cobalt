@@ -873,7 +873,8 @@ fn catalog_info(
             let installed_entry = installed
                 .iter()
                 .find(|installed| installed.id == entry.manifest().id());
-            let version = installed_entry.and_then(|installed| installed.installed_version.as_deref());
+            let version =
+                installed_entry.and_then(|installed| installed.installed_version.as_deref());
             let mut info = manifest_info(
                 entry.manifest(),
                 version,
@@ -1533,7 +1534,10 @@ mod tests {
             version: version.to_owned(),
             minimum_cobalt_version: env!("CARGO_PKG_VERSION").to_owned(),
             glyph: "note".to_owned(),
-            capabilities: capabilities.iter().map(|capability| (*capability).to_owned()).collect(),
+            capabilities: capabilities
+                .iter()
+                .map(|capability| (*capability).to_owned())
+                .collect(),
             binary_sha256: kobo_net::sha256::hex_digest(&binary),
             binary_bytes: binary.len() as u64,
         })
@@ -1583,7 +1587,8 @@ mod tests {
         install_with(&root, "solo", &key, |_, _| Ok(solo_package.clone())).expect("install solo");
 
         // The new catalog grows word-count's capabilities; solo is gone.
-        let (json, signature, _) = release_with_capabilities(&seed, "word-count", "1.1.0", &["network"]);
+        let (json, signature, _) =
+            release_with_capabilities(&seed, "word-count", "1.1.0", &["network"]);
         let listing = refresh_with(&root, &key, |url, _| {
             if url == CATALOG_URL {
                 Ok(json.clone())
@@ -2348,8 +2353,10 @@ mod tests {
         assert_eq!(result, Ok(()));
         let current = installed_manifests(&root, &key).expect("installed");
         assert_eq!(current[0].version(), "1.1.0");
-        assert!(!failed.exists(), "a passing candidate supersedes the record");
+        assert!(
+            !failed.exists(),
+            "a passing candidate supersedes the record"
+        );
         let _ignored = fs::remove_dir_all(root);
     }
-
 }

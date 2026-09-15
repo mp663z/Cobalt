@@ -81,7 +81,10 @@ pub fn run(
             if !said.is_empty() {
                 let detail = said.lines().last().unwrap_or(said);
                 outcome = outcome.map_err(|error| {
-                    format!("{error}; the application said: {}", &detail[..detail.len().min(160)])
+                    format!(
+                        "{error}; the application said: {}",
+                        &detail[..detail.len().min(160)]
+                    )
                 });
             }
         }
@@ -105,11 +108,11 @@ fn converse(
         .and_then(|()| stream.set_read_timeout(Some(left)))
         .map_err(|error| format!("canary stream setup: {error}"))?;
     let hello = kobo_protocol::read_from(&mut stream).map_err(|error| match error {
-        kobo_protocol::StreamError::Protocol(
-            kobo_protocol::ProtocolError::UnsupportedVersion(version),
-        ) => format!(
-            "the application speaks protocol {version}, which this runtime does not serve"
-        ),
+        kobo_protocol::StreamError::Protocol(kobo_protocol::ProtocolError::UnsupportedVersion(
+            version,
+        )) => {
+            format!("the application speaks protocol {version}, which this runtime does not serve")
+        }
         other => format!("no handshake from the application: {other}"),
     })?;
     let Message::Hello { name } = hello.message else {
@@ -178,7 +181,10 @@ fn accept_before(
 fn remaining(started: Instant, deadline: Duration) -> Result<Duration, String> {
     let left = deadline.saturating_sub(started.elapsed());
     if left.is_zero() {
-        Err(format!("the canary deadline of {}s passed", deadline.as_secs()))
+        Err(format!(
+            "the canary deadline of {}s passed",
+            deadline.as_secs()
+        ))
     } else {
         Ok(left)
     }
@@ -258,20 +264,20 @@ mod tests {
                     version: kobo_protocol::VERSION,
                     request_id: 2,
                     message: Message::SetScreen(kobo_ui::Screen {
-                id: 1,
-                top_bar: None,
-                nodes: vec![],
-                nav_bar: None,
-                bottom_action: None,
-                page_turns: None,
-                owns_back: false,
-                reading: false,
-                legacy_typography: false,
-                reading_font: None,
-                text_scale: None,
-                hold: None,
-                overlay: None,
-            }),
+                        id: 1,
+                        top_bar: None,
+                        nodes: vec![],
+                        nav_bar: None,
+                        bottom_action: None,
+                        page_turns: None,
+                        owns_back: false,
+                        reading: false,
+                        legacy_typography: false,
+                        reading_font: None,
+                        text_scale: None,
+                        hold: None,
+                        overlay: None,
+                    }),
                 },
             )
             .unwrap();

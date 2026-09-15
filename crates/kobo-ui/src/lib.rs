@@ -13040,9 +13040,7 @@ fn node_enabled_interaction_count(node: &Node) -> usize {
         Node::Text { links, .. } | Node::RichText { links, .. } => links.len(),
         Node::Section { link, .. } => usize::from(link.is_some()),
         Node::Quote { fold, .. } => usize::from(fold.is_some()),
-        Node::Button { state, .. } | Node::Toggle { state, .. } => {
-            usize::from(state.is_enabled())
-        }
+        Node::Button { state, .. } | Node::Toggle { state, .. } => usize::from(state.is_enabled()),
         Node::Field { clear, .. } => 1 + usize::from(clear.is_some()),
         Node::Chips { chips, .. } | Node::Tabs { tabs: chips, .. } => chips.len(),
         Node::Card { .. } | Node::Band { .. } => 0,
@@ -14262,7 +14260,9 @@ fn render_all_with_selected_font(
                 let inset = metrics.rule_thickness().saturating_mul(2);
                 let knob = track_height.saturating_sub(inset.saturating_mul(2));
                 let knob_x = if on {
-                    track.x.saturating_add(track.width.saturating_sub(knob + inset))
+                    track
+                        .x
+                        .saturating_add(track.width.saturating_sub(knob + inset))
                 } else {
                     track.x.saturating_add(inset)
                 };

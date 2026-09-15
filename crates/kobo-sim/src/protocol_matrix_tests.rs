@@ -29,8 +29,7 @@ const SUPPORTED: [u8; 5] = [
 ];
 
 fn fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/fixtures/protocol")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/fixtures/protocol")
 }
 
 fn greet(version: u8) -> (AppServer, AppSession, UnixStream, PathBuf) {
@@ -119,7 +118,10 @@ fn every_supported_version_keeps_its_session_version() {
 
 #[test]
 fn unsupported_versions_are_refused_before_welcome() {
-    for bad in [kobo_protocol::LEGACY_VERSION - 1, kobo_protocol::VERSION + 1] {
+    for bad in [
+        kobo_protocol::LEGACY_VERSION - 1,
+        kobo_protocol::VERSION + 1,
+    ] {
         let root = private_temp_dir();
         let socket_path = root.join("app.sock");
         let server = AppServer::bind("127.0.0.1:0", &socket_path).expect("bind app server");

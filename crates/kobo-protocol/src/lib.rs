@@ -1889,7 +1889,9 @@ impl DeviceError {
             Self::InvalidInput => "the data received was not usable",
             Self::Backend => "the reader could not complete the request",
             Self::Integrity => "the download did not match its published digest",
-            Self::Canary => "the app could not start after install, so the previous version was kept",
+            Self::Canary => {
+                "the app could not start after install, so the previous version was kept"
+            }
         }
     }
 }
@@ -2050,11 +2052,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION
-            | FOLIO_VERSION
-            | SELECTED_GRID_VERSION
-            | SERVER_ACCOUNT_VERSION
-            | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4742,11 +4740,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION
-            | FOLIO_VERSION
-            | SELECTED_GRID_VERSION
-            | SERVER_ACCOUNT_VERSION
-            | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5224,11 +5218,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION
-            | FOLIO_VERSION
-            | SELECTED_GRID_VERSION
-            | SERVER_ACCOUNT_VERSION
-            | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SERVER_ACCOUNT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -7887,7 +7877,7 @@ mod tests {
                     provenance: AppProvenance::Catalog,
                     package_bytes: None,
                     permissions_changed: false,
-            quarantined: false,
+                    quarantined: false,
                 }],
             },
             DeviceResult::Library {
@@ -8272,7 +8262,7 @@ mod tests {
                     provenance: AppProvenance::Catalog,
                     package_bytes: None,
                     permissions_changed: false,
-            quarantined: false,
+                    quarantined: false,
                 })
                 .collect(),
         };
@@ -9643,7 +9633,12 @@ mod node_coverage_tests {
             on: true,
             state: ControlState::Enabled,
         };
-        for version in [LEGACY_VERSION, FOLIO_VERSION, SELECTED_GRID_VERSION, SERVER_ACCOUNT_VERSION] {
+        for version in [
+            LEGACY_VERSION,
+            FOLIO_VERSION,
+            SELECTED_GRID_VERSION,
+            SERVER_ACCOUNT_VERSION,
+        ] {
             let frame = Frame {
                 version,
                 request_id: 7,

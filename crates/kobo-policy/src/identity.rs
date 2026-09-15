@@ -154,7 +154,11 @@ mod tests {
     fn the_same_bytes_again_are_the_same_item() {
         let identity = book();
         assert_eq!(
-            classify(&identity, b"the same bytes wherever they come from", "other.epub"),
+            classify(
+                &identity,
+                b"the same bytes wherever they come from",
+                "other.epub"
+            ),
             Arrival::Same
         );
     }
@@ -171,6 +175,9 @@ mod tests {
     #[test]
     fn different_bytes_under_a_fresh_name_are_new() {
         let identity = book();
-        assert_eq!(classify(&identity, b"different bytes entirely", "other.epub"), Arrival::New);
+        assert_eq!(
+            classify(&identity, b"different bytes entirely", "other.epub"),
+            Arrival::New
+        );
     }
 }
