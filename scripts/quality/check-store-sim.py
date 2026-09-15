@@ -22,8 +22,9 @@ def main():
     args = parser.parse_args()
     cli = ROOT / 'target/debug/kobo'
     builder = ROOT / 'target/debug/examples/signed-store'
-    if not cli.is_file() or not builder.is_file():
-        parser.error('Build kobo-cli and the kobo-sim signed-store example first.')
+    payload = ROOT / 'target/debug/examples/quality-fixture'
+    if not cli.is_file() or not builder.is_file() or not payload.is_file():
+        parser.error('Build kobo-cli and the kobo-sim signed-store and quality-fixture examples first.')
     args.output.mkdir(parents=True, mode=0o700)
     process = None
     with tempfile.TemporaryDirectory(prefix='cobalt-store-', dir='/tmp') as private:
@@ -32,11 +33,17 @@ def main():
                    CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0',
                    KOBO_SIM_PROFILE='clara-bw-391', KOBO_TEXT_SCALE=args.scale,
                    KOBO_SIM_APP_STORE=str(fixture), KOBO_SIM_FIXTURE='original-signed-store',
+                   # Installs in this journey face the launch canary: the
+                   # packaged payload is the real quality-fixture application.
+                   KOBO_SIM_CANARY='1',
                    KOBO_SIM_SEED='0', KOBO_SIM_CLOCK_MILLIS='1788850860000')
         with (args.output / 'simulator.log').open('w') as log:
-            def publish(version, mode='publish'):
+            def publish(version, mode='publish', live=True):
+                # A live payload is the real fixture application; a broken one
+                # is inert bytes that cannot complete a launch canary.
+                publish_env = dict(env, KOBO_FIXTURE_PAYLOAD=str(payload)) if live else env
                 subprocess.run([str(builder), mode, str(fixture), version], check=True,
-                               stdout=log, stderr=log, timeout=15)
+                               env=publish_env, stdout=log, stderr=log, timeout=15)
 
             def stop():
                 if process is not None and process.poll() is None:
@@ -119,14 +126,27 @@ def main():
                       'expect Installed · 1.1.0', 'shot quarantined-cleared')
                 assert not (health / 'quality-fixture').exists()
                 assert not notes.exists(), 'reset removes the saved state'
+                # A candidate that cannot launch never replaces what runs:
+                # the canary refuses it, the store says so, 1.1.0 stays.
+                publish('1.2.0', live=False)
+                drive('tap-id refresh', 'tap-id app-quality-fixture',
+                      'tap-id install-quality-fixture',
+                      'expect could not start after install', 'shot canary-failed')
+                assert installed() == '1.1.0', 'the failed canary kept the previous version'
+                failed = fixture / 'installed/apps/quality-fixture.failed'
+                assert (failed / 'DIAGNOSTICS').is_file(), 'failed candidate keeps diagnostics'
+                assert not (fixture / 'installed/apps/quality-fixture.next').exists()
                 with urllib.request.urlopen(f'http://{address}/simulation', timeout=5) as response:
                     simulation = json.load(response)
                 result = dict(status='passed', basis='store-app-sdk-ipc-and-runtime-transactions',
-                              original_fixture=True, fixture_payload='inert; not a launch validation',
+                              original_fixture=True,
+                              fixture_payload='quality-fixture example; every install passes the launch canary',
                               scale=args.scale, app_store=simulation['appStore'],
                               checks=['install', 'disk-full preserves version', 'update', 'process restart',
                                       'remove preserves data', 'reinstall',
-                                      'quarantine flags the listing', 'recovery flow', 'reset clears the flag'],
+                                      'quarantine flags the listing', 'recovery flow', 'reset clears the flag',
+                                      'launch canary passes on every install',
+                                      'failed canary keeps the previous version'],
                               cli_sha256=hashlib.sha256(cli.read_bytes()).hexdigest(),
                               builder_sha256=hashlib.sha256(builder.read_bytes()).hexdigest(),
                               source_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),

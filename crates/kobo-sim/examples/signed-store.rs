@@ -28,7 +28,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("refusing to modify an unrelated directory".into());
     }
-    let binary = format!("Original inert local Store fixture {}\n", args[3]).into_bytes();
+    // KOBO_FIXTURE_PAYLOAD points at a real application binary (the
+    // quality-fixture example) so installs can face the launch canary;
+    // without it the payload stays inert bytes for pure transaction checks.
+    let binary = std::env::var_os("KOBO_FIXTURE_PAYLOAD")
+        .map(|path| fs::read(path).expect("fixture payload readable"))
+        .unwrap_or_else(|| {
+            format!("Original inert local Store fixture {}\n", args[3]).into_bytes()
+        });
     let manifest = Manifest::new_public(ManifestInput {
         id: "quality-fixture".into(),
         display_name: "Quality fixture".into(),
