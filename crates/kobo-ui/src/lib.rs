@@ -4277,6 +4277,23 @@ pub enum Node {
         /// Whether this is the one thing the screen is for. See [`Emphasis`].
         emphasis: Emphasis,
     },
+    /// A labelled switch: one standing choice that is either on or off.
+    ///
+    /// Buttons say what happens next; a toggle says how things are. The
+    /// distinction matters on a reader the owner returns to weeks later: a
+    /// label beside a switch that is plainly on needs no memory of the choice
+    /// that put it there, where a button named after the alternative forces
+    /// the owner to infer the current state from what it is not. The state
+    /// lives in the switch itself, never in the label: a label that reads
+    /// "(on)" is two controls disagreeing about one fact.
+    Toggle {
+        id: NodeId,
+        action: ActionId,
+        label: String,
+        /// Whether the choice is on. Drawn, never written into the label.
+        on: bool,
+        state: ControlState,
+    },
     Card {
         id: NodeId,
         children: Vec<Node>,
@@ -5477,6 +5494,7 @@ impl Node {
             | Self::Section { id, .. }
             | Self::Quote { id, .. }
             | Self::Button { id, .. }
+            | Self::Toggle { id, .. }
             | Self::Card { id, .. }
             | Self::Field { id, .. }
             | Self::Chips { id, .. }
@@ -5659,6 +5677,9 @@ pub enum LayoutKind {
     /// size without consulting the tree.
     Quote(u8, QuoteRole),
     Button(ActionId, ControlState, Emphasis),
+    /// A standing on/off choice. The flag is the current state, so the panel
+    /// can draw the switch without asking the application anything.
+    Toggle(ActionId, ControlState, bool),
     /// A checker stack on a backgammon point. `from_top` pins its base to the
     /// matching board edge so a five-checker point reads as one familiar pile.
     BackgammonStack(Glyph, u8, bool),
@@ -5858,6 +5879,7 @@ impl LayoutKind {
         match *self {
             Self::Cell(_, CellStyle::CrosswordBlock, _) => None,
             Self::Button(action, ControlState::Enabled, _)
+            | Self::Toggle(action, ControlState::Enabled, _)
             | Self::BarAction(action)
             | Self::BarGlyph(action, _)
             | Self::NavDestination(action, ..)
@@ -6266,7 +6288,8 @@ impl Layout {
             let action = match node.kind {
                 // A control that is drawn as unavailable is not one, whatever
                 // action it still names.
-                LayoutKind::Button(_, ControlState::Disabled, _) => continue,
+                LayoutKind::Button(_, ControlState::Disabled, _)
+                | LayoutKind::Toggle(_, ControlState::Disabled, _) => continue,
                 // The scrim ends the search. Everything past it is underneath
                 // an overlay, and a control the reader cannot see is a control
                 // they cannot have meant to press. A popover treats the miss
@@ -6297,6 +6320,7 @@ impl Layout {
             if matches!(
                 node.kind,
                 LayoutKind::Button(_, ControlState::Disabled, _)
+                    | LayoutKind::Toggle(_, ControlState::Disabled, _)
                     | LayoutKind::Tile(_, ControlState::Disabled)
                     | LayoutKind::Scrim { .. }
             ) {
@@ -6742,6 +6766,7 @@ fn layout_flow_node(
             | Node::Activity { .. } => width.min(metrics.readable_width()),
             Node::Section { .. }
             | Node::Button { .. }
+            | Node::Toggle { .. }
             | Node::Field { .. }
             | Node::Chips { .. }
             | Node::Tabs { .. }
@@ -7379,6 +7404,45 @@ fn layout_node(
                     height,
                 },
                 kind: LayoutKind::Button(*action, *state, *emphasis),
+                text_lines: lines,
+            });
+            y.saturating_add(height)
+        }
+        Node::Toggle {
+            id,
+            action,
+            label,
+            on,
+            state,
+        } => {
+            // The whole row is the target; the switch is only the picture of
+            // the state. Height follows the same rule as a button: what the
+            // words need, floored at a finger.
+            let finger = max(
+                metrics.touch_target_minimum(),
+                metrics.touch_target_default(),
+            );
+            let padding = if legacy_typography() {
+                16
+            } else {
+                metrics.tenth_mm(BUTTON_HORIZONTAL_PADDING_TENTH_MM)
+            };
+            let text_width = width
+                .saturating_sub(metrics.tenth_mm(TOGGLE_TRACK_WIDTH_TENTH_MM))
+                .saturating_sub(padding);
+            let lines = wrap_text(label, text_width.max(1), FontSize::Body);
+            let wrapped =
+                i32::try_from(lines.len()).unwrap_or(1).max(1) * FontSize::Body.line_height();
+            let height = max(finger, wrapped);
+            layout.nodes.push(LayoutNode {
+                id: *id,
+                rect: Rect {
+                    x,
+                    y,
+                    width,
+                    height,
+                },
+                kind: LayoutKind::Toggle(*action, *state, *on),
                 text_lines: lines,
             });
             y.saturating_add(height)
@@ -11367,6 +11431,15 @@ fn force_grapheme_break(
 /// looked like in 1996, and it is most of why these controls read as
 /// wireframes rather than as buttons.
 pub const BUTTON_RADIUS_TENTH_MM: i32 = 10;
+
+/// The track of a [`Node::Toggle`] switch. Sized to read at arm's length on
+/// the smallest panel, not to fill a finger: the whole row is the target, so
+/// the switch itself only has to be seen.
+pub const TOGGLE_TRACK_WIDTH_TENTH_MM: i32 = 44;
+/// The track height of a [`Node::Toggle`] switch. Half the width keeps the
+/// capsule proportion every platform converged on, and makes the knob a
+/// circle by construction.
+pub const TOGGLE_TRACK_HEIGHT_TENTH_MM: i32 = 22;
 /// Corner radius of a command-deck pad. Larger than a keyboard key so a
 /// fifteen-key grid reads as recessed hardware rather than a ruled board.
 pub const PAD_RADIUS_TENTH_MM: i32 = 28;
@@ -12546,7 +12619,9 @@ fn validate_node(
                 check_text_coverage(id, &link.label, Face::Text, issues);
             }
         }
-        Node::Button { label, .. } => check_text_coverage(id, label, Face::Text, issues),
+        Node::Button { label, .. } | Node::Toggle { label, .. } => {
+            check_text_coverage(id, label, Face::Text, issues);
+        }
         Node::Field {
             value, placeholder, ..
         } => {
@@ -12965,7 +13040,9 @@ fn node_enabled_interaction_count(node: &Node) -> usize {
         Node::Text { links, .. } | Node::RichText { links, .. } => links.len(),
         Node::Section { link, .. } => usize::from(link.is_some()),
         Node::Quote { fold, .. } => usize::from(fold.is_some()),
-        Node::Button { state, .. } => usize::from(state.is_enabled()),
+        Node::Button { state, .. } | Node::Toggle { state, .. } => {
+            usize::from(state.is_enabled())
+        }
         Node::Field { clear, .. } => 1 + usize::from(clear.is_some()),
         Node::Chips { chips, .. } | Node::Tabs { tabs: chips, .. } => chips.len(),
         Node::Card { .. } | Node::Band { .. } => 0,
@@ -13020,6 +13097,7 @@ const fn is_enabled_interactive(kind: LayoutKind) -> bool {
         && !matches!(
             kind,
             LayoutKind::Button(_, ControlState::Disabled, _)
+                | LayoutKind::Toggle(_, ControlState::Disabled, _)
                 | LayoutKind::Tile(_, ControlState::Disabled)
                 | LayoutKind::StepperControl(_, ControlState::Disabled, _)
         )
@@ -13105,6 +13183,7 @@ const fn is_tappable(kind: LayoutKind) -> bool {
     matches!(
         kind,
         LayoutKind::Button(_, ControlState::Enabled, _)
+            | LayoutKind::Toggle(_, ControlState::Enabled, _)
             | LayoutKind::Back
             | LayoutKind::BarAction(_)
             | LayoutKind::BarGlyph(..)
@@ -13245,6 +13324,7 @@ fn layout_text_style(node: &LayoutNode) -> Option<(FontSize, Face)> {
         | LayoutKind::FactValue
         | LayoutKind::Quote(..)
         | LayoutKind::Button(..)
+        | LayoutKind::Toggle(..)
         | LayoutKind::PagedList
         | LayoutKind::RowTitle
         | LayoutKind::RowTitleDone
@@ -14135,6 +14215,77 @@ fn render_all_with_selected_font(
                     tone::MUTED,
                     clip,
                 );
+            }
+            LayoutKind::Toggle(_, state, on) => {
+                // The label leads, the switch trails, and the state is read
+                // from the switch alone: on is a filled track with the knob
+                // run to the trailing end, off is an outlined track with the
+                // knob home. Fill versus outline carries the meaning, which
+                // keeps it legible on a panel with no greys to spare.
+                let ink = match state {
+                    ControlState::Enabled => tone::INK,
+                    ControlState::Disabled => tone::MUTED,
+                };
+                let rule = match state {
+                    ControlState::Enabled => tone::INK,
+                    ControlState::Disabled => tone::RULE,
+                };
+                let text_height = i32::try_from(node.text_lines.len()).unwrap_or(1).max(1)
+                    * FontSize::Body.line_height();
+                let text_top = node
+                    .rect
+                    .y
+                    .saturating_add((node.rect.height - text_height).max(0) / 2);
+                draw_lines(
+                    surface,
+                    &node.text_lines,
+                    node.rect.x,
+                    text_top,
+                    FontSize::Body,
+                    ink,
+                    clip,
+                );
+                let track_width = metrics.tenth_mm(TOGGLE_TRACK_WIDTH_TENTH_MM);
+                let track_height = metrics.tenth_mm(TOGGLE_TRACK_HEIGHT_TENTH_MM);
+                let track = Rect {
+                    x: node
+                        .rect
+                        .x
+                        .saturating_add(node.rect.width.saturating_sub(track_width)),
+                    y: node
+                        .rect
+                        .y
+                        .saturating_add((node.rect.height - track_height).max(0) / 2),
+                    width: track_width,
+                    height: track_height,
+                };
+                let inset = metrics.rule_thickness().saturating_mul(2);
+                let knob = track_height.saturating_sub(inset.saturating_mul(2));
+                let knob_x = if on {
+                    track.x.saturating_add(track.width.saturating_sub(knob + inset))
+                } else {
+                    track.x.saturating_add(inset)
+                };
+                let knob_rect = Rect {
+                    x: knob_x,
+                    y: track.y.saturating_add(inset),
+                    width: knob,
+                    height: knob,
+                };
+                if on {
+                    fill_rounded_clipped(surface, track, track.height / 2, ink, clip);
+                    fill_rounded_clipped(surface, knob_rect, knob / 2, tone::PAPER, clip);
+                } else {
+                    stroke_rounded_clipped(
+                        surface,
+                        track,
+                        track.height / 2,
+                        rule,
+                        metrics.button_border(),
+                        clip,
+                    );
+                    fill_rounded_clipped(surface, knob_rect, knob / 2, rule, clip);
+                }
             }
             // A board cell is outlined rather than filled, so a board reads as
             // ruled squares and an empty cell stays paper white. Filling would
@@ -20957,6 +21108,52 @@ mod prose_tests {
     }
 
     #[test]
+    fn a_toggle_is_full_width_with_room_for_its_label_and_switch() {
+        let screen = Screen::new(
+            1,
+            vec![
+                Node::Toggle {
+                    id: NodeId(1),
+                    action: ActionId(1),
+                    label: "Beta updates".to_owned(),
+                    on: true,
+                    state: ControlState::Enabled,
+                },
+                Node::Toggle {
+                    id: NodeId(2),
+                    action: ActionId(2),
+                    label: "Automatic updates".to_owned(),
+                    on: false,
+                    state: ControlState::Disabled,
+                },
+            ],
+        );
+        let laid_out = screen.layout_with(&CLARA_BW_METRICS, &Chrome::default());
+        let on = laid_out
+            .nodes
+            .iter()
+            .find(|node| node.kind == LayoutKind::Toggle(ActionId(1), ControlState::Enabled, true))
+            .expect("enabled toggle lays out");
+        let off = laid_out
+            .nodes
+            .iter()
+            .find(|node| {
+                node.kind == LayoutKind::Toggle(ActionId(2), ControlState::Disabled, false)
+            })
+            .expect("disabled toggle lays out");
+        let minimum = CLARA_BW_METRICS.touch_target_minimum();
+        assert!(on.rect.width >= minimum && on.rect.height >= minimum);
+        assert_eq!(on.rect.width, off.rect.width);
+        // The enabled switch answers a tap; the disabled one is inert.
+        let x = on.rect.x + on.rect.width - 4;
+        let y = on.rect.y + on.rect.height / 2;
+        assert_eq!(laid_out.hit_control(x, y), Some(ActionId(1)));
+        let y_off = off.rect.y + off.rect.height / 2;
+        assert!(laid_out.hit_inert_control(x, y_off));
+        // A long label wraps beside the switch instead of under it.
+        assert!(screen.validate(&CLARA_BW_METRICS).is_empty());
+    }
+
     fn a_button_is_as_tall_as_the_words_on_it() {
         // Two secondary actions side by side give each label half the panel,
         // and at the larger reader text settings "Clear finished" needs two

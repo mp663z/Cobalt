@@ -722,6 +722,41 @@ impl ScreenBuilder {
         self.button_with_state(name, label, ControlState::Enabled)
     }
 
+    /// Adds a standing on/off choice, drawn as a switch beside its label.
+    ///
+    /// Reach for this when the control itself is the state: a channel that is
+    /// joined, a radio that is allowed. A button named "Turn on Wi-Fi" makes
+    /// the reader infer the present from the offered future; a switch drawn
+    /// on or off tells it directly. Tapping sends the action; the application
+    /// answers by rebuilding the screen with the new position, and any
+    /// confirmation the choice needs is a screen it navigates to first, the
+    /// same as any other consequential action.
+    #[must_use]
+    pub fn toggle(self, name: impl AsRef<str>, label: impl Into<String>, on: bool) -> Self {
+        self.toggle_with_state(name, label, on, ControlState::Enabled)
+    }
+
+    /// Adds a switch with an explicit enabled state.
+    #[must_use]
+    pub fn toggle_with_state(
+        mut self,
+        name: impl AsRef<str>,
+        label: impl Into<String>,
+        on: bool,
+        state: ControlState,
+    ) -> Self {
+        let action = self.register(name.as_ref());
+        let id = self.next_id();
+        self.nodes.push(Node::Toggle {
+            id,
+            action,
+            label: label.into(),
+            on,
+            state,
+        });
+        self
+    }
+
     /// Adds the one control the screen exists for, drawn filled.
     ///
     /// At most one per screen. A fill is the loudest mark this panel can make

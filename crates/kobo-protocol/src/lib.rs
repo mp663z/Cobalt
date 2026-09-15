@@ -4518,6 +4518,15 @@ fn encoded_node_len(
             add_encoded_len(&mut length, encoded_string_len(label)?)?;
             length
         }
+        Node::Toggle { label, .. } => {
+            if version < STORE_PROVENANCE_VERSION {
+                return Err(ProtocolError::InvalidValue("toggle node"));
+            }
+            // tag, id, action, state, on, then the label.
+            let mut length = 11;
+            add_encoded_len(&mut length, encoded_string_len(label)?)?;
+            length
+        }
         Node::Card { children, .. } => {
             if children.len() > MAX_NODES {
                 return Err(ProtocolError::TooManyNodes);
@@ -5802,6 +5811,26 @@ fn encode_node(
                 kobo_ui::Emphasis::Normal => 0,
                 kobo_ui::Emphasis::Primary => 1,
             });
+            push_string(output, label)?;
+        }
+        Node::Toggle {
+            id,
+            action,
+            label,
+            on,
+            state,
+        } => {
+            if version < STORE_PROVENANCE_VERSION {
+                return Err(ProtocolError::InvalidValue("toggle node"));
+            }
+            output.push(35);
+            push_u32(output, id.0);
+            push_u32(output, action.0);
+            output.push(match state {
+                ControlState::Enabled => 0,
+                ControlState::Disabled => 1,
+            });
+            output.push(u8::from(*on));
             push_string(output, label)?;
         }
         Node::Card { id, children } => {
@@ -7445,6 +7474,21 @@ fn decode_node(
             }
             Ok(Node::Rows { id, rows })
         }
+        35 if version >= STORE_PROVENANCE_VERSION => Ok(Node::Toggle {
+            id,
+            action: ActionId(reader.u32()?),
+            state: match reader.u8()? {
+                0 => ControlState::Enabled,
+                1 => ControlState::Disabled,
+                _ => return Err(ProtocolError::InvalidValue("control state")),
+            },
+            on: match reader.u8()? {
+                0 => false,
+                1 => true,
+                _ => return Err(ProtocolError::InvalidValue("toggle state")),
+            },
+            label: reader.string()?,
+        }),
         _ => Err(ProtocolError::InvalidValue("node tag")),
     }
 }
@@ -9333,6 +9377,13 @@ mod node_coverage_tests {
                 ],
                 weights: vec![240, 90],
             },
+            Node::Toggle {
+                id: NodeId(71),
+                action: ActionId(71),
+                label: "Beta updates".into(),
+                on: true,
+                state: ControlState::Disabled,
+            },
             Node::Heading {
                 id: NodeId(1),
                 text: "Heading".into(),
@@ -9800,6 +9851,37 @@ mod node_coverage_tests {
             }],
         ));
         assert_eq!(round_trip(screen.clone()).overlay, screen.overlay);
+    }
+
+    #[test]
+    fn a_toggle_node_refuses_sessions_that_predate_it() {
+        let node = Node::Toggle {
+            id: NodeId(71),
+            action: ActionId(71),
+            label: "Beta updates".into(),
+            on: true,
+            state: ControlState::Enabled,
+        };
+        for version in [LEGACY_VERSION, FOLIO_VERSION, SELECTED_GRID_VERSION, SERVER_ACCOUNT_VERSION] {
+            let frame = Frame {
+                version,
+                request_id: 7,
+                message: Message::SetScreen(Screen::new(1, vec![node.clone()])),
+            };
+            assert!(
+                encode(&frame).is_err(),
+                "version {version} accepted a toggle node"
+            );
+        }
+        // A forged toggle on an older session is refused, never misread.
+        let frame = Frame {
+            version: VERSION,
+            request_id: 7,
+            message: Message::SetScreen(Screen::new(1, vec![node])),
+        };
+        let mut bytes = encode(&frame).expect("encode");
+        bytes[4] = SERVER_ACCOUNT_VERSION;
+        assert!(decode(&bytes).is_err());
     }
 
     #[test]
