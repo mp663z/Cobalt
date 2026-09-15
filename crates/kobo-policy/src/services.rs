@@ -11,8 +11,8 @@
 
 use crate::{Capability, Declared, Grant, Grants, PowerPolicy};
 use kobo_protocol::{
-    AudioPlaybackState, DenyReason, DeviceError, DeviceRequest, DeviceResult, DictionaryEntry,
-    UpdateChannel,
+    AudioPlaybackState, CapabilityAvailability, DenyReason, DeviceError, DeviceRequest,
+    DeviceResult, DictionaryEntry, UpdateChannel,
 };
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -233,6 +233,7 @@ impl DeviceServices {
     #[allow(clippy::too_many_lines)]
     pub fn handle(&mut self, request: DeviceRequest) -> DeviceResult {
         match request {
+            DeviceRequest::ReadCapability { name } => self.capability_report(&name),
             DeviceRequest::ReadBattery => self.read_battery(),
             DeviceRequest::ReadBatteryDetail => self.read_battery_detail(),
             DeviceRequest::ReadIdentity => Self::read_identity(),
@@ -523,6 +524,44 @@ impl DeviceServices {
     /// sensor that is present and sees nothing. An application then exercises
     /// the same path it will on hardware rather than a "no sensor" branch it
     /// would never otherwise reach.
+    /// Answers one availability question with the state the evidence
+    /// actually carries, never a bare boolean
+    /// (docs/quality/contracts/capability-availability.md). The answer
+    /// describes this build and its policy; an application that has not
+    /// declared the capability hears that, because hearing it is how the
+    /// mistake gets fixed.
+    fn capability_report(&self, name: &str) -> DeviceResult {
+        let report = |state, reason: String| DeviceResult::Capability {
+            name: name.to_owned(),
+            state,
+            reason,
+        };
+        let Some(capability) = Capability::parse(name) else {
+            return report(
+                CapabilityAvailability::Unsupported,
+                format!("this runtime has no capability named '{name}'"),
+            );
+        };
+        match self.refusal(capability) {
+            None => report(CapabilityAvailability::Available, "available".to_owned()),
+            Some(DenyReason::NotDeclared) => report(
+                CapabilityAvailability::Denied,
+                format!("the application has not declared '{name}' in its manifest"),
+            ),
+            Some(DenyReason::WithheldForBattery) => report(
+                CapabilityAvailability::TemporarilyUnavailable,
+                "withheld while the battery is low; it returns as the battery recovers".to_owned(),
+            ),
+            Some(DenyReason::Unsupported) => report(
+                CapabilityAvailability::Unsupported,
+                format!("this build does not implement '{name}' on this device"),
+            ),
+            Some(reason @ (DenyReason::PolicyRejected | DenyReason::Busy)) => {
+                report(CapabilityAvailability::Denied, reason.describe().to_owned())
+            }
+        }
+    }
+
     fn read_cover(&self) -> DeviceResult {
         self.refusal(Capability::CoverSensor).map_or(
             DeviceResult::Cover {
@@ -743,6 +782,9 @@ pub fn request_capability(request: &DeviceRequest) -> Option<Capability> {
         | DeviceRequest::RecoverApp { .. }
         | DeviceRequest::SetSecret { .. }
         | DeviceRequest::SetServerSecret { .. } => return None,
+        // Asking about availability costs no declaration: the answer is the
+        // build's own evidence, and an app that forgot to declare hears so.
+        DeviceRequest::ReadCapability { .. } => return None,
         DeviceRequest::ListLibrary | DeviceRequest::ReadLibrary { .. } => Capability::Library,
     })
 }
@@ -755,7 +797,9 @@ fn clamp_seconds(duration: Duration) -> u32 {
 mod tests {
     use super::{Backends, DeviceServices, DeviceState};
     use crate::{Capability, Declared, PowerPolicy};
-    use kobo_protocol::{DenyReason, DeviceRequest, DeviceResult, UpdateChannel};
+    use kobo_protocol::{
+        CapabilityAvailability, DenyReason, DeviceRequest, DeviceResult, UpdateChannel,
+    };
 
     fn seconds_of(duration: std::time::Duration) -> u32 {
         u32::try_from(duration.as_secs()).expect("policy fits in u32")
@@ -790,6 +834,89 @@ mod tests {
 
     fn declared(names: &[&str]) -> Declared {
         Declared::parse(names.iter().copied()).expect("valid declaration")
+    }
+
+    #[test]
+    fn availability_reports_carry_the_state_and_its_reason() {
+        let mut services = DeviceServices::new(
+            declared(&["network"]),
+            PowerPolicy::DEFAULT,
+            Backends::with([Capability::Network]),
+        );
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "network".to_owned(),
+                state: CapabilityAvailability::Available,
+                reason: "available".to_owned(),
+            }
+        );
+        // A name the runtime does not know is unsupported with the evidence,
+        // never guessed from the asking application.
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "camera".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "camera".to_owned(),
+                state: CapabilityAvailability::Unsupported,
+                reason: "this runtime has no capability named 'camera'".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn availability_reports_say_why_without_costing_a_declaration() {
+        let mut services = DeviceServices::new(
+            declared(&[]),
+            PowerPolicy::DEFAULT,
+            Backends::with(Capability::ALL),
+        );
+        // Undeclared is said, so the mistake gets fixed.
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "network".to_owned(),
+                state: CapabilityAvailability::Denied,
+                reason: "the application has not declared 'network' in its manifest".to_owned(),
+            }
+        );
+        // Withheld for battery is temporary, and the reason says so.
+        let mut low = DeviceServices::new(
+            declared(&["network", "hold-wifi"]),
+            PowerPolicy::DEFAULT,
+            Backends::with(Capability::ALL),
+        );
+        low.observe_battery(5, false);
+        let DeviceResult::Capability { state, reason, .. } =
+            low.handle(DeviceRequest::ReadCapability {
+                name: "hold-wifi".to_owned(),
+            })
+        else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::TemporarilyUnavailable);
+        assert!(reason.contains("battery"), "{reason}");
+        // A backend this build lacks is unsupported, declared or not.
+        let mut bare = DeviceServices::new(
+            declared(&["network"]),
+            PowerPolicy::DEFAULT,
+            Backends::none(),
+        );
+        assert_eq!(
+            bare.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "network".to_owned(),
+                state: CapabilityAvailability::Unsupported,
+                reason: "this build does not implement 'network' on this device".to_owned(),
+            }
+        );
     }
 
     #[test]
