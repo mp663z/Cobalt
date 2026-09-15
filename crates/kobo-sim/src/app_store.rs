@@ -16,6 +16,10 @@ pub(super) struct SignedStore {
     root: PathBuf,
     transport: PathBuf,
     key: Ed25519PublicKey,
+    /// Whether installs run their launch canary. The original fixture
+    /// payload is inert data, not a launchable application, so this is
+    /// opt-in: fixtures that package a real binary set KOBO_SIM_CANARY=1.
+    canary: bool,
 }
 
 impl SignedStore {
@@ -38,6 +42,7 @@ impl SignedStore {
             root,
             transport,
             key,
+            canary: std::env::var_os("KOBO_SIM_CANARY").is_some_and(|value| value == "1"),
         })
     }
 
@@ -78,9 +83,27 @@ impl SignedStore {
                 runtime::refresh_using_fault(&self.root, channel, &self.key, fetch, fault)
             }
             DeviceRequest::InstallApp { id } => {
+                if self.canary {
+                    return done(runtime::install_with_canary(
+                        &self.root,
+                        id,
+                        channel,
+                        &self.key,
+                        fetch,
+                        fault,
+                        &|binary, manifest| {
+                            kobod::canary::run(
+                                binary,
+                                manifest.id(),
+                                crate::canary_panel(),
+                                std::time::Duration::from_secs(5),
+                            )
+                        },
+                    ));
+                }
                 return done(runtime::install_using_fault(
                     &self.root, id, channel, &self.key, fetch, fault,
-                ))
+                ));
             }
             DeviceRequest::UninstallApp { id } => {
                 return done(runtime::uninstall_using(&self.root, id, &self.key))
