@@ -2,9 +2,30 @@
   "contract": "docs/quality/contracts/protocol-compatibility.md",
   "producer": "crates/kobo-sim/src/protocol_matrix_tests.rs (KOBO_BLESS=1 cargo test -p kobo-sim protocol_matrix)",
   "sessions": [
-    {"version": 11, "name": "LEGACY", "file": "session-v11.bin"},
-    {"version": 12, "name": "FOLIO", "file": "session-v12.bin"},
-    {"version": 13, "name": "SELECTED_GRID", "file": "session-v13.bin"},
-    {"version": 14, "name": "VERSION", "file": "session-v14.bin"}
+    {
+      "version": 11,
+      "name": "LEGACY",
+      "file": "session-v11.bin"
+    },
+    {
+      "version": 12,
+      "name": "FOLIO",
+      "file": "session-v12.bin"
+    },
+    {
+      "version": 13,
+      "name": "SELECTED_GRID",
+      "file": "session-v13.bin"
+    },
+    {
+      "version": 14,
+      "name": "VERSION",
+      "file": "session-v14.bin"
+    },
+    {
+      "version": 15,
+      "name": "STORE_PROVENANCE",
+      "file": "session-v15.bin"
+    }
   ]
 }
