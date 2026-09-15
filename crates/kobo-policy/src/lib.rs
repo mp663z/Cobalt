@@ -10,6 +10,7 @@
 
 pub mod clock;
 pub mod credentials;
+pub mod identity;
 pub mod library;
 mod persistence;
 pub mod services;
