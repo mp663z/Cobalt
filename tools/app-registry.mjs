@@ -220,7 +220,9 @@ function validateQuality(app, directoryName) {
   sentence(app.user, label("user"));
   sentence(app.job, label("job"));
   sentence(app.offline, label("offline"));
-  if (!Array.isArray(app.data) || app.data.length === 0) {
+  // An explicit empty array says "this app creates no user data"; leaving
+  // the field out is what fails completeness.
+  if (!Array.isArray(app.data)) {
     throw new Error(`${label("data")} must name each kind of user-created data`);
   }
   for (const [index, item] of app.data.entries()) {
@@ -240,8 +242,8 @@ function validateQuality(app, directoryName) {
     ["capabilities_required", "purpose"],
     ["capabilities_optional", "gates"]
   ]) {
-    if (!Array.isArray(app[field]) || app[field].length === 0) {
-      throw new Error(`${label(field)} must be a non-empty array`);
+    if (!Array.isArray(app[field])) {
+      throw new Error(`${label(field)} must be an array, empty only when it means none`);
     }
     for (const [index, item] of app[field].entries()) {
       const at = `${label(field)}[${index}]`;
@@ -250,6 +252,9 @@ function validateQuality(app, directoryName) {
         throw new Error(`${at}.name must be a capability name`);
       }
       sentence(item[purposeKey], `${at}.${purposeKey}`);
+      if (!app.capabilities.includes(item.name)) {
+        throw new Error(`${at}.name '${item.name}' is not one of the app's declared capabilities`);
+      }
     }
   }
   sentenceList(app.profiles, label("profiles"));
