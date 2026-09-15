@@ -53,12 +53,12 @@ fn record_failure(adds: &Path, stage: UpdateStage, reason: &str) {
     if !cobalt.is_dir() {
         return;
     }
-    let state = cobalt.join("state");
-    if fs::create_dir_all(&state).is_err() {
+    let state_dir = cobalt.join("state");
+    if fs::create_dir_all(&state_dir).is_err() {
         return;
     }
     let _ignored = fs::write(
-        state.join("last-update-error"),
+        state_dir.join("last-update-error"),
         format!("{}: {reason}\n", stage.label()),
     );
 }
@@ -1252,7 +1252,11 @@ mod tests {
             }
         }
         container.extend_from_slice(&(!crc).to_le_bytes());
-        container.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+        container.extend_from_slice(
+            &u32::try_from(bytes.len())
+                .expect("fixture part fits")
+                .to_le_bytes(),
+        );
         container
     }
 
@@ -1412,22 +1416,21 @@ mod tests {
         // one: a reader that is updating has Cobalt by definition.
         fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
         let (archive, digest, complete) = full_archive(members, bootstrap);
-        let outcome = match install(&archive, &digest, &adds) {
-            Ok(()) => "\"result\":\"installed\"".to_owned(),
-            Err(_) => {
-                let ledger = fs::read_to_string(adds.join("cobalt/state/last-update-error"))
-                    .expect("a refusal records its reason");
-                let stage = ledger.split(':').next().expect("a staged ledger line");
-                format!(
-                    "\"result\":\"refused\",\"stage\":\"{}\",\"ledger\":\"{}\"",
-                    json_escape(stage),
-                    json_escape(ledger.trim_end()),
-                )
-            }
+        let outcome = if let Ok(()) = install(&archive, &digest, &adds) {
+            "\"result\":\"installed\"".to_owned()
+        } else {
+            let ledger = fs::read_to_string(adds.join("cobalt/state/last-update-error"))
+                .expect("a refusal records its reason");
+            let stage = ledger.split(':').next().expect("a staged ledger line");
+            format!(
+                "\"result\":\"refused\",\"stage\":\"{}\",\"ledger\":\"{}\"",
+                json_escape(stage),
+                json_escape(ledger.trim_end()),
+            )
         };
         let _ignored = fs::remove_dir_all(&adds);
         let manifest_field = match manifest {
-            Some(text) => format!("\"manifest\":{}", text),
+            Some(text) => format!("\"manifest\":{text}"),
             None => "\"manifest\":null".to_owned(),
         };
         let record = format!(
@@ -1487,7 +1490,7 @@ mod tests {
     /// under scripts/fixtures/update-graph; scripts/fixtures/update-graph/
     /// check.py replays the same archives in lanes without a Rust toolchain.
     /// A drift in either is a contract change, not a fixture refresh.
-    /// Regenerate from a known-good tree with KOBO_BLESS=1.
+    /// Regenerate from a known-good tree with `KOBO_BLESS=1`.
     #[test]
     fn update_graph_edges_match_the_committed_contract() {
         let current = launch_files(b"#!/bin/sh\n# release candidate\n");

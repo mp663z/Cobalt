@@ -37,6 +37,11 @@ pub struct Panel {
 /// Returns a one-line success summary for the install journal, or diagnostics
 /// specific enough that the quarantine record tells the owner what the
 /// package did instead of launching.
+///
+/// # Errors
+///
+/// Returns diagnostics naming what the package did instead of launching: the
+/// socket, the spawn, the deadline, the panel handshake, or the exit.
 pub fn run(
     binary: &Path,
     expected_name: &str,
@@ -344,7 +349,10 @@ mod tests {
             Duration::from_secs(5),
         )
         .unwrap_err();
-        assert!(error.contains("protocol 16"), "{error}");
+        assert!(
+            error.contains(&format!("protocol {}", kobo_protocol::VERSION + 1)),
+            "{error}"
+        );
         app_thread.join().unwrap();
     }
 

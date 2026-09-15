@@ -40,6 +40,7 @@ pub struct Capability {
 
 impl Capability {
     /// Usable now.
+    #[must_use]
     pub fn available() -> Self {
         Self {
             state: CapabilityState::Available,
@@ -82,18 +83,21 @@ impl Capability {
     }
 
     /// The state this report carries.
+    #[must_use]
     pub fn state(&self) -> CapabilityState {
         self.state
     }
 
     /// Why: the owner action, the change, the permission, or the probe
     /// evidence, in the device's own words.
+    #[must_use]
     pub fn reason(&self) -> &str {
         &self.reason
     }
 
     /// The derived boolean view: usable now. A view, never the source
     /// of truth - the state and reason are.
+    #[must_use]
     pub fn is_available(&self) -> bool {
         self.state == CapabilityState::Available
     }
@@ -103,6 +107,7 @@ impl Capability {
     /// [`crate::Device::read_capability`]: the request asks, the runtime
     /// answers, and this keeps the answer in states and reasons instead
     /// of a boolean.
+    #[must_use]
     pub fn report(result: &DeviceResult) -> Option<Self> {
         let DeviceResult::Capability { state, reason, .. } = result else {
             return None;

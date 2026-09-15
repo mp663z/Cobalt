@@ -41,6 +41,7 @@ pub enum Recovery {
 }
 
 impl Health {
+    #[must_use]
     pub fn new(root: &Path) -> Self {
         Self {
             root: root.to_path_buf(),
@@ -59,6 +60,7 @@ impl Health {
 
     /// The recorded consecutive crash count. An absent or unreadable ledger
     /// is zero: the count is evidence, not suspicion.
+    #[must_use]
     pub fn crashes(&self, application: &str) -> u32 {
         let Ok(path) = self.ledger(application) else {
             return 0;
@@ -71,11 +73,16 @@ impl Health {
 
     /// Whether the application is quarantined: the limit reached, no clean
     /// exit since.
+    #[must_use]
     pub fn is_quarantined(&self, application: &str) -> bool {
         self.crashes(application) >= CONSECUTIVE_CRASH_LIMIT
     }
 
     /// A launch that ran and ended normally clears the count.
+    ///
+    /// # Errors
+    ///
+    /// Returns the name check or ledger write failure.
     pub fn record_clean_exit(&self, application: &str) -> Result<(), String> {
         let path = self.ledger(application)?;
         if self.crashes(application) == 0 && !path.exists() {
@@ -85,6 +92,10 @@ impl Health {
     }
 
     /// An application that died on its own. Returns the new count.
+    ///
+    /// # Errors
+    ///
+    /// Returns the name check or ledger write failure.
     pub fn record_crash(&self, application: &str) -> Result<u32, String> {
         let path = self.ledger(application)?;
         let crashes = self.crashes(application).saturating_add(1);
@@ -93,6 +104,9 @@ impl Health {
     }
 
     /// Clears the record after a recovery choice carried it out.
+    /// # Errors
+    ///
+    /// Returns the name check or ledger write failure.
     pub fn release(&self, application: &str) -> Result<(), String> {
         let path = self.ledger(application)?;
         if path.exists() {
@@ -103,6 +117,10 @@ impl Health {
 
     /// Carries out the state half of a recovery choice. Returns what was
     /// done with the state, in words the confirmation screen can repeat.
+    /// # Errors
+    ///
+    /// Returns the name check, a state move or delete failure, or the ledger
+    /// write failure.
     pub fn recover(
         &self,
         application: &str,

@@ -781,10 +781,10 @@ pub fn request_capability(request: &DeviceRequest) -> Option<Capability> {
         // runtime authorizes it by caller identity, not manifest capability.
         | DeviceRequest::RecoverApp { .. }
         | DeviceRequest::SetSecret { .. }
-        | DeviceRequest::SetServerSecret { .. } => return None,
+        | DeviceRequest::SetServerSecret { .. }
         // Asking about availability costs no declaration: the answer is the
         // build's own evidence, and an app that forgot to declare hears so.
-        DeviceRequest::ReadCapability { .. } => return None,
+        | DeviceRequest::ReadCapability { .. } => return None,
         DeviceRequest::ListLibrary | DeviceRequest::ReadLibrary { .. } => Capability::Library,
     })
 }

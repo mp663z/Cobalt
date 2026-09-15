@@ -8598,7 +8598,7 @@ mod tests {
     }
 
     /// Provenance, package size and the permission-change flag exist only on
-    /// sessions that greeted with STORE_PROVENANCE_VERSION: a newer runtime
+    /// sessions that greeted with `STORE_PROVENANCE_VERSION`: a newer runtime
     /// keeps sending the old shape to older apps, byte for byte, and an older
     /// runtime's answer decodes to the defaults a new app can rely on.
     #[test]
@@ -8739,15 +8739,6 @@ mod tests {
         let mut forged = encode(&modern).expect("encode modern");
         forged[4] = SERVER_ACCOUNT_VERSION;
         assert!(decode(&forged).is_err(), "forged canary tag refused");
-    }
-
-    fn defaulted_with(entries: Vec<AppInfo>) -> AppInfo {
-        let mut entry = entries.into_iter().next().expect("one entry");
-        entry.provenance = AppProvenance::Catalog;
-        entry.package_bytes = None;
-        entry.permissions_changed = false;
-        entry.quarantined = false;
-        entry
     }
 
     #[test]

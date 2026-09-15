@@ -18,7 +18,7 @@ pub(super) struct SignedStore {
     key: Ed25519PublicKey,
     /// Whether installs run their launch canary. The original fixture
     /// payload is inert data, not a launchable application, so this is
-    /// opt-in: fixtures that package a real binary set KOBO_SIM_CANARY=1.
+    /// opt-in: fixtures that package a real binary set `KOBO_SIM_CANARY=1`.
     canary: bool,
 }
 

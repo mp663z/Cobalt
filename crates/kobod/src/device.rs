@@ -3578,6 +3578,7 @@ fn launch_canary(binary: &Path, manifest: &kobo_app_store::Manifest) -> Result<S
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn open_application(
     apps: &mut Vec<Hosted>,
     next_id: &mut u64,
@@ -5248,7 +5249,7 @@ mod tests {
     #[test]
     fn a_child_that_outlives_the_reap_deadline_counts_as_a_crash() {
         let (mut hosted, _client, root) = hosted_peer(kobo_protocol::VERSION);
-        let mut sleeper = std::process::Command::new("/usr/bin/sleep")
+        let sleeper = std::process::Command::new("/usr/bin/sleep")
             .arg("30")
             .spawn()
             .expect("a stubborn stand-in process");
