@@ -246,7 +246,14 @@ pub fn installed_using(root: &Path, key: &Ed25519PublicKey) -> Result<Vec<AppInf
 fn installed_with_key(root: &Path, key: &Ed25519PublicKey) -> Result<Vec<AppInfo>, DeviceError> {
     let mut entries = installed_manifests(root, key)?
         .into_iter()
-        .map(|manifest| manifest_info(&manifest, Some(manifest.version())))
+        .map(|manifest| {
+            manifest_info(
+                &manifest,
+                Some(manifest.version()),
+                kobo_protocol::AppProvenance::Local,
+                None,
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let installed_ids = entries
         .iter()
@@ -365,6 +372,8 @@ fn prepare_remote_install_channel_with(
         && !manifest_info(
             entry.manifest(),
             current.and_then(|candidate| candidate.installed_version.as_deref()),
+            kobo_protocol::AppProvenance::Catalog,
+            Some(entry.package_bytes()),
         )?
         .has_update()
     {
@@ -674,7 +683,12 @@ pub fn install_using_fault(
         .iter()
         .find(|candidate| candidate.id == id)
     {
-        let candidate = manifest_info(entry.manifest(), current.installed_version.as_deref())?;
+        let candidate = manifest_info(
+            entry.manifest(),
+            current.installed_version.as_deref(),
+            kobo_protocol::AppProvenance::Catalog,
+            Some(entry.package_bytes()),
+        )?;
         if current.installed_version.as_deref() != Some(entry.manifest().version())
             && !candidate.has_update()
         {
@@ -776,11 +790,24 @@ fn catalog_info(
         .entries()
         .iter()
         .map(|entry| {
-            let version = installed
+            let installed_entry = installed
                 .iter()
-                .find(|installed| installed.id == entry.manifest().id())
-                .and_then(|installed| installed.installed_version.as_deref());
-            manifest_info(entry.manifest(), version)
+                .find(|installed| installed.id == entry.manifest().id());
+            let version = installed_entry.and_then(|installed| installed.installed_version.as_deref());
+            let mut info = manifest_info(
+                entry.manifest(),
+                version,
+                kobo_protocol::AppProvenance::Catalog,
+                Some(entry.package_bytes()),
+            )?;
+            // An update that changes what the app may do must be visible
+            // before it is installed, not discovered after.
+            if let Some(installed) = installed_entry {
+                let declared = entry.manifest().capabilities().collect::<BTreeSet<_>>();
+                let current = installed.capabilities.iter().map(String::as_str).collect();
+                info.permissions_changed = declared != current;
+            }
+            Ok(info)
         })
         .collect::<Result<Vec<_>, _>>()?;
     for installed in installed {
@@ -832,6 +859,9 @@ fn builtin_info(app: &BuiltinApp) -> AppInfo {
             .map(|capability| (*capability).to_owned())
             .collect(),
         installed_version: Some(app.version.to_owned()),
+        provenance: kobo_protocol::AppProvenance::Local,
+        package_bytes: None,
+        permissions_changed: false,
     }
 }
 
@@ -850,6 +880,8 @@ fn is_uninstalled(root: &Path, id: &str) -> Result<bool, DeviceError> {
 fn manifest_info(
     manifest: &Manifest,
     installed_version: Option<&str>,
+    provenance: kobo_protocol::AppProvenance,
+    package_bytes: Option<u64>,
 ) -> Result<AppInfo, DeviceError> {
     Ok(AppInfo {
         id: manifest.id().to_owned(),
@@ -861,6 +893,9 @@ fn manifest_info(
         glyph: glyph(manifest.glyph()).ok_or(DeviceError::InvalidInput)?,
         capabilities: manifest.capabilities().map(str::to_owned).collect(),
         installed_version: installed_version.map(str::to_owned),
+        provenance,
+        package_bytes,
+        permissions_changed: false,
     })
 }
 
@@ -1380,6 +1415,105 @@ mod tests {
         let json = catalog.to_canonical_bytes();
         let signature = format!("{}\n", sign(&json, seed).expect("signature")).into_bytes();
         (json, signature, package)
+    }
+
+    /// Builds a signed release whose manifest declares the given
+    /// capabilities, so a catalog can change what an update would grant.
+    fn release_with_capabilities(
+        seed: &[u8; 32],
+        id: &str,
+        version: &str,
+        capabilities: &[&str],
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let binary = format!("{id} app binary {version}").into_bytes();
+        let manifest = Manifest::new_public(ManifestInput {
+            id: id.to_owned(),
+            display_name: format!("{id} application"),
+            short_label: id.to_owned(),
+            summary: format!("The {id} test application."),
+            version: version.to_owned(),
+            minimum_cobalt_version: env!("CARGO_PKG_VERSION").to_owned(),
+            glyph: "note".to_owned(),
+            capabilities: capabilities.iter().map(|capability| (*capability).to_owned()).collect(),
+            binary_sha256: kobo_net::sha256::hex_digest(&binary),
+            binary_bytes: binary.len() as u64,
+        })
+        .expect("manifest");
+        let package = build_bundle(&manifest, &binary, seed).expect("bundle");
+        let catalog = Catalog::new(vec![CatalogEntry::new(CatalogEntryInput {
+            manifest,
+            package_url: format!("https://example.test/{id}.cobalt-app"),
+            package_sha256: kobo_net::sha256::hex_digest(&package),
+            package_bytes: package.len() as u64,
+        })
+        .expect("entry")])
+        .expect("catalog");
+        let json = catalog.to_canonical_bytes();
+        let signature = format!("{}\n", sign(&json, seed).expect("signature")).into_bytes();
+        (json, signature, package)
+    }
+
+    /// The Store's listing says where each row came from: catalog rows carry
+    /// the signed entry's size and flag updates that change capabilities,
+    /// while an installed app missing from the catalog reads as local.
+    #[test]
+    fn catalog_listing_carries_provenance_size_and_permission_changes() {
+        let root = root();
+        let seed = [7_u8; 32];
+        let key = derive_public_key(&seed).expect("key");
+
+        let (json, signature, package) = release_for(&seed, "word-count", "1.0.0");
+        refresh_with(&root, &key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(json.clone())
+            } else {
+                Ok(signature.clone())
+            }
+        })
+        .expect("refresh v1");
+        install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install v1");
+        let (solo_json, solo_signature, solo_package) = release_for(&seed, "solo", "1.0.0");
+        refresh_with(&root, &key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(solo_json.clone())
+            } else {
+                Ok(solo_signature.clone())
+            }
+        })
+        .expect("refresh solo");
+        install_with(&root, "solo", &key, |_, _| Ok(solo_package.clone())).expect("install solo");
+
+        // The new catalog grows word-count's capabilities; solo is gone.
+        let (json, signature, _) = release_with_capabilities(&seed, "word-count", "1.1.0", &["network"]);
+        let listing = refresh_with(&root, &key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(json.clone())
+            } else {
+                Ok(signature.clone())
+            }
+        })
+        .expect("refresh v2");
+
+        let word_count = listing
+            .iter()
+            .find(|entry| entry.id == "word-count")
+            .expect("word-count listed");
+        assert_eq!(word_count.provenance, kobo_protocol::AppProvenance::Catalog);
+        assert!(word_count.package_bytes.is_some_and(|bytes| bytes > 0));
+        assert_eq!(word_count.installed_version.as_deref(), Some("1.0.0"));
+        assert!(word_count.has_update());
+        assert!(
+            word_count.permissions_changed,
+            "an update adding the network capability must be flagged"
+        );
+
+        let solo = listing
+            .iter()
+            .find(|entry| entry.id == "solo")
+            .expect("installed apps missing from the catalog stay listed");
+        assert_eq!(solo.provenance, kobo_protocol::AppProvenance::Local);
+        assert_eq!(solo.package_bytes, None);
+        assert!(!solo.permissions_changed);
     }
 
     #[test]

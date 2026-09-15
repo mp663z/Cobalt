@@ -509,6 +509,9 @@ mod tests {
                 glyph: Glyph::Note,
                 capabilities: Vec::new(),
                 installed_version: Some("1.0.0".to_owned()),
+                provenance: kobo_sdk::AppProvenance::Catalog,
+                package_bytes: None,
+                permissions_changed: false,
             }],
         });
         assert_eq!(runner.app().installed[0].id, "word-count");

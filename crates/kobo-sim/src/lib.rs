@@ -1203,6 +1203,9 @@ impl Default for SimulatedApps {
                     glyph,
                     capabilities: entry.capabilities,
                     installed_version,
+                    provenance: kobo_protocol::AppProvenance::Catalog,
+                    package_bytes: None,
+                    permissions_changed: false,
                 }
             })
             .collect::<Vec<_>>();
@@ -1296,6 +1299,9 @@ fn simulated_app(
             .map(|value| (*value).to_owned())
             .collect(),
         installed_version: installed.then(|| "1.0.0".to_owned()),
+        provenance: kobo_protocol::AppProvenance::Local,
+        package_bytes: None,
+        permissions_changed: false,
     }
 }
 

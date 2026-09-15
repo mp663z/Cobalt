@@ -15,7 +15,7 @@ mod selected_grid_tests;
 mod suspend;
 
 pub use kobo_protocol::{
-    is_valid_key, AppInfo, AppLinkState, AudioPlaybackState, AudioSource, BatteryDetail,
+    is_valid_key, AppInfo, AppLinkState, AppProvenance, AudioPlaybackState, AudioSource, BatteryDetail,
     BluetoothDevice, BluetoothDeviceKind, Credential, DenyReason, DeviceError, DeviceIdentity,
     DeviceRequest, DeviceResult, DictionaryEntry, Frame, Header, LibraryEntry, Lifecycle, LogLevel,
     Message, RemoteInstallOutcome, SecretHeader, ShellError, ShellEvent, ShellRequest, StoreError,
