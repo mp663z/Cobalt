@@ -69,6 +69,7 @@ use std::process::ExitCode;
 mod app_link;
 mod app_store;
 mod autoupdate;
+mod health;
 #[cfg(feature = "device-write")]
 mod blackbox;
 mod consent;
