@@ -15,7 +15,8 @@ mod selected_grid_tests;
 mod suspend;
 
 pub use kobo_protocol::{
-    is_valid_key, AppInfo, AppLinkState, AppProvenance, AudioPlaybackState, AudioSource, BatteryDetail,
+    is_valid_key, AppInfo, AppLinkState, AppProvenance, AppRecovery, AudioPlaybackState, AudioSource,
+    BatteryDetail,
     BluetoothDevice, BluetoothDeviceKind, Credential, DenyReason, DeviceError, DeviceIdentity,
     DeviceRequest, DeviceResult, DictionaryEntry, Frame, Header, LibraryEntry, Lifecycle, LogLevel,
     Message, RemoteInstallOutcome, SecretHeader, ShellError, ShellEvent, ShellRequest, StoreError,
@@ -2593,6 +2594,18 @@ impl Device<'_> {
     #[cfg(feature = "runtime-settings")]
     pub fn set_app_channel(&mut self, channel: UpdateChannel) {
         self.request(DeviceRequest::SetAppChannel { channel });
+    }
+
+    /// Carries out the owner's chosen recovery for a quarantined
+    /// application. The runtime authorizes the caller; the answer is
+    /// [`DeviceResult::Done`] or a failure, and a fresh listing reads back
+    /// the cleared quarantine.
+    #[cfg(feature = "runtime-settings")]
+    pub fn recover_app(&mut self, name: impl Into<String>, recovery: AppRecovery) {
+        self.request(DeviceRequest::RecoverApp {
+            name: name.into(),
+            recovery,
+        });
     }
 
     fn bluetooth_address(
