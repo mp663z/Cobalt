@@ -727,7 +727,7 @@ pub fn install_with_canary(
     install_full(root, id, channel, key, fetch, fault, Some(canary))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn install_full(
     root: &Path,
     id: &str,
@@ -1117,6 +1117,7 @@ fn recover_interrupted_transaction(
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 fn stage_and_swap(
     root: &Path,
     manifest: &Manifest,

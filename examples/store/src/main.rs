@@ -381,8 +381,7 @@ impl Store {
                     "Download",
                     entry
                         .package_bytes
-                        .map(describe_bytes)
-                        .unwrap_or_else(|| "Unknown".to_owned()),
+                        .map_or_else(|| "Unknown".to_owned(), describe_bytes),
                 ),
                 ("Requires Cobalt", entry.minimum_cobalt_version.clone()),
                 (
@@ -578,6 +577,7 @@ impl KoboApp for Store {
         context.applications().catalog_channel();
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         if action == ActionId::BACK {
             self.view = match &self.view {
@@ -696,6 +696,7 @@ impl KoboApp for Store {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_device_result(
         &mut self,
         context: &mut Context,
@@ -973,6 +974,7 @@ fn app_state(entry: &AppInfo) -> String {
 }
 
 /// A package size an owner can plan around, in the units downloads use.
+#[allow(clippy::cast_precision_loss)]
 fn describe_bytes(bytes: u64) -> String {
     if bytes >= 1_000_000 {
         format!("{:.1} MB", bytes as f64 / 1_000_000.0)

@@ -24,11 +24,13 @@ impl Provenance {
     }
 
     /// The connector or app that delivered this copy.
+    #[must_use]
     pub fn source(&self) -> &str {
         &self.source
     }
 
     /// The name the copy carried, exactly as delivered.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -45,6 +47,7 @@ pub struct ContentIdentity {
 impl ContentIdentity {
     /// Identifies `bytes`, titled and authored as the metadata says, first
     /// seen from `provenance`.
+    #[must_use]
     pub fn identify(bytes: &[u8], title: &str, author: &str, provenance: Provenance) -> Self {
         Self {
             hash: kobo_net::sha256::hex_digest(bytes),
@@ -54,17 +57,20 @@ impl ContentIdentity {
     }
 
     /// The hash of the original bytes.
+    #[must_use]
     pub fn hash(&self) -> &str {
         &self.hash
     }
 
     /// The normalized metadata key: the title and author reduced to a
     /// form that spelling and spacing differences cannot multiply.
+    #[must_use]
     pub fn key(&self) -> &str {
         &self.key
     }
 
     /// Every source that delivered these bytes, first delivery first.
+    #[must_use]
     pub fn provenance(&self) -> &[Provenance] {
         &self.provenance
     }
@@ -83,6 +89,7 @@ pub enum Arrival {
 }
 
 /// Classifies an arrival against the identity already recorded for it.
+#[must_use]
 pub fn classify(known: &ContentIdentity, bytes: &[u8], name: &str) -> Arrival {
     let hash = kobo_net::sha256::hex_digest(bytes);
     if hash == known.hash {

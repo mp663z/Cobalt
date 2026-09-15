@@ -3041,6 +3041,7 @@ fn simulated_platform_request_allowed(
     !matches!(request, kobo_protocol::DeviceRequest::Update { .. }) || caller == "settings"
 }
 
+#[allow(clippy::too_many_lines)]
 fn simulated_app_request(
     state: &Arc<Mutex<AppState>>,
     caller: &str,

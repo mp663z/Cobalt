@@ -440,6 +440,7 @@ impl Phase {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 struct Game {
     position: Position,
     turn: Player,
@@ -2639,9 +2640,11 @@ mod tests {
 
     #[test]
     fn the_record_of_play_is_offered_as_plain_text() {
-        let mut game = Game::default();
-        game.played = vec!["White 8/5 6/5".into(), "Black 6/1 4/2".into()];
-        game.score = [2, 1];
+        let mut game = Game {
+            played: vec!["White 8/5 6/5".into(), "Black 6/1 4/2".into()],
+            score: [2, 1],
+            ..Game::default()
+        };
         let text = game.record_text();
         assert!(text.starts_with("Backgammon turn record\n"));
         assert!(text.contains("Score: White 2 · Black 1"));

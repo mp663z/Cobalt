@@ -15,7 +15,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// The most an import may be. The same ceiling the shelf download path
-/// enforces (`kobo-sdk`'s MAX_SHELF_DOWNLOAD, 32 MiB); repeated here
+/// enforces (`kobo-sdk`'s `MAX_SHELF_DOWNLOAD`, 32 MiB); repeated here
 /// because the policy crate sits below the SDK.
 const MAX_IMPORT_BYTES: usize = 32 * 1024 * 1024;
 
@@ -37,6 +37,7 @@ pub enum Rejection {
 
 impl Rejection {
     /// The boundary report, in words an app can show.
+    #[must_use]
     pub fn describe(&self) -> &'static str {
         match self {
             Self::MalformedName => "the name is not a plain file name",
@@ -91,6 +92,10 @@ fn check(name: &str, bytes: &[u8]) -> Result<library::Kind, Rejection> {
 /// The metadata key needs a title and author; at the boundary the best
 /// available title is the file name without its suffix, exactly what a
 /// tile shows before the document is opened.
+///
+/// # Errors
+///
+/// Returns the [`Rejection`] naming why the boundary refused the import.
 pub fn adopt_in(
     root: &Path,
     name: &str,
@@ -98,7 +103,7 @@ pub fn adopt_in(
     provenance: Provenance,
 ) -> Result<Outcome, Rejection> {
     check(name, bytes)?;
-    let title = name.rfind('.').map(|dot| &name[..dot]).unwrap_or(name);
+    let title = name.rfind('.').map_or(name, |dot| &name[..dot]);
     let identity = ContentIdentity::identify(bytes, title, "", provenance);
     let destination = root.join(name);
     if let Ok(existing) = fs::read(&destination) {
