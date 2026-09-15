@@ -1647,6 +1647,7 @@ fn host_applications(
     let catalogue = application
         .parent()
         .map_or_else(|| PathBuf::from("/tmp"), Path::to_path_buf);
+    let health = crate::health::Health::new(Path::new(COBALT_ROOT));
     let home = application.to_path_buf();
     let (sender, events) = mpsc::channel();
     touch.set(Some(sender.clone()));
@@ -1944,7 +1945,7 @@ fn host_applications(
                     let Some(index) = index_of(&apps, id) else {
                         continue;
                     };
-                    let gone = apps.remove(index);
+                    let mut gone = apps.remove(index);
                     if let Some(effect) = power.abort(kobod::power::Refusal::Busy) {
                         apply_power_effect(&mut apps, effect)?;
                     }
@@ -1952,6 +1953,7 @@ fn host_applications(
                         "{} exited after {} screens",
                         gone.name, gone.painted
                     ));
+                    record_exit(&health, &mut gone);
                     stop_hosted(gone);
                     if id == front {
                         // The first application ending ends the session: there
@@ -2961,6 +2963,9 @@ fn host_applications(
                                 gone.name, gone.painted
                             ));
                             let was_front = gone.id == front;
+                            if let Err(error) = health.record_clean_exit(&gone.name) {
+                                println!("could not record {} closing cleanly: {error}", gone.name);
+                            }
                             stop_hosted(gone);
                             if ending {
                                 return Ok(finish(&apps, &visited, "the launcher was closed"));
@@ -2994,6 +2999,7 @@ fn host_applications(
                                 whole_screen,
                                 &sender,
                                 front,
+                                &health,
                             ) {
                                 Ok(opened) => {
                                     front = switch_to(
@@ -3480,8 +3486,16 @@ fn open_application(
     whole_screen: Rect,
     sender: &Sender<Event>,
     front: u64,
+    health: &crate::health::Health,
 ) -> Result<u64, String> {
     let path = resolve(catalogue, name)?;
+    // The launcher is never quarantined: it is the way out.
+    if name != "launcher" && health.is_quarantined(name) {
+        return Err(format!(
+            "{name} has crashed {} times in a row and is quarantined. From the Store or the launcher the owner can launch it without its saved state, export or reset that state, or remove the app",
+            health.crashes(name)
+        ));
+    }
     if let Some(id) = id_of_path(apps, &path) {
         return Ok(id);
     }
@@ -3725,6 +3739,49 @@ fn report_what_an_application_says(name: String, stderr: std::process::ChildStde
             println!("{name} said: {line}");
         }
     });
+}
+
+/// Records what an unpolite ending means for the application. Only endings
+/// the runtime did not order arrive here: a clean status resets the count,
+/// anything else - a signal, a nonzero status, a process that will not even
+/// answer for its own death - is a crash, and enough of those quarantine the
+/// application rather than the reader.
+fn record_exit(health: &crate::health::Health, app: &mut Hosted) {
+    // The stream is already gone, so the process is on its way out; give it
+    // a moment to be honest about how.
+    let deadline = Instant::now() + Duration::from_millis(500);
+    let status = loop {
+        match app.child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(50)),
+            _ => break None,
+        }
+    };
+    match status {
+        Some(status) if status.success() => {
+            if let Err(error) = health.record_clean_exit(&app.name) {
+                println!("could not record {} exiting cleanly: {error}", app.name);
+            }
+        }
+        Some(status) => {
+            println!("{} crashed: {status}", app.name);
+            record_crash(health, &app.name);
+        }
+        None => {
+            println!("{} died without an exit status", app.name);
+            record_crash(health, &app.name);
+        }
+    }
+}
+
+fn record_crash(health: &crate::health::Health, name: &str) {
+    match health.record_crash(name) {
+        Ok(count) if count >= crate::health::CONSECUTIVE_CRASH_LIMIT => {
+            println!("{name} is quarantined after {count} crashes in a row");
+        }
+        Ok(_) => {}
+        Err(error) => println!("could not record {name} crashing: {error}"),
+    }
 }
 
 /// Ends one hosted application and everything it started.
