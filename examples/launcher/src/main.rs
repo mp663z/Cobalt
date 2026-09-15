@@ -512,7 +512,8 @@ mod tests {
                 provenance: kobo_sdk::AppProvenance::Catalog,
                 package_bytes: None,
                 permissions_changed: false,
-            }],
+                        quarantined: false,
+}],
         });
         assert_eq!(runner.app().installed[0].id, "word-count");
         let commands = runner.action(action_id(&opening("word-count")));

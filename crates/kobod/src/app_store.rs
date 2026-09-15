@@ -191,6 +191,15 @@ pub fn refresh(root: &Path, channel: UpdateChannel) -> Result<Vec<AppInfo>, Devi
     })
 }
 
+/// Flags every quarantined application in a listing, so a shelf or store
+/// row can say so instead of offering a launch that will be refused.
+fn mark_quarantine(root: &Path, entries: &mut [AppInfo]) {
+    let health = crate::health::Health::new(root);
+    for entry in entries {
+        entry.quarantined = health.is_quarantined(&entry.id);
+    }
+}
+
 /// Reads the last verified catalog for one channel.
 ///
 /// # Errors
@@ -212,11 +221,13 @@ pub fn catalog_using(
     channel: UpdateChannel,
     key: &Ed25519PublicKey,
 ) -> Result<Vec<AppInfo>, DeviceError> {
-    match read_channel_catalog(root, channel, key) {
-        Ok(catalog) => catalog_info(root, &catalog, key),
-        Err(DeviceError::NotFound) => local_catalog_info(root, key),
-        Err(error) => Err(error),
-    }
+    let mut entries = match read_channel_catalog(root, channel, key) {
+        Ok(catalog) => catalog_info(root, &catalog, key)?,
+        Err(DeviceError::NotFound) => local_catalog_info(root, key)?,
+        Err(error) => return Err(error),
+    };
+    mark_quarantine(root, &mut entries);
+    Ok(entries)
 }
 
 /// Lists every verified installed Store application.
@@ -264,6 +275,7 @@ fn installed_with_key(root: &Path, key: &Ed25519PublicKey) -> Result<Vec<AppInfo
             entries.push(builtin_info(app));
         }
     }
+    mark_quarantine(root, &mut entries);
     sort_info(&mut entries);
     Ok(entries)
 }
@@ -862,6 +874,7 @@ fn builtin_info(app: &BuiltinApp) -> AppInfo {
         provenance: kobo_protocol::AppProvenance::Local,
         package_bytes: None,
         permissions_changed: false,
+        quarantined: false,
     }
 }
 
@@ -896,6 +909,7 @@ fn manifest_info(
         provenance,
         package_bytes,
         permissions_changed: false,
+        quarantined: false,
     })
 }
 
