@@ -7,7 +7,7 @@
 use kobo_sdk::{
     action_id, ActionId, AppInfo, AppLinkState, Context, DenyReason, DeviceError, DeviceRequest,
     DeviceResult, Glyph, Heartbeat, KoboApp, PictureHandle, Position, RemoteInstallOutcome,
-    RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture,
+    AppProvenance, RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture, UpdateChannel,
 };
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::process::ExitCode;
@@ -40,6 +40,7 @@ struct Store {
     view: View,
     page: usize,
     refreshing: bool,
+    channel: Option<UpdateChannel>,
     refresh_after_cache: bool,
     notice: Option<String>,
     app_link: AppLinkState,
@@ -56,6 +57,7 @@ impl Default for Store {
             view: View::Catalog,
             page: 0,
             refreshing: false,
+            channel: None,
             refresh_after_cache: false,
             notice: None,
             app_link: AppLinkState::Unpaired,
@@ -131,15 +133,16 @@ impl Store {
                 .bottom_action_marked(REFRESH, "Refresh", Glyph::Refresh);
             return screen.build();
         }
+        let section = match (self.channel, self.refreshing) {
+            (Some(UpdateChannel::Beta), true) => "Beta apps · refreshing",
+            (Some(UpdateChannel::Beta), false) => "Beta apps",
+            (Some(UpdateChannel::Stable), true) => "Stable apps · refreshing",
+            (Some(UpdateChannel::Stable), false) => "Stable apps",
+            (None, true) => "Apps · refreshing",
+            (None, false) => "Apps",
+        };
         screen = screen
-            .section_with_value(
-                if self.refreshing {
-                    "Apps · refreshing"
-                } else {
-                    "Apps"
-                },
-                format!("{} / {pages}", self.page + 1),
-            )
+            .section_with_value(section, format!("{} / {pages}", self.page + 1))
             .rows_with_trailing(
                 page_indices[self.page]
                     .iter()
@@ -349,8 +352,28 @@ impl Store {
                 entry.summary.clone(),
             )
             .facts([
+                (
+                    "Source",
+                    match entry.provenance {
+                        AppProvenance::Catalog => match self.channel {
+                            Some(UpdateChannel::Beta) => "Beta catalog".to_owned(),
+                            Some(UpdateChannel::Stable) => "Stable catalog".to_owned(),
+                            None => "Verified catalog".to_owned(),
+                        },
+                        AppProvenance::Local => {
+                            "On this Kobo only - not in the verified catalog".to_owned()
+                        }
+                    },
+                ),
                 ("Available", entry.version.clone()),
                 ("Installed", installed.unwrap_or("Not installed").to_owned()),
+                (
+                    "Download",
+                    entry
+                        .package_bytes
+                        .map(describe_bytes)
+                        .unwrap_or_else(|| "Unknown".to_owned()),
+                ),
                 ("Requires Cobalt", entry.minimum_cobalt_version.clone()),
                 (
                     "Management",
@@ -468,6 +491,9 @@ impl KoboApp for Store {
         self.show(context);
         context.applications().cached_catalog();
         context.store().read_link();
+        // Asked last so a runtime that predates the question simply never
+        // answers it after the catalog and link answers the screen needs.
+        context.applications().catalog_channel();
     }
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
@@ -553,6 +579,9 @@ impl KoboApp for Store {
         }
         let mut refresh_after_paint = false;
         match (request, result) {
+            (DeviceRequest::ReadAppChannel, DeviceResult::UpdateChannel(channel)) => {
+                self.channel = Some(channel);
+            }
             (DeviceRequest::ReadAppCatalog, DeviceResult::Apps { entries }) => {
                 self.replace_entries(entries);
                 if !matches!(self.view, View::Working { .. } | View::AppLink) {
@@ -754,10 +783,36 @@ fn app_state(entry: &AppInfo) -> String {
     if !entry.is_compatible_with(env!("CARGO_PKG_VERSION")) {
         return format!("Requires Cobalt {}", entry.minimum_cobalt_version);
     }
-    match &entry.installed_version {
-        None => "Available".to_owned(),
-        Some(version) if entry.has_update() => format!("{version} → {}", entry.version),
-        Some(version) => format!("Installed · {version}"),
+    let size = entry.package_bytes.map(describe_bytes);
+    match (&entry.installed_version, entry.provenance) {
+        (_, AppProvenance::Local) => match &entry.installed_version {
+            Some(version) => format!("Local · {version}"),
+            None => "Local".to_owned(),
+        },
+        (None, AppProvenance::Catalog) => match size {
+            Some(size) => format!("Available · {size}"),
+            None => "Available".to_owned(),
+        },
+        (Some(version), AppProvenance::Catalog) if entry.has_update() => {
+            let mut state = format!("{version} → {}", entry.version);
+            if let Some(size) = size {
+                state.push_str(&format!(" · {size}"));
+            }
+            if entry.permissions_changed {
+                state.push_str(" · new permissions");
+            }
+            state
+        }
+        (Some(version), AppProvenance::Catalog) => format!("Installed · {version}"),
+    }
+}
+
+/// A package size an owner can plan around, in the units downloads use.
+fn describe_bytes(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
+    } else {
+        format!("{} KB", (bytes + 999) / 1_000)
     }
 }
 
@@ -837,7 +892,11 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             requests,
-            vec![&DeviceRequest::ReadAppCatalog, &DeviceRequest::ReadAppLink]
+            vec![
+                &DeviceRequest::ReadAppCatalog,
+                &DeviceRequest::ReadAppLink,
+                &DeviceRequest::ReadAppChannel,
+            ]
         );
         let commands = runner.device_result(DeviceResult::Apps {
             entries: vec![app("notes", None)],
@@ -858,6 +917,7 @@ mod tests {
             "network refresh started before cached content painted"
         );
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
         runner.device_result(DeviceResult::Apps {
             entries: vec![app("notes", None)],
         });
@@ -946,6 +1006,7 @@ mod tests {
             entries: vec![app("sudoku", None)],
         });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
         runner.device_result(DeviceResult::Apps {
             entries: vec![app("sudoku", None)],
         });
@@ -977,6 +1038,7 @@ mod tests {
             entries: vec![app("sudoku", Some("1.0.0"))],
         });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
         runner.device_result(DeviceResult::Apps {
             entries: vec![app("sudoku", Some("1.0.0"))],
         });
@@ -997,6 +1059,7 @@ mod tests {
             entries: vec![app("sudoku", Some("1.0.0"))],
         });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
         runner.device_result(DeviceResult::Apps {
             entries: vec![app("sudoku", Some("1.0.0"))],
         });
@@ -1088,6 +1151,32 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn catalog_rows_label_channel_provenance_size_and_permission_changes() {
+        let mut available = app("notes", None);
+        available.package_bytes = Some(2_400_000);
+        assert_eq!(app_state(&available), "Available · 2.4 MB");
+
+        let mut local = app("side-loaded", Some("0.9.0"));
+        local.provenance = AppProvenance::Local;
+        assert_eq!(app_state(&local), "Local · 0.9.0");
+
+        let mut update = app("reader", Some("1.0.0"));
+        update.package_bytes = Some(950_000);
+        update.permissions_changed = true;
+        assert_eq!(
+            app_state(&update),
+            "1.0.0 → 1.1.0 · 950 KB · new permissions"
+        );
+
+        let mut runner = AppRunner::new(Store::default());
+        runner.start();
+        runner.device_result(DeviceResult::Apps { entries: Vec::new() });
+        runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Beta));
+        assert_eq!(runner.app().channel, Some(UpdateChannel::Beta));
     }
 
     #[test]
@@ -1199,6 +1288,7 @@ mod tests {
                 .collect(),
         });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
+        runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Stable));
         let commands = runner.device_result(DeviceResult::Apps {
             entries: (0..14)
                 .map(|index| app(&format!("app-{index}"), Some("1.1.0")))

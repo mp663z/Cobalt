@@ -63,8 +63,11 @@ pub struct Preferences {
     pub cobalt: bool,
     /// Whether installed applications are replaced when the catalog moves on.
     pub apps: bool,
-    /// Which platform and application release streams are consulted.
+    /// Which platform release stream is consulted.
     pub channel: UpdateChannel,
+    /// Which signed app catalog the Store browses. A separate choice from the
+    /// platform channel: moving one never moves the other on its own.
+    pub app_channel: UpdateChannel,
 }
 
 impl Default for Preferences {
@@ -75,6 +78,7 @@ impl Default for Preferences {
             cobalt: true,
             apps: true,
             channel: UpdateChannel::Stable,
+            app_channel: UpdateChannel::Stable,
         }
     }
 }
@@ -149,7 +153,7 @@ pub fn set_preferences(root: &Path, chosen: Preferences) -> Result<(), DeviceErr
 pub fn plan(root: &Path, chosen: Preferences, installed: &str) -> Plan {
     plan_with(
         chosen,
-        || stale_apps(root, chosen.channel),
+        || stale_apps(root, chosen.app_channel),
         || platform_update(installed, chosen.channel),
     )
 }
@@ -184,18 +188,33 @@ fn parse(text: &str) -> Preferences {
             "apps=on" => chosen.apps = true,
             "channel=stable" => chosen.channel = UpdateChannel::Stable,
             "channel=beta" => chosen.channel = UpdateChannel::Beta,
+            "app_channel=stable" => chosen.app_channel = UpdateChannel::Stable,
+            "app_channel=beta" => chosen.app_channel = UpdateChannel::Beta,
             _ => {}
         }
+    }
+    // A file written before the channels split predates the app catalog
+    // choice: inherit the platform channel it meant then, exactly once, and
+    // the two move independently from the next choice on.
+    if !text
+        .lines()
+        .any(|line| line.trim().starts_with("app_channel="))
+    {
+        chosen.app_channel = chosen.channel;
     }
     chosen
 }
 
 fn render(chosen: Preferences) -> String {
     format!(
-        "cobalt={}\napps={}\nchannel={}\n",
+        "cobalt={}\napps={}\nchannel={}\napp_channel={}\n",
         if chosen.cobalt { "on" } else { "off" },
         if chosen.apps { "on" } else { "off" },
         match chosen.channel {
+            UpdateChannel::Stable => "stable",
+            UpdateChannel::Beta => "beta",
+        },
+        match chosen.app_channel {
             UpdateChannel::Stable => "stable",
             UpdateChannel::Beta => "beta",
         }
@@ -373,12 +392,15 @@ mod tests {
         for cobalt in [false, true] {
             for apps in [false, true] {
                 for channel in [UpdateChannel::Stable, UpdateChannel::Beta] {
-                    let chosen = Preferences {
-                        cobalt,
-                        apps,
-                        channel,
-                    };
-                    assert_eq!(parse(&render(chosen)), chosen);
+                    for app_channel in [UpdateChannel::Stable, UpdateChannel::Beta] {
+                        let chosen = Preferences {
+                            cobalt,
+                            apps,
+                            channel,
+                            app_channel,
+                        };
+                        assert_eq!(parse(&render(chosen)), chosen);
+                    }
                 }
             }
         }
@@ -411,6 +433,38 @@ mod tests {
     }
 
     #[test]
+    fn app_channel_inherits_once_then_moves_independently() {
+        // A preferences file written before the channels split meant one
+        // choice for both; it keeps meaning that exactly once.
+        assert_eq!(
+            parse("cobalt=on\napps=on\nchannel=beta\n"),
+            Preferences {
+                cobalt: true,
+                apps: true,
+                channel: UpdateChannel::Beta,
+                app_channel: UpdateChannel::Beta,
+            }
+        );
+        // Written by a build that knows the split, the two never move together.
+        assert_eq!(
+            parse("channel=beta\napp_channel=stable\n"),
+            Preferences {
+                channel: UpdateChannel::Beta,
+                app_channel: UpdateChannel::Stable,
+                ..Preferences::default()
+            }
+        );
+        assert_eq!(
+            parse("channel=stable\napp_channel=beta\n"),
+            Preferences {
+                channel: UpdateChannel::Stable,
+                app_channel: UpdateChannel::Beta,
+                ..Preferences::default()
+            }
+        );
+    }
+
+    #[test]
     fn a_missing_file_is_the_default_and_a_write_makes_it_stick() {
         let root = std::env::temp_dir().join(format!("cobalt-auto-update-{}", std::process::id()));
         let _ignored = std::fs::remove_dir_all(&root);
@@ -419,6 +473,7 @@ mod tests {
             cobalt: false,
             apps: true,
             channel: UpdateChannel::Beta,
+            app_channel: UpdateChannel::Beta,
         };
         set_preferences(&root, chosen).expect("write choices");
         assert_eq!(preferences(&root), chosen);
@@ -438,6 +493,7 @@ mod tests {
             cobalt: true,
             apps: true,
             channel: UpdateChannel::Beta,
+            app_channel: UpdateChannel::Beta,
         };
         set_preferences(&root, beta).expect("choose beta");
         set_preferences(
@@ -588,6 +644,7 @@ mod tests {
                         cobalt,
                         apps,
                         channel,
+                        app_channel: channel,
                     };
                     let plan = plan_with(
                         chosen,
