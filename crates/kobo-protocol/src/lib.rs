@@ -1274,6 +1274,13 @@ pub enum DeviceRequest {
     ReadUpdateChannel,
     /// Select the published update stream used for platform and app updates.
     SetUpdateChannel { channel: UpdateChannel },
+    /// Report which signed app catalog the Store browses. Distinct from the
+    /// platform channel: changing one never moves the other on its own.
+    /// Wire-gated on [`STORE_PROVENANCE_VERSION`].
+    ReadAppChannel,
+    /// Select which signed app catalog the Store browses. Wire-gated on
+    /// [`STORE_PROVENANCE_VERSION`].
+    SetAppChannel { channel: UpdateChannel },
     /// Install or replace one runtime-owned credential for the calling app.
     ///
     /// The runtime authorizes the app/name pair before writing anything.
@@ -2918,6 +2925,15 @@ fn encode_device_request(
         DeviceRequest::SetUpdateChannel { channel } => {
             output.extend_from_slice(&[46, channel.wire()]);
         }
+        DeviceRequest::ReadAppChannel if version >= STORE_PROVENANCE_VERSION => {
+            output.push(51);
+        }
+        DeviceRequest::SetAppChannel { channel } if version >= STORE_PROVENANCE_VERSION => {
+            output.extend_from_slice(&[52, channel.wire()]);
+        }
+        DeviceRequest::ReadAppChannel | DeviceRequest::SetAppChannel { .. } => {
+            return Err(ProtocolError::UnknownMessageType(51));
+        }
         DeviceRequest::SetSecret { name, value }
             if version >= FOLIO_VERSION
                 && valid_app_id(name)
@@ -3274,6 +3290,10 @@ fn decode_device_request(
         }
         45 => Ok(DeviceRequest::ReadUpdateChannel),
         46 => Ok(DeviceRequest::SetUpdateChannel {
+            channel: UpdateChannel::from_wire(reader.u8()?)?,
+        }),
+        51 if version >= STORE_PROVENANCE_VERSION => Ok(DeviceRequest::ReadAppChannel),
+        52 if version >= STORE_PROVENANCE_VERSION => Ok(DeviceRequest::SetAppChannel {
             channel: UpdateChannel::from_wire(reader.u8()?)?,
         }),
         47 if version >= FOLIO_VERSION => {

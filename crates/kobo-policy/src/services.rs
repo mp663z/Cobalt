@@ -97,6 +97,7 @@ pub struct DeviceServices {
     dictionaries: kobo_dict::Index,
     auto_update: AutoUpdateChoices,
     update_channel: UpdateChannel,
+    app_channel: UpdateChannel,
 }
 
 /// The two standing update switches, held together because they are asked
@@ -150,6 +151,7 @@ impl DeviceServices {
                 apps: true,
             },
             update_channel: UpdateChannel::Stable,
+            app_channel: UpdateChannel::Stable,
         }
     }
 
@@ -337,7 +339,9 @@ impl DeviceServices {
             request @ (DeviceRequest::ReadAutoUpdate
             | DeviceRequest::SetAutoUpdate { .. }
             | DeviceRequest::ReadUpdateChannel
-            | DeviceRequest::SetUpdateChannel { .. }) => self.handle_update_preferences(&request),
+            | DeviceRequest::SetUpdateChannel { .. }
+            | DeviceRequest::ReadAppChannel
+            | DeviceRequest::SetAppChannel { .. }) => self.handle_update_preferences(&request),
             DeviceRequest::ListLibrary => self.list_library(),
             DeviceRequest::ReadLibrary { id } => self.read_library(&id),
         }
@@ -396,6 +400,11 @@ impl DeviceServices {
             DeviceRequest::SetUpdateChannel { channel } => {
                 self.update_channel = *channel;
                 DeviceResult::UpdateChannel(self.update_channel)
+            }
+            DeviceRequest::ReadAppChannel => DeviceResult::UpdateChannel(self.app_channel),
+            DeviceRequest::SetAppChannel { channel } => {
+                self.app_channel = *channel;
+                DeviceResult::UpdateChannel(self.app_channel)
             }
             _ => unreachable!("caller passes only update-preference requests"),
         }
@@ -724,6 +733,8 @@ pub fn request_capability(request: &DeviceRequest) -> Option<Capability> {
         | DeviceRequest::SetAutoUpdate { .. }
         | DeviceRequest::ReadUpdateChannel
         | DeviceRequest::SetUpdateChannel { .. }
+        | DeviceRequest::ReadAppChannel
+        | DeviceRequest::SetAppChannel { .. }
         | DeviceRequest::SetSecret { .. }
         | DeviceRequest::SetServerSecret { .. } => return None,
         DeviceRequest::ListLibrary | DeviceRequest::ReadLibrary { .. } => Capability::Library,

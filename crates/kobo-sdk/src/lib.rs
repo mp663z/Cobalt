@@ -1621,6 +1621,14 @@ impl Applications<'_> {
         self.request(DeviceRequest::RefreshAppCatalog);
     }
 
+    /// Asks which signed catalog channel the Store session is browsing.
+    /// The answer arrives as [`DeviceResult::UpdateChannel`] matched to
+    /// [`DeviceRequest::ReadAppChannel`]; runtimes predating the split simply
+    /// never answer.
+    pub fn catalog_channel(&mut self) {
+        self.request(DeviceRequest::ReadAppChannel);
+    }
+
     /// Installs or updates one catalog application.
     ///
     /// Returns `false` without queueing when `id` cannot be a stable

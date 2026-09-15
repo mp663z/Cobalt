@@ -1763,7 +1763,7 @@ fn host_applications(
         // session last displayed. Settings may change while Store is
         // backgrounded; resolving the channel again at install time could
         // otherwise install a different version than the one the user saw.
-        let mut store_channel = crate::autoupdate::preferences(Path::new(COBALT_ROOT)).channel;
+        let mut store_channel = crate::autoupdate::preferences(Path::new(COBALT_ROOT)).app_channel;
         let mut visited: Vec<String> = Vec::new();
         let ceiling = Instant::now() + limits.ceiling;
         let mut last_activity = Instant::now();
@@ -2740,7 +2740,8 @@ fn host_applications(
                                     }
                                     kobo_protocol::DeviceRequest::ReadAppCatalog => {
                                         let root = Path::new(COBALT_ROOT);
-                                        let channel = crate::autoupdate::preferences(root).channel;
+                                        let channel =
+                                            crate::autoupdate::preferences(root).app_channel;
                                         let result = crate::app_store::catalog(root, channel);
                                         if result.is_ok() {
                                             store_channel = channel;
@@ -2749,7 +2750,8 @@ fn host_applications(
                                     }
                                     kobo_protocol::DeviceRequest::RefreshAppCatalog => {
                                         let root = Path::new(COBALT_ROOT);
-                                        let channel = crate::autoupdate::preferences(root).channel;
+                                        let channel =
+                                            crate::autoupdate::preferences(root).app_channel;
                                         let result = crate::app_store::refresh(root, channel);
                                         if result.is_ok() {
                                             store_channel = channel;
@@ -2839,6 +2841,29 @@ fn host_applications(
                                             chosen,
                                         ) {
                                             Ok(()) => update_channel_result(chosen),
+                                            Err(error) => {
+                                                kobo_protocol::DeviceResult::Failed(error)
+                                            }
+                                        }
+                                    }
+                                    kobo_protocol::DeviceRequest::ReadAppChannel => {
+                                        update_channel_result_for(
+                                            crate::autoupdate::preferences(Path::new(COBALT_ROOT))
+                                                .app_channel,
+                                        )
+                                    }
+                                    kobo_protocol::DeviceRequest::SetAppChannel { channel } => {
+                                        let current =
+                                            crate::autoupdate::preferences(Path::new(COBALT_ROOT));
+                                        let chosen = crate::autoupdate::Preferences {
+                                            app_channel: *channel,
+                                            ..current
+                                        };
+                                        match crate::autoupdate::set_preferences(
+                                            Path::new(COBALT_ROOT),
+                                            chosen,
+                                        ) {
+                                            Ok(()) => update_channel_result_for(chosen.app_channel),
                                             Err(error) => {
                                                 kobo_protocol::DeviceResult::Failed(error)
                                             }
@@ -3272,7 +3297,9 @@ fn system_request_allowed(app: &str, request: &kobo_protocol::DeviceRequest) -> 
         | kobo_protocol::DeviceRequest::ReadAutoUpdate
         | kobo_protocol::DeviceRequest::SetAutoUpdate { .. }
         | kobo_protocol::DeviceRequest::ReadUpdateChannel
-        | kobo_protocol::DeviceRequest::SetUpdateChannel { .. } => app == "settings",
+        | kobo_protocol::DeviceRequest::SetUpdateChannel { .. }
+        | kobo_protocol::DeviceRequest::SetAppChannel { .. } => app == "settings",
+        kobo_protocol::DeviceRequest::ReadAppChannel => app == "settings" || app == "store",
         kobo_protocol::DeviceRequest::ListInstalledApps => matches!(app, "launcher" | "store"),
         kobo_protocol::DeviceRequest::ReadAppCatalog
         | kobo_protocol::DeviceRequest::RefreshAppCatalog
@@ -3376,6 +3403,12 @@ fn auto_update_result(chosen: crate::autoupdate::Preferences) -> kobo_protocol::
 
 fn update_channel_result(chosen: crate::autoupdate::Preferences) -> kobo_protocol::DeviceResult {
     kobo_protocol::DeviceResult::UpdateChannel(chosen.channel)
+}
+
+/// The catalog channel the Store browses, answered with the same shape the
+/// platform channel uses.
+fn update_channel_result_for(channel: kobo_protocol::UpdateChannel) -> kobo_protocol::DeviceResult {
+    kobo_protocol::DeviceResult::UpdateChannel(channel)
 }
 
 /// Whether the battery can afford background writes right now. A reader whose
