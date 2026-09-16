@@ -4,3 +4,4 @@ pub mod fonts;
 pub mod health;
 pub mod navigation;
 pub mod power;
+pub mod probes;
