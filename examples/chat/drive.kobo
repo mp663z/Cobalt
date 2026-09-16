@@ -1,0 +1,6 @@
+wait 800
+expect AI Command Center
+expect Nothing said yet
+expect Tap Type to start.
+clean
+shot empty
