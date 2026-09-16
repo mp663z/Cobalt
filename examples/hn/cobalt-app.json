@@ -8,5 +8,32 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Read a story's article on the reader, keep it after the front page has moved on, and see at a glance which stories have been read."
+  "release_notes": "Read a story's article on the reader, keep it after the front page has moved on, and see at a glance which stories have been read.",
+  "user": "Somebody who follows Hacker News and wants it on e-ink.",
+  "job": "Read Top, New, Ask and Show stories with complete comment threads.",
+  "offline": "Only your marks survive without the network; the stories themselves need it.",
+  "data": [
+    {
+      "kind": "your marks on stories",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are your place in the discussion",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch stories and comments from Hacker News"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not post or vote.",
+    "It does not cache whole threads for offline reading."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

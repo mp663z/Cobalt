@@ -8,5 +8,32 @@
   "capabilities": [
     "cover-sensor"
   ],
-  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for."
+  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
+  "user": "Somebody curious about the sensor behind their reader's bezel.",
+  "job": "Find the hall sensor and watch it respond to a magnet.",
+  "offline": "It never touches the network.",
+  "data": [
+    {
+      "kind": "your saved readings",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are a demo record, nothing more",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "cover-sensor",
+      "purpose": "to sense the magnet at all"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It is not a metal detector.",
+    "It does not use the sensor for sleep or wake."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

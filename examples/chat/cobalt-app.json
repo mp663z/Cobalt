@@ -9,5 +9,25 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for."
+  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
+  "user": "Somebody who wants to ask a question and read the answer on e-ink.",
+  "job": "Ask a question, then read and navigate the answer with touch controls.",
+  "offline": "Nothing works without the network; asking is the job.",
+  "data": [],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to send your question and bring back the answer"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not keep a conversation history.",
+    "It does not answer without being asked."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

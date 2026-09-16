@@ -6,5 +6,27 @@
   "version": "1.0.9",
   "glyph": "check",
   "capabilities": [],
-  "release_notes": "Edit a list and date it, and take a copy off the reader onto a paired computer without emptying the list in the process."
+  "release_notes": "Edit a list and date it, and take a copy off the reader onto a paired computer without emptying the list in the process.",
+  "user": "Somebody who wants a list that stays out of the way.",
+  "job": "Keep a simple to-do list that stays on your Kobo.",
+  "offline": "It never touches the network; the list lives on the reader.",
+  "data": [
+    {
+      "kind": "your to-do items",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; the list is the whole point",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not sync anywhere.",
+    "It does not remind you."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

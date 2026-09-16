@@ -8,5 +8,32 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for."
+  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
+  "user": "Somebody who wants the day's news in one quiet read.",
+  "job": "Build a daily news brief in the background while you use other apps.",
+  "offline": "Briefs already built read without the network; building today's needs it.",
+  "data": [
+    {
+      "kind": "your saved briefs",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; yesterday's news is yesterday's news",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch the day's stories for your brief"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not replace a full news reader.",
+    "It does not alert you; the brief waits for you."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

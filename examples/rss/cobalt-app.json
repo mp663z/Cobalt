@@ -8,5 +8,38 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Read saved articles and images offline, search article text, preview direct feeds and OPML imports, browse starter feeds, and track unread articles and refresh history. Failed saves can be retried without losing the previous saved copy."
+  "release_notes": "Read saved articles and images offline, search article text, preview direct feeds and OPML imports, browse starter feeds, and track unread articles and refresh history. Failed saves can be retried without losing the previous saved copy.",
+  "user": "Somebody who follows feeds and wants to read them properly.",
+  "job": "Follow feeds, search saved articles and read offline with images.",
+  "offline": "Saved articles read without the network, images included; refreshing needs it.",
+  "data": [
+    {
+      "kind": "your feed list",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; OPML import brings it back from your computer",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the articles saved for offline reading",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; refreshing fetches them again",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to refresh your feeds and fetch their articles"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not sync with a feed service.",
+    "It does not fetch what a feed does not publish."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

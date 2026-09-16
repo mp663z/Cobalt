@@ -9,5 +9,43 @@
     "network",
     "frontlight-control"
   ],
-  "release_notes": "Line up a table's columns under the headings that name them, typeset numbered equations, set figures apart from the prose, and carry a document's mathematics all the way through instead of stopping early."
+  "release_notes": "Line up a table's columns under the headings that name them, typeset numbered equations, set figures apart from the prose, and carry a document's mathematics all the way through instead of stopping early.",
+  "user": "Somebody who borrows books from public OPDS libraries.",
+  "job": "Browse OPDS libraries and read their books on your Kobo.",
+  "offline": "Books already kept read without the network; browsing a library does not.",
+  "data": [
+    {
+      "kind": "your library list",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it remembers the libraries you use",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the books you keep",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay in their library",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to browse OPDS libraries and fetch their books"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "frontlight-control",
+      "gates": "reading comfortably in low light"
+    }
+  ],
+  "non_goals": [
+    "It does not sell books.",
+    "It does not sync reading places between devices."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
