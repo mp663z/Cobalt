@@ -9,5 +9,38 @@
   "glyph": "chat",
   "capabilities": [
     "network"
+  ],
+  "user": "Somebody who wants trivia night in their pocket.",
+  "job": "Play quiz packs solo or pass the reader around the table.",
+  "offline": "Packs already on the reader play without the network; new packs need it.",
+  "data": [
+    {
+      "kind": "the quiz packs you have kept",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; kept packs stay playable offline",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "scores from rounds in progress",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep a paused round resumable",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch new quiz packs"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not host online multiplayer.",
+    "It does not rank you against other players."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
   ]
 }

@@ -26,5 +26,42 @@
         "command": "kobo frame push ~/Pictures/family --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who wants their Kobo to hold a photo on the shelf or desk.",
+  "job": "Show photos pushed from your computer, as a still or a scheduled slideshow.",
+  "offline": "Everything works without the network; photos arrive from your computer, never the internet.",
+  "data": [
+    {
+      "kind": "the photos you push from your computer",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay on your computer",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your slideshow settings",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; re-setting them takes a moment",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [
+    {
+      "name": "keep-awake",
+      "gates": "holding a slideshow on screen"
+    },
+    {
+      "name": "scheduled-wake",
+      "gates": "waking the reader for a scheduled show"
+    }
+  ],
+  "non_goals": [
+    "It does not fetch photos from the internet.",
+    "It does not edit your photos."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

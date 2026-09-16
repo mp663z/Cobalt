@@ -23,5 +23,44 @@
         "command": "kobo trust set calibre --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody with a calibre-web library who wants it on their Kobo.",
+  "job": "Browse your calibre-web library and read its books on e-ink.",
+  "offline": "Books already fetched and your reading places work without the network; browsing the library does not.",
+  "data": [
+    {
+      "kind": "your library address and sign-in",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are how the app reaches your library",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the books you have fetched",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay in your calibre-web library",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your reading place in each fetched book",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-read book continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to reach your calibre-web library and fetch its books"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not edit your library.",
+    "It does not sync reading places back to calibre-web."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

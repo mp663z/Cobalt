@@ -25,5 +25,43 @@
         "command": "kobo needles push PATTERN.pdf --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who knits or crochets with the reader beside the pattern.",
+  "job": "Count rows, browse your Ravelry collections, and read synced patterns offline.",
+  "offline": "Synced patterns and your row counts work without the network; browsing Ravelry does not.",
+  "data": [
+    {
+      "kind": "the patterns you sync",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay in your Ravelry library",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your row counts",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are where you stopped",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to browse Ravelry and sync your patterns"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "keep-awake",
+      "gates": "keeping the pattern up while you work"
+    }
+  ],
+  "non_goals": [
+    "It does not edit patterns.",
+    "It does not post to Ravelry."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

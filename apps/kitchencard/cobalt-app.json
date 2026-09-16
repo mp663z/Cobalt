@@ -21,5 +21,37 @@
         "command": "kobo secret set mealie --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who cooks with the reader propped on the counter.",
+  "job": "Keep your Mealie recipes readable and awake while you cook.",
+  "offline": "Recipes you have kept work without the network; fetching new ones does not.",
+  "data": [
+    {
+      "kind": "the recipes you have kept",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; the originals stay in your Mealie",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch recipes from your Mealie"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "keep-awake",
+      "gates": "keeping a recipe up while you cook"
+    }
+  ],
+  "non_goals": [
+    "It does not edit recipes.",
+    "It does not plan meals or shopping lists."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

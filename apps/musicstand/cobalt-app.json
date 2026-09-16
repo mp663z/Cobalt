@@ -9,5 +9,38 @@
   "glyph": "note",
   "capabilities": [
     "keep-awake"
+  ],
+  "user": "Somebody who plays an instrument and wants the score on e-ink.",
+  "job": "Read music scores with setlists and half-page turns.",
+  "offline": "Everything works without the network; scores arrive from your computer.",
+  "data": [
+    {
+      "kind": "the scores you put on the reader",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay on your computer",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your setlists",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are the order you play in",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [
+    {
+      "name": "keep-awake",
+      "gates": "keeping the score up while you play"
+    }
+  ],
+  "non_goals": [
+    "It does not turn pages by listening.",
+    "It does not annotate scores."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
   ]
 }

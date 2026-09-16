@@ -37,5 +37,43 @@
         }
       }
     ]
-  }
+  },
+  "user": "Somebody whose papers live in Zotero.",
+  "job": "Browse your Zotero collections and read your papers on e-ink.",
+  "offline": "Papers already kept and their indexed text work without the network; browsing collections does not.",
+  "data": [
+    {
+      "kind": "your Zotero sign-in and library keys",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are how the app reaches your library",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the papers you keep",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay in your Zotero library",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to reach your Zotero library and fetch papers"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "frontlight-control",
+      "gates": "reading comfortably in low light"
+    }
+  ],
+  "non_goals": [
+    "It does not edit your Zotero library.",
+    "It does not manage citations."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

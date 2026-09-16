@@ -24,5 +24,38 @@
         "command": "kobo trust set homeassistant --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody with Home Assistant who wants a quiet panel on the wall.",
+  "job": "Show your saved Home Assistant tiles and control them from a low-power panel.",
+  "offline": "The last known tile states stay on screen without the network; controlling anything needs it.",
+  "data": [
+    {
+      "kind": "your Home Assistant address",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it is how the app reaches your home",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the last known state of your tiles",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep the panel useful between updates",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to reach your Home Assistant and control its tiles"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not replace the Home Assistant app.",
+    "It does not discover devices on its own."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

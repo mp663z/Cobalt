@@ -20,5 +20,38 @@
         "command": "kobo secret set hermes-post --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who writes letters and wants them away from the computer.",
+  "job": "Read and reply to letters from Hermes.",
+  "offline": "Letters already fetched stay readable without the network; new post and replies need it.",
+  "data": [
+    {
+      "kind": "your Hermes address",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it is how the app reaches your letters",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the letters already fetched",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep your post readable offline",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch new post and send your replies"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not handle attachments.",
+    "It does not keep letters after you delete them."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

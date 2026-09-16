@@ -32,5 +32,47 @@
         "text": "Official Lichess Board API. Rapid and Classical seeks."
       }
     ]
-  }
+  },
+  "user": "Somebody who plays on Lichess and wants the board on e-ink.",
+  "job": "Play Lichess games, challenge players, and solve puzzles, with real offline play too.",
+  "offline": "Offline games and puzzles already fetched work without the network; live games and challenges need it.",
+  "data": [
+    {
+      "kind": "your Lichess session, saved after pairing",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; pairing again restores it",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the games you are in",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep a live game resumable",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to play on Lichess and fetch puzzles"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "hold-wifi",
+      "gates": "keeping Wi-Fi alive through a live game"
+    },
+    {
+      "name": "keep-awake",
+      "gates": "keeping a live game on screen"
+    }
+  ],
+  "non_goals": [
+    "It does not analyse your games.",
+    "It does not show Lichess chat."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

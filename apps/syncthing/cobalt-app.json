@@ -24,5 +24,32 @@
         "command": "kobo sync run"
       }
     ]
-  }
+  },
+  "user": "Somebody who wants files on their Kobo without plugging it in.",
+  "job": "Choose folders and a battery-friendly schedule for syncing.",
+  "offline": "Choosing folders and the schedule works without the network; syncing itself needs it.",
+  "data": [
+    {
+      "kind": "your folder choices and sync schedule",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are the setup the sync follows",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "scheduled-wake",
+      "purpose": "to wake the reader for each scheduled sync"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not move files itself; the sync service does.",
+    "It does not sync on battery-unfriendly schedules."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

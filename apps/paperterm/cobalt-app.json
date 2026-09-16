@@ -15,5 +15,32 @@
         "text": "Run kobo stream init on the computer, install its stream trust root on the Kobo, then start kobo stream."
       }
     ]
-  }
+  },
+  "user": "Somebody who wants a quiet e-ink terminal for their computer.",
+  "job": "Pair with your computer and mirror a terminal session on e-ink.",
+  "offline": "Nothing works without the pairing; the network is the job.",
+  "data": [
+    {
+      "kind": "the pairing with your computer",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; re-pairing takes a moment",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to carry the terminal session from your computer"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not run programs on the reader itself.",
+    "It does not keep scrollback after a session ends."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

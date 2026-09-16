@@ -1,6 +1,6 @@
 {
   "id": "rss-miniflux",
-  "display_name": "RSS Reader \u2014 Miniflux",
+  "display_name": "RSS Reader — Miniflux",
   "short_label": "RSS Reader",
   "summary": "Read your Miniflux feeds anywhere.",
   "page_description": "Bring unread Miniflux articles to your Kobo and keep reading without Wi-Fi.",
@@ -20,5 +20,32 @@
         "command": "kobo secret set miniflux --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who follows feeds and wants them away from the phone.",
+  "job": "Read your Miniflux feeds on e-ink, anywhere.",
+  "offline": "Entries already fetched work without the network; refreshing does not.",
+  "data": [
+    {
+      "kind": "the entries already fetched and your pending marks",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; marks send when the network returns",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to refresh your Miniflux feeds and send your marks"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not manage subscriptions.",
+    "It does not fetch full articles beyond the feed."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
