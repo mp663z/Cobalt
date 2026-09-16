@@ -1917,6 +1917,16 @@ mod tests {
     }
 
     #[test]
+    fn committed_demo_fixture_matches_the_builder() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scripts/fixtures/parser/story-demo.z5"
+        ))
+        .expect("committed demo fixture");
+        assert_eq!(bytes, input_story());
+    }
+
+    #[test]
     fn deterministic_v3_v5_v8_stories_execute() {
         for version in [3, 5, 8] {
             let mut machine = Machine::new(story(version), "fixture.z3").unwrap();

@@ -1,5 +1,19 @@
-# Empty private shelf: first-run transfer instructions, not a toy story.
+# Demo story seeded from scripts/fixtures/parser (byte-identical to the zvm
+# test fixture). The empty-shelf transfer instructions show on first run
+# without the seed.
 expect Interactive fiction
-expect parser push
+expect demo.z5
 clean
-shot parser-library-empty
+shot parser-library
+
+tap-id story-0
+wait 400
+expect Type a command
+clean
+shot parser-play
+
+tap-id look
+wait 400
+expect accepted
+clean
+shot parser-turn

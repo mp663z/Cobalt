@@ -27,6 +27,8 @@ SAMPLE_EVIDENCE = {
     'frame': 'seeded photo pushed through the real `kobo frame push` path',
     'vault': 'fixture notes pushed through the real `kobo vault push` path',
     'fanshelf': 'FANSHELF_DEMO synthetic library exercised by the route',
+    'flashcards': 'original demo bundle staged like a host import, reviewed by the route',
+    'parser': 'synthetic demo story staged like a device push, played by the route',
 }
 # Journey writes that are fetched network caches, not the reader's own data.
 CACHE_ONLY = {'gutenbird'}
