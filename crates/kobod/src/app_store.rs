@@ -873,7 +873,8 @@ fn catalog_info(
             let installed_entry = installed
                 .iter()
                 .find(|installed| installed.id == entry.manifest().id());
-            let version = installed_entry.and_then(|installed| installed.installed_version.as_deref());
+            let version =
+                installed_entry.and_then(|installed| installed.installed_version.as_deref());
             let mut info = manifest_info(
                 entry.manifest(),
                 version,
@@ -926,6 +927,7 @@ fn system_info(root: &Path) -> Result<Vec<AppInfo>, DeviceError> {
 
 fn builtin_info(app: &BuiltinApp) -> AppInfo {
     AppInfo {
+        quality_json: None,
         id: app.id.to_owned(),
         title: app.title.to_owned(),
         label: app.label.to_owned(),
@@ -965,6 +967,9 @@ fn manifest_info(
     package_bytes: Option<u64>,
 ) -> Result<AppInfo, DeviceError> {
     Ok(AppInfo {
+        quality_json: manifest
+            .quality()
+            .map(kobo_app_store::Quality::to_canonical_json),
         id: manifest.id().to_owned(),
         title: manifest.display_name().to_owned(),
         label: manifest.short_label().to_owned(),
@@ -1491,6 +1496,7 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
+            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),
@@ -1527,6 +1533,7 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary {version}").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
+            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),
@@ -1534,7 +1541,10 @@ mod tests {
             version: version.to_owned(),
             minimum_cobalt_version: env!("CARGO_PKG_VERSION").to_owned(),
             glyph: "note".to_owned(),
-            capabilities: capabilities.iter().map(|capability| (*capability).to_owned()).collect(),
+            capabilities: capabilities
+                .iter()
+                .map(|capability| (*capability).to_owned())
+                .collect(),
             binary_sha256: kobo_net::sha256::hex_digest(&binary),
             binary_bytes: binary.len() as u64,
         })
@@ -1584,7 +1594,8 @@ mod tests {
         install_with(&root, "solo", &key, |_, _| Ok(solo_package.clone())).expect("install solo");
 
         // The new catalog grows word-count's capabilities; solo is gone.
-        let (json, signature, _) = release_with_capabilities(&seed, "word-count", "1.1.0", &["network"]);
+        let (json, signature, _) =
+            release_with_capabilities(&seed, "word-count", "1.1.0", &["network"]);
         let listing = refresh_with(&root, &key, |url, _| {
             if url == CATALOG_URL {
                 Ok(json.clone())
@@ -2349,8 +2360,41 @@ mod tests {
         assert_eq!(result, Ok(()));
         let current = installed_manifests(&root, &key).expect("installed");
         assert_eq!(current[0].version(), "1.1.0");
-        assert!(!failed.exists(), "a passing candidate supersedes the record");
+        assert!(
+            !failed.exists(),
+            "a passing candidate supersedes the record"
+        );
         let _ignored = fs::remove_dir_all(root);
     }
+    #[test]
+    fn uninstalling_an_app_never_touches_adopted_library_content() {
+        let root = root();
+        let seed = [7_u8; 32];
+        let key = derive_public_key(&seed).expect("key");
+        let (json, signature, package) = release_for(&seed, "word-count", "1.0.0");
+        refresh_with(&root, &key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(json.clone())
+            } else {
+                Ok(signature.clone())
+            }
+        })
+        .expect("refresh");
+        install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install");
 
+        // Adopted content lives outside the apps root. The contract: removing
+        // an adapter never deletes adopted content.
+        let library = root.join("library");
+        fs::create_dir_all(&library).expect("library");
+        fs::write(library.join("hobbit.epub"), b"the road goes ever on").expect("adopted");
+
+        uninstall(&root, "word-count").expect("uninstall");
+
+        assert_eq!(
+            fs::read(library.join("hobbit.epub")).expect("adopted content intact"),
+            b"the road goes ever on"
+        );
+        assert!(installed(&root).expect("removed").is_empty());
+        let _ignored = fs::remove_dir_all(root);
+    }
 }
