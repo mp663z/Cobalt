@@ -1,10 +1,11 @@
 # APPQA-07 leg matrix
 
 Per-app status of the five app-quality gate legs: install, sample,
-own-data, task and offline-reopen. Regenerate the measured legs by
-running `scripts/check-apps-sim.py`; the sweep reports `state_written`,
-`reopened` and the route per app. This rendering is from the sweep at
-`f22bfa5` (44/44 passed, 44/44 reopened offline).
+own-data, task and offline-reopen. Rendered by
+`scripts/quality/render_appqa07_matrix.py` from a
+`scripts/check-apps-sim.py` sweep; the sweep reports
+`state_written`, `reopened` and the route per app. This rendering
+is from the sweep at `f22bfa5` (44/44 passed, 44/44 reopened offline).
 
 Leg meanings:
 
@@ -19,7 +20,10 @@ Leg meanings:
 - **own-data** - the app shown working with data from the reader’s own
   action: a journey write measured by the sweep, or own content pushed
   through the app’s real CLI path. Apps whose manifest declares no user
-  data are n/a. A fetched network cache is not own data.
+  data are n/a. A fetched network cache is not own data. Apps whose
+  data starts on a server (feed, catalog, library, pairing) keep the
+  gap until a local fixture exercises them; the first-run screen is
+  their honest floor, not evidence.
 - **task** - a committed simulator route exercises the core journey.
 - **offline-reopen** - after the route, the same state relaunches with
   no network and renders a first screen.
