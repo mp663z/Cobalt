@@ -3388,8 +3388,10 @@
     "pr": 3,
     "group": "Catalog-wide release gates",
     "task": "Supply a committed meaningful route for each of the 43 apps",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Fresh-simulator sweep: 44/44 apps pass, 43 committed routes (Zotero Reader excluded per APPQA-13), every app reopened offline to a rendered first screen; routes for audiobook, brief, chat, gutenbird and rss verified against their real first screens."
+    ]
   },
   {
     "id": "APPQA-07",
