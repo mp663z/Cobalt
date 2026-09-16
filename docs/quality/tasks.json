@@ -2729,8 +2729,10 @@
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Allow player names and count",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Home gains a Players screen: 2/3/4-player chips for pass-around (solo stays solo) and tappable name rows (clean_name validates 1-12 chars, strips '|' which would corrupt state). Names, count and turn order persist in the save (packs|rounds|synced_day|players|names; older saves load with defaults). Pass, reveal, podium and scorecard all use the chosen names and count. Unit-tested (clean_name, state round trip, 3-player pass names Cleo next, not Dev); drive route renames Ada to Bo, sets 3 players, sees 'sits out', and the round then runs as 'Bo answers'. Both text scales pixel-verified."
+    ]
   },
   {
     "id": "QUIZ-02",

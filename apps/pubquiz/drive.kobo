@@ -1,6 +1,18 @@
 expect Pub Quiz
 expect Built-in set
 shot home
+tap Players
+expect Tap a name to change it
+tap-id players-3
+expect sits out
+clean
+shot players
+tap-id name-0
+type Bo
+tap Save
+expect Bo
+tap Back
+expect Pub Quiz
 tap How to play
 expect Ten questions, one Kobo
 wait 800
@@ -8,7 +20,7 @@ clean
 shot pubquiz-help
 tap Play
 tap Start pass-around
-expect Ada answers
+expect Bo answers
 clean
 shot question
 
