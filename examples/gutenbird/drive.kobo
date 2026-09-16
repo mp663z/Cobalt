@@ -1,7 +1,4 @@
 wait 800
 expect Project Gutenberg
-expect Popular
-expect Latest
-expect Random
 clean
 shot catalogs
