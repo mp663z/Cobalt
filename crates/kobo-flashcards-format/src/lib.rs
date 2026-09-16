@@ -15,7 +15,9 @@ use std::fmt;
 use std::io::{Read, Write};
 use unicode_normalization::UnicodeNormalization;
 
+mod sample;
 mod svg;
+pub use sample::sample_bundle;
 pub use svg::{rasterize_svg, validate_svg_source};
 
 pub const MAGIC: [u8; 8] = *b"CBFLASH\0";
