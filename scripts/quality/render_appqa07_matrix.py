@@ -32,6 +32,21 @@ SAMPLE_EVIDENCE = {
 }
 # Journey writes that are fetched network caches, not the reader's own data.
 CACHE_ONLY = {'gutenbird'}
+# Gaps the sweep cannot close, with the reason measured against the source.
+GAP_REASONS = {
+    'arxiv': 'keeping a paper needs a fetched paper; no offline write path',
+    'audiobook': 'the library records only finished books; composing needs provider secrets (exa/elevenlabs), no draft persists on failure',
+    'brief': 'keeping an article needs a fetched digest; no offline write path',
+    'calibre-web': 'settings save only after a verified server fetch',
+    'hn': 'read marks need a fetched story list; no offline write path',
+    'homepanel': 'requires an https Home Assistant URL; the simulator has no TLS fixture',
+    'lichess': 'live play needs an account token; the offline computer game does not persist',
+    'panels': 'panel content comes from the paired host; no offline write path',
+    'paperterm': 'pairing needs a reachable terminal host; no offline write path',
+    'rss': 'every save path (subscribe, remove, retry) needs a fetched feed first',
+    'rss-miniflux': 'server-first client; no offline write path',
+    'sidekick': 'pairing needs the sidekick handshake; no offline write path',
+}
 
 
 def classify_own_data(app, state_written):
@@ -44,6 +59,9 @@ def classify_own_data(app, state_written):
         return f'yes - journey wrote {names}', False
     if app in CACHE_ONLY and state_written:
         return 'gap - only the fetched catalog cache was written', True
+    reason = GAP_REASONS.get(app)
+    if reason:
+        return f'gap - {reason}', True
     return 'gap', True
 
 

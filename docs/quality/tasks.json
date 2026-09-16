@@ -3400,7 +3400,7 @@
     "task": "Exercise install/sample/own-data/task/offline-reopen for each app",
     "status": "todo",
     "evidence": [
-      "Leg matrix at docs/quality/appqa-07-matrix.md, rendered from the 3dbfe9a sweep (44/44 pass, 44/44 offline reopen): task leg measured for the 43 routed apps, offline-reopen measured for all 44, own-data measured for 19 journey-writing apps plus deck/frame/vault via real CLI pushes, 3 apps declare no user data. Open: install leg UNVERIFIED in the sandbox for all apps (machinery covered by beta-store-smoke/kobod tests; real-binary install is publish-pipeline and attended device proof), own-data gaps on 19 apps, sample-path evidence on only 4. Status stays todo until the open legs close."
+      "Leg matrix at docs/quality/appqa-07-matrix.md, rendered from the ac92756 sweep (44/44 pass, 44/44 offline reopen): task leg measured for the 43 routed apps, offline-reopen measured for all 44, own-data measured for 24 journey-writing apps (5 seeded fixtures: fanshelf tags, flashcards review log, parser autosave, pubquiz round count, post gateway) plus deck/frame/vault via real CLI pushes, 3 apps declare no user data. Open: install leg UNVERIFIED in the sandbox for all apps (machinery covered by beta-store-smoke/kobod tests; real-binary install is publish-pipeline and attended device proof), own-data gaps on 13 apps each with a named reason (server-first data, credential-gated, or needs an https fixture), sample-path evidence on 6 apps. Status stays todo until the open legs close."
     ]
   },
   {
