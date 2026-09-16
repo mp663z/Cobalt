@@ -770,6 +770,15 @@ impl Quality {
     pub fn non_goals(&self) -> &[String] {
         &self.non_goals
     }
+
+    /// The block as canonical JSON, the same bytes the manifest spelling
+    /// carries and signatures cover.
+    #[must_use]
+    pub fn to_canonical_json(&self) -> String {
+        let mut out = String::with_capacity(512);
+        write_quality_object(self, &mut out);
+        out
+    }
 }
 
 const QUALITY_FIELDS: [&str; 10] = [
@@ -1018,7 +1027,12 @@ fn validate_quality(input: QualityInput, declared: &[String]) -> Result<Quality,
 }
 
 fn write_quality(quality: &Quality, out: &mut String) {
-    out.push_str(",\"quality\":{\"user\":");
+    out.push_str(",\"quality\":");
+    write_quality_object(quality, out);
+}
+
+fn write_quality_object(quality: &Quality, out: &mut String) {
+    out.push_str("{\"user\":");
     kobo_json::escape_into(&quality.user, out);
     out.push_str(",\"job\":");
     kobo_json::escape_into(&quality.job, out);

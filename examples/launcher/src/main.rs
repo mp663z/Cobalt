@@ -500,6 +500,7 @@ mod tests {
         runner.start();
         runner.device_result(DeviceResult::Apps {
             entries: vec![AppInfo {
+                quality_json: None,
                 id: "word-count".to_owned(),
                 title: "Word Count".to_owned(),
                 label: "Words".to_owned(),
