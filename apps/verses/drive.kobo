@@ -1,3 +1,13 @@
+wait 800
 expect Today
 clean
 shot today
+tap-id favorite
+expect Remove favorite
+clean
+shot favorited
+tap-id browse
+expect Favorites
+expect Poems
+clean
+shot browse
