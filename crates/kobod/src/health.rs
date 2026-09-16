@@ -132,9 +132,8 @@ impl Health {
             Recovery::LaunchWithoutState => {
                 if state.exists() {
                     let aside = free_name(&state, "held")?;
-                    fs::rename(&state, &aside).map_err(|error| {
-                        format!("move {} aside: {error}", state.display())
-                    })?;
+                    fs::rename(&state, &aside)
+                        .map_err(|error| format!("move {} aside: {error}", state.display()))?;
                     Ok(format!("state set aside at {}", aside.display()))
                 } else {
                     Ok("no saved state to set aside".to_owned())
@@ -228,8 +227,8 @@ fn free_name(base: &Path, marker: &str) -> Result<PathBuf, String> {
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
     fs::create_dir(destination)
         .map_err(|error| format!("create {}: {error}", destination.display()))?;
-    let entries = fs::read_dir(source)
-        .map_err(|error| format!("read {}: {error}", source.display()))?;
+    let entries =
+        fs::read_dir(source).map_err(|error| format!("read {}: {error}", source.display()))?;
     for entry in entries {
         let entry = entry.map_err(|error| format!("read {}: {error}", source.display()))?;
         let from = entry.path();
@@ -240,8 +239,7 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
         if kind.is_dir() {
             copy_directory(&from, &to)?;
         } else if kind.is_file() {
-            fs::copy(&from, &to)
-                .map_err(|error| format!("copy {}: {error}", from.display()))?;
+            fs::copy(&from, &to).map_err(|error| format!("copy {}: {error}", from.display()))?;
         }
         // Anything that is neither a file nor a directory - a symlink, a
         // socket - is skipped rather than followed out of the state tree.
@@ -280,7 +278,10 @@ mod tests {
         assert!(!health.is_quarantined("word-count"));
         for round in 1..CONSECUTIVE_CRASH_LIMIT {
             assert_eq!(health.record_crash("word-count").unwrap(), round);
-            assert!(!health.is_quarantined("word-count"), "quarantined at {round}");
+            assert!(
+                !health.is_quarantined("word-count"),
+                "quarantined at {round}"
+            );
         }
         assert_eq!(
             health.record_crash("word-count").unwrap(),
@@ -339,7 +340,13 @@ mod tests {
             assert!(health.record_crash(bad).is_err(), "{bad}");
             assert_eq!(health.crashes(bad), 0, "{bad}");
         }
-        assert!(!scratch.0.join("health").exists() || fs::read_dir(scratch.0.join("health")).unwrap().next().is_none());
+        assert!(
+            !scratch.0.join("health").exists()
+                || fs::read_dir(scratch.0.join("health"))
+                    .unwrap()
+                    .next()
+                    .is_none()
+        );
     }
 
     #[test]
@@ -350,7 +357,11 @@ mod tests {
         fs::create_dir_all(&state).unwrap();
         fs::write(state.join("items"), "buy milk\n").unwrap();
         let outcome = health
-            .recover("todo", Recovery::LaunchWithoutState, &scratch.0.join("exports"))
+            .recover(
+                "todo",
+                Recovery::LaunchWithoutState,
+                &scratch.0.join("exports"),
+            )
             .unwrap();
         assert!(outcome.contains("set aside"), "{outcome}");
         assert!(!state.exists());
@@ -362,7 +373,11 @@ mod tests {
         fs::create_dir_all(&state).unwrap();
         fs::write(state.join("items"), "buy eggs\n").unwrap();
         health
-            .recover("todo", Recovery::LaunchWithoutState, &scratch.0.join("exports"))
+            .recover(
+                "todo",
+                Recovery::LaunchWithoutState,
+                &scratch.0.join("exports"),
+            )
             .unwrap();
         assert_eq!(
             fs::read_to_string(scratch.0.join("data/todo.held.2/items")).unwrap(),
@@ -379,7 +394,9 @@ mod tests {
         fs::write(state.join("notes/one"), "first\n").unwrap();
         fs::write(state.join("position"), "42\n").unwrap();
         let exports = scratch.0.join("exports");
-        let outcome = health.recover("reader", Recovery::ExportState, &exports).unwrap();
+        let outcome = health
+            .recover("reader", Recovery::ExportState, &exports)
+            .unwrap();
         assert!(outcome.contains("exported"), "{outcome}");
         assert_eq!(
             fs::read_to_string(exports.join("reader-state/notes/one")).unwrap(),
@@ -387,7 +404,9 @@ mod tests {
         );
         // The source is untouched: an export never mutates the original.
         assert_eq!(fs::read_to_string(state.join("position")).unwrap(), "42\n");
-        health.recover("reader", Recovery::ExportState, &exports).unwrap();
+        health
+            .recover("reader", Recovery::ExportState, &exports)
+            .unwrap();
         assert!(exports.join("reader-state-2").is_dir());
     }
 
@@ -416,7 +435,9 @@ mod tests {
         let scratch = Scratch::new("absent");
         let health = Health::new(&scratch.0);
         let exports = scratch.0.join("exports");
-        let outcome = health.recover("ghost", Recovery::ExportState, &exports).unwrap();
+        let outcome = health
+            .recover("ghost", Recovery::ExportState, &exports)
+            .unwrap();
         assert!(outcome.contains("no saved state"), "{outcome}");
         let outcome = health
             .recover("ghost", Recovery::LaunchWithoutState, &exports)

@@ -15,16 +15,16 @@ mod selected_grid_tests;
 mod suspend;
 
 pub use kobo_protocol::{
-    is_valid_key, AppInfo, AppLinkState, AppProvenance, AppRecovery, AudioPlaybackState, AudioSource,
-    BatteryDetail,
-    BluetoothDevice, BluetoothDeviceKind, Credential, DenyReason, DeviceError, DeviceIdentity,
-    DeviceRequest, DeviceResult, DictionaryEntry, Frame, Header, LibraryEntry, Lifecycle, LogLevel,
-    Message, RemoteInstallOutcome, SecretHeader, ShellError, ShellEvent, ShellRequest, StoreError,
-    StoreRequest, StoreResult, StreamError, Task, TaskError, TaskId, TaskOutcome, UpdateChannel,
-    UpdateMethod, WifiNetwork, CACHE_PREFIX, MAX_CACHE_KEYS, MAX_FONT_BYTES, MAX_HEADERS,
-    MAX_HEADER_NAME, MAX_HEADER_VALUE, MAX_INLINE_PICTURE_BYTES, MAX_LOOKUP_WORD_BYTES,
-    MAX_PICTURE_BYTES, MAX_PICTURE_CHUNK_BYTES, MAX_RADIO_DEVICES, MAX_RADIO_NAME, MAX_SHELF_CHUNK,
-    MAX_SHELL_CHUNK, MAX_STORE_KEYS, MAX_STORE_VALUE, MAX_TASK_BYTES, MAX_URL_LEN,
+    is_valid_key, AppInfo, AppLinkState, AppProvenance, AppRecovery, AudioPlaybackState,
+    AudioSource, BatteryDetail, BluetoothDevice, BluetoothDeviceKind, Credential, DenyReason,
+    DeviceError, DeviceIdentity, DeviceRequest, DeviceResult, DictionaryEntry, Frame, Header,
+    LibraryEntry, Lifecycle, LogLevel, Message, RemoteInstallOutcome, SecretHeader, ShellError,
+    ShellEvent, ShellRequest, StoreError, StoreRequest, StoreResult, StreamError, Task, TaskError,
+    TaskId, TaskOutcome, UpdateChannel, UpdateMethod, WifiNetwork, CACHE_PREFIX, MAX_CACHE_KEYS,
+    MAX_FONT_BYTES, MAX_HEADERS, MAX_HEADER_NAME, MAX_HEADER_VALUE, MAX_INLINE_PICTURE_BYTES,
+    MAX_LOOKUP_WORD_BYTES, MAX_PICTURE_BYTES, MAX_PICTURE_CHUNK_BYTES, MAX_RADIO_DEVICES,
+    MAX_RADIO_NAME, MAX_SHELF_CHUNK, MAX_SHELL_CHUNK, MAX_STORE_KEYS, MAX_STORE_VALUE,
+    MAX_TASK_BYTES, MAX_URL_LEN,
 };
 pub use kobo_ui::QuoteRole;
 pub use kobo_ui::{
@@ -55,8 +55,8 @@ pub use kobo_policy::{Capability, Declared, Grant, Grants, PowerPolicy};
 pub use kobo_policy::clock;
 pub mod audio;
 pub mod board;
-pub mod capability;
 mod builder;
+pub mod capability;
 pub mod credentials;
 pub mod entropy;
 pub mod exports;

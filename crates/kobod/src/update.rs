@@ -236,15 +236,17 @@ fn release_manifest(tar: &[u8]) -> Result<Option<kobo_json::Value>, String> {
         if block.iter().all(|&byte| byte == 0) {
             break;
         }
-        let size = read_octal(&block[124..136])
-            .map_err(|_| "the archive carries a member header this updater cannot read".to_owned())?;
-        let size =
-            usize::try_from(size).map_err(|_| "the archive declares a member too large".to_owned())?;
+        let size = read_octal(&block[124..136]).map_err(|_| {
+            "the archive carries a member header this updater cannot read".to_owned()
+        })?;
+        let size = usize::try_from(size)
+            .map_err(|_| "the archive declares a member too large".to_owned())?;
         let payload_at = offset + BLOCK;
         if payload_at + size > tar.len() {
             return Err("the archive ends inside a member".to_owned());
         }
-        if block[156] == b'0' && installed_path(&read_string(&block[0..100])) == Some(Path::new(RELEASE_MANIFEST))
+        if block[156] == b'0'
+            && installed_path(&read_string(&block[0..100])) == Some(Path::new(RELEASE_MANIFEST))
         {
             let text = std::str::from_utf8(&tar[payload_at..payload_at + size])
                 .map_err(|_| "the release manifest is not UTF-8".to_owned())?;
@@ -1248,7 +1250,11 @@ mod tests {
         for &byte in bytes {
             crc ^= u32::from(byte);
             for _ in 0..8 {
-                crc = if crc & 1 == 1 { (crc >> 1) ^ 0xedb8_8320 } else { crc >> 1 };
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0xedb8_8320
+                } else {
+                    crc >> 1
+                };
             }
         }
         container.extend_from_slice(&(!crc).to_le_bytes());
@@ -1361,8 +1367,7 @@ mod tests {
 
     /// Where the committed update-graph fixtures live.
     fn graph_dir() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../scripts/fixtures/update-graph")
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/fixtures/update-graph")
     }
 
     fn json_escape(text: &str) -> String {
@@ -1371,7 +1376,10 @@ mod tests {
 
     /// The members of a full archive: the standalone launcher first, unless
     /// the edge publishes the pre-bootstrap layout.
-    fn full_archive<'a>(members: &[Member<'a>], bootstrap: bool) -> (Vec<u8>, String, Vec<Member<'a>>) {
+    fn full_archive<'a>(
+        members: &[Member<'a>],
+        bootstrap: bool,
+    ) -> (Vec<u8>, String, Vec<Member<'a>>) {
         let mut complete = Vec::with_capacity(members.len() + 1);
         if bootstrap {
             complete.push(launch_bootstrap());
@@ -1468,10 +1476,17 @@ mod tests {
                     Ok(())
                 }
             });
-            assert!(interrupted.is_err(), "boundary {boundary:?} did not interrupt");
+            assert!(
+                interrupted.is_err(),
+                "boundary {boundary:?} did not interrupt"
+            );
             recover_interrupted_update(&adds).expect("startup recovery");
             let start = fs::read_to_string(adds.join("cobalt/start.sh")).expect("active release");
-            let recovered = if start.contains("# release new") { "new" } else { "old" };
+            let recovered = if start.contains("# release new") {
+                "new"
+            } else {
+                "old"
+            };
             assert!(!adds.join(JOURNAL).exists(), "recovery clears the journal");
             checkpoints.push(format!(
                 "{{\"step\":\"{}\",\"recovered\":\"{recovered}\"}}",
@@ -1516,11 +1531,26 @@ mod tests {
         old_layout.push(folder(""));
 
         let edges = vec![
-            archive_edge("stable-to-candidate", &with_manifest, true, Some(
-                r#"{"schema":1,"requiresUpdater":1,"roots":["cobalt","launcher"],"migrations":["nickelmenu"]}"#,
-            )),
-            archive_edge("pre-bootstrap-layout-to-current-bootstrap", &old_layout, false, None),
-            archive_edge("future-schema-refused-before-apply", &future_schema, true, Some(r#"{"schema":2}"#)),
+            archive_edge(
+                "stable-to-candidate",
+                &with_manifest,
+                true,
+                Some(
+                    r#"{"schema":1,"requiresUpdater":1,"roots":["cobalt","launcher"],"migrations":["nickelmenu"]}"#,
+                ),
+            ),
+            archive_edge(
+                "pre-bootstrap-layout-to-current-bootstrap",
+                &old_layout,
+                false,
+                None,
+            ),
+            archive_edge(
+                "future-schema-refused-before-apply",
+                &future_schema,
+                true,
+                Some(r#"{"schema":2}"#),
+            ),
             archive_edge(
                 "future-updater-capability-refused-before-apply",
                 &future_updater,
@@ -1535,10 +1565,12 @@ mod tests {
             ),
         ];
 
-        let mut records: Vec<String> =
-            edges.iter().map(|(record, _)| record.clone()).collect();
+        let mut records: Vec<String> = edges.iter().map(|(record, _)| record.clone()).collect();
         records.push(interruption_edge());
-        let index = format!("{{\"contract\":\"update-graph\",\"edges\":[{}]}}\n", records.join(","));
+        let index = format!(
+            "{{\"contract\":\"update-graph\",\"edges\":[{}]}}\n",
+            records.join(",")
+        );
 
         let dir = graph_dir();
         if std::env::var_os("KOBO_BLESS").is_some() {
@@ -1577,8 +1609,9 @@ mod tests {
     fn a_manifest_asking_for_a_newer_updater_is_refused_before_staging() {
         let adds = scratch("manifest-newer-updater");
         fs::create_dir_all(adds.join("cobalt")).expect("an installed Cobalt");
-        let (archive, digest) =
-            release_archive(Some(r#"{"schema":1,"requiresUpdater":2,"roots":["cobalt"]}"#));
+        let (archive, digest) = release_archive(Some(
+            r#"{"schema":1,"requiresUpdater":2,"roots":["cobalt"]}"#,
+        ));
         let error = install(&archive, &digest, &adds).expect_err("refused before staging");
         assert_eq!(error, DeviceError::InvalidInput);
         assert!(!adds.join("cobalt.next").exists());
@@ -1669,7 +1702,9 @@ mod tests {
         ));
         install(&archive, &digest, &adds).expect("install succeeds");
         let manifest = fs::read(adds.join("cobalt/release.json")).expect("manifest installed");
-        assert!(std::str::from_utf8(&manifest).unwrap().contains("nickelmenu"));
+        assert!(std::str::from_utf8(&manifest)
+            .unwrap()
+            .contains("nickelmenu"));
         assert!(!adds.join("cobalt.next").exists());
         let _ignored = fs::remove_dir_all(&adds);
     }

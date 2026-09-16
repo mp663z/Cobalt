@@ -5,9 +5,10 @@
 //! it never receives a package URL or chooses an installation path.
 
 use kobo_sdk::{
-    action_id, ActionId, AppInfo, AppLinkState, Context, DenyReason, DeviceError, DeviceRequest,
-    DeviceResult, Glyph, Heartbeat, KoboApp, PictureHandle, Position, RemoteInstallOutcome,
-    AppProvenance, RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture, UpdateChannel,
+    action_id, ActionId, AppInfo, AppLinkState, AppProvenance, Context, DenyReason, DeviceError,
+    DeviceRequest, DeviceResult, Glyph, Heartbeat, KoboApp, PictureHandle, Position,
+    RemoteInstallOutcome, RowLead, Screen, ScreenBuilder, TaskId, TaskOutcome, TilePicture,
+    UpdateChannel,
 };
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::process::ExitCode;
@@ -879,8 +880,8 @@ mod tests {
             provenance: kobo_sdk::AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
-                quarantined: false,
-}
+            quarantined: false,
+        }
     }
 
     #[test]
@@ -1119,8 +1120,8 @@ mod tests {
                 provenance: kobo_sdk::AppProvenance::Catalog,
                 package_bytes: None,
                 permissions_changed: false,
-                        quarantined: false,
-})
+                quarantined: false,
+            })
             .collect::<Vec<_>>();
         for panel in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
             for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
@@ -1178,7 +1179,9 @@ mod tests {
 
         let mut runner = AppRunner::new(Store::default());
         runner.start();
-        runner.device_result(DeviceResult::Apps { entries: Vec::new() });
+        runner.device_result(DeviceResult::Apps {
+            entries: Vec::new(),
+        });
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
         runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Beta));
         assert_eq!(runner.app().channel, Some(UpdateChannel::Beta));

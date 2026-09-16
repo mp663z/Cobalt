@@ -2871,10 +2871,7 @@ fn host_applications(
                                                 .app_channel,
                                         )
                                     }
-                                    kobo_protocol::DeviceRequest::RecoverApp {
-                                        name,
-                                        recovery,
-                                    } => {
+                                    kobo_protocol::DeviceRequest::RecoverApp { name, recovery } => {
                                         let health =
                                             kobod::health::Health::new(Path::new(COBALT_ROOT));
                                         let exports = Path::new(COBALT_ROOT).join("exports");
@@ -2896,7 +2893,9 @@ fn host_applications(
                                                         kobod::health::Recovery::ResetState,
                                                         &exports,
                                                     )?;
-                                                    Ok(format!("{name} removed with its saved state"))
+                                                    Ok(format!(
+                                                        "{name} removed with its saved state"
+                                                    ))
                                                 }
                                                 kobo_protocol::AppRecovery::LaunchWithoutState => {
                                                     health.recover(

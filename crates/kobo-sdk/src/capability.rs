@@ -172,7 +172,11 @@ mod tests {
     #[test]
     fn every_state_carries_its_reason() {
         let cases = [
-            (Capability::available(), CapabilityState::Available, "available"),
+            (
+                Capability::available(),
+                CapabilityState::Available,
+                "available",
+            ),
             (
                 Capability::owner_setup_required("enable Wi-Fi in Nickel"),
                 CapabilityState::OwnerSetupRequired,
@@ -197,7 +201,10 @@ mod tests {
         for (capability, state, reason) in cases {
             assert_eq!(capability.state(), state);
             assert_eq!(capability.reason(), reason);
-            assert_eq!(capability.is_available(), state == CapabilityState::Available);
+            assert_eq!(
+                capability.is_available(),
+                state == CapabilityState::Available
+            );
         }
     }
 

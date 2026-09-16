@@ -306,7 +306,10 @@ fn quarantine_marks_listings_and_reset_clears_it() {
     fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
     let state = fixture.state();
     request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
-    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+    assert_eq!(
+        request(&state, &install(), Scenario::Normal),
+        DeviceResult::Done
+    );
     assert!(!entries(&state)[0].quarantined);
     let data = fixture.0.join("installed/data/quality-fixture/notes");
     fs::create_dir_all(data.parent().unwrap()).unwrap();
@@ -314,14 +317,22 @@ fn quarantine_marks_listings_and_reset_clears_it() {
     let ledger = crash_ledger(&fixture, 5);
     assert!(entries(&state)[0].quarantined, "ledger flags the listing");
     assert_eq!(
-        request(&state, &recover(kobo_protocol::AppRecovery::ResetState), Scenario::Normal),
+        request(
+            &state,
+            &recover(kobo_protocol::AppRecovery::ResetState),
+            Scenario::Normal
+        ),
         DeviceResult::Done
     );
     assert!(!ledger.exists(), "recovery releases the ledger");
     assert!(!data.exists(), "reset removes the saved state");
     let entry = &entries(&state)[0];
     assert!(!entry.quarantined);
-    assert_eq!(entry.installed_version.as_deref(), Some("1.0.0"), "still installed");
+    assert_eq!(
+        entry.installed_version.as_deref(),
+        Some("1.0.0"),
+        "still installed"
+    );
 }
 
 #[test]
@@ -330,28 +341,47 @@ fn export_keeps_state_and_remove_uninstalls() {
     fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
     let state = fixture.state();
     request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
-    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+    assert_eq!(
+        request(&state, &install(), Scenario::Normal),
+        DeviceResult::Done
+    );
     let data = fixture.0.join("installed/data/quality-fixture/notes");
     fs::create_dir_all(data.parent().unwrap()).unwrap();
     fs::write(&data, b"Owner's notes").unwrap();
     let ledger = crash_ledger(&fixture, 6);
     assert!(entries(&state)[0].quarantined);
     assert_eq!(
-        request(&state, &recover(kobo_protocol::AppRecovery::ExportState), Scenario::Normal),
+        request(
+            &state,
+            &recover(kobo_protocol::AppRecovery::ExportState),
+            Scenario::Normal
+        ),
         DeviceResult::Done
     );
     assert_eq!(
-        fs::read(fixture.0.join("installed/exports/quality-fixture-state/notes")).unwrap(),
+        fs::read(
+            fixture
+                .0
+                .join("installed/exports/quality-fixture-state/notes")
+        )
+        .unwrap(),
         b"Owner's notes"
     );
     assert!(data.exists(), "an export never mutates the original");
     assert!(!entries(&state)[0].quarantined, "ledger released");
     crash_ledger(&fixture, 5);
     assert_eq!(
-        request(&state, &recover(kobo_protocol::AppRecovery::RemoveApp), Scenario::Normal),
+        request(
+            &state,
+            &recover(kobo_protocol::AppRecovery::RemoveApp),
+            Scenario::Normal
+        ),
         DeviceResult::Done
     );
-    assert!(!fixture.0.join("installed/apps/quality-fixture").exists(), "removed");
+    assert!(
+        !fixture.0.join("installed/apps/quality-fixture").exists(),
+        "removed"
+    );
     assert!(!ledger.exists());
     assert!(!data.exists(), "remove takes the saved state with it");
 }
@@ -379,7 +409,10 @@ fn a_payload_that_cannot_launch_fails_its_canary_and_keeps_the_previous_version(
     fixture.release("1.0.0", env!("CARGO_PKG_VERSION"), &[71; 32]);
     let state = fixture.state();
     request(&state, &DeviceRequest::RefreshAppCatalog, Scenario::Normal);
-    assert_eq!(request(&state, &install(), Scenario::Normal), DeviceResult::Done);
+    assert_eq!(
+        request(&state, &install(), Scenario::Normal),
+        DeviceResult::Done
+    );
 
     // The 1.1.0 candidate is still the inert fixture payload: with the
     // canary on, launching it fails honestly and the previous version stays.
@@ -404,10 +437,17 @@ fn a_payload_that_cannot_launch_fails_its_canary_and_keeps_the_previous_version(
     let diagnostics = fs::read_to_string(failed.join("DIAGNOSTICS")).unwrap();
     assert!(!diagnostics.is_empty());
     let entry = &entries(&state)[0];
-    assert_eq!(entry.installed_version.as_deref(), Some("1.0.0"), "previous stays");
+    assert_eq!(
+        entry.installed_version.as_deref(),
+        Some("1.0.0"),
+        "previous stays"
+    );
     assert!(entry.has_update(), "the update remains on offer");
     assert!(
-        !fixture.0.join("installed/apps/quality-fixture.next").exists(),
+        !fixture
+            .0
+            .join("installed/apps/quality-fixture.next")
+            .exists(),
         "no staging left behind"
     );
 }
