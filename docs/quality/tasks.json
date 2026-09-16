@@ -1748,8 +1748,10 @@
     "pr": 3,
     "group": "Habits",
     "task": "Make Add habit prominent on empty Today",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Empty Today splash now carries a prominent primary 'Add a habit' button; drive route taps it to add the first habit (pass at both text scales, pixel-verified screenshots)."
+    ]
   },
   {
     "id": "HABIT-02",
@@ -1764,24 +1766,30 @@
     "pr": 3,
     "group": "Habits",
     "task": "Provide easy habit editing",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Manage rows explain themselves ('Tap a habit to change its schedule...') and each row's menu archives/restores the habit; route archives and restores Tea and asserts 'daily; archived' both ways."
+    ]
   },
   {
     "id": "HABIT-04",
     "pr": 3,
     "group": "Habits",
     "task": "Explain missed and skipped day rules",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Stats states the rules in plain sentences: 'Skipped days do not count for or against a streak. A missed day ends a streak. Best streaks count scheduled days only.' Matches model semantics (skip neither helps nor hurts; missed due day resets the run)."
+    ]
   },
   {
     "id": "HABIT-05",
     "pr": 3,
     "group": "Habits",
     "task": "Add useful weekly summary",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Stats shows a weekly summary as calm facts rows (Completions; Last 7 days: N of M done) computed by Habits::last_week, unit-tested (2 of 7 for a daily habit done twice; archived habits excluded). Display heading demoted to facts per the calmer-type steering."
+    ]
   },
   {
     "id": "HABIT-06",
