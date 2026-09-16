@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             job: "Stand in for a real application in install and removal checks.".into(),
             offline: "Everything the fixture does works without the network.".into(),
             data: vec![DataKindInput {
-                kind: "the fixture's saved state".into(),
+                kind: "Saved state".into(),
                 location: "the app's private storage on the reader".into(),
                 export: "not offered; the bytes are inert".into(),
                 on_remove: "retained".into(),
