@@ -7,5 +7,27 @@
   "version": "0.1.2",
   "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
   "glyph": "book",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants a story that answers back.",
+  "job": "Play an interactive story without Wi-Fi, and put it down without losing your place.",
+  "offline": "The story and your saves live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "your saved place in the story",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; it exists so a paused story continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new stories.",
+    "It does not read the story aloud."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

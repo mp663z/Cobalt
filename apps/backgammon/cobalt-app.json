@@ -15,13 +15,13 @@
       "kind": "the record of recent turns",
       "location": "the app's private storage on the reader",
       "export": "plain text (.txt) from Match, Export record",
-      "on_remove": "deleted"
+      "on_remove": "retained"
     },
     {
       "kind": "the game in progress",
       "location": "the app's private storage on the reader",
       "export": "not offered; it exists so a half-played game continues",
-      "on_remove": "deleted"
+      "on_remove": "retained"
     }
   ],
   "capabilities_required": [],

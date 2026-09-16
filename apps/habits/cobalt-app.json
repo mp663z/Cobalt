@@ -7,5 +7,27 @@
   "version": "0.1.4",
   "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
   "glyph": "check",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody building a routine who wants to mark the day on their Kobo.",
+  "job": "Track daily and weekday habits and see the streak you are on.",
+  "offline": "Your habits and their history live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "your habits and their streak history",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it is the record the streaks are counted from",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not remind you; it answers when you look.",
+    "It does not sync your habits anywhere."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

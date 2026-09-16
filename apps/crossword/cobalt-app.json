@@ -8,5 +8,27 @@
   "version": "0.1.5",
   "release_notes": "Clear active-word shading when a crossword is complete, while restoring it when an answer is edited again.",
   "glyph": "grid",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants a quiet word puzzle on their Kobo.",
+  "job": "Solve a compact crossword built for touch, with clues that stay with the word you are on.",
+  "offline": "The crossword and your answers live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the crossword in progress, with every answer you have entered",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so work in progress continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new crosswords.",
+    "It does not time you or keep scores."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

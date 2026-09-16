@@ -8,5 +8,27 @@
   "version": "0.1.3",
   "release_notes": "Four games on one shelf, a mark for each, whose move it is under the game's name, and a board this panel cannot draw says so rather than raising an error.",
   "glyph": "circle",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Two people sharing one Kobo, or one person against the house.",
+  "job": "Play a round of Reversi on one reader, with a saved game waiting if you stop.",
+  "offline": "The game lives on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the game in progress",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-played game continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not play over a network.",
+    "It does not keep scores across games."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

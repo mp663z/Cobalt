@@ -8,5 +8,27 @@
   "version": "0.1.6",
   "release_notes": "Choose from 20 original puzzles with difficulty guides, separate progress and direct Kakuro number entry.",
   "glyph": "grid",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants a pocket of logic puzzles on their Kobo.",
+  "job": "Play four familiar logic games, each keeping its own progress.",
+  "offline": "Every game and save lives on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "your progress in each of the four games",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so work in progress continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new puzzles.",
+    "It does not keep scores across games."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
