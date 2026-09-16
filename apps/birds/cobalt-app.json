@@ -19,5 +19,27 @@
         "command": "kobo birds listen --source http://<host>:8080 --device <reader>"
       }
     ]
-  }
+  },
+  "user": "Somebody who runs BirdNET-Go on a home computer and wants its bird collages on their Kobo.",
+  "job": "Open the latest pushed bird collage, see when it was updated, and keep the last complete snapshot offline.",
+  "offline": "A collage already on the reader stays viewable with no network; only fetching a new one needs the companion.",
+  "data": [
+    {
+      "kind": "the latest bird collage snapshot",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; the original collage stays on the computer that rendered it",
+      "on_remove": "deleted"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "profiles": [
+    "clara-bw-391"
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "non_goals": [
+    "It does not detect birds itself; detection happens on the computer running BirdNET-Go.",
+    "It does not stream live audio or show a live view."
+  ]
 }
