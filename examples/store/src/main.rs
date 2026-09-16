@@ -1670,33 +1670,40 @@ mod tests {
         quarantined.quarantined = true;
         let mut store = Store::default();
         store.replace_entries(vec![rated, quarantined]);
-        for scale in [TextScale::Default, TextScale::ExtraLarge] {
-            kobo_ui::with_text_scale(scale, || {
-                for metrics in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
-                    for screen in [
-                        store.detail("notes"),
-                        store.detail("puzzle"),
-                        store.uninstall_confirmation("notes"),
-                        quality_screen(
-                            store
-                                .entries
-                                .iter()
-                                .find(|entry| entry.id == "notes")
-                                .unwrap(),
-                        )
-                        .build(),
-                    ] {
-                        let layout = screen.layout_with(&metrics, &Chrome::with_back(false));
-                        assert!(
-                            layout
-                                .nodes
-                                .iter()
-                                .all(|node| { node.rect.y + node.rect.height <= metrics.height }),
-                            "screen clipped at {scale:?}"
-                        );
-                    }
+        // layout_with reads the scale from the metrics, so every profile and
+        // every one of the nine text scales is exercised for real here.
+        for profile in kobo_profile::SUPPORTED_PROFILES {
+            for scale in TextScale::STEPS {
+                let metrics = DisplayMetrics {
+                    width: i32::try_from(profile.width).unwrap_or(i32::MAX),
+                    height: i32::try_from(profile.height).unwrap_or(i32::MAX),
+                    pixels_per_inch: i32::from(profile.pixels_per_inch),
+                    text_scale: scale,
+                };
+                for screen in [
+                    store.detail("notes"),
+                    store.detail("puzzle"),
+                    store.uninstall_confirmation("notes"),
+                    quality_screen(
+                        store
+                            .entries
+                            .iter()
+                            .find(|entry| entry.id == "notes")
+                            .unwrap(),
+                    )
+                    .build(),
+                ] {
+                    let layout = screen.layout_with(&metrics, &Chrome::with_back(false));
+                    assert!(
+                        layout
+                            .nodes
+                            .iter()
+                            .all(|node| { node.rect.y + node.rect.height <= metrics.height }),
+                        "screen clipped on {} at {scale:?}",
+                        profile.id
+                    );
                 }
-            });
+            }
         }
     }
 

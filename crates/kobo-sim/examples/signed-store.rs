@@ -53,7 +53,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 purpose: "Checks for a newer fixture package once a day.".into(),
             }],
             capabilities_optional: vec![],
-            profiles: vec!["clara-bw-391".into()],
+            profiles: kobo_profile::SUPPORTED_PROFILES
+                .iter()
+                .map(|profile| profile.id.to_owned())
+                .collect(),
             maintainer: "The Cobalt app maintainers.".into(),
             support: "the Cobalt issue tracker".into(),
             non_goals: vec!["It does nothing a real application does.".into()],

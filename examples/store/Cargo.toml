@@ -17,6 +17,7 @@ qrcodegen = "1.8"
 
 [dev-dependencies]
 kobo-catalog = { path = "../../crates/kobo-catalog" }
+kobo-profile = { path = "../../crates/kobo-profile" }
 kobo-ui = { path = "../../crates/kobo-ui" }
 
 [lints]
