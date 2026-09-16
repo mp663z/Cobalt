@@ -8,3 +8,10 @@ expect Tea
 expect daily
 clean
 shot today
+
+tap Stats
+expect completions
+tap Settings
+expect Stored on this reader
+clean
+shot settings

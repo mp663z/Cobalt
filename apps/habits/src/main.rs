@@ -315,12 +315,8 @@ impl Habits {
             }
             Page::Settings => {
                 s = s
-                    .rows([(
-                        "local",
-                        "Stored on this reader",
-                        "Works without network access.",
-                        Glyph::Settings,
-                    )])
+                    .facts([("Storage", "Stored on this reader".to_owned())])
+                    .text("Works without network access.")
                     .text("Habits never connect, upload, or back up your completions.");
             }
         }

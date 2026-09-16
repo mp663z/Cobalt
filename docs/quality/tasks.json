@@ -3380,8 +3380,10 @@
     "pr": 3,
     "group": "Catalog-wide release gates",
     "task": "Audit every visible action for a handler",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Static audit scripts/quality/check_action_handlers.py (+ scripts/test_check_action_handlers.py) covers all 44 catalog apps: 42 clean, kitchencard 'ingredient' rows documented as unverifiable without a server fixture, gallery demo widgets left inert pending a design decision. habits Settings info row converted to non-interactive .facts() and reached by the drive route (Today -> Stats -> Settings, expects 'Stored on this reader', pass). Method, per-app results and honest limits (literal-match blind spots; typed action registry not attempted): docs/quality/appqa-05-actions.md."
+    ]
   },
   {
     "id": "APPQA-06",
