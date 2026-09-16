@@ -2739,8 +2739,10 @@
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Provide categories and difficulty",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Home gains a tappable Categories row; the Categories screen lists All categories plus every category in the loaded packs with question counts and the live choice marked 'in use', paginated with the measured row pager so any pack size fits both text scales. Rounds draw only from the chosen category and the round length is honest: min(10, pool) everywhere (question screens, reveal, podium, scorecard, How to play), never a padded ten. A saved category the current pack no longer contains falls back to All categories. The choice persists as a ninth save field; older saves load with All categories. Synced-pack difficulty ratings are parsed, title-cased and shown in the question subtitle (Category \u00b7 Difficulty \u00b7 question N of M); the built-in set is unrated and says so on the About screen. Route covers open > pick General knowledge > home shows it > reset to All at both scales; unit tests cover optional difficulty parsing, label line, shortened category rounds, lost-category fallback and the save roundtrip."
+    ]
   },
   {
     "id": "QUIZ-03",
@@ -2777,8 +2779,10 @@
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Test full rounds, repeats and offline refreshed packs",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Full rounds: the committed route plays a complete ten-question pass-around round to the podium at both text scales. Repeats: the route then starts a solo round from the finished state, answers, advances to question 2 of 10 and returns home (repeat-round shot). Offline refreshed packs: scripts/quality/check-pubquiz-offline-pack-sim.py stages the canned pack fixture (scripts/fixtures/pubquiz/pack.json, 12 original questions) plus saved state as the exact store keys a sync writes, launches the simulator in the offline scenario, and proves the refreshed pack plays: home names Open Trivia DB, the fixture question at the saved rotation offset renders with its difficulty, the correct answer scores 'Correct', all with the radio off. A live sync leg stays out of the committed route because fetched content is nondeterministic; sync success/failure notes are unit-covered."
+    ]
   },
   {
     "id": "LATER-01",

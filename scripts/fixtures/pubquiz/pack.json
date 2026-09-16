@@ -1,0 +1,137 @@
+{
+ "response_code": 0,
+ "results": [
+  {
+   "category": "Fixture science",
+   "difficulty": "easy",
+   "question": "Which fixture planet is named after the Roman messenger god?",
+   "correct_answer": "Mercury",
+   "incorrect_answers": [
+    "Venus",
+    "Mars",
+    "Jupiter"
+   ]
+  },
+  {
+   "category": "Fixture science",
+   "difficulty": "medium",
+   "question": "What gas do fixture plants take in for photosynthesis?",
+   "correct_answer": "Carbon dioxide",
+   "incorrect_answers": [
+    "Oxygen",
+    "Nitrogen",
+    "Hydrogen"
+   ]
+  },
+  {
+   "category": "Fixture science",
+   "difficulty": "hard",
+   "question": "What is the fixture chemical symbol for gold?",
+   "correct_answer": "Au",
+   "incorrect_answers": [
+    "Ag",
+    "Gd",
+    "Go"
+   ]
+  },
+  {
+   "category": "Fixture science",
+   "difficulty": "easy",
+   "question": "How many legs does a fixture spider have?",
+   "correct_answer": "Eight",
+   "incorrect_answers": [
+    "Six",
+    "Ten",
+    "Four"
+   ]
+  },
+  {
+   "category": "Fixture history",
+   "difficulty": "medium",
+   "question": "Which fixture empire built the Colosseum?",
+   "correct_answer": "Roman",
+   "incorrect_answers": [
+    "Greek",
+    "Ottoman",
+    "Persian"
+   ]
+  },
+  {
+   "category": "Fixture history",
+   "difficulty": "easy",
+   "question": "The fixture Great Wall stands mainly in which country?",
+   "correct_answer": "China",
+   "incorrect_answers": [
+    "India",
+    "Japan",
+    "Mongolia"
+   ]
+  },
+  {
+   "category": "Fixture history",
+   "difficulty": "hard",
+   "question": "Which fixture treaty ended the First World War?",
+   "correct_answer": "Versailles",
+   "incorrect_answers": [
+    "Tordesillas",
+    "Westphalia",
+    "Utrecht"
+   ]
+  },
+  {
+   "category": "Fixture history",
+   "difficulty": "medium",
+   "question": "Which fixture ship sank in 1912 on its first voyage?",
+   "correct_answer": "Titanic",
+   "incorrect_answers": [
+    "Lusitania",
+    "Britannic",
+    "Queen Mary"
+   ]
+  },
+  {
+   "category": "Fixture arts",
+   "difficulty": "easy",
+   "question": "Who painted the fixture Mona Lisa?",
+   "correct_answer": "Leonardo da Vinci",
+   "incorrect_answers": [
+    "Raphael",
+    "Monet",
+    "Van Gogh"
+   ]
+  },
+  {
+   "category": "Fixture arts",
+   "difficulty": "medium",
+   "question": "The fixture novel 1984 was written by whom?",
+   "correct_answer": "George Orwell",
+   "incorrect_answers": [
+    "Aldous Huxley",
+    "Ray Bradbury",
+    "Franz Kafka"
+   ]
+  },
+  {
+   "category": "Fixture arts",
+   "difficulty": "easy",
+   "question": "How many keys does a standard fixture piano have?",
+   "correct_answer": "88",
+   "incorrect_answers": [
+    "76",
+    "92",
+    "104"
+   ]
+  },
+  {
+   "category": "Fixture arts",
+   "difficulty": "hard",
+   "question": "Which fixture composer wrote the Ninth Symphony?",
+   "correct_answer": "Beethoven",
+   "incorrect_answers": [
+    "Mozart",
+    "Bach",
+    "Haydn"
+   ]
+  }
+ ]
+}

@@ -13,6 +13,15 @@ tap Save
 expect Bo
 tap Back
 expect Pub Quiz
+tap Categories
+expect All categories
+clean
+shot categories
+tap-id category-1
+expect General knowledge
+tap Categories
+tap-id category-all
+expect Pub Quiz
 tap How to play
 expect Ten questions, one Kobo
 wait 800
@@ -110,3 +119,15 @@ expect Pub Quiz
 expect Play
 clean
 shot after-round
+
+# A repeat round starts clean with the pack's rotation.
+tap Solo round
+expect Solo round
+tap-id answer-0
+expect Round result
+tap-id continue
+expect question 2 of 10
+tap Back
+expect Pub Quiz
+clean
+shot repeat-round
