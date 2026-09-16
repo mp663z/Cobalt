@@ -1194,6 +1194,7 @@ impl Default for SimulatedApps {
                 // Keep one catalog app available for an install/reinstall journey.
                 let installed_version = (entry.id != "sudoku").then(|| entry.version.clone());
                 kobo_protocol::AppInfo {
+                    quality_json: None,
                     id: entry.id,
                     title: entry.title,
                     label: entry.label,
@@ -1301,6 +1302,7 @@ fn simulated_app(
     installed: bool,
 ) -> kobo_protocol::AppInfo {
     kobo_protocol::AppInfo {
+        quality_json: None,
         id: id.to_owned(),
         title: title.to_owned(),
         label: label.to_owned(),

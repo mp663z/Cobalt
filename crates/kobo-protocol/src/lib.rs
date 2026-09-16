@@ -65,7 +65,7 @@ pub const MAGIC: [u8; 4] = *b"KOBO";
 /// A colour picture travels the same way: a grey picture still uses the tags it
 /// always did, byte for byte, and a colour one uses tags of its own that an
 /// older runtime refuses rather than misreads.
-pub const VERSION: u8 = 16;
+pub const VERSION: u8 = 17;
 /// Version adding reasoned capability availability: an application may ask
 /// the state of a capability and receives the state plus its human-readable
 /// reason, so a device that needs owner setup is never reported as
@@ -78,6 +78,9 @@ pub const CAPABILITY_REASON_VERSION: u8 = 16;
 /// Its beta node tag 35 carries the standing toggle switch; older runtimes
 /// refuse it rather than misread it.
 pub const STORE_PROVENANCE_VERSION: u8 = 15;
+
+/// Wire version carrying the app quality manifest block on [`AppInfo`].
+pub const STORE_QUALITY_VERSION: u8 = 17;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -178,6 +181,9 @@ pub const MAX_APP_VERSION_LEN: usize = 64;
 /// Capability declarations are drawn as a short list and are also bounded by
 /// the complete capability vocabulary.
 pub const MAX_APP_CAPABILITIES: usize = 16;
+
+/// Maximum byte length of the app quality manifest block on [`AppInfo`].
+pub const MAX_APP_QUALITY_BYTES: usize = 8_192;
 const MAX_APP_LINK_EXPIRES_IN: u32 = 10 * 60;
 const MAX_APP_LINK_BROWSERS: u8 = 8;
 
@@ -1663,6 +1669,10 @@ pub struct AppInfo {
     /// The installed version when present. A different `version` means an
     /// update is available.
     pub installed_version: Option<String>,
+    /// The app quality manifest block as canonical JSON, when the catalog
+    /// carries it. Wire-gated on [`STORE_QUALITY_VERSION`]; older sessions
+    /// decode as `None`.
+    pub quality_json: Option<String>,
     /// Where this listing came from: the signed catalog being browsed, or
     /// the set of applications already on the device. Wire-gated on
     /// [`STORE_PROVENANCE_VERSION`]; older sessions decode as `Catalog`.
@@ -3861,6 +3871,15 @@ fn encode_app_info(
         output.push(u8::from(entry.permissions_changed));
         output.push(u8::from(entry.quarantined));
     }
+    if version >= STORE_QUALITY_VERSION {
+        match &entry.quality_json {
+            Some(quality) => {
+                output.push(1);
+                push_string(output, quality)?;
+            }
+            None => output.push(0),
+        }
+    }
     Ok(())
 }
 
@@ -3883,6 +3902,10 @@ fn validate_app_info(entry: &AppInfo) -> Result<(), ProtocolError> {
             .capabilities
             .iter()
             .any(|capability| capability.is_empty() || capability.len() > 32)
+        || entry
+            .quality_json
+            .as_deref()
+            .is_some_and(|quality| quality.is_empty() || quality.len() > MAX_APP_QUALITY_BYTES)
     {
         return Err(ProtocolError::InvalidValue("application metadata"));
     }
@@ -4295,6 +4318,15 @@ fn decode_apps_result(
             } else {
                 (AppProvenance::Catalog, None, false, false)
             };
+        let quality_json = if wire_version >= STORE_QUALITY_VERSION {
+            match reader.u8()? {
+                0 => None,
+                1 => Some(reader.string()?),
+                _ => return Err(ProtocolError::InvalidValue("application quality flag")),
+            }
+        } else {
+            None
+        };
         let entry = AppInfo {
             id,
             title,
@@ -4305,6 +4337,7 @@ fn decode_apps_result(
             glyph,
             capabilities,
             installed_version,
+            quality_json,
             provenance,
             package_bytes,
             permissions_changed,
@@ -8006,6 +8039,7 @@ mod tests {
             },
             DeviceResult::Apps {
                 entries: vec![AppInfo {
+                    quality_json: None,
                     id: "word-count".to_owned(),
                     title: "Word Count".to_owned(),
                     label: "Words".to_owned(),
@@ -8488,6 +8522,7 @@ mod tests {
         let too_many = DeviceResult::Apps {
             entries: (0..=MAX_APP_CATALOG_ENTRIES)
                 .map(|index| AppInfo {
+                    quality_json: None,
                     id: format!("app-{index}"),
                     title: "App".to_owned(),
                     label: "App".to_owned(),
@@ -8512,6 +8547,7 @@ mod tests {
         .is_err());
 
         let app = |version: String| AppInfo {
+            quality_json: None,
             id: "version-test".to_owned(),
             title: "Version Test".to_owned(),
             label: "Version".to_owned(),
@@ -8547,6 +8583,7 @@ mod tests {
     #[test]
     fn app_compatibility_uses_numeric_cobalt_versions() {
         let app = AppInfo {
+            quality_json: None,
             id: "version-test".to_owned(),
             title: "Version Test".to_owned(),
             label: "Version".to_owned(),
@@ -8567,6 +8604,7 @@ mod tests {
         assert!(!app.is_compatible_with("nightly"));
 
         let newer = AppInfo {
+            quality_json: None,
             minimum_cobalt_version: "0.4.0".to_owned(),
             ..app
         };
@@ -8576,6 +8614,7 @@ mod tests {
     #[test]
     fn app_updates_are_only_strictly_newer_numeric_versions() {
         let app = |published: &str, installed: &str| AppInfo {
+            quality_json: None,
             id: "version-test".to_owned(),
             title: "Version Test".to_owned(),
             label: "Version".to_owned(),
@@ -8604,6 +8643,7 @@ mod tests {
     #[test]
     fn app_provenance_rides_only_sessions_that_speak_it() {
         let rich = AppInfo {
+            quality_json: None,
             id: "word-count".to_owned(),
             title: "Word Count".to_owned(),
             label: "Words".to_owned(),
@@ -8619,6 +8659,7 @@ mod tests {
             quarantined: true,
         };
         let plain = AppInfo {
+            quality_json: None,
             provenance: AppProvenance::Catalog,
             package_bytes: None,
             permissions_changed: false,
@@ -8652,6 +8693,100 @@ mod tests {
             decode(&legacy_bytes).expect("decode legacy"),
             expected,
             "an old-shape answer decodes to the defaults a new app relies on"
+        );
+    }
+
+    /// The quality manifest block rides only sessions that greeted with
+    /// `STORE_QUALITY_VERSION`: older sessions get the byte shape they know,
+    /// and their answers decode with no quality block.
+    #[test]
+    fn app_quality_rides_only_sessions_that_speak_it() {
+        let rich = AppInfo {
+            quality_json: Some("{\"user\":\"A reader.\",\"job\":\"Count words.\"}".to_owned()),
+            id: "word-count".to_owned(),
+            title: "Word Count".to_owned(),
+            label: "Words".to_owned(),
+            summary: "Counts words in a note.".to_owned(),
+            version: "1.2.0".to_owned(),
+            minimum_cobalt_version: "0.3.0".to_owned(),
+            glyph: Glyph::Note,
+            capabilities: vec!["shared-files".to_owned()],
+            installed_version: Some("1.1.0".to_owned()),
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
+            quarantined: false,
+        };
+        let plain = AppInfo {
+            quality_json: None,
+            ..rich.clone()
+        };
+        let frame = |entry: AppInfo, version: u8| Frame {
+            version,
+            request_id: 11,
+            message: Message::DeviceResult(DeviceResult::Apps {
+                entries: vec![entry],
+            }),
+        };
+
+        let modern = frame(rich.clone(), STORE_QUALITY_VERSION);
+        assert_eq!(
+            decode(&encode(&modern).expect("encode modern")).expect("decode modern"),
+            modern,
+            "sessions that speak quality keep the block"
+        );
+
+        let legacy = frame(rich, STORE_PROVENANCE_VERSION);
+        let expected = frame(plain, STORE_PROVENANCE_VERSION);
+        let legacy_bytes = encode(&legacy).expect("legacy sessions get the old shape");
+        assert_eq!(
+            legacy_bytes,
+            encode(&expected).expect("defaults encode"),
+            "the legacy encoding must not depend on the block it cannot carry"
+        );
+        assert_eq!(
+            decode(&legacy_bytes).expect("decode legacy"),
+            expected,
+            "an old-shape answer decodes with no quality block"
+        );
+    }
+
+    #[test]
+    fn app_quality_is_bounded_and_nonempty() {
+        let entry = |quality: String| AppInfo {
+            quality_json: Some(quality),
+            id: "word-count".to_owned(),
+            title: "Word Count".to_owned(),
+            label: "Words".to_owned(),
+            summary: "Counts words in a note.".to_owned(),
+            version: "1.2.0".to_owned(),
+            minimum_cobalt_version: "0.3.0".to_owned(),
+            glyph: Glyph::Note,
+            capabilities: Vec::new(),
+            installed_version: None,
+            provenance: AppProvenance::Catalog,
+            package_bytes: None,
+            permissions_changed: false,
+            quarantined: false,
+        };
+        let frame = |entry: AppInfo| Frame {
+            version: STORE_QUALITY_VERSION,
+            request_id: 3,
+            message: Message::DeviceResult(DeviceResult::Apps {
+                entries: vec![entry],
+            }),
+        };
+        assert!(
+            encode(&frame(entry(String::new()))).is_err(),
+            "empty is no block"
+        );
+        assert!(
+            encode(&frame(entry("x".repeat(MAX_APP_QUALITY_BYTES + 1)))).is_err(),
+            "an overlong block is refused"
+        );
+        assert!(
+            encode(&frame(entry("{\"user\":\"A reader.\"}".repeat(2)))).is_ok(),
+            "a bounded block encodes"
         );
     }
 

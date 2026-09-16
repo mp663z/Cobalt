@@ -1045,6 +1045,7 @@ mod tests {
 
     fn app(id: &str, installed: Option<&str>) -> AppInfo {
         AppInfo {
+            quality_json: None,
             id: id.to_owned(),
             title: format!("{id} app"),
             label: id.to_owned(),
@@ -1285,6 +1286,7 @@ mod tests {
             .unwrap()
             .into_iter()
             .map(|entry| AppInfo {
+                quality_json: None,
                 id: entry.id,
                 title: entry.title,
                 label: entry.label,
