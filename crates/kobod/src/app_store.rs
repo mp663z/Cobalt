@@ -960,7 +960,6 @@ fn system_info(root: &Path) -> Result<Vec<AppInfo>, DeviceError> {
 
 fn builtin_info(app: &BuiltinApp) -> AppInfo {
     AppInfo {
-        quality_json: None,
         id: app.id.to_owned(),
         title: app.title.to_owned(),
         label: app.label.to_owned(),
@@ -1000,9 +999,6 @@ fn manifest_info(
     package_bytes: Option<u64>,
 ) -> Result<AppInfo, DeviceError> {
     Ok(AppInfo {
-        quality_json: manifest
-            .quality()
-            .map(kobo_app_store::Quality::to_canonical_json),
         id: manifest.id().to_owned(),
         title: manifest.display_name().to_owned(),
         label: manifest.short_label().to_owned(),
@@ -1538,7 +1534,6 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
-            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),
@@ -1575,7 +1570,6 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary {version}").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
-            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),
