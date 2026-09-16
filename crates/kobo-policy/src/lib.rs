@@ -321,6 +321,9 @@ impl Declared {
 pub enum Grant {
     Allowed,
     NotDeclared,
+    /// The owner withdrew a grant the application holds; the next ask hears
+    /// the refusal without a reinstall.
+    Revoked,
     WithheldForBattery,
 }
 
@@ -331,6 +334,7 @@ pub struct Grants {
     policy: PowerPolicy,
     battery_percent: u8,
     charging: bool,
+    revoked: std::collections::BTreeSet<Capability>,
 }
 
 impl Grants {
@@ -341,7 +345,25 @@ impl Grants {
             policy,
             battery_percent: 100,
             charging: false,
+            revoked: std::collections::BTreeSet::new(),
         }
+    }
+
+    /// Withdraws a grant the application holds; the next ask hears the
+    /// refusal, with no reinstall.
+    pub fn revoke(&mut self, capability: Capability) {
+        self.revoked.insert(capability);
+    }
+
+    /// Hands a revoked grant back.
+    pub fn restore(&mut self, capability: Capability) {
+        self.revoked.remove(&capability);
+    }
+
+    /// Whether the owner withdrew this grant.
+    #[must_use]
+    pub fn was_revoked(&self, capability: Capability) -> bool {
+        self.revoked.contains(&capability)
     }
 
     pub fn observe_battery(&mut self, percent: u8, charging: bool) {
@@ -354,6 +376,9 @@ impl Grants {
     pub fn check(&self, capability: Capability) -> Grant {
         if !self.declared.holds(capability) {
             return Grant::NotDeclared;
+        }
+        if self.revoked.contains(&capability) {
+            return Grant::Revoked;
         }
         if self
             .policy
@@ -387,6 +412,27 @@ mod tests {
         assert_eq!(Capability::parse("root"), None);
         assert_eq!(Capability::parse("Network"), None);
         assert_eq!(Capability::parse(""), None);
+    }
+
+    #[test]
+    fn a_revoked_grant_refuses_until_restored_without_a_reinstall() {
+        let mut grants = Grants::new(Declared::all(), PowerPolicy::DEFAULT);
+        grants.revoke(Capability::HoldWifi);
+        assert_eq!(grants.check(Capability::HoldWifi), Grant::Revoked);
+        // A revocation outranks the battery either way: a low battery does
+        // not drown it out, and restoring it reveals the battery rule that
+        // was underneath.
+        grants.observe_battery(5, false);
+        assert_eq!(grants.check(Capability::HoldWifi), Grant::Revoked);
+        grants.restore(Capability::HoldWifi);
+        assert_eq!(
+            grants.check(Capability::HoldWifi),
+            Grant::WithheldForBattery
+        );
+        // Restoring a grant nobody revoked changes nothing: the front
+        // light is not battery-gated, so it stays allowed throughout.
+        grants.restore(Capability::FrontlightControl);
+        assert_eq!(grants.check(Capability::FrontlightControl), Grant::Allowed);
     }
 
     #[test]

@@ -1767,7 +1767,28 @@ impl AppSession {
         if state.scenario == scenario {
             return Ok(());
         }
+        let previous = state.scenario;
         state.scenario = scenario;
+        // A scenario the owner would cause on a reader reaches the services,
+        // not just the task errors: offline is Wi-Fi off until the owner
+        // turns it on, and permission-denied is every grant revoked until
+        // the owner grants again.
+        if previous != Scenario::Offline && scenario == Scenario::Offline {
+            state.services.observe_wifi(false);
+        }
+        if previous == Scenario::Offline && scenario != Scenario::Offline {
+            state.services.observe_wifi(true);
+        }
+        if previous != Scenario::PermissionDenied && scenario == Scenario::PermissionDenied {
+            for capability in kobo_policy::Capability::ALL {
+                state.services.revoke_grant(capability);
+            }
+        }
+        if previous == Scenario::PermissionDenied && scenario != Scenario::PermissionDenied {
+            for capability in kobo_policy::Capability::ALL {
+                state.services.restore_grant(capability);
+            }
+        }
         state.observe_hardware();
         if scenario == Scenario::CachePressure {
             state.pressure_pictures = kobo_ui::PictureCache::new(256 * 1024);
@@ -4720,6 +4741,87 @@ mod tests {
         assert!(session.change_clock("advance -1").is_err());
         assert!(session.change_clock("advance 999999999999").is_err());
         assert_eq!(session.state.lock().unwrap().simulation_json(), before);
+    }
+
+    #[test]
+    fn scenarios_carry_each_capability_availability_state() {
+        use kobo_protocol::{CapabilityAvailability, DenyReason, DeviceRequest, DeviceResult};
+        let (client, server) = UnixStream::pair().unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .unwrap();
+        let session = AppSession {
+            state: Arc::new(Mutex::new(AppState {
+                services: DeviceServices::simulated(),
+                ..AppState::default()
+            })),
+            writer: AppWriter::spawn_for(server, kobo_protocol::VERSION),
+        };
+        let report = |name: &str| {
+            session
+                .state
+                .lock()
+                .unwrap()
+                .services
+                .handle(DeviceRequest::ReadCapability {
+                    name: name.to_owned(),
+                })
+        };
+        assert_eq!(
+            report("network"),
+            DeviceResult::Capability {
+                name: "network".into(),
+                state: CapabilityAvailability::Available,
+                reason: "available".into(),
+            }
+        );
+        // Offline is Wi-Fi off: an owner action away, never broken hardware.
+        session.set_scenario(Scenario::Offline).unwrap();
+        let DeviceResult::Capability { state, reason, .. } = report("network") else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::OwnerSetupRequired);
+        assert!(reason.contains("Wi-Fi"), "{reason}");
+        session.set_scenario(Scenario::Normal).unwrap();
+        assert!(matches!(
+            report("network"),
+            DeviceResult::Capability {
+                state: CapabilityAvailability::Available,
+                ..
+            }
+        ));
+        // Permission denied is every grant revoked until the owner grants
+        // again, and a real ask is refused on the next request, no reinstall.
+        session.set_scenario(Scenario::PermissionDenied).unwrap();
+        let DeviceResult::Capability { state, reason, .. } = report("network") else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::Denied);
+        assert!(reason.contains("revoked"), "{reason}");
+        assert!(matches!(
+            session
+                .state
+                .lock()
+                .unwrap()
+                .services
+                .handle(DeviceRequest::ScanWifi),
+            DeviceResult::Denied(DenyReason::PolicyRejected)
+        ));
+        session.set_scenario(Scenario::Normal).unwrap();
+        assert!(matches!(
+            report("network"),
+            DeviceResult::Capability {
+                state: CapabilityAvailability::Available,
+                ..
+            }
+        ));
+        // A low battery withholds the expensive holds, temporarily.
+        session.set_scenario(Scenario::LowBattery).unwrap();
+        let DeviceResult::Capability { state, reason, .. } = report("hold-wifi") else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::TemporarilyUnavailable);
+        assert!(reason.contains("battery"), "{reason}");
     }
 
     #[test]
