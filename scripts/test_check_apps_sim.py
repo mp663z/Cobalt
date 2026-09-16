@@ -58,6 +58,54 @@ else:
         result = self.run_fixture(startup_failure=True)
         self.assertIn('simulator exited with 9', result['error'])
 
+    def passing_fixture(self):
+        """A fake whose route passes and writes journey state into TMPDIR."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app = root / 'apps/fixture'
+            app.mkdir(parents=True)
+            (app / 'drive.kobo').write_text('expect Home\n')
+            out = root / 'output'
+            out.mkdir()
+            fake = root / 'kobo'
+            fake.write_text(f"""#!{sys.executable}
+import os, sys, time
+from pathlib import Path
+if sys.argv[1] == 'dev':
+    Path(os.environ['TMPDIR'], 'launch-state').write_text('launch')
+    print('Kobo app simulator: http://127.0.0.1:12345', flush=True)
+    time.sleep(60)
+elif '--script' in sys.argv:
+    Path(os.environ['TMPDIR'], 'journey-state').write_text('journey')
+    Path(os.environ['TMPDIR'], 'launch-state').write_text('changed')
+else:
+    print('text ["Home"]')
+""")
+            fake.chmod(0o755)
+            with patch.object(runner, 'ROOT', root):
+                result = runner.run_app('fixture', fake, out, dict(os.environ), 3)
+            self.assertEqual(result['status'], 'pass', result)
+            self.assertTrue(result['reopened'])
+            self.assertEqual(sorted(result['state_written']),
+                             ['journey-state', 'launch-state'])
+            return result
+
+    def test_passing_route_reports_journey_state_writes(self):
+        self.passing_fixture()
+
+    def test_snapshot_state_hashes_regular_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'a').write_text('one')
+            first = runner.snapshot_state(root)
+            self.assertEqual(list(first), ['a'])
+            (root / 'a').write_text('two')
+            (root / 'b').write_text('new')
+            second = runner.snapshot_state(root)
+            changed = [path for path in set(first) | set(second)
+                       if first.get(path) != second.get(path)]
+            self.assertEqual(sorted(changed), ['a', 'b'])
+
 
 if __name__ == '__main__':
     unittest.main()
