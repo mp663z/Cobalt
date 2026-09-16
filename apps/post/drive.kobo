@@ -2,3 +2,10 @@
 expect Connect a Hermes gateway
 clean
 shot setup
+
+type localhost
+tap Save gateway
+wait 600
+expect No letters yet
+clean
+shot inbox

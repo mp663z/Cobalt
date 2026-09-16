@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -58,6 +59,20 @@ def seed(app, state, kobo, env, log):
     elif app == 'vault':
         run('vault', 'init', '--sim')
         run('vault', 'push', str(ROOT / 'scripts/fixtures/vault'), '--sim')
+    elif app == 'parser':
+        # Synthetic v5 demo story (scripts/fixtures/parser/build_demo_story.py);
+        # the same bytes the zvm tests build, staged like a device push.
+        shelf = Path(state) / 'cobalt-sim-data' / 'parser'
+        shelf.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / 'scripts/fixtures/parser/story-demo.z5',
+                        shelf / 'story-demo.z5')
+    elif app == 'flashcards':
+        # Original demo bundle built by kobo-flashcards-format's demo_bundle
+        # example; the reader stages it exactly like a host import.
+        shelf = Path(state) / 'cobalt-sim-data' / 'flashcards'
+        shelf.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / 'scripts/fixtures/flashcards/collection.cobfc',
+                        shelf / 'collection.cobfc')
 
 
 def run_app(app, kobo, out, environment, timeout):

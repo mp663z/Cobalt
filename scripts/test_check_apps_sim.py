@@ -93,6 +93,20 @@ else:
     def test_passing_route_reports_journey_state_writes(self):
         self.passing_fixture()
 
+    def test_flashcards_seed_stages_the_demo_bundle(self):
+        import io
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = root / 'scripts/fixtures/flashcards/collection.cobfc'
+            fixture.parent.mkdir(parents=True)
+            fixture.write_bytes(b'demo bundle bytes')
+            state = root / 'state'
+            state.mkdir()
+            with patch.object(runner, 'ROOT', root):
+                runner.seed('flashcards', state, root / 'kobo', dict(os.environ), io.StringIO())
+            staged = state / 'cobalt-sim-data/flashcards/collection.cobfc'
+            self.assertEqual(staged.read_bytes(), b'demo bundle bytes')
+
     def test_snapshot_state_hashes_regular_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

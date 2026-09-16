@@ -9,3 +9,81 @@ tap Start pass-around
 expect Ada answers
 clean
 shot question
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+wait 150
+
+tap-id answer-0
+expect Answer locked
+tap Show result
+expect Round result
+tap-id continue
+expect Podium
+clean
+shot podium
+
+tap Finish round
+expect Pub Quiz
+expect Play
+clean
+shot after-round

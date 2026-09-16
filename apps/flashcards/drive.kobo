@@ -1,5 +1,25 @@
-wait 500
+# Runs against the staged demo bundle (scripts/fixtures/flashcards). The
+# missing/corrupt-collection paths are covered by check-flashcards-companion.
+wait 800
 expect Flashcards
-expect Collection not found
+expect Nature Notes
 clean
-shot collection-missing
+shot decks
+
+tap-id deck-0
+wait-for-id answer
+expect What does a compass point toward?
+clean
+shot question
+
+tap-id answer
+wait-for-id good
+expect Magnetic north.
+clean
+shot answer
+
+tap-id good
+wait 1000
+wait-for-id answer
+clean
+shot next-card
