@@ -2366,4 +2366,35 @@ mod tests {
         );
         let _ignored = fs::remove_dir_all(root);
     }
+    #[test]
+    fn uninstalling_an_app_never_touches_adopted_library_content() {
+        let root = root();
+        let seed = [7_u8; 32];
+        let key = derive_public_key(&seed).expect("key");
+        let (json, signature, package) = release_for(&seed, "word-count", "1.0.0");
+        refresh_with(&root, &key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(json.clone())
+            } else {
+                Ok(signature.clone())
+            }
+        })
+        .expect("refresh");
+        install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install");
+
+        // Adopted content lives outside the apps root. The contract: removing
+        // an adapter never deletes adopted content.
+        let library = root.join("library");
+        fs::create_dir_all(&library).expect("library");
+        fs::write(library.join("hobbit.epub"), b"the road goes ever on").expect("adopted");
+
+        uninstall(&root, "word-count").expect("uninstall");
+
+        assert_eq!(
+            fs::read(library.join("hobbit.epub")).expect("adopted content intact"),
+            b"the road goes ever on"
+        );
+        assert!(installed(&root).expect("removed").is_empty());
+        let _ignored = fs::remove_dir_all(root);
+    }
 }

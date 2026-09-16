@@ -33,6 +33,8 @@ pub enum Rejection {
     Empty,
     /// The name is already taken by different bytes.
     Conflict,
+    /// A migration source could not be read.
+    Unreadable,
 }
 
 impl Rejection {
@@ -45,6 +47,7 @@ impl Rejection {
             Self::Oversized => "the file is larger than the import ceiling",
             Self::Empty => "the file is empty",
             Self::Conflict => "the name is already taken by a different file",
+            Self::Unreadable => "the existing copy could not be read",
         }
     }
 }
@@ -146,9 +149,35 @@ pub fn adopt_in(
     result.map(|()| Outcome::Adopted(identity))
 }
 
+/// Migrates the app-owned file at `source` into the shared library
+/// under `root`, first seen from `provenance`.
+///
+/// The source is read and never written: the copy the app already has
+/// stays readable at every point of the migration, and the shared copy
+/// lands through the same staged, atomic commit every import takes.
+/// Whether the app later removes its own copy is the app's decision,
+/// not the migration's.
+///
+/// # Errors
+///
+/// Returns [`Rejection::Unreadable`] when the source cannot be read, or
+/// the [`Rejection`] naming why the boundary refused the import.
+pub fn migrate_in(
+    root: &Path,
+    source: &Path,
+    provenance: Provenance,
+) -> Result<Outcome, Rejection> {
+    let name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(Rejection::MalformedName)?;
+    let bytes = fs::read(source).map_err(|_| Rejection::Unreadable)?;
+    adopt_in(root, name, &bytes, provenance)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{adopt_in, Outcome, Rejection, MAX_IMPORT_BYTES};
+    use super::{adopt_in, migrate_in, Outcome, Rejection, MAX_IMPORT_BYTES};
     use crate::identity::Provenance;
     use crate::library;
     use std::fs;
@@ -267,5 +296,59 @@ mod tests {
             .next()
             .is_none());
         let _ignored = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn migration_keeps_the_existing_copy_readable_and_commits_the_shared_one() {
+        let root = scratch("migrate");
+        let app_copy = root.join("app-owned").join("hobbit.epub");
+        fs::create_dir_all(app_copy.parent().expect("parent")).expect("app folder");
+        fs::write(&app_copy, b"the road goes ever on").expect("app copy");
+
+        let outcome = migrate_in(&root, &app_copy, source()).expect("migrate");
+        assert!(matches!(outcome, Outcome::Adopted(_)));
+        assert_eq!(
+            fs::read(&app_copy).expect("app copy still readable"),
+            b"the road goes ever on"
+        );
+        assert_eq!(
+            fs::read(root.join("hobbit.epub")).expect("shared copy committed"),
+            b"the road goes ever on"
+        );
+        let _ignored = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_migration_that_cannot_read_leaves_the_library_untouched() {
+        let root = scratch("migrate-unreadable");
+        let missing = root.join("app-owned").join("ghost.epub");
+        assert_eq!(
+            migrate_in(&root, &missing, source()),
+            Err(Rejection::Unreadable)
+        );
+        assert!(!root.join("ghost.epub").exists());
+        let _ignored = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn migrating_what_is_already_shared_rewrites_nothing() {
+        let root = scratch("migrate-twice");
+        let app_copy = root.join("app-owned").join("notes.md");
+        fs::create_dir_all(app_copy.parent().expect("parent")).expect("app folder");
+        fs::write(&app_copy, b"remember the milk").expect("app copy");
+
+        assert!(matches!(
+            migrate_in(&root, &app_copy, source()).expect("first"),
+            Outcome::Adopted(_)
+        ));
+        assert!(matches!(
+            migrate_in(&root, &app_copy, source()).expect("second"),
+            Outcome::AlreadyPresent(_)
+        ));
+        assert_eq!(
+            fs::read(&app_copy).expect("app copy still readable"),
+            b"remember the milk"
+        );
+        let _ignored = fs::remove_dir_all(root);
     }
 }
