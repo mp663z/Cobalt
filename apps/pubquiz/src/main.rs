@@ -24,12 +24,14 @@ enum View {
     Reveal,
     Podium,
     Players,
+    Categories,
     HowTo,
     About,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Question {
     category: String,
+    difficulty: String,
     text: String,
     answers: [String; 4],
     correct: usize,
@@ -38,6 +40,7 @@ struct Question {
 fn question(category: &str, text: &str, answers: [&str; 4], correct: usize) -> Question {
     Question {
         category: category.into(),
+        difficulty: String::new(),
         text: text.into(),
         answers: answers.map(Into::into),
         correct,
@@ -133,6 +136,7 @@ struct Quiz {
     export: Option<kobo_sdk::exports::Export>,
     names: [String; 4],
     players: usize,
+    category: String,
     entry: TextEntry,
     renaming: usize,
 }
@@ -157,6 +161,7 @@ impl Default for Quiz {
             export: None,
             names: NAMES.map(String::from),
             players: 4,
+            category: String::new(),
             entry: TextEntry::new().opened_by("name-entry"),
             renaming: 0,
         }
@@ -172,12 +177,13 @@ impl Quiz {
         context.store().save(
             STATE,
             format!(
-                "{}|{}|{}|{}|{}",
+                "{}|{}|{}|{}|{}|{}",
                 self.packs,
                 self.rounds,
                 self.synced_day.map_or(String::new(), |day| day.to_string()),
                 self.players,
-                self.names.join("|")
+                self.names.join("|"),
+                self.category.replace('|', " ")
             )
             .into_bytes(),
         );
@@ -191,15 +197,44 @@ impl Quiz {
         self.scores = [0; 4];
         self.note = None;
         self.page = 0;
-        let offset = usize::from(self.rounds) * 10 % self.questions.len();
-        self.round_questions = self
-            .questions
+        let pool: Vec<&Question> = match self.active_category() {
+            Some(category) => self
+                .questions
+                .iter()
+                .filter(|q| q.category == category)
+                .collect(),
+            None => self.questions.iter().collect(),
+        };
+        let offset = usize::from(self.rounds) * 10 % pool.len();
+        let take = pool.len().min(10);
+        self.round_questions = pool
             .iter()
             .cycle()
             .skip(offset)
-            .take(10)
-            .cloned()
+            .take(take)
+            .map(|q| (*q).clone())
             .collect();
+    }
+    /// Distinct categories in the current packs, in first-seen order, with counts.
+    fn categories(&self) -> Vec<(String, usize)> {
+        let mut seen: Vec<(String, usize)> = Vec::new();
+        for question in &self.questions {
+            match seen.iter_mut().find(|(name, _)| *name == question.category) {
+                Some((_, count)) => *count += 1,
+                None => seen.push((question.category.clone(), 1)),
+            }
+        }
+        seen
+    }
+    /// The chosen category, but only while the current packs still contain it.
+    fn active_category(&self) -> Option<&str> {
+        if self.category.is_empty() {
+            return None;
+        }
+        self.questions
+            .iter()
+            .any(|q| q.category == self.category)
+            .then_some(self.category.as_str())
     }
     fn sync(&mut self, context: &mut Context) {
         if self.sync_task.is_some() {
@@ -218,7 +253,14 @@ impl Quiz {
         }
     }
     fn page_count(&self, context: &Context) -> usize {
-        if self.view == View::Choices {
+        if self.view == View::Categories {
+            let categories = self.categories();
+            let titles = categories
+                .iter()
+                .map(|(name, _)| (name.as_str(), ""))
+                .collect::<Vec<_>>();
+            context.paginate_rows(&titles, true).len()
+        } else if self.view == View::Choices {
             let question = &self.round_questions[self.question % self.round_questions.len()];
             let titles = question
                 .answers
@@ -239,6 +281,13 @@ impl Quiz {
         context.set_screen(screen_with(self, context));
     }
 }
+fn title_case(word: &str) -> String {
+    let mut chars = word.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
 const MAX_NAME_CHARS: usize = 12;
 
 fn clean_name(name: &str) -> Option<String> {
@@ -297,6 +346,30 @@ impl Quiz {
         } else if let Some(index) = (0..4).find(|i| action == action_id(&format!("name-{i}"))) {
             self.renaming = index;
             self.entry.open();
+        } else {
+            return false;
+        }
+        self.show(context);
+        true
+    }
+    /// The taps that belong to choosing a category. Returns whether it took
+    /// the tap.
+    fn categories_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action == action_id("categories") && self.view == View::Home {
+            self.view = View::Categories;
+            self.page = 0;
+        } else if self.view != View::Categories {
+            return false;
+        } else if action == action_id("category-all") {
+            self.category.clear();
+            self.save(context);
+            self.view = View::Home;
+        } else if let Some(index) =
+            (0..self.categories().len()).find(|i| action == action_id(&format!("category-{i}")))
+        {
+            self.category.clone_from(&self.categories()[index].0);
+            self.save(context);
+            self.view = View::Home;
         } else {
             return false;
         }
@@ -379,6 +452,11 @@ fn parse_pack(bytes: &[u8]) -> Option<Vec<Question>> {
             if category.is_empty() || text.is_empty() || correct.is_empty() || wrong.len() != 3 {
                 return None;
             }
+            let difficulty = item
+                .get("difficulty")
+                .and_then(Value::as_str)
+                .map(|d| title_case(&clean_text(d, 16)))
+                .unwrap_or_default();
             let mut answers = wrong
                 .iter()
                 .map(|answer| clean_text(answer.as_str().unwrap_or_default(), 80))
@@ -393,6 +471,7 @@ fn parse_pack(bytes: &[u8]) -> Option<Vec<Question>> {
             let answers: [String; 4] = answers.try_into().ok()?;
             Some(Question {
                 category,
+                difficulty,
                 text,
                 answers,
                 correct: slot,
@@ -407,12 +486,22 @@ fn screen(quiz: &Quiz) -> Screen {
     screen_with(quiz, &Context::default())
 }
 
+/// Category plus the pack's difficulty rating when it carries one.
+fn label_line(question: &Question) -> String {
+    if question.difficulty.is_empty() {
+        question.category.clone()
+    } else {
+        format!("{} · {}", question.category, question.difficulty)
+    }
+}
+
 fn question_text(quiz: &Quiz) -> String {
     let question = &quiz.round_questions[quiz.question % quiz.round_questions.len()];
     let mut text = format!(
-        "{} · question {} of 10\n\n{}",
-        question.category,
+        "{} · question {} of {}\n\n{}",
+        label_line(question),
         quiz.question + 1,
+        quiz.round_questions.len(),
         question.text
     );
     for (index, answer) in question.answers.iter().enumerate() {
@@ -445,9 +534,10 @@ fn question_screen(quiz: &Quiz, context: &Context) -> Screen {
     let compact = ScreenBuilder::new("pubquiz-question")
         .top_bar(question_title(quiz))
         .secondary(format!(
-            "{} · question {} of 10",
-            question.category,
-            quiz.question + 1
+            "{} · question {} of {}",
+            label_line(question),
+            quiz.question + 1,
+            quiz.round_questions.len()
         ))
         .text(&question.text)
         .rows(answer_rows(question))
@@ -523,7 +613,11 @@ fn scorecard_text(quiz: &Quiz) -> String {
         civil_date(i64::from(today_day()))
     );
     for (i, name) in quiz.names.iter().enumerate().take(players) {
-        text.push_str(&format!("\n{name}: {} of 10", quiz.scores[i]));
+        text.push_str(&format!(
+            "\n{name}: {} of {}",
+            quiz.scores[i],
+            quiz.round_questions.len()
+        ));
     }
     text.push('\n');
     text
@@ -549,7 +643,6 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
                 .top_bar("Pub Quiz")
                 .facts([
                     ("Questions", format!("{} ready", quiz.questions.len())),
-                    ("Rounds played", format!("{}", quiz.rounds)),
                     ("Pass-around", format!("{} players", quiz.players)),
                     (
                         "Pack",
@@ -582,6 +675,12 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
                         },
                     ),
                 ])
+                .rows([(
+                    "categories",
+                    "Categories",
+                    quiz.active_category().unwrap_or("All categories"),
+                    Glyph::Tag,
+                )])
                 .buttons([
                     ("players", "Players"),
                     ("how-to-play", "How to play"),
@@ -618,7 +717,7 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
                 )
                 .primary_button(
                     "continue",
-                    if quiz.question + 1 == 10 {
+                    if quiz.question + 1 == quiz.round_questions.len() {
                         "See podium"
                     } else {
                         "Next question"
@@ -662,13 +761,60 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
                 )
             }))
             .build(),
+        View::Categories => {
+            let active = quiz.active_category();
+            let mut rows: Vec<(String, String, String)> = vec![(
+                "category-all".to_owned(),
+                "All categories".to_owned(),
+                if active.is_none() {
+                    format!("{} questions · in use", quiz.questions.len())
+                } else {
+                    format!("{} questions", quiz.questions.len())
+                },
+            )];
+            rows.extend(
+                quiz.categories()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (name, count))| {
+                        (
+                            format!("category-{i}"),
+                            name.clone(),
+                            if active == Some(name.as_str()) {
+                                format!("{count} questions · in use")
+                            } else {
+                                format!("{count} questions")
+                            },
+                        )
+                    }),
+            );
+            let titles = rows
+                .iter()
+                .map(|(_, name, sub)| (name.as_str(), sub.as_str()))
+                .collect::<Vec<_>>();
+            let pages = context.paginate_rows(&titles, true);
+            let page = quiz.page.min(pages.len().saturating_sub(1));
+            ScreenBuilder::new("pubquiz-categories")
+                .top_bar("Categories")
+                .owns_back(true)
+                .rows(pages[page].iter().map(|&index| {
+                    let (id, name, sub) = &rows[index];
+                    (id.clone(), name.clone(), sub.clone(), Glyph::Tag)
+                }))
+                .page_position(
+                    u16::try_from(page + 1).unwrap_or(u16::MAX),
+                    u16::try_from(pages.len()).unwrap_or(u16::MAX),
+                )
+                .action_bar([("previous-page", "Previous"), ("next-page", "Next")])
+                .build()
+        }
         View::HowTo => ScreenBuilder::new("pubquiz-help")
             .top_bar("How to play")
             .owns_back(true)
-            .heading("Ten questions, one Kobo")
+            .heading("Up to ten questions, one Kobo")
             .text("Solo: choose an answer and see the result right away.")
             .text("Pass-around: answer, pass the Kobo, then reveal the result.")
-            .text("Players take turns. The highest score after ten questions wins.")
+            .text("Players take turns. The highest score after the round wins.")
             .bottom_action("home", "Play")
             .build(),
         View::About => ScreenBuilder::new("pubquiz-about")
@@ -676,6 +822,7 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
             .heading("About")
             .text("Question packs use Open Trivia DB content, licensed CC-BY-SA 4.0.")
             .text("opentdb.com · cached packs are redistributed under the same license.")
+            .text("Synced packs can carry a difficulty rating; the built-in set is unrated.")
             .button("home", "Back to packs")
             .build(),
     }
@@ -709,6 +856,12 @@ impl KoboApp for Quiz {
                                     *slot = name;
                                 }
                             }
+                        }
+                        if let Some(category) = p.get(8) {
+                            category
+                                .replace('|', " ")
+                                .trim()
+                                .clone_into(&mut self.category);
                         }
                     }
                 }
@@ -821,14 +974,14 @@ impl KoboApp for Quiz {
         } else if action == action_id("question") && self.view == View::Choices {
             self.view = View::Question;
             self.page = 0;
-        } else if matches!(self.view, View::Question | View::Choices)
+        } else if matches!(self.view, View::Question | View::Choices | View::Categories)
             && action == action_id("next-page")
         {
             self.page = self
                 .page
                 .saturating_add(1)
                 .min(self.page_count(context).saturating_sub(1));
-        } else if matches!(self.view, View::Question | View::Choices)
+        } else if matches!(self.view, View::Question | View::Choices | View::Categories)
             && action == action_id("previous-page")
         {
             self.page = self.page.saturating_sub(1);
@@ -842,7 +995,7 @@ impl KoboApp for Quiz {
             self.view = View::About;
         } else if action == action_id("how-to-play") {
             self.view = View::HowTo;
-        } else if self.players_action(context, action) {
+        } else if self.players_action(context, action) || self.categories_action(context, action) {
         } else if action == ActionId::BACK || action == action_id("home") {
             self.view = View::Home;
         } else if let Some(answer) = (0..4).find(|i| {
@@ -864,7 +1017,7 @@ impl KoboApp for Quiz {
             };
             self.page = 0;
             self.answer = None;
-            if self.question >= 10 {
+            if self.question >= self.round_questions.len() {
                 self.view = View::Podium;
                 self.rounds = self.rounds.saturating_add(1);
                 self.save(context);
@@ -1022,6 +1175,57 @@ mod tests {
 
     use super::*;
     use kobo_ui::{Chrome, CLARA_BW_METRICS};
+
+    #[test]
+    fn synced_pack_difficulty_is_optional_and_shown() {
+        let with = format!(
+            r#"{{"response_code":0,"results":[{}]}}"#,
+            (0..10)
+                .map(|i| format!(
+                    r#"{{"category":"Science","difficulty":"medium","question":"Q{i}?","correct_answer":"Right","incorrect_answers":["W1","W2","W3"]}}"#
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let questions = parse_pack(with.as_bytes()).expect("pack parses");
+        assert_eq!(questions[0].difficulty, "Medium");
+        assert!(bundled_questions()[0].difficulty.is_empty());
+        assert_eq!(label_line(&questions[0]), "Science · Medium");
+        assert_eq!(label_line(&bundled_questions()[0]), "Science");
+    }
+
+    #[test]
+    fn a_chosen_category_shortens_the_round_honestly() {
+        let mut quiz = Quiz {
+            category: "Science".into(),
+            ..Quiz::default()
+        };
+        quiz.begin(true);
+        assert_eq!(quiz.round_questions.len(), 2);
+        assert!(quiz.round_questions.iter().all(|q| q.category == "Science"));
+    }
+
+    #[test]
+    fn a_category_the_pack_lost_falls_back_to_all() {
+        let mut quiz = Quiz {
+            category: "Vanished".into(),
+            ..Quiz::default()
+        };
+        assert_eq!(quiz.active_category(), None);
+        quiz.begin(true);
+        assert_eq!(quiz.round_questions.len(), 10);
+    }
+
+    #[test]
+    fn category_survives_the_save_file() {
+        let saved = "1|3|20469|3|Ada|Bert|Cleo|Dev|History";
+        let parts: Vec<_> = saved.split('|').collect();
+        assert_eq!(parts.get(8), Some(&"History"));
+        let legacy = "1|3|20469|3|Ada|Bert|Cleo|Dev";
+        let parts: Vec<_> = legacy.split('|').collect();
+        assert_eq!(parts.get(8), None);
+    }
+
     #[test]
     fn locked_answer_hides_the_reveal() {
         let mut quiz = Quiz::default();
