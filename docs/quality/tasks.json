@@ -1491,16 +1491,26 @@
     "pr": 3,
     "group": "Flashcards app",
     "task": "Show import status and guided companion handoff",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Settings gains a Collection section naming the loaded source (Built-in sample vs Companion import) and contents (cards and decks), from the bundle manifest (apps/flashcards/src/main.rs collection_facts).",
+      "New on-device guide 'Importing your decks' in Licences & about walks the four host steps (import, verify, stage with --kobo-root, read again) and states that staging validates before replacing (GUIDANCE_DOCUMENTS).",
+      "Notices index paginates (5 rows per page with page turns) so the two added guides fit at every text scale; layout diagnostics pass at Default, ExtraLarge and Largest.",
+      "Pixel-verified golden captures: apps/flashcards/screenshots/states/{settings,licenses,license-document}.png.",
+      "Standard flashcards sim route passes at both text scales; first-use e2e passes at both scales."
+    ]
   },
   {
     "id": "CARDS-04",
     "pr": 3,
     "group": "Flashcards app",
     "task": "Explain local grading and review-log reconciliation accurately",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Review settings facts now state the truth plainly: Grades 'Saved on this reader', Intervals 'Not recalculated on Kobo'.",
+      "New on-device guide 'Grades and your review log': grades append to a local log bound to the collection fingerprint, the log survives collection replacement, and export runs from the computer via kobo flashcards export-review-log --kobo-root MOUNT review-log.ndjson. Copy verified against crates/kobo-cli/src/flashcards.rs and apps/flashcards/README.md; no claim of merging grades back into the source collection.",
+      "12 flashcards tests pass; clippy --workspace --all-targets --all-features -D warnings clean; node 113/113; python 10/10."
+    ]
   },
   {
     "id": "CARDS-05",

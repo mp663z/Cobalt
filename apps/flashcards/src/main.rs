@@ -145,6 +145,7 @@ struct Flashcards {
     card_page: usize,
     card_pages: Vec<StyledPage>,
     notice_page: usize,
+    notice_index_page: usize,
     notice_documents: Vec<NoticeDocument>,
     notice_document: Option<usize>,
     loading_received: u64,
@@ -181,6 +182,7 @@ impl Default for Flashcards {
             card_page: 0,
             card_pages: Vec::new(),
             notice_page: 0,
+            notice_index_page: 0,
             notice_documents: Vec::new(),
             notice_document: None,
             loading_received: 0,
@@ -199,7 +201,7 @@ impl Flashcards {
             View::Loading => loading_screen(self.loading_received, self.loading_total),
             View::Decks => self.deck_picker(),
             View::Review => self.review(),
-            View::Settings => settings_screen(self.show_details),
+            View::Settings => settings_screen(self.show_details, self.collection_facts()),
             View::Notices => self.notice_index(),
             View::NoticeDocument => self.notice(),
             View::Problem => {
@@ -250,6 +252,23 @@ impl Flashcards {
             .iter()
             .filter(|card_id| self.reviewed_cards.contains(card_id))
             .count()
+    }
+
+    fn collection_facts(&self) -> Option<CollectionFacts> {
+        let manifest = self.bundle.as_ref()?.manifest();
+        let sample = manifest
+            .sources
+            .iter()
+            .any(|source| source.package_kind == "demo");
+        Some(CollectionFacts {
+            source: if sample {
+                "Built-in sample".to_owned()
+            } else {
+                "Companion import".to_owned()
+            },
+            cards: manifest.cards.len(),
+            decks: manifest.decks.len(),
+        })
     }
 
     fn selected_deck_name(&self) -> String {
@@ -461,10 +480,14 @@ impl Flashcards {
     }
 
     fn notice_index(&self) -> Screen {
+        let page_count = self.notice_documents.len().div_ceil(5).max(1);
+        let page = self.notice_index_page.min(page_count - 1);
         let rows = self
             .notice_documents
             .iter()
             .enumerate()
+            .skip(page * 5)
+            .take(5)
             .map(|(index, document)| {
                 (
                     format!("notice-document-{index}"),
@@ -478,13 +501,21 @@ impl Flashcards {
                     ),
                 )
             });
-        ScreenBuilder::new("flashcards-notice-index")
+        let mut screen = ScreenBuilder::new("flashcards-notice-index")
             .top_bar("Licences & about")
             .owns_back(true)
             .section("On this device")
             .rows_with_trailing(rows)
-            .bottom_action("screen-back", "Done")
-            .build()
+            .bottom_action("screen-back", "Done");
+        if page_count > 1 {
+            screen = screen
+                .page_turns("notice-index-prev", "notice-index-next")
+                .page_position(
+                    u16::try_from(page + 1).unwrap_or(u16::MAX),
+                    u16::try_from(page_count).unwrap_or(u16::MAX),
+                );
+        }
+        screen.build()
     }
 
     fn notice(&self) -> Screen {
@@ -913,6 +944,14 @@ impl Flashcards {
                     self.card_page.saturating_sub(1)
                 };
             }
+            View::Notices => {
+                let last = self.notice_documents.len().div_ceil(5).saturating_sub(1);
+                self.notice_index_page = if forward {
+                    self.notice_index_page.saturating_add(1).min(last)
+                } else {
+                    self.notice_index_page.saturating_sub(1)
+                };
+            }
             View::NoticeDocument => {
                 let last = self
                     .notice_document
@@ -951,6 +990,7 @@ impl KoboApp for Flashcards {
                 self.view = View::Notices;
                 self.notice_document = None;
                 self.notice_page = 0;
+                self.notice_index_page = 0;
                 context.set_screen(self.screen());
             } else if matches!(self.view, View::Settings | View::Notices) {
                 self.close_supporting_screen(context);
@@ -967,12 +1007,14 @@ impl KoboApp for Flashcards {
             self.open_view(context, View::Settings);
         } else if action == action_id("notices") {
             self.notice_page = 0;
+            self.notice_index_page = 0;
             self.notice_document = None;
             self.open_view(context, View::Notices);
         } else if action == action_id("notice-index") {
             self.view = View::Notices;
             self.notice_document = None;
             self.notice_page = 0;
+            self.notice_index_page = 0;
             context.set_screen(self.screen());
         } else if action == action_id("screen-back") {
             self.close_supporting_screen(context);
@@ -1183,8 +1225,15 @@ fn problem_screen(kind: ProblemKind, message: &str, menu_open: bool) -> Screen {
         .build()
 }
 
-fn settings_screen(detailed: bool) -> Screen {
-    ScreenBuilder::new("flashcards-settings")
+/// What the loaded collection is, stated plainly on the settings screen.
+struct CollectionFacts {
+    source: String,
+    cards: usize,
+    decks: usize,
+}
+
+fn settings_screen(detailed: bool, collection: Option<CollectionFacts>) -> Screen {
+    let mut screen = ScreenBuilder::new("flashcards-settings")
         .top_bar("Review settings")
         .owns_back(true)
         .section("Card details")
@@ -1198,13 +1247,19 @@ fn settings_screen(detailed: bool) -> Screen {
         .chosen(usize::from(detailed))
         .section("Review behavior")
         .facts([
-            ("Order", "Imported due queue"),
-            ("Text size", "Reader setting"),
-            ("Intervals", "Not recalculated on Kobo"),
-            ("Media", "Fit without stretching"),
-        ])
-        .bottom_action("screen-back", "Done")
-        .build()
+            ("Grades", "Saved on this reader".to_owned()),
+            ("Intervals", "Not recalculated on Kobo".to_owned()),
+        ]);
+    if let Some(collection) = collection {
+        screen = screen.section("Collection").facts([
+            ("Source", collection.source),
+            (
+                "Contents",
+                format!("{} cards in {} decks", collection.cards, collection.decks),
+            ),
+        ]);
+    }
+    screen.bottom_action("screen-back", "Done").build()
 }
 
 fn done_screen(
@@ -1501,8 +1556,29 @@ fn styled_page(text: &str, spans: &[CardTextSpan], start: usize, end: usize) -> 
     }
 }
 
+/// Owner guidance, always reachable from Licences & about. Import steps match
+/// apps/flashcards/README.md; the review-log description matches what the
+/// device actually does (append-only local log, preserved across bundles).
+const GUIDANCE_DOCUMENTS: [(&str, &str); 2] = [
+    (
+        "Importing your decks",
+        "Flashcards reviews collections prepared on your computer.\n\n1. Run the importer there: kobo flashcards import deck.apkg --merge collection.cobfc\n\n2. Check the bundle: kobo flashcards verify collection.cobfc\n\n3. Connect the Kobo and stage: kobo flashcards stage collection.cobfc --kobo-root MOUNT\n\n4. Back on the Kobo, read the collection again.\n\nStaging replaces the collection only after the new bundle validates. Your review log is kept separately and is never replaced.",
+    ),
+    (
+        "Grades and your review log",
+        "Every grade is saved on this reader, in a review log bound to this collection's fingerprint. Replacing the collection keeps the log.\n\nIntervals come from the import and are not recalculated on the Kobo.\n\nTo keep a copy, export the log from your computer: kobo flashcards export-review-log --kobo-root MOUNT review-log.ndjson",
+    ),
+];
+
 fn build_notice_documents(context: &Context) -> Vec<NoticeDocument> {
     let mut documents = Vec::new();
+    for (title, text) in GUIDANCE_DOCUMENTS {
+        let mut pages = context.paginate(text, true);
+        if pages.is_empty() {
+            pages.push(vec![text.to_owned()]);
+        }
+        documents.push(NoticeDocument { title, pages });
+    }
     for (title, text) in DEVICE_DISTRIBUTION_DOCUMENTS {
         let readable = readable_notice(text);
         let mut pages = context.paginate(&readable, true);
@@ -1674,7 +1750,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Once;
 
-    fn install_fonts() {
+    pub(crate) fn install_fonts() {
         static ONCE: Once = Once::new();
         ONCE.call_once(|| {
             kobo_text::install(CLARA_BW_METRICS).expect("Cobalt text face");
@@ -2032,7 +2108,19 @@ mod tests {
                 None,
                 false,
             ),
-            ("settings", settings_screen(false), None, false),
+            (
+                "settings",
+                settings_screen(
+                    false,
+                    Some(CollectionFacts {
+                        source: "Companion import".to_owned(),
+                        cards: 20,
+                        decks: 2,
+                    }),
+                ),
+                None,
+                false,
+            ),
             ("licenses", notice_index, None, false),
             ("license-document", notice_screen, None, false),
         ]
@@ -2266,7 +2354,10 @@ mod tests {
         install_fonts();
         let context = Context::default();
         let notices = build_notice_documents(&context);
-        assert_eq!(notices.len(), DEVICE_DISTRIBUTION_DOCUMENTS.len());
+        assert_eq!(
+            notices.len(),
+            DEVICE_DISTRIBUTION_DOCUMENTS.len() + GUIDANCE_DOCUMENTS.len()
+        );
         assert!(
             notices
                 .iter()
@@ -2274,25 +2365,29 @@ mod tests {
                 .sum::<usize>()
                 > DEVICE_DISTRIBUTION_DOCUMENTS.len()
         );
-        let notice_index = Flashcards {
-            view: View::Notices,
-            notice_documents: notices.clone(),
-            ..Flashcards::default()
-        }
-        .notice_index();
-        let diagnostics = notice_index.diagnostics(&CLARA_BW_METRICS, &Chrome::measuring(true));
-        assert!(diagnostics.issues.is_empty(), "{:?}", diagnostics.issues);
-        for index in 0..notices.len() {
-            let rect = notice_index
-                .layout_with(&CLARA_BW_METRICS, &Chrome::measuring(true))
-                .rect_of_action(action_id(&format!("notice-document-{index}")))
-                .expect("notice row");
-            assert!(rect.height >= CLARA_BW_METRICS.touch_target_minimum());
+        let notice_page_count = notices.len().div_ceil(5).max(1);
+        for page in 0..notice_page_count {
+            let notice_index = Flashcards {
+                view: View::Notices,
+                notice_index_page: page,
+                notice_documents: notices.clone(),
+                ..Flashcards::default()
+            }
+            .notice_index();
+            let diagnostics = notice_index.diagnostics(&CLARA_BW_METRICS, &Chrome::measuring(true));
+            assert!(diagnostics.issues.is_empty(), "{:?}", diagnostics.issues);
+            let layout = notice_index.layout_with(&CLARA_BW_METRICS, &Chrome::measuring(true));
+            for index in (page * 5)..((page * 5) + 5).min(notices.len()) {
+                let rect = layout
+                    .rect_of_action(action_id(&format!("notice-document-{index}")))
+                    .expect("notice row");
+                assert!(rect.height >= CLARA_BW_METRICS.touch_target_minimum());
+            }
         }
         let screens = [
             loading_screen(0, None),
             loading_screen(100, Some(200)),
-            settings_screen(false),
+            settings_screen(false, None),
             problem_screen(
                 ProblemKind::Corrupt,
                 "The staged collection is corrupt or unsupported.",
@@ -2300,6 +2395,28 @@ mod tests {
             ),
             done_screen("Japanese", 20, 20, false, None),
         ];
+        let with_collection = settings_screen(
+            true,
+            Some(CollectionFacts {
+                source: "Companion import".to_owned(),
+                cards: 20,
+                decks: 2,
+            }),
+        );
+        for scale in [
+            TextScale::Default,
+            TextScale::ExtraLarge,
+            TextScale::Largest,
+        ] {
+            let mut metrics = CLARA_BW_METRICS;
+            metrics.text_scale = scale;
+            let diagnostics = with_collection.diagnostics(&metrics, &Chrome::measuring(true));
+            assert!(
+                diagnostics.issues.is_empty(),
+                "{scale:?}: {:?}",
+                diagnostics.issues
+            );
+        }
         for screen in screens {
             let diagnostics =
                 screen.diagnostics(&CLARA_BW_METRICS, &Chrome::measuring(screen.owns_back));
