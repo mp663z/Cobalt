@@ -1347,6 +1347,7 @@ fn app_catalog(arguments: &[String]) -> Result<(), String> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ReleaseApp {
+    quality: kobo_app_store::QualityInput,
     package: String,
     id: String,
     display_name: String,
@@ -1407,6 +1408,24 @@ fn app_check(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn release_manifest(app: &ReleaseApp, binary: &[u8]) -> Result<kobo_app_store::Manifest, String> {
+    kobo_app_store::Manifest::new_public(kobo_app_store::ManifestInput {
+        quality: Some(app.quality.clone()),
+        id: app.id.clone(),
+        display_name: app.display_name.clone(),
+        short_label: app.short_label.clone(),
+        summary: app.summary.clone(),
+        version: app.version.clone(),
+        minimum_cobalt_version: app.minimum_cobalt_version.clone(),
+        glyph: app.glyph.clone(),
+        capabilities: app.capabilities.clone(),
+        binary_sha256: kobo_net::sha256::hex_digest(binary),
+        binary_bytes: u64::try_from(binary.len())
+            .map_err(|_| format!("{} binary is too large", app.package))?,
+    })
+    .map_err(|error| format!("invalid {} metadata: {error}", app.id))
+}
+
 fn app_release(arguments: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: kobo app-release --registry PATH --seed PATH --out PATH \
                          --base-url HTTPS_URL [--prebuilt-dir PATH | --artifact-dir PATH]";
@@ -1463,20 +1482,7 @@ fn app_release(arguments: &[String]) -> Result<(), String> {
                 None => build_release_binary(&app)?,
             },
         };
-        let manifest = kobo_app_store::Manifest::new_public(kobo_app_store::ManifestInput {
-            id: app.id.clone(),
-            display_name: app.display_name,
-            short_label: app.short_label,
-            summary: app.summary,
-            version: app.version,
-            minimum_cobalt_version: app.minimum_cobalt_version,
-            glyph: app.glyph,
-            capabilities: app.capabilities,
-            binary_sha256: kobo_net::sha256::hex_digest(&binary),
-            binary_bytes: u64::try_from(binary.len())
-                .map_err(|_| format!("{} binary is too large", app.package))?,
-        })
-        .map_err(|error| format!("invalid {} metadata: {error}", app.id))?;
+        let manifest = release_manifest(&app, &binary)?;
         let bundle = kobo_app_store::build_bundle(&manifest, &binary, &seed)
             .map_err(|error| format!("bundle {}: {error}", app.id))?;
         let (package_name, package_sha256) = release_package_name(&app.id, &bundle);
@@ -1664,6 +1670,7 @@ fn read_release_registry(path: &Path) -> Result<Vec<ReleaseApp>, String> {
             return Err(format!("duplicate app id '{}'", app.id));
         }
         kobo_app_store::Manifest::new_public(kobo_app_store::ManifestInput {
+            quality: Some(app.quality.clone()),
             id: app.id.clone(),
             display_name: app.display_name.clone(),
             short_label: app.short_label.clone(),
@@ -1682,8 +1689,12 @@ fn read_release_registry(path: &Path) -> Result<Vec<ReleaseApp>, String> {
 }
 
 fn parse_release_app(value: &kobo_json::Value) -> Result<ReleaseApp, String> {
-    const FIELDS: [&str; 9] = [
+    const FIELDS: [&str; 10] = [
         "package",
+        // The channels contract: an app enters the signed catalog with a
+        // complete quality manifest, so the release path requires the block
+        // the registry gate (tools/app-registry.mjs) already checked.
+        "quality",
         "id",
         "display_name",
         "short_label",
@@ -1707,6 +1718,8 @@ fn parse_release_app(value: &kobo_json::Value) -> Result<ReleaseApp, String> {
             .map(str::to_owned)
             .ok_or_else(|| format!("app field '{name}' must be a string"))
     };
+    let quality = kobo_app_store::parse_quality_json(registry_field(fields, "quality")?)
+        .map_err(|error| format!("app field 'quality' is invalid: {error}"))?;
     let capabilities = registry_field(fields, "capabilities")?
         .as_array()
         .ok_or_else(|| "app field 'capabilities' must be an array".to_owned())?
@@ -1719,6 +1732,7 @@ fn parse_release_app(value: &kobo_json::Value) -> Result<ReleaseApp, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ReleaseApp {
+        quality,
         package: string("package")?,
         id: string("id")?,
         display_name: string("display_name")?,
@@ -7126,6 +7140,18 @@ mod tests {
                 "minimum_cobalt_version":"0.2.4",
                 "glyph":"book",
                 "capabilities":["network"],
+                "quality":{
+                    "user":"Somebody with a personal library on their Kobo.",
+                    "job":"Read a personal library.",
+                    "offline":"Every fetched book reads with no network at all.",
+                    "data":[],
+                    "capabilities_required":[{"name":"network","purpose":"Fetch books from the library."}],
+                    "capabilities_optional":[],
+                    "profiles":["clara-bw-391"],
+                    "maintainer":"The Cobalt app maintainers.",
+                    "support":"the issue tracker",
+                    "non_goals":["It does not edit the library."]
+                },
                 "setup":{"steps":[{"text":"Create a read-only key."}]}
             }"#,
         )
@@ -7166,6 +7192,7 @@ mod tests {
         fs::write(&seed_path, seed).expect("write seed");
         fs::write(&binary_path, &binary).expect("write binary");
         let manifest = kobo_app_store::Manifest::new_public(kobo_app_store::ManifestInput {
+            quality: None,
             id: "word-count".to_owned(),
             display_name: "Word Count".to_owned(),
             short_label: "Words".to_owned(),

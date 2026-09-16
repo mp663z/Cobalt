@@ -652,6 +652,7 @@ fn release_with_binary(
 
 fn fixture_manifest(app: &str, version: &str, binary: &[u8]) -> Result<Manifest, String> {
     Manifest::new_public(ManifestInput {
+        quality: None,
         id: app.to_owned(),
         display_name: "Beta acceptance fixture".to_owned(),
         short_label: "Beta fixture".to_owned(),

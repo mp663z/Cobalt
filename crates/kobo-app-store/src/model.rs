@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::str::FromStr;
 
-const MANIFEST_FIELDS: [&str; 11] = [
+const MANIFEST_FIELDS: [&str; 12] = [
     "format_version",
     "id",
     "display_name",
@@ -22,6 +22,9 @@ const MANIFEST_FIELDS: [&str; 11] = [
     "capabilities",
     "binary_sha256",
     "binary_bytes",
+    // Optional: the app quality manifest block
+    // (docs/quality/contracts/app-quality-manifest.md).
+    "quality",
 ];
 const CATALOG_FIELDS: [&str; 2] = ["format_version", "entries"];
 const ENTRY_FIELDS: [&str; 4] = ["manifest", "package_url", "package_sha256", "package_bytes"];
@@ -149,6 +152,9 @@ impl FromStr for Sha256Digest {
 /// Unvalidated owned fields used to construct a [`Manifest`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifestInput {
+    /// The app quality manifest block; required by the release tooling,
+    /// optional on the wire so older fixtures keep parsing.
+    pub quality: Option<QualityInput>,
     pub id: String,
     pub display_name: String,
     pub short_label: String,
@@ -164,6 +170,7 @@ pub struct ManifestInput {
 /// A fully validated application manifest.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Manifest {
+    quality: Option<Quality>,
     id: String,
     display_name: String,
     short_label: String,
@@ -195,10 +202,15 @@ impl Manifest {
         validate_cobalt_version(&input.minimum_cobalt_version)?;
         validate_identifier(&input.glyph, "glyph", MAX_GLYPH_BYTES)?;
         let capabilities = validate_capabilities(&input.capabilities)?;
+        let quality = input
+            .quality
+            .map(|quality| validate_quality(quality, &input.capabilities))
+            .transpose()?;
         let binary_sha256 = Sha256Digest::parse(&input.binary_sha256, "binary_sha256")?;
         validate_count(input.binary_bytes, "binary_bytes", MAX_BINARY_BYTES)?;
 
         Ok(Self {
+            quality,
             id: input.id,
             display_name: input.display_name,
             short_label: input.short_label,
@@ -274,6 +286,12 @@ impl Manifest {
     #[must_use]
     pub fn to_canonical_bytes(&self) -> Vec<u8> {
         self.to_canonical_json().into_bytes()
+    }
+
+    /// The app quality manifest block, when the catalog carries it.
+    #[must_use]
+    pub fn quality(&self) -> Option<&Quality> {
+        self.quality.as_ref()
     }
 
     #[must_use]
@@ -511,11 +529,569 @@ fn parse_catalog_entry(value: &Value, reserved_ids: &[&str]) -> Result<CatalogEn
     })
 }
 
+/// What happens to one kind of user-created data when the app is removed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Retention {
+    /// The data stays on the reader.
+    Retained,
+    /// The uninstall flow offers an export, then deletes the data.
+    ExportedThenDeleted,
+    /// The data is deleted with the app.
+    Deleted,
+}
+
+impl Retention {
+    /// The canonical manifest spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Retained => "retained",
+            Self::ExportedThenDeleted => "exported-then-deleted",
+            Self::Deleted => "deleted",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "retained" => Some(Self::Retained),
+            "exported-then-deleted" => Some(Self::ExportedThenDeleted),
+            "deleted" => Some(Self::Deleted),
+            _ => None,
+        }
+    }
+}
+
+/// One kind of user-created data, as declared by the app.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DataKindInput {
+    /// A short name for the kind ("kept papers"), not a sentence.
+    pub kind: String,
+    /// Where it lives, in user-facing language.
+    pub location: String,
+    /// How it leaves the reader, or why it does not.
+    pub export: String,
+    /// What removal does to it: retained, exported-then-deleted, deleted.
+    pub on_remove: String,
+}
+
+/// A required capability and its user-facing purpose.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityPurposeInput {
+    /// A capability the app also declares.
+    pub name: String,
+    /// What the app needs it for, in user-facing language.
+    pub purpose: String,
+}
+
+/// An optional capability and the feature it gates.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityGateInput {
+    /// A capability the app also declares.
+    pub name: String,
+    /// The feature that works only with it.
+    pub gates: String,
+}
+
+/// The app quality manifest block
+/// (docs/quality/contracts/app-quality-manifest.md), unvalidated.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QualityInput {
+    /// Who the app serves.
+    pub user: String,
+    /// The one job it does.
+    pub job: String,
+    /// What works with no network, as user-visible behavior.
+    pub offline: String,
+    /// Each kind of user-created data; empty means the app creates none.
+    pub data: Vec<DataKindInput>,
+    /// Capabilities the app fails without.
+    pub capabilities_required: Vec<CapabilityPurposeInput>,
+    /// Capabilities the app degrades gracefully without.
+    pub capabilities_optional: Vec<CapabilityGateInput>,
+    /// Simulator profiles the app supports.
+    pub profiles: Vec<String>,
+    /// The named owner.
+    pub maintainer: String,
+    /// Where issues go.
+    pub support: String,
+    /// What the app deliberately does not do.
+    pub non_goals: Vec<String>,
+}
+
+/// A validated kind of user-created data.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DataKind {
+    kind: String,
+    location: String,
+    export: String,
+    on_remove: Retention,
+}
+
+impl DataKind {
+    /// A short name for the kind.
+    #[must_use]
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    /// Where it lives, in user-facing language.
+    #[must_use]
+    pub fn location(&self) -> &str {
+        &self.location
+    }
+
+    /// How it leaves the reader, or why it does not.
+    #[must_use]
+    pub fn export(&self) -> &str {
+        &self.export
+    }
+
+    /// What removal does to it.
+    #[must_use]
+    pub const fn on_remove(&self) -> Retention {
+        self.on_remove
+    }
+}
+
+/// A validated required capability with its purpose.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityPurpose {
+    name: String,
+    purpose: String,
+}
+
+impl CapabilityPurpose {
+    /// The capability name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// What the app needs it for, in user-facing language.
+    #[must_use]
+    pub fn purpose(&self) -> &str {
+        &self.purpose
+    }
+}
+
+/// A validated optional capability with the feature it gates.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityGate {
+    name: String,
+    gates: String,
+}
+
+impl CapabilityGate {
+    /// The capability name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The feature that works only with it.
+    #[must_use]
+    pub fn gates(&self) -> &str {
+        &self.gates
+    }
+}
+
+/// A validated app quality manifest block.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Quality {
+    user: String,
+    job: String,
+    offline: String,
+    data: Vec<DataKind>,
+    capabilities_required: Vec<CapabilityPurpose>,
+    capabilities_optional: Vec<CapabilityGate>,
+    profiles: Vec<String>,
+    maintainer: String,
+    support: String,
+    non_goals: Vec<String>,
+}
+
+impl Quality {
+    /// Who the app serves.
+    #[must_use]
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    /// The one job it does.
+    #[must_use]
+    pub fn job(&self) -> &str {
+        &self.job
+    }
+
+    /// What works with no network, as user-visible behavior.
+    #[must_use]
+    pub fn offline(&self) -> &str {
+        &self.offline
+    }
+
+    /// Each kind of user-created data.
+    #[must_use]
+    pub fn data(&self) -> &[DataKind] {
+        &self.data
+    }
+
+    /// Capabilities the app fails without.
+    #[must_use]
+    pub fn capabilities_required(&self) -> &[CapabilityPurpose] {
+        &self.capabilities_required
+    }
+
+    /// Capabilities the app degrades gracefully without.
+    #[must_use]
+    pub fn capabilities_optional(&self) -> &[CapabilityGate] {
+        &self.capabilities_optional
+    }
+
+    /// Simulator profiles the app supports.
+    #[must_use]
+    pub fn profiles(&self) -> &[String] {
+        &self.profiles
+    }
+
+    /// The named owner.
+    #[must_use]
+    pub fn maintainer(&self) -> &str {
+        &self.maintainer
+    }
+
+    /// Where issues go.
+    #[must_use]
+    pub fn support(&self) -> &str {
+        &self.support
+    }
+
+    /// What the app deliberately does not do.
+    #[must_use]
+    pub fn non_goals(&self) -> &[String] {
+        &self.non_goals
+    }
+}
+
+const QUALITY_FIELDS: [&str; 10] = [
+    "user",
+    "job",
+    "offline",
+    "data",
+    "capabilities_required",
+    "capabilities_optional",
+    "profiles",
+    "maintainer",
+    "support",
+    "non_goals",
+];
+const DATA_KIND_FIELDS: [&str; 4] = ["kind", "location", "export", "on_remove"];
+const PURPOSE_FIELDS: [&str; 2] = ["name", "purpose"];
+const GATE_FIELDS: [&str; 2] = ["name", "gates"];
+const MAX_QUALITY_SENTENCE_BYTES: usize = 280;
+const MAX_QUALITY_KIND_BYTES: usize = 80;
+const MAX_QUALITY_EXPORT_BYTES: usize = 120;
+const MAX_QUALITY_SUPPORT_BYTES: usize = 200;
+const MAX_QUALITY_DATA_KINDS: usize = 8;
+const MAX_QUALITY_NON_GOALS: usize = 8;
+const MAX_QUALITY_PROFILES: usize = 8;
+
+/// Shape-parses a quality manifest JSON value into unvalidated input.
+///
+/// The release tooling reads registry rows with this; `Manifest::new` then
+/// validates the content like any other manifest field.
+///
+/// # Errors
+///
+/// Returns an error for a malformed block: wrong types, or unknown,
+/// duplicate or missing fields.
+pub fn parse_quality_json(value: &Value) -> Result<QualityInput, FormatError> {
+    parse_quality_value(value)
+}
+
+fn parse_quality_value(value: &Value) -> Result<QualityInput, FormatError> {
+    let object = StrictObject::new(value, "quality", &QUALITY_FIELDS)?;
+    let data = object
+        .value("data")?
+        .as_array()
+        .ok_or(FormatError::InvalidType("data"))?
+        .iter()
+        .map(|item| {
+            let item = StrictObject::new(item, "data kind", &DATA_KIND_FIELDS)?;
+            Ok(DataKindInput {
+                kind: string_field(&item, "kind")?,
+                location: string_field(&item, "location")?,
+                export: string_field(&item, "export")?,
+                on_remove: string_field(&item, "on_remove")?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    let capabilities_required = object
+        .value("capabilities_required")?
+        .as_array()
+        .ok_or(FormatError::InvalidType("capabilities_required"))?
+        .iter()
+        .map(|item| {
+            let item = StrictObject::new(item, "required capability", &PURPOSE_FIELDS)?;
+            Ok(CapabilityPurposeInput {
+                name: string_field(&item, "name")?,
+                purpose: string_field(&item, "purpose")?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    let capabilities_optional = object
+        .value("capabilities_optional")?
+        .as_array()
+        .ok_or(FormatError::InvalidType("capabilities_optional"))?
+        .iter()
+        .map(|item| {
+            let item = StrictObject::new(item, "optional capability", &GATE_FIELDS)?;
+            Ok(CapabilityGateInput {
+                name: string_field(&item, "name")?,
+                gates: string_field(&item, "gates")?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    let string_list = |field: &'static str| -> Result<Vec<String>, FormatError> {
+        object
+            .value(field)?
+            .as_array()
+            .ok_or(FormatError::InvalidType(field))?
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .map(str::to_owned)
+                    .ok_or(FormatError::InvalidType(field))
+            })
+            .collect()
+    };
+    Ok(QualityInput {
+        user: string_field(&object, "user")?,
+        job: string_field(&object, "job")?,
+        offline: string_field(&object, "offline")?,
+        data,
+        capabilities_required,
+        capabilities_optional,
+        profiles: string_list("profiles")?,
+        maintainer: string_field(&object, "maintainer")?,
+        support: string_field(&object, "support")?,
+        non_goals: string_list("non_goals")?,
+    })
+}
+
+fn validate_quality_sentence(
+    value: &str,
+    field: &'static str,
+    maximum: usize,
+    minimum: usize,
+) -> Result<(), FormatError> {
+    validate_text(value, field, maximum)?;
+    if value.trim().len() < minimum {
+        return Err(FormatError::InvalidValue {
+            field,
+            reason: "must be a meaningful sentence",
+        });
+    }
+    Ok(())
+}
+
+fn validate_data_kind(item: DataKindInput) -> Result<DataKind, FormatError> {
+    validate_quality_sentence(&item.kind, "kind", MAX_QUALITY_KIND_BYTES, 2)?;
+    validate_quality_sentence(&item.location, "location", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    validate_quality_sentence(&item.export, "export", MAX_QUALITY_EXPORT_BYTES, 12)?;
+    let on_remove = Retention::parse(&item.on_remove).ok_or(FormatError::InvalidValue {
+        field: "on_remove",
+        reason: "must be retained, exported-then-deleted, or deleted",
+    })?;
+    Ok(DataKind {
+        kind: item.kind,
+        location: item.location,
+        export: item.export,
+        on_remove,
+    })
+}
+
+fn validate_quality_capability_name(name: &str, declared: &[String]) -> Result<(), FormatError> {
+    validate_text(name, "name", MAX_CAPABILITY_NAME_BYTES)?;
+    if !declared.iter().any(|capability| capability == name) {
+        return Err(FormatError::InvalidValue {
+            field: "name",
+            reason: "must be one of the app's declared capabilities",
+        });
+    }
+    Ok(())
+}
+
+fn validate_capability_purpose(
+    item: CapabilityPurposeInput,
+    declared: &[String],
+) -> Result<CapabilityPurpose, FormatError> {
+    validate_quality_capability_name(&item.name, declared)?;
+    validate_quality_sentence(&item.purpose, "purpose", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    Ok(CapabilityPurpose {
+        name: item.name,
+        purpose: item.purpose,
+    })
+}
+
+fn validate_capability_gate(
+    item: CapabilityGateInput,
+    declared: &[String],
+) -> Result<CapabilityGate, FormatError> {
+    validate_quality_capability_name(&item.name, declared)?;
+    validate_quality_sentence(&item.gates, "gates", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    Ok(CapabilityGate {
+        name: item.name,
+        gates: item.gates,
+    })
+}
+
+fn validate_quality(input: QualityInput, declared: &[String]) -> Result<Quality, FormatError> {
+    validate_quality_sentence(&input.user, "user", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    validate_quality_sentence(&input.job, "job", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    validate_quality_sentence(&input.offline, "offline", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    if input.data.len() > MAX_QUALITY_DATA_KINDS {
+        return Err(FormatError::InvalidValue {
+            field: "data",
+            reason: "too many data kinds",
+        });
+    }
+    let data = input
+        .data
+        .into_iter()
+        .map(validate_data_kind)
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    if input.capabilities_required.len() > MAX_CAPABILITIES
+        || input.capabilities_optional.len() > MAX_CAPABILITIES
+    {
+        return Err(FormatError::InvalidValue {
+            field: "capabilities_required",
+            reason: "too many capability entries",
+        });
+    }
+    let capabilities_required = input
+        .capabilities_required
+        .into_iter()
+        .map(|item| validate_capability_purpose(item, declared))
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    let capabilities_optional = input
+        .capabilities_optional
+        .into_iter()
+        .map(|item| validate_capability_gate(item, declared))
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    if input.profiles.is_empty() || input.profiles.len() > MAX_QUALITY_PROFILES {
+        return Err(FormatError::InvalidValue {
+            field: "profiles",
+            reason: "must name at least one supported profile",
+        });
+    }
+    for profile in &input.profiles {
+        validate_text(profile, "profiles", MAX_CAPABILITY_NAME_BYTES)?;
+    }
+    validate_quality_sentence(
+        &input.maintainer,
+        "maintainer",
+        MAX_QUALITY_SENTENCE_BYTES,
+        12,
+    )?;
+    validate_quality_sentence(&input.support, "support", MAX_QUALITY_SUPPORT_BYTES, 12)?;
+    if input.non_goals.is_empty() || input.non_goals.len() > MAX_QUALITY_NON_GOALS {
+        return Err(FormatError::InvalidValue {
+            field: "non_goals",
+            reason: "must name at least one non-goal",
+        });
+    }
+    for non_goal in &input.non_goals {
+        validate_quality_sentence(non_goal, "non_goals", MAX_QUALITY_SENTENCE_BYTES, 12)?;
+    }
+    Ok(Quality {
+        user: input.user,
+        job: input.job,
+        offline: input.offline,
+        data,
+        capabilities_required,
+        capabilities_optional,
+        profiles: input.profiles,
+        maintainer: input.maintainer,
+        support: input.support,
+        non_goals: input.non_goals,
+    })
+}
+
+fn write_quality(quality: &Quality, out: &mut String) {
+    out.push_str(",\"quality\":{\"user\":");
+    kobo_json::escape_into(&quality.user, out);
+    out.push_str(",\"job\":");
+    kobo_json::escape_into(&quality.job, out);
+    out.push_str(",\"offline\":");
+    kobo_json::escape_into(&quality.offline, out);
+    out.push_str(",\"data\":[");
+    for (index, item) in quality.data.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        out.push_str("{\"kind\":");
+        kobo_json::escape_into(&item.kind, out);
+        out.push_str(",\"location\":");
+        kobo_json::escape_into(&item.location, out);
+        out.push_str(",\"export\":");
+        kobo_json::escape_into(&item.export, out);
+        out.push_str(",\"on_remove\":");
+        kobo_json::escape_into(item.on_remove.as_str(), out);
+        out.push('}');
+    }
+    out.push_str("],\"capabilities_required\":[");
+    for (index, item) in quality.capabilities_required.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        out.push_str("{\"name\":");
+        kobo_json::escape_into(&item.name, out);
+        out.push_str(",\"purpose\":");
+        kobo_json::escape_into(&item.purpose, out);
+        out.push('}');
+    }
+    out.push_str("],\"capabilities_optional\":[");
+    for (index, item) in quality.capabilities_optional.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        out.push_str("{\"name\":");
+        kobo_json::escape_into(&item.name, out);
+        out.push_str(",\"gates\":");
+        kobo_json::escape_into(&item.gates, out);
+        out.push('}');
+    }
+    out.push_str("],\"profiles\":[");
+    for (index, profile) in quality.profiles.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        kobo_json::escape_into(profile, out);
+    }
+    out.push_str("],\"maintainer\":");
+    kobo_json::escape_into(&quality.maintainer, out);
+    out.push_str(",\"support\":");
+    kobo_json::escape_into(&quality.support, out);
+    out.push_str(",\"non_goals\":[");
+    for (index, non_goal) in quality.non_goals.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        kobo_json::escape_into(non_goal, out);
+    }
+    out.push_str("]}");
+}
+
 fn parse_manifest_value(value: &Value, reserved_ids: &[&str]) -> Result<Manifest, FormatError> {
-    let object = StrictObject::new(value, "manifest", &MANIFEST_FIELDS)?;
+    let object = StrictObject::with_optional(value, "manifest", &MANIFEST_FIELDS, &["quality"])?;
     validate_format(object.value("format_version")?)?;
+    let quality = match object.fields.iter().find(|(name, _)| name == "quality") {
+        Some((_, value)) => Some(parse_quality_value(value)?),
+        None => None,
+    };
     Manifest::new(
         ManifestInput {
+            quality,
             id: string_field(&object, "id")?,
             display_name: string_field(&object, "display_name")?,
             short_label: string_field(&object, "short_label")?,
@@ -550,6 +1126,15 @@ impl<'a> StrictObject<'a> {
         name: &'static str,
         expected: &[&'static str],
     ) -> Result<Self, FormatError> {
+        Self::with_optional(value, name, expected, &[])
+    }
+
+    fn with_optional(
+        value: &'a Value,
+        name: &'static str,
+        expected: &[&'static str],
+        optional: &[&'static str],
+    ) -> Result<Self, FormatError> {
         let Value::Object(fields) = value else {
             return Err(FormatError::ExpectedObject(name));
         };
@@ -569,7 +1154,7 @@ impl<'a> StrictObject<'a> {
             }
         }
         for field in expected {
-            if !seen.contains(field) {
+            if !seen.contains(field) && !optional.contains(field) {
                 return Err(FormatError::MissingField {
                     object: name,
                     field,
@@ -807,6 +1392,9 @@ fn write_manifest(manifest: &Manifest, out: &mut String) {
     kobo_json::escape_into(manifest.binary_sha256.as_str(), out);
     out.push_str(",\"binary_bytes\":");
     out.push_str(&manifest.binary_bytes.to_string());
+    if let Some(quality) = &manifest.quality {
+        write_quality(quality, out);
+    }
     out.push('}');
 }
 
@@ -817,6 +1405,7 @@ mod tests {
 
     fn input(id: &str, binary: &[u8]) -> ManifestInput {
         ManifestInput {
+            quality: None,
             id: id.to_owned(),
             display_name: "Daily Brief".to_owned(),
             short_label: "Brief".to_owned(),
@@ -912,6 +1501,105 @@ mod tests {
         assert_eq!(Catalog::parse(first.as_bytes(), &[]), Ok(catalog));
     }
 
+    fn quality_input() -> QualityInput {
+        QualityInput {
+            user: "A reader who keeps papers on their Kobo.".to_owned(),
+            job: "Browse, keep, and read papers offline.".to_owned(),
+            offline: "Every kept paper opens and reads with no network at all.".to_owned(),
+            data: vec![DataKindInput {
+                kind: "kept papers".to_owned(),
+                location: "the app's own folder on the reader".to_owned(),
+                export: "the original PDF bytes".to_owned(),
+                on_remove: "retained".to_owned(),
+            }],
+            capabilities_required: vec![CapabilityPurposeInput {
+                name: "network".to_owned(),
+                purpose: "Search and download papers from the source.".to_owned(),
+            }],
+            capabilities_optional: vec![CapabilityGateInput {
+                name: "scheduled-wake".to_owned(),
+                gates: "checking for new papers overnight.".to_owned(),
+            }],
+            profiles: vec!["clara-bw-391".to_owned()],
+            maintainer: "The Cobalt app maintainers.".to_owned(),
+            support: "the issue tracker".to_owned(),
+            non_goals: vec!["It does not sync a reading position between devices.".to_owned()],
+        }
+    }
+
+    #[test]
+    fn quality_block_round_trips_through_canonical_json() {
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality_input());
+        let manifest = Manifest::new(manifest_input, &[]).expect("valid manifest");
+        let json = manifest.to_canonical_json();
+        let parsed = Manifest::parse(json.as_bytes(), &[]).expect("round trip parses");
+        assert_eq!(parsed, manifest);
+        let quality = parsed.quality().expect("quality survives");
+        assert_eq!(quality.data()[0].on_remove(), Retention::Retained);
+        assert_eq!(quality.capabilities_required()[0].name(), "network");
+        assert_eq!(
+            quality.capabilities_optional()[0].gates(),
+            "checking for new papers overnight."
+        );
+        assert!(json.contains("\"on_remove\":\"retained\""));
+    }
+
+    #[test]
+    fn manifests_without_quality_still_parse() {
+        let manifest = Manifest::new(input("daily-brief", b"binary"), &[]).expect("valid");
+        let json = manifest.to_canonical_json();
+        assert!(!json.contains("quality"));
+        let parsed = Manifest::parse(json.as_bytes(), &[]).expect("parses");
+        assert_eq!(parsed.quality(), None);
+    }
+
+    #[test]
+    fn quality_rejects_an_unknown_retention_value() {
+        let mut quality = quality_input();
+        quality.data[0].on_remove = "archived".to_owned();
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality);
+        let error = Manifest::new(manifest_input, &[]).expect_err("archived is not retention");
+        assert!(error.to_string().contains("on_remove"));
+    }
+
+    #[test]
+    fn quality_capability_names_must_be_declared() {
+        let mut quality = quality_input();
+        quality.capabilities_required[0].name = "shell".to_owned();
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality);
+        let error = Manifest::new(manifest_input, &[]).expect_err("shell is not declared");
+        assert!(error.to_string().contains("declared capabilities"));
+    }
+
+    #[test]
+    fn quality_rejects_empty_profiles_and_empty_non_goals() {
+        let mut quality = quality_input();
+        quality.profiles = vec![];
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality.clone());
+        assert!(Manifest::new(manifest_input, &[]).is_err());
+        quality.profiles = vec!["clara-bw-391".to_owned()];
+        quality.non_goals = vec![];
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality);
+        assert!(Manifest::new(manifest_input, &[]).is_err());
+    }
+
+    #[test]
+    fn quality_json_with_a_missing_field_is_rejected() {
+        let mut manifest_input = input("daily-brief", b"binary");
+        manifest_input.quality = Some(quality_input());
+        let manifest = Manifest::new(manifest_input, &[]).expect("valid manifest");
+        let json = manifest
+            .to_canonical_json()
+            .replace("\"maintainer\":\"The Cobalt app maintainers.\",", "");
+        let error = Manifest::parse(json.as_bytes(), &[]).expect_err("missing maintainer");
+        assert!(error.to_string().contains("maintainer"));
+    }
+
     #[test]
     fn catalog_constructor_enforces_the_serialized_size_limit() {
         let entries = (0..MAX_CATALOG_ENTRIES)
@@ -919,6 +1607,7 @@ mod tests {
                 let id = format!("app-{index:03}");
                 let manifest = Manifest::new(
                     ManifestInput {
+                        quality: None,
                         id: id.clone(),
                         display_name: "\"".repeat(MAX_DISPLAY_NAME_BYTES),
                         short_label: "\"".repeat(MAX_SHORT_LABEL_BYTES),

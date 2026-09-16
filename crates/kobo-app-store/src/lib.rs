@@ -16,8 +16,10 @@ mod signing;
 pub use bundle::{build_bundle, parse_bundle, parse_public_bundle, ParsedBundle};
 pub use error::{BundleError, FormatError, SignatureError};
 pub use model::{
-    cobalt_version_at_least, is_public_glyph, is_public_reserved_app_id, public_reserved_app_ids,
-    Catalog, CatalogEntry, CatalogEntryInput, Manifest, ManifestInput, Sha256Digest,
+    cobalt_version_at_least, is_public_glyph, is_public_reserved_app_id, parse_quality_json,
+    public_reserved_app_ids, CapabilityGate, CapabilityGateInput, CapabilityPurpose,
+    CapabilityPurposeInput, Catalog, CatalogEntry, CatalogEntryInput, DataKind, DataKindInput,
+    Manifest, ManifestInput, Quality, QualityInput, Retention, Sha256Digest,
 };
 pub use release::{verify_release_manifest, ReleaseAsset, ReleaseManifest};
 pub use signing::{derive_public_key, sign, verify, DetachedSignature, Ed25519PublicKey};
