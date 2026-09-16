@@ -11,5 +11,51 @@
     "bluetooth-audio",
     "bluetooth-control"
   ],
-  "release_notes": "Line up a table's columns under the headings that name them, typeset numbered equations, set figures apart from the prose, and carry a document's mathematics all the way through instead of stopping early."
+  "release_notes": "Line up a table's columns under the headings that name them, typeset numbered equations, set figures apart from the prose, and carry a document's mathematics all the way through instead of stopping early.",
+  "user": "Somebody who wants a long listen made from a topic they choose.",
+  "job": "Turn a topic into an original narrated audiobook and listen to it on your Kobo.",
+  "offline": "Audiobooks already made play without the network; making a new one needs it.",
+  "data": [
+    {
+      "kind": "the audiobooks made for you",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; making one again takes a new request",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your library and listening places",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep a half-heard book resumable",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to have your topic narrated into an audiobook"
+    },
+    {
+      "name": "audio",
+      "purpose": "to play the narration on the reader"
+    }
+  ],
+  "capabilities_optional": [
+    {
+      "name": "bluetooth-audio",
+      "gates": "listening on Bluetooth headphones or speakers"
+    },
+    {
+      "name": "bluetooth-control",
+      "gates": "pairing and controlling those devices"
+    }
+  ],
+  "non_goals": [
+    "It does not narrate your own documents.",
+    "It does not store anything in the cloud for you."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

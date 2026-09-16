@@ -9,5 +9,25 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Every reference panel is measured against the screen it is drawn on, so the components gallery fits at all nine text sizes instead of running off the bottom."
+  "release_notes": "Every reference panel is measured against the screen it is drawn on, so the components gallery fits at all nine text sizes instead of running off the bottom.",
+  "user": "Somebody building or checking a Cobalt app.",
+  "job": "See every Cobalt UI component on the device in one reference app.",
+  "offline": "The component reference works without the network; the live network demo does not.",
+  "data": [],
+  "capabilities_required": [],
+  "capabilities_optional": [
+    {
+      "name": "network",
+      "gates": "the live network component demo"
+    }
+  ],
+  "non_goals": [
+    "It is not a store or a launcher.",
+    "It does not change device settings."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

@@ -8,5 +8,32 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "A question says which terminal on which computer is asking, two arriving at once are both on the board, and an answer that came too late is not reported as a decision."
+  "release_notes": "A question says which terminal on which computer is asking, two arriving at once are both on the board, and an answer that came too late is not reported as a decision.",
+  "user": "Somebody whose coding agent asks permission while they are away from the desk.",
+  "job": "Answer coding-agent permission prompts from your Kobo.",
+  "offline": "Nothing works without the pairing; the network is the job.",
+  "data": [
+    {
+      "kind": "the pairing with your computer",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; re-pairing takes a moment",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to reach the paired computer and return your answers"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not run the agent itself.",
+    "It does not answer prompts for you."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { collectRegistry, currentProtocolVersion, deriveMinimumCobalt, normalizeContribution, qualityComplete } from "./app-registry.mjs";
 import {
   contributionPlan,
@@ -196,6 +199,29 @@ test("a manifest without quality fields stays valid and incomplete", () => {
   const app = normalizeContribution(manifest(), "notes");
   assert.equal(app.id, "notes");
   assert.equal(qualityComplete(manifest()), false);
+});
+
+test("the registry gate refuses a manifest without quality fields", () => {
+  const tree = mkdtempSync(join(tmpdir(), "registry-gate-"));
+  writeFileSync(join(tree, "base.json"), JSON.stringify({ format_version: 1, apps: [] }));
+  mkdirSync(join(tree, "plain"));
+  writeFileSync(join(tree, "plain", "cobalt-app.json"), JSON.stringify(manifest()));
+  assert.throws(
+    () => collectRegistry({ basePath: join(tree, "base.json"), sourcePaths: [tree] }),
+    /plain\/cobalt-app.json has no complete quality manifest/
+  );
+});
+
+test("a registry row carries the quality manifest for the Store to render", () => {
+  const tree = mkdtempSync(join(tmpdir(), "registry-quality-"));
+  writeFileSync(join(tree, "base.json"), JSON.stringify({ format_version: 1, apps: [] }));
+  mkdirSync(join(tree, "notes"));
+  writeFileSync(join(tree, "notes", "cobalt-app.json"), JSON.stringify(manifest(quality())));
+  const registry = collectRegistry({ basePath: join(tree, "base.json"), sourcePaths: [tree] });
+  const row = registry.apps.find(app => app.id === "notes");
+  assert.equal(row.quality.user, "A reader who keeps papers on their Kobo.");
+  assert.equal(row.quality.data[0].on_remove, "retained");
+  assert.equal(row.quality.capabilities_required[0].name, "network");
 });
 
 test("a half-declared quality manifest is rejected with the missing fields named", () => {

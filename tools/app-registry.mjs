@@ -166,7 +166,25 @@ export function normalizeContribution(value, directoryName) {
     minimum_cobalt_version,
     glyph: app.glyph,
     capabilities: app.capabilities,
-    ...(app.setup === undefined ? {} : { setup: app.setup })
+    ...(app.setup === undefined ? {} : { setup: app.setup }),
+    // The registry row carries the quality manifest so the Store, the
+    // uninstall flow and the app pages can all render from it.
+    ...(qualityComplete(app)
+      ? {
+          quality: {
+            user: app.user,
+            job: app.job,
+            offline: app.offline,
+            data: app.data,
+            capabilities_required: app.capabilities_required,
+            capabilities_optional: app.capabilities_optional,
+            profiles: app.profiles,
+            maintainer: app.maintainer,
+            support: app.support,
+            non_goals: app.non_goals
+          }
+        }
+      : {})
   };
 }
 
@@ -283,7 +301,18 @@ export function collectRegistry({
         if (error.code === "ENOENT") continue;
         throw error;
       }
-      const contribution = normalizeContribution(JSON.parse(source), entry.name);
+      const manifest = JSON.parse(source);
+      // The channels contract (docs/quality/contracts/channels.md): an app
+      // enters the catalog when its quality manifest is complete, not because
+      // its directory exists. The registry is the catalog's source, so the
+      // gate lives here.
+      if (!qualityComplete(manifest)) {
+        throw new Error(
+          `${entry.name}/cobalt-app.json has no complete quality manifest; ` +
+            `an app enters the registry only with one (docs/quality/contracts/app-quality-manifest.md)`
+        );
+      }
+      const contribution = normalizeContribution(manifest, entry.name);
       const existing = apps.find(
         app => app.id === contribution.id || app.package === contribution.package
       );

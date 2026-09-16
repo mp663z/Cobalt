@@ -6,5 +6,27 @@
   "version": "1.0.10",
   "glyph": "grid",
   "capabilities": [],
-  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for."
+  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
+  "user": "Two people sharing one Kobo.",
+  "job": "Play tic-tac-toe together on one reader.",
+  "offline": "It never touches the network.",
+  "data": [
+    {
+      "kind": "the game in progress",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-played game continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not play over a network.",
+    "It does not keep scores across games."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
