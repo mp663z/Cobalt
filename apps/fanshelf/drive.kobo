@@ -32,3 +32,12 @@ expect AO3 Atom feed
 expect A Map Made of Starlight
 clean
 shot tag-feed
+
+tap Shelf
+tap Followed tags
+tap Add
+type Time Travel
+tap Follow
+expect Tag followed
+clean
+shot tag-followed
