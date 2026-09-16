@@ -9997,7 +9997,12 @@ mod node_coverage_tests {
             on: true,
             state: ControlState::Enabled,
         };
-        for version in [LEGACY_VERSION, FOLIO_VERSION, SELECTED_GRID_VERSION, SERVER_ACCOUNT_VERSION] {
+        for version in [
+            LEGACY_VERSION,
+            FOLIO_VERSION,
+            SELECTED_GRID_VERSION,
+            SERVER_ACCOUNT_VERSION,
+        ] {
             let frame = Frame {
                 version,
                 request_id: 7,
