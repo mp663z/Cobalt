@@ -93,6 +93,23 @@ impl Habits {
             cx.store().save(HABITS, value);
         }
     }
+    fn last_week(items: &[Habit], today: u32) -> (usize, usize) {
+        let first = today.saturating_sub(6);
+        let mut done = 0;
+        let mut scheduled = 0;
+        for h in items.iter().filter(|h| !h.archived) {
+            for day in first..=today {
+                if h.due(day) {
+                    scheduled += 1;
+                    if h.done.contains(&day) {
+                        done += 1;
+                    }
+                }
+            }
+        }
+        (done, scheduled)
+    }
+
     fn page_bounds(page: usize, total: usize) -> (usize, usize, usize, usize) {
         let pages = total.div_ceil(ROWS_PER_PAGE);
         let page = Self::clamp_page(page, total);
@@ -210,11 +227,13 @@ impl Habits {
                     .filter(|(_, h)| !h.archived && h.due(day))
                     .collect();
                 if due.is_empty() {
-                    s = s.splash(
-                        Some(Glyph::Check),
-                        "Nothing due",
-                        "Add a habit, or return when one is due.",
-                    );
+                    s = s
+                        .splash(
+                            Some(Glyph::Check),
+                            "Nothing due",
+                            "Add a habit, or return when one is due.",
+                        )
+                        .primary_button("add", "Add a habit");
                 } else {
                     let (start, end, page, pages) = Self::page_bounds(self.today_page, due.len());
                     let visible = &due[start..end];
@@ -291,26 +310,34 @@ impl Habits {
                 } else {
                     let (start, end, page, pages) =
                         Self::page_bounds(self.manage_page, self.items.len());
-                    s = s.rows(self.items[start..end].iter().enumerate().map(|(i, h)| {
-                        (
-                            format!("cycle-{}", start + i),
-                            Self::display_name(&h.name),
-                            format!(
-                                "{}{}",
-                                h.schedule_label(),
-                                if h.archived { "; archived" } else { "" }
-                            ),
-                            Glyph::Settings,
-                        )
-                    }));
+                    s = s
+                        .text("Tap a habit to change its schedule. The row menu archives or restores it.")
+                        .rows_with_menu(self.items[start..end].iter().enumerate().map(|(i, h)| {
+                            (
+                                format!("cycle-{}", start + i),
+                                Self::display_name(&h.name),
+                                format!(
+                                    "{}{}",
+                                    h.schedule_label(),
+                                    if h.archived { "; archived" } else { "" }
+                                ),
+                                Glyph::Settings,
+                                format!("archive-{}", start + i),
+                            )
+                        }));
                     s = Self::paged(s, page, pages, "manage-prev", "manage-next");
                 }
             }
             Page::Stats => {
                 let completed: usize = self.items.iter().map(|h| h.done.len()).sum();
+                let (done, scheduled) = Self::last_week(&self.items, Self::day());
                 s = s
-                    .heading(format!("{completed} completions"))
-                    .text("Best streaks are measured across scheduled days.")
+                    .facts([
+                        ("Completions", format!("{completed}")),
+                        ("Last 7 days", format!("{done} of {scheduled} done")),
+                    ])
+                    .text("Skipped days do not count for or against a streak.")
+                    .text("A missed day ends a streak. Best streaks count scheduled days only.")
                     .button("settings", "Settings");
             }
             Page::Settings => {
@@ -451,6 +478,10 @@ impl KoboApp for Habits {
             if a == action_id(&format!("skip-{i}")) {
                 changed |= h.skip(Self::day());
             }
+            if a == action_id(&format!("archive-{i}")) {
+                h.archived = !h.archived;
+                changed = true;
+            }
             if a == action_id(&format!("cycle-{i}")) {
                 h.schedule = match h.schedule {
                     Schedule::Daily => Schedule::Weekdays,
@@ -497,6 +528,19 @@ mod tests {
             Node::Rows { rows, .. } => rows.iter().any(|row| row.action == action_id(name)),
             _ => false,
         })
+    }
+
+    #[test]
+    fn last_week_counts_scheduled_and_done_days() {
+        let mut daily = Habit::new("Tea".into());
+        let today = 20;
+        daily.toggle_complete(today);
+        daily.toggle_complete(today - 2);
+        let mut archived = Habit::new("Old".into());
+        archived.archived = true;
+        archived.toggle_complete(today);
+        let (done, scheduled) = Habits::last_week(&[daily, archived], today);
+        assert_eq!((done, scheduled), (2, 7));
     }
 
     #[test]

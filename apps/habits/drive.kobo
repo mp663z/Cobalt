@@ -1,6 +1,7 @@
 expect Habits
-tap Manage
-tap Add
+expect Add a habit
+shot empty
+tap Add a habit
 type Tea
 tap Add
 tap Today
@@ -9,8 +10,17 @@ expect daily
 clean
 shot today
 
+tap Manage
+expect Tap a habit to change
+tap-id archive-0
+expect daily; archived
+shot manage
+tap-id archive-0
+expect Tea
 tap Stats
-expect completions
+expect Last 7 days
+expect Completions
+shot stats
 tap Settings
 expect Stored on this reader
 clean
