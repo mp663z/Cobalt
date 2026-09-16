@@ -209,7 +209,7 @@ fn quality_screen(entry: &AppInfo) -> ScreenBuilder {
         Some(quality) => {
             screen = screen.facts([("Offline", quality.offline)]);
             if !quality.purposes.is_empty() {
-                screen = screen.section("What this app can do").facts(
+                screen = screen.section("What it can do").facts(
                     quality
                         .purposes
                         .into_iter()
@@ -226,7 +226,7 @@ fn quality_screen(entry: &AppInfo) -> ScreenBuilder {
             }
         }
         None => {
-            screen = screen.error_state("This app has not published quality information yet.");
+            screen = screen.error_state("This app has not shared quality information yet.");
         }
     }
     screen
@@ -297,7 +297,7 @@ impl Store {
                         "No apps available"
                     },
                     if self.refreshing {
-                        "The last verified catalog is shown first; the current GitHub release is being checked now."
+                        "Showing the last verified catalog while checking for updates."
                     } else {
                         "Connect Wi-Fi and refresh the catalog."
                     },
@@ -567,23 +567,20 @@ impl Store {
         if app_quality(entry).is_some() && !entry.quarantined {
             screen = screen
                 .section("Quality")
-                .section_link(quality_action(id), "What this app can do");
+                .section_link(quality_action(id), "What it can do");
         }
         if entry.has_update() && entry.permissions_changed {
             screen = screen.facts([(
                 "This update",
                 if app_quality(entry).is_some() {
-                    "Adds permissions. Purposes are in What this app can do.".to_owned()
+                    "Adds permissions. Details are in What it can do.".to_owned()
                 } else {
                     "Adds permissions.".to_owned()
                 },
             )]);
         }
         if entry.quarantined {
-            screen = screen.facts([(
-                "Status",
-                "Quarantined after repeated crashes. Opening is paused.".to_owned(),
-            )]);
+            screen = screen.facts([("Status", "Paused after repeated crashes.".to_owned())]);
         }
         detail_actions(screen, entry, id).build()
     }
@@ -594,18 +591,18 @@ impl Store {
         ScreenBuilder::new("store-recovery")
             .top_bar(format!("Recover {title}"))
             .owns_back(true)
-            .text("This app crashed repeatedly and is paused. Each choice asks first.")
+            .text("This app crashed repeatedly and is paused. Nothing happens without asking you first.")
             .button(
                 recover_choice(id, AppRecovery::LaunchWithoutState),
                 "Open without saved state",
             )
-            .text("The saved state is set aside, not deleted, and the app starts clean.")
+            .text("Saved state is set aside, not deleted. The app starts clean.")
             .button(
                 recover_choice(id, AppRecovery::ExportState),
                 "Export saved state",
             )
             .text(
-                "A copy of the saved state is written to the exports folder; the app stays paused.",
+                "A copy of the saved state goes to the exports folder. The app stays paused.",
             )
             .button(
                 recover_choice(id, AppRecovery::ResetState),
@@ -630,7 +627,7 @@ impl Store {
             AppRecovery::ExportState => (
                 "Export state",
                 format!(
-                    "A copy of the saved state is written to the exports folder. {title} stays paused until you pick another recovery."
+                    "A copy of the saved state goes to the exports folder. {title} stays paused until you pick another recovery."
                 ),
             ),
             AppRecovery::ResetState => (

@@ -89,7 +89,7 @@ def main():
                     return json.loads((fixture / 'installed/apps/quality-fixture/manifest.json').read_text())['version']
 
                 drive('wait-idle', 'expect-state /simulation#/appStore/mode "signed-local"',
-                      'tap-id app-quality-fixture', 'expect What this app can do', 'shot available',
+                      'tap-id app-quality-fixture', 'expect What it can do', 'shot available',
                       'tap-id quality-quality-fixture',
                       'expect Everything the fixture does works without the network',
                       'expect Checks for a newer fixture package once a day',
