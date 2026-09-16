@@ -19,6 +19,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--scale', default='extra-large')
+    parser.add_argument('--profile', default='clara-bw-391',
+                        help='kobo-profile device ID, e.g. clara-bw-391 or elipsa-2e-389')
     args = parser.parse_args()
     cli = ROOT / 'target/debug/kobo'
     builder = ROOT / 'target/debug/examples/signed-store'
@@ -31,7 +33,7 @@ def main():
         fixture = Path(private) / 'fixture'
         env = dict(os.environ, TMPDIR=private, CARGO_TARGET_DIR=str(ROOT / 'target'),
                    CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0',
-                   KOBO_SIM_PROFILE='clara-bw-391', KOBO_TEXT_SCALE=args.scale,
+                   KOBO_SIM_PROFILE=args.profile, KOBO_TEXT_SCALE=args.scale,
                    KOBO_SIM_APP_STORE=str(fixture), KOBO_SIM_FIXTURE='original-signed-store',
                    # Installs in this journey face the launch canary: the
                    # packaged payload is the real quality-fixture application.
@@ -149,7 +151,8 @@ def main():
                 result = dict(status='passed', basis='store-app-sdk-ipc-and-runtime-transactions',
                               original_fixture=True,
                               fixture_payload='quality-fixture example; every install passes the launch canary',
-                              scale=args.scale, app_store=simulation['appStore'],
+                              scale=args.scale, profile=args.profile,
+                              app_store=simulation['appStore'],
                               checks=['install', 'quality screen renders offline, purposes and retention',
                                       'uninstall confirmation states data retention',
                                       'cancel keeps the app installed',
