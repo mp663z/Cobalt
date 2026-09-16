@@ -18,3 +18,11 @@ tap View results
 expect Spells
 clean
 shot spell-results
+tap-at 965 374
+tap Bookmark
+clean
+shot spell-bookmarked
+tap Bookmarks
+expect Alarm
+clean
+shot bookmarks
