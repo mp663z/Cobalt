@@ -217,31 +217,36 @@ impl Export {
     }
     #[must_use]
     pub fn screen(&self) -> Screen {
+        // The name of the thing being copied is content, not the screen's
+        // title: the top bar carries the action, so the document name sits in
+        // the flow at text size and the facts do the identifying.
+        let title = if self.offer.title.chars().count() > 64 {
+            format!("{}…", self.offer.title.chars().take(63).collect::<String>())
+        } else {
+            self.offer.title.clone()
+        };
         let mut screen = ScreenBuilder::new("export")
             .top_bar("Save a copy")
             .owns_back(true)
-            .heading(if self.offer.title.chars().count() > 64 {
-                format!("{}…", self.offer.title.chars().take(63).collect::<String>())
-            } else {
-                self.offer.title.clone()
-            })
-            .secondary(format!(
-                "{} · {}",
-                self.offer.format.extension().to_uppercase(),
-                crate::imports::display_size(self.offer.bytes)
-            ));
+            .text(title)
+            .facts([
+                ("Format", self.offer.format.extension().to_uppercase()),
+                ("Size", crate::imports::display_size(self.offer.bytes)),
+            ]);
         if self.ready {
-            screen = screen.text("Ready for your computer.").secondary("Use Cobalt on your paired computer to receive this copy. The original stays on your reader.");
+            screen = screen
+                .text("Ready for your computer.")
+                .secondary("Open Cobalt on your paired computer to receive it. The original stays on your reader.");
         } else if let Some(problem) = self.problem.as_deref().or_else(|| self.copy.failure()) {
             screen = screen
                 .text(problem)
                 .bottom_action("export-retry", "Try again");
         } else if self.publishing {
-            screen = screen.text("Preparing the saved copy…");
+            screen = screen.text("Preparing the copy…");
         } else {
             screen = match self.copy.stage() {
                 crate::imports::Stage::Preview => screen
-                    .text("Keep a copy to receive on your computer.")
+                    .text("Keep a copy to open on your computer.")
                     .bottom_action("export-confirm", "Save copy"),
                 _ => screen.text("Saving and checking the copy…"),
             };
