@@ -1,4 +1,6 @@
 expect Pub Quiz
+expect Built-in set
+shot home
 tap How to play
 expect Ten questions, one Kobo
 wait 800
@@ -12,6 +14,9 @@ shot question
 
 tap-id answer-0
 expect Answer locked
+expect Hand the Kobo to Bert
+clean
+shot pass
 tap Show result
 expect Round result
 tap-id continue
@@ -82,6 +87,12 @@ expect Podium
 clean
 shot podium
 
+tap Save a copy
+expect Save a copy
+wait-for Ready for your computer
+shot export
+tap Back
+expect Podium
 tap Finish round
 expect Pub Quiz
 expect Play
