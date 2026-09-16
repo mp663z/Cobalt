@@ -1,3 +1,4 @@
+wait 800
 expect Lichess
 expect Puzzles
 tap How to play
@@ -9,3 +10,14 @@ tap Play
 expect Computer
 clean
 shot home
+tap Computer
+expect Your move
+clean
+shot computer-board
+tap-id square-e2
+expect e2 →
+tap-id square-e4
+expect-missing e2 →
+wait-for Your move
+clean
+shot computer-replied
