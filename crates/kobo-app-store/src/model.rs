@@ -802,7 +802,9 @@ const MAX_QUALITY_EXPORT_BYTES: usize = 120;
 const MAX_QUALITY_SUPPORT_BYTES: usize = 200;
 const MAX_QUALITY_DATA_KINDS: usize = 8;
 const MAX_QUALITY_NON_GOALS: usize = 8;
-const MAX_QUALITY_PROFILES: usize = 8;
+/// The simulator matrix names nine supported profiles; the bound leaves
+/// room for newly admitted hardware without permitting abuse.
+const MAX_QUALITY_PROFILES: usize = 16;
 
 /// Shape-parses a quality manifest JSON value into unvalidated input.
 ///
