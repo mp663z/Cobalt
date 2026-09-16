@@ -11,6 +11,7 @@ name = "kobo-store"
 path = "src/main.rs"
 
 [dependencies]
+kobo-json = { path = "../../crates/kobo-json" }
 kobo-sdk = { path = "../../crates/kobo-sdk", features = ["runtime-settings"] }
 qrcodegen = "1.8"
 

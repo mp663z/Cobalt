@@ -21,6 +21,8 @@ const PREVIOUS: &str = "previous";
 const NEXT: &str = "next";
 const UPDATE_COBALT: &str = "update-cobalt";
 const RECOVERY_CONFIRM: &str = "recovery-confirm";
+const UNINSTALL_CONFIRM: &str = "uninstall-confirm";
+const UNINSTALL_CANCEL: &str = "uninstall-cancel";
 const RECOVERY_CANCEL: &str = "recovery-cancel";
 const QR_HANDLE: PictureHandle = PictureHandle(1);
 const QR_SCALE: u32 = 7;
@@ -40,7 +42,85 @@ enum View {
         id: String,
         recovery: AppRecovery,
     },
+    UninstallConfirm(String),
     AppLink,
+}
+
+/// The slice of an app's quality manifest the Store renders: the offline
+/// promise, required-capability purposes, and what removal does to data.
+struct AppQuality {
+    offline: String,
+    purposes: Vec<(String, String)>,
+    data: Vec<(String, String)>,
+}
+
+fn quality_field<'a>(
+    fields: &'a [(String, kobo_json::Value)],
+    name: &str,
+) -> Option<&'a kobo_json::Value> {
+    fields
+        .iter()
+        .find(|(field, _)| field == name)
+        .map(|(_, value)| value)
+}
+
+fn quality_strings(
+    fields: &[(String, kobo_json::Value)],
+    list: &str,
+    value_field: &str,
+) -> Vec<(String, String)> {
+    let Some(kobo_json::Value::Array(items)) = quality_field(fields, list) else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|item| {
+            let kobo_json::Value::Object(item) = item else {
+                return None;
+            };
+            let name = quality_field(item, "name")
+                .or_else(|| quality_field(item, "kind"))?
+                .as_str()?
+                .to_owned();
+            let value = quality_field(item, value_field)?.as_str()?.to_owned();
+            Some((name, value))
+        })
+        .collect()
+}
+
+fn app_quality(entry: &AppInfo) -> Option<AppQuality> {
+    let value = kobo_json::parse(entry.quality_json.as_deref()?).ok()?;
+    let kobo_json::Value::Object(fields) = &value else {
+        return None;
+    };
+    let offline = quality_field(fields, "offline")?.as_str()?.to_owned();
+    let mut data = quality_strings(fields, "data", "on_remove");
+    // Data kinds carry `kind`, not `name`; quality_strings above reads either.
+    if data.is_empty() {
+        data = Vec::new();
+    }
+    Some(AppQuality {
+        offline,
+        purposes: quality_strings(fields, "capabilities_required", "purpose"),
+        data,
+    })
+}
+
+/// "bluetooth-audio" reads as "Bluetooth audio" beside its purpose.
+fn capability_label(name: &str) -> String {
+    let mut label = name.replace('-', " ");
+    if let Some(first) = label.get_mut(..1) {
+        first.make_ascii_uppercase();
+    }
+    label
+}
+
+fn retention_wording(on_remove: &str) -> &'static str {
+    match on_remove {
+        "deleted" => "is deleted with the app.",
+        "exported-then-deleted" => "is exported, then deleted.",
+        _ => "stays on this Kobo.",
+    }
 }
 
 struct Store {
@@ -77,6 +157,30 @@ impl Default for Store {
     }
 }
 
+/// The quality manifest rendered as facts rows: the offline promise, one
+/// row per required capability saying what it is for, and a warning when an
+/// update adds permissions. Unrated apps add nothing.
+fn quality_facts(mut screen: ScreenBuilder, entry: &AppInfo) -> ScreenBuilder {
+    if let Some(quality) = app_quality(entry) {
+        screen = screen.facts([("Offline", quality.offline)]);
+        if !quality.purposes.is_empty() {
+            screen = screen.facts(
+                quality
+                    .purposes
+                    .into_iter()
+                    .map(|(name, purpose)| (capability_label(&name), purpose)),
+            );
+        }
+    }
+    if entry.has_update() && entry.permissions_changed {
+        screen = screen.facts([(
+            "This update",
+            "Adds permissions. What each one allows is listed above.".to_owned(),
+        )]);
+    }
+    screen
+}
+
 impl Store {
     fn show(&mut self, context: &mut Context) {
         let screen = match self.view.clone() {
@@ -85,6 +189,7 @@ impl Store {
             View::Working { id, action } => self.working(&id, action),
             View::Recovery(id) => self.recovery(&id),
             View::RecoveryConfirm { id, recovery } => self.recovery_confirmation(&id, recovery),
+            View::UninstallConfirm(id) => self.uninstall_confirmation(&id),
             View::AppLink => self.app_link(),
         };
         context.set_screen(screen);
@@ -401,6 +506,7 @@ impl Store {
                     },
                 ),
             ]);
+        screen = quality_facts(screen, entry);
         if entry.quarantined {
             screen = screen.facts([(
                 "Status",
@@ -504,6 +610,41 @@ impl Store {
             .build()
     }
 
+    fn uninstall_confirmation(&self, id: &str) -> Screen {
+        let Some(entry) = self.entries.iter().find(|entry| entry.id == id) else {
+            return ScreenBuilder::new("store-missing")
+                .top_bar("App Store")
+                .owns_back(true)
+                .error_state("This app is no longer in the verified catalog.")
+                .build();
+        };
+        let mut screen = ScreenBuilder::new("store-uninstall-confirm")
+            .top_bar("Remove app?")
+            .owns_back(true)
+            .facts([("App", entry.title.clone())]);
+        match app_quality(entry) {
+            Some(quality) if !quality.data.is_empty() => {
+                screen = screen.facts(
+                    quality
+                        .data
+                        .iter()
+                        .map(|(kind, on_remove)| (kind.clone(), retention_wording(on_remove))),
+                );
+            }
+            _ => {
+                screen = screen.facts([("App data", "stays on this Kobo.")]);
+            }
+        }
+        screen
+            .text(format!(
+                "{} leaves this Kobo. Installing it again later starts fresh.",
+                entry.title
+            ))
+            .primary_button(UNINSTALL_CONFIRM, "Remove")
+            .button(UNINSTALL_CANCEL, "Cancel")
+            .build()
+    }
+
     fn working(&self, id: &str, action: &str) -> Screen {
         let title = self
             .entries
@@ -590,6 +731,19 @@ impl KoboApp for Store {
         if action == action_id(RECOVERY_CANCEL) {
             if let View::RecoveryConfirm { id, .. } = &self.view {
                 self.view = View::Recovery(id.clone());
+                self.show(context);
+            }
+            return;
+        }
+        if action == action_id(UNINSTALL_CONFIRM) {
+            if let View::UninstallConfirm(id) = self.view.clone() {
+                self.request_uninstall(context, id);
+            }
+            return;
+        }
+        if action == action_id(UNINSTALL_CANCEL) {
+            if let View::UninstallConfirm(id) = self.view.clone() {
+                self.view = View::Detail(id);
                 self.show(context);
             }
             return;
@@ -687,7 +841,9 @@ impl KoboApp for Store {
             if action == action_id(&open_action(&id)) {
                 context.launch(id);
             } else if action == action_id(&remove_action(&id)) {
-                self.request_uninstall(context, id);
+                self.notice = None;
+                self.view = View::UninstallConfirm(id);
+                self.show(context);
             } else if !compatible {
                 context.launch("settings");
             } else {
@@ -1043,6 +1199,12 @@ mod tests {
         text_scale: TextScale::Default,
     };
 
+    fn quality_fixture(id: &str) -> String {
+        format!(
+            r#"{{"spec":"app-quality/1","id":"{id}","offline":"Works fully offline. Syncing waits for Wi-Fi.","capabilities_required":[{{"name":"wifi","purpose":"Syncs your notes when Wi-Fi is available."}},{{"name":"storage","purpose":"Saves the documents you write."}}],"data":[{{"kind":"Documents you write","on_remove":"retained"}},{{"kind":"Sync history","on_remove":"deleted"}}]}}"#
+        )
+    }
+
     fn app(id: &str, installed: Option<&str>) -> AppInfo {
         AppInfo {
             quality_json: None,
@@ -1174,11 +1336,36 @@ mod tests {
             .iter()
             .any(|command| matches!(command, Command::Launch(id) if id == "notes")));
 
-        let remove = runner.action(action_id(&remove_action("notes")));
+        runner.action(action_id(&remove_action("notes")));
+        assert_eq!(
+            runner.app().view,
+            View::UninstallConfirm("notes".to_owned())
+        );
+        let remove = runner.action(action_id(UNINSTALL_CONFIRM));
         assert!(remove.iter().any(|command| matches!(
             command,
             Command::Device(DeviceRequest::UninstallApp { id }) if id == "notes"
         )));
+    }
+
+    #[test]
+    fn cancelling_an_uninstall_returns_to_the_app_detail() {
+        let mut runner = AppRunner::new(Store::default());
+        runner.start();
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![app("notes", Some("1.0.0"))],
+        });
+        runner.action(action_id(&app_action("notes")));
+        runner.action(action_id(&remove_action("notes")));
+        assert_eq!(
+            runner.app().view,
+            View::UninstallConfirm("notes".to_owned())
+        );
+        let commands = runner.action(action_id(UNINSTALL_CANCEL));
+        assert_eq!(runner.app().view, View::Detail("notes".to_owned()));
+        assert!(!commands
+            .iter()
+            .any(|command| matches!(command, Command::Device(DeviceRequest::UninstallApp { .. }))));
     }
 
     #[test]
@@ -1206,6 +1393,7 @@ mod tests {
         });
         runner.action(action_id(&app_action("sudoku")));
         runner.action(action_id(&remove_action("sudoku")));
+        runner.action(action_id(UNINSTALL_CONFIRM));
         runner.device_result(DeviceResult::Done);
         assert_eq!(
             runner.app().notice.as_deref(),
@@ -1364,6 +1552,69 @@ mod tests {
         runner.device_result(DeviceResult::AppLink(AppLinkState::Unpaired));
         runner.device_result(DeviceResult::UpdateChannel(UpdateChannel::Beta));
         assert_eq!(runner.app().channel, Some(UpdateChannel::Beta));
+    }
+
+    #[test]
+    fn quality_manifests_are_parsed_and_missing_data_is_unreported() {
+        let mut rated = app("notes", Some("1.0.0"));
+        rated.quality_json = Some(quality_fixture("notes"));
+        let quality = app_quality(&rated).expect("fixture parses");
+        assert_eq!(
+            quality.offline,
+            "Works fully offline. Syncing waits for Wi-Fi."
+        );
+        assert_eq!(
+            quality.purposes,
+            vec![
+                (
+                    "wifi".to_owned(),
+                    "Syncs your notes when Wi-Fi is available.".to_owned()
+                ),
+                (
+                    "storage".to_owned(),
+                    "Saves the documents you write.".to_owned()
+                ),
+            ]
+        );
+        assert_eq!(
+            quality.data,
+            vec![
+                ("Documents you write".to_owned(), "retained".to_owned()),
+                ("Sync history".to_owned(), "deleted".to_owned()),
+            ]
+        );
+
+        let unrated = app("legacy", Some("0.9.0"));
+        assert!(app_quality(&unrated).is_none());
+    }
+
+    #[test]
+    fn quality_helpers_shape_plain_person_sentences() {
+        assert_eq!(capability_label("wifi"), "Wifi");
+        assert_eq!(capability_label("bluetooth-audio"), "Bluetooth audio");
+        assert_eq!(retention_wording("retained"), "stays on this Kobo.");
+        assert_eq!(retention_wording("deleted"), "is deleted with the app.");
+        assert_eq!(
+            retention_wording("exported-then-deleted"),
+            "is exported, then deleted."
+        );
+    }
+
+    #[test]
+    fn quality_detail_and_uninstall_confirmation_fit_the_panels() {
+        let mut rated = app("notes", Some("1.0.0"));
+        rated.quality_json = Some(quality_fixture("notes"));
+        let mut store = Store::default();
+        store.replace_entries(vec![rated]);
+        for metrics in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
+            for screen in [store.detail("notes"), store.uninstall_confirmation("notes")] {
+                let layout = screen.layout_with(&metrics, &Chrome::with_back(false));
+                assert!(layout
+                    .nodes
+                    .iter()
+                    .all(|node| { node.rect.y + node.rect.height <= metrics.height }));
+            }
+        }
     }
 
     #[test]
