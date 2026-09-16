@@ -1,0 +1,25 @@
+{
+  "id": "birds",
+  "display_name": "Birds",
+  "short_label": "Birds",
+  "summary": "Show the birds heard by BirdNET-Go on your Mac or Linux computer.",
+  "page_description": "A quiet offline viewer for bird collages detected and rendered on your own computer.",
+  "version": "0.1.0",
+  "release_notes": "Open the latest host-pushed bird collage, see when it was updated, and keep the last complete snapshot offline.",
+  "glyph": "app",
+  "capabilities": [],
+  "setup": {"steps": [
+    {"text": "Run BirdNET-Go and Fugleramme on a Mac or Linux computer with a microphone.", "command": "See apps/birds/README.md"},
+    {"text": "Start the companion through the existing owner-attended SSH path.", "command": "kobo birds listen --source http://<host>:8080 --device <reader>"}
+  ]},
+  "user": "Somebody who wants the garden's latest birds on an existing Kobo.",
+  "job": "Keep the last complete bird collage readable away from the listening computer.",
+  "offline": "The last pushed collage, update time and recent list remain readable without Wi-Fi.",
+  "data": [{"kind":"bird snapshot and collage pushed from your computer","location":"the app's shelf storage on the reader","export":"not offered; the source stays on your computer","on_remove":"retained"}],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": ["It does not record audio or run BirdNET on the Kobo.", "It does not move audio clips to the reader."],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": ["clara-bw-391"]
+}
