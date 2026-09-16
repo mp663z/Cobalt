@@ -1540,6 +1540,7 @@ name = "kobo-store"
 version = "0.3.16"
 dependencies = [
  "kobo-catalog",
+ "kobo-json",
  "kobo-sdk",
  "kobo-ui",
  "qrcodegen",
