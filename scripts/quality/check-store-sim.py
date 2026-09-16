@@ -87,7 +87,12 @@ def main():
                     return json.loads((fixture / 'installed/apps/quality-fixture/manifest.json').read_text())['version']
 
                 drive('wait-idle', 'expect-state /simulation#/appStore/mode "signed-local"',
-                      'tap-id app-quality-fixture', 'shot available',
+                      'tap-id app-quality-fixture', 'expect What this app can do', 'shot available',
+                      'tap-id quality-quality-fixture',
+                      'expect Everything the fixture does works without the network',
+                      'expect Checks for a newer fixture package once a day',
+                      'expect stays on this Kobo', 'shot quality',
+                      'tap back',
                       'tap-id install-quality-fixture', 'expect installed successfully', 'shot installed')
                 assert installed() == '1.0.0'
                 notes = fixture / 'installed/data/quality-fixture/notes'
@@ -104,6 +109,9 @@ def main():
                 address = start()
                 drive('wait-idle', 'expect Installed · 1.1.0', 'shot reopened',
                       'tap-id app-quality-fixture', 'tap-id remove-quality-fixture',
+                      'expect stays on this Kobo', 'shot uninstall-confirm',
+                      'tap-id uninstall-cancel', 'expect Quality fixture',
+                      'tap-id remove-quality-fixture', 'tap-id uninstall-confirm',
                       'expect removed successfully', 'shot removed')
                 assert not (fixture / 'installed/apps/quality-fixture').exists()
                 assert notes.read_text() == 'Original owner fixture note\n'
@@ -142,7 +150,10 @@ def main():
                               original_fixture=True,
                               fixture_payload='quality-fixture example; every install passes the launch canary',
                               scale=args.scale, app_store=simulation['appStore'],
-                              checks=['install', 'disk-full preserves version', 'update', 'process restart',
+                              checks=['install', 'quality screen renders offline, purposes and retention',
+                                      'uninstall confirmation states data retention',
+                                      'cancel keeps the app installed',
+                                      'disk-full preserves version', 'update', 'process restart',
                                       'remove preserves data', 'reinstall',
                                       'quarantine flags the listing', 'recovery flow', 'reset clears the flag',
                                       'launch canary passes on every install',

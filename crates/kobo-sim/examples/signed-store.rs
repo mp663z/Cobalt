@@ -1,7 +1,7 @@
 //! Create/update an explicitly local signed Store fixture; never a release key.
 use kobo_app_store::{
-    build_bundle, derive_public_key, sign, Catalog, CatalogEntry, CatalogEntryInput, DataKindInput,
-    Manifest, ManifestInput, QualityInput,
+    build_bundle, derive_public_key, sign, CapabilityPurposeInput, Catalog, CatalogEntry,
+    CatalogEntryInput, DataKindInput, Manifest, ManifestInput, QualityInput,
 };
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
@@ -48,7 +48,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 export: "not offered; the bytes are inert".into(),
                 on_remove: "retained".into(),
             }],
-            capabilities_required: vec![],
+            capabilities_required: vec![CapabilityPurposeInput {
+                name: "network".into(),
+                purpose: "Checks for a newer fixture package once a day.".into(),
+            }],
             capabilities_optional: vec![],
             profiles: vec!["clara-bw-391".into()],
             maintainer: "The Cobalt app maintainers.".into(),
@@ -62,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         version: args[3].clone(),
         minimum_cobalt_version: env!("CARGO_PKG_VERSION").into(),
         glyph: "note".into(),
-        capabilities: vec![],
+        capabilities: vec!["network".into()],
         binary_sha256: kobo_net::sha256::hex_digest(&binary),
         binary_bytes: binary.len() as u64,
     })?;

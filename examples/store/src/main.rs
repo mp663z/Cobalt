@@ -21,6 +21,10 @@ const PREVIOUS: &str = "previous";
 const NEXT: &str = "next";
 const UPDATE_COBALT: &str = "update-cobalt";
 const RECOVERY_CONFIRM: &str = "recovery-confirm";
+fn quality_action(id: &str) -> String {
+    format!("quality-{id}")
+}
+
 const UNINSTALL_CONFIRM: &str = "uninstall-confirm";
 const UNINSTALL_CANCEL: &str = "uninstall-cancel";
 const RECOVERY_CANCEL: &str = "recovery-cancel";
@@ -43,6 +47,7 @@ enum View {
         recovery: AppRecovery,
     },
     UninstallConfirm(String),
+    Quality(String),
     AppLink,
 }
 
@@ -157,26 +162,72 @@ impl Default for Store {
     }
 }
 
-/// The quality manifest rendered as facts rows: the offline promise, one
-/// row per required capability saying what it is for, and a warning when an
-/// update adds permissions. Unrated apps add nothing.
-fn quality_facts(mut screen: ScreenBuilder, entry: &AppInfo) -> ScreenBuilder {
-    if let Some(quality) = app_quality(entry) {
-        screen = screen.facts([("Offline", quality.offline)]);
-        if !quality.purposes.is_empty() {
-            screen = screen.facts(
-                quality
-                    .purposes
-                    .into_iter()
-                    .map(|(name, purpose)| (capability_label(&name), purpose)),
-            );
+/// The bottom control an app's state calls for: recovery for a quarantined
+/// app, the Cobalt update prompt for an incompatible one, otherwise the
+/// install, update, open and uninstall actions its state allows.
+fn detail_actions(screen: ScreenBuilder, entry: &AppInfo, id: &str) -> ScreenBuilder {
+    let installed = entry.installed_version.as_deref();
+    if entry.quarantined {
+        screen.bottom_action_marked(recovery_action(id), "Recovery options", Glyph::Refresh)
+    } else if is_system_app(id) {
+        screen.bottom_action_marked(open_action(id), "Open", entry.glyph)
+    } else if !entry.is_compatible_with(env!("CARGO_PKG_VERSION")) {
+        if installed.is_some() {
+            screen.action_bar_marked(vec![
+                (
+                    UPDATE_COBALT.to_owned(),
+                    "Update Cobalt",
+                    Some(Glyph::Refresh),
+                ),
+                (open_action(id), "Open", Some(entry.glyph)),
+                (remove_action(id), "Uninstall", Some(Glyph::Trash)),
+            ])
+        } else {
+            screen.bottom_action_marked(UPDATE_COBALT, "Update Cobalt", Glyph::Refresh)
         }
+    } else if installed.is_some() {
+        let mut actions = vec![
+            (open_action(id), "Open", Some(entry.glyph)),
+            (remove_action(id), "Uninstall", Some(Glyph::Trash)),
+        ];
+        if entry.has_update() {
+            actions.insert(0, (install_action(id), "Update", Some(Glyph::Download)));
+        }
+        screen.action_bar_marked(actions)
+    } else {
+        screen.bottom_action_marked(install_action(id), "Install", Glyph::Download)
     }
-    if entry.has_update() && entry.permissions_changed {
-        screen = screen.facts([(
-            "This update",
-            "Adds permissions. What each one allows is listed above.".to_owned(),
-        )]);
+}
+
+/// Where the quality manifest lives: the detail screen carries one section
+/// link here so the facts rows stay readable at every text scale.
+fn quality_screen(entry: &AppInfo) -> ScreenBuilder {
+    let mut screen = ScreenBuilder::new("store-quality")
+        .top_bar(entry.title.clone())
+        .owns_back(true);
+    match app_quality(entry) {
+        Some(quality) => {
+            screen = screen.facts([("Offline", quality.offline)]);
+            if !quality.purposes.is_empty() {
+                screen = screen.section("What this app can do").facts(
+                    quality
+                        .purposes
+                        .into_iter()
+                        .map(|(name, purpose)| (capability_label(&name), purpose)),
+                );
+            }
+            if !quality.data.is_empty() {
+                screen = screen.section("Your data").facts(
+                    quality
+                        .data
+                        .iter()
+                        .map(|(kind, on_remove)| (kind.clone(), retention_wording(on_remove))),
+                );
+            }
+        }
+        None => {
+            screen = screen.error_state("This app has not published quality information yet.");
+        }
     }
     screen
 }
@@ -190,6 +241,12 @@ impl Store {
             View::Recovery(id) => self.recovery(&id),
             View::RecoveryConfirm { id, recovery } => self.recovery_confirmation(&id, recovery),
             View::UninstallConfirm(id) => self.uninstall_confirmation(&id),
+            View::Quality(id) => {
+                let Some(entry) = self.entries.iter().find(|entry| entry.id == id) else {
+                    return;
+                };
+                quality_screen(entry).build()
+            }
             View::AppLink => self.app_link(),
         };
         context.set_screen(screen);
@@ -457,7 +514,6 @@ impl Store {
         };
         let installed = entry.installed_version.as_deref();
         let system = is_system_app(id);
-        let compatible = entry.is_compatible_with(env!("CARGO_PKG_VERSION"));
         let mut screen = ScreenBuilder::new("store-detail")
             .top_bar(entry.title.clone())
             .owns_back(true)
@@ -506,44 +562,30 @@ impl Store {
                     },
                 ),
             ]);
-        screen = quality_facts(screen, entry);
+        // A quarantined app's detail is about recovery; the quality link
+        // would push the status row off the panel at larger text scales.
+        if app_quality(entry).is_some() && !entry.quarantined {
+            screen = screen
+                .section("Quality")
+                .section_link(quality_action(id), "What this app can do");
+        }
+        if entry.has_update() && entry.permissions_changed {
+            screen = screen.facts([(
+                "This update",
+                if app_quality(entry).is_some() {
+                    "Adds permissions. Purposes are in What this app can do.".to_owned()
+                } else {
+                    "Adds permissions.".to_owned()
+                },
+            )]);
+        }
         if entry.quarantined {
             screen = screen.facts([(
                 "Status",
                 "Quarantined after repeated crashes. Opening is paused.".to_owned(),
             )]);
         }
-        screen = if entry.quarantined {
-            screen.bottom_action_marked(recovery_action(id), "Recovery options", Glyph::Refresh)
-        } else if system {
-            screen.bottom_action_marked(open_action(id), "Open", entry.glyph)
-        } else if !compatible {
-            if installed.is_some() {
-                screen.action_bar_marked(vec![
-                    (
-                        UPDATE_COBALT.to_owned(),
-                        "Update Cobalt",
-                        Some(Glyph::Refresh),
-                    ),
-                    (open_action(id), "Open", Some(entry.glyph)),
-                    (remove_action(id), "Uninstall", Some(Glyph::Trash)),
-                ])
-            } else {
-                screen.bottom_action_marked(UPDATE_COBALT, "Update Cobalt", Glyph::Refresh)
-            }
-        } else if installed.is_some() {
-            let mut actions = vec![
-                (open_action(id), "Open", Some(entry.glyph)),
-                (remove_action(id), "Uninstall", Some(Glyph::Trash)),
-            ];
-            if entry.has_update() {
-                actions.insert(0, (install_action(id), "Update", Some(Glyph::Download)));
-            }
-            screen.action_bar_marked(actions)
-        } else {
-            screen.bottom_action_marked(install_action(id), "Install", Glyph::Download)
-        };
-        screen.build()
+        detail_actions(screen, entry, id).build()
     }
 
     fn recovery(&self, id: &str) -> Screen {
@@ -722,7 +764,9 @@ impl KoboApp for Store {
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         if action == ActionId::BACK {
             self.view = match &self.view {
-                View::Recovery(id) | View::RecoveryConfirm { id, .. } => View::Detail(id.clone()),
+                View::Recovery(id) | View::RecoveryConfirm { id, .. } | View::Quality(id) => {
+                    View::Detail(id.clone())
+                }
                 _ => View::Catalog,
             };
             self.show(context);
@@ -810,6 +854,15 @@ impl KoboApp for Store {
             } else {
                 self.page.saturating_sub(1)
             };
+            self.show(context);
+            return;
+        }
+        if let Some(entry) = self
+            .entries
+            .iter()
+            .find(|entry| action == action_id(&quality_action(&entry.id)))
+        {
+            self.view = View::Quality(entry.id.clone());
             self.show(context);
             return;
         }
@@ -1601,19 +1654,58 @@ mod tests {
     }
 
     #[test]
+    fn the_quality_link_opens_the_quality_screen_and_back_returns() {
+        let mut runner = AppRunner::new(Store::default());
+        runner.start();
+        let mut rated = app("notes", Some("1.0.0"));
+        rated.quality_json = Some(quality_fixture("notes"));
+        runner.device_result(DeviceResult::Apps {
+            entries: vec![rated],
+        });
+        runner.action(action_id(&app_action("notes")));
+        assert_eq!(runner.app().view, View::Detail("notes".to_owned()));
+        runner.action(action_id(&quality_action("notes")));
+        assert_eq!(runner.app().view, View::Quality("notes".to_owned()));
+        runner.action(ActionId::BACK);
+        assert_eq!(runner.app().view, View::Detail("notes".to_owned()));
+    }
+
+    #[test]
     fn quality_detail_and_uninstall_confirmation_fit_the_panels() {
         let mut rated = app("notes", Some("1.0.0"));
         rated.quality_json = Some(quality_fixture("notes"));
+        let mut quarantined = app("puzzle", Some("2.0.0"));
+        quarantined.quality_json = Some(quality_fixture("puzzle"));
+        quarantined.quarantined = true;
         let mut store = Store::default();
-        store.replace_entries(vec![rated]);
-        for metrics in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
-            for screen in [store.detail("notes"), store.uninstall_confirmation("notes")] {
-                let layout = screen.layout_with(&metrics, &Chrome::with_back(false));
-                assert!(layout
-                    .nodes
-                    .iter()
-                    .all(|node| { node.rect.y + node.rect.height <= metrics.height }));
-            }
+        store.replace_entries(vec![rated, quarantined]);
+        for scale in [TextScale::Default, TextScale::ExtraLarge] {
+            kobo_ui::with_text_scale(scale, || {
+                for metrics in [CLARA_BW_METRICS, ELIPSA_2E_METRICS] {
+                    for screen in [
+                        store.detail("notes"),
+                        store.detail("puzzle"),
+                        store.uninstall_confirmation("notes"),
+                        quality_screen(
+                            store
+                                .entries
+                                .iter()
+                                .find(|entry| entry.id == "notes")
+                                .unwrap(),
+                        )
+                        .build(),
+                    ] {
+                        let layout = screen.layout_with(&metrics, &Chrome::with_back(false));
+                        assert!(
+                            layout
+                                .nodes
+                                .iter()
+                                .all(|node| { node.rect.y + node.rect.height <= metrics.height }),
+                            "screen clipped at {scale:?}"
+                        );
+                    }
+                }
+            });
         }
     }
 
