@@ -66,15 +66,21 @@ fn staging_dir(root: &Path) -> PathBuf {
     root.join(".adds/adoptions")
 }
 
+/// Whether `name` is a plain file name: not empty, not a dot path, no
+/// separators, no leading dot. Import and restore share this boundary.
+#[must_use]
+pub fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.starts_with('.')
+}
+
 /// Validates the boundary rules before a byte is staged.
 fn check(name: &str, bytes: &[u8]) -> Result<library::Kind, Rejection> {
-    if name.is_empty()
-        || name == "."
-        || name == ".."
-        || name.contains('/')
-        || name.contains('\\')
-        || name.starts_with('.')
-    {
+    if !plain_name(name) {
         return Err(Rejection::MalformedName);
     }
     let kind = library::Kind::from_name(name).ok_or(Rejection::UnsupportedType)?;

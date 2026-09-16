@@ -11,9 +11,11 @@
 pub mod adoption;
 pub mod clock;
 pub mod credentials;
+pub mod export;
 pub mod identity;
 pub mod library;
 mod persistence;
+pub mod restore;
 pub mod services;
 pub mod shelf;
 pub mod store;
