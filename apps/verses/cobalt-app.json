@@ -9,5 +9,32 @@
   "glyph": "note",
   "capabilities": [
     "network"
+  ],
+  "user": "Somebody who wants one good poem with breakfast.",
+  "job": "Show a public-domain poem each day.",
+  "offline": "Poems already fetched work without the network; a new day's poem needs it.",
+  "data": [
+    {
+      "kind": "the poems already fetched and your settings",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they keep yesterday's poem readable",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch each new day's poem"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not include copyrighted poetry.",
+    "It does not read poems aloud."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
   ]
 }

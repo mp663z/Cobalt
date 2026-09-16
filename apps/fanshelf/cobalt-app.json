@@ -9,5 +9,38 @@
   "glyph": "book",
   "capabilities": [
     "network"
+  ],
+  "user": "Somebody who reads fan fiction and wants a shelf of it offline.",
+  "job": "Save public AO3 works to a shelf made for offline reading.",
+  "offline": "Saved works and your tags work without the network; saving new works does not.",
+  "data": [
+    {
+      "kind": "the works you save",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay public on AO3",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your tags for the shelf",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they are how your shelf stays organised",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to save public AO3 works to your shelf"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not follow AO3 accounts or bookmarks.",
+    "It does not sync your tags anywhere."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
   ]
 }

@@ -20,5 +20,32 @@
         "command": "kobo secret set wallabag --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who saves articles to read properly later.",
+  "job": "Read your Wallabag articles on e-ink, anywhere.",
+  "offline": "Articles already fetched work without the network; fetching new ones does not.",
+  "data": [
+    {
+      "kind": "the articles already fetched",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; the originals stay in your Wallabag",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch articles from your Wallabag"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not archive or delete in Wallabag.",
+    "It does not clip pages itself."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

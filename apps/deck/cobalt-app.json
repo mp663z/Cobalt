@@ -24,5 +24,32 @@
         "command": "kobo trust set sidekick --device <address>"
       }
     ]
-  }
+  },
+  "user": "Somebody who wants their Kobo on the desk as a companion to the computer.",
+  "job": "Turn the reader into a remote control for your computer.",
+  "offline": "Nothing works without the pairing; the network is the job.",
+  "data": [
+    {
+      "kind": "the pairing with your computer",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; re-pairing takes a moment",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to reach the computer it controls"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not mirror your computer's screen.",
+    "It does not control more than one pairing."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

@@ -8,5 +8,38 @@
   "capabilities": [
     "network"
   ],
-  "release_notes": "Typeset a paper's numbered equations, line up a results table's columns under the headings that name them, carry the mathematics all the way through instead of stopping early, and close the gap before a comma."
+  "release_notes": "Typeset a paper's numbered equations, line up a results table's columns under the headings that name them, carry the mathematics all the way through instead of stopping early, and close the gap before a comma.",
+  "user": "Somebody who reads preprints and wants them on e-ink.",
+  "job": "Search arXiv, keep the papers you want, and read them on your Kobo.",
+  "offline": "Kept papers and your reading places work without the network; searching does not.",
+  "data": [
+    {
+      "kind": "the papers you keep",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the same search on arXiv fetches them again",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your reading place in each kept paper",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-read paper continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to search arXiv and fetch the papers you keep"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not fetch paywalled journals.",
+    "It does not manage citations."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

@@ -22,5 +22,38 @@
         "text": "Open Download on your shelf to retry a paused transfer. A completed download can be added to the shelf offline; saved comics remain available."
       }
     ]
-  }
+  },
+  "user": "Somebody who reads comics on e-ink.",
+  "job": "Read comics added from your computer or your Komga library.",
+  "offline": "Comics already on the reader work without the network; fetching from Komga does not.",
+  "data": [
+    {
+      "kind": "the comics you add",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered; the originals stay on your computer or in Komga",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "part-fetched transfers and reading places",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; they let an interrupted fetch resume",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [
+    {
+      "name": "network",
+      "purpose": "to fetch comics from your Komga library"
+    }
+  ],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not organise your Komga library.",
+    "It does not convert comic formats."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
