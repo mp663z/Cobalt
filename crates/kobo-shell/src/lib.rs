@@ -245,8 +245,11 @@ mod tests {
     }
 
     /// Drains until `needle` shows up in the output, or patience runs out.
+    /// Patience is generous because a shared CI runner can take seconds to
+    /// hand a freshly spawned program its first slice; the wait only ever
+    /// lasts as long as the output takes to arrive.
     fn wait_for(shells: &mut Shells, needle: &str) -> String {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(30);
         let mut seen = String::new();
         while Instant::now() < deadline && !seen.contains(needle) {
             for event in shells.drain() {
@@ -357,10 +360,13 @@ mod tests {
         // The whole reason the grid travels with the open request: a program
         // that assumes eighty columns draws off the side of this panel.
         let mut shells = permitted();
-        shells.handle(ShellRequest::Open {
-            columns: 53,
-            rows: 37,
-        });
+        assert_eq!(
+            shells.handle(ShellRequest::Open {
+                columns: 53,
+                rows: 37,
+            }),
+            Some(ShellEvent::Opened)
+        );
         shells.handle(ShellRequest::Input(b"stty size\n".to_vec()));
         let seen = wait_for(&mut shells, "37 53");
         assert!(seen.contains("37 53"), "saw {seen:?}");
