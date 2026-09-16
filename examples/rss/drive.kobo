@@ -1,0 +1,6 @@
+wait 800
+expect Feeds
+expect No feeds yet
+expect ready to read without a browser.
+clean
+shot empty

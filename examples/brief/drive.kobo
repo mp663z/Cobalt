@@ -1,0 +1,7 @@
+wait 800
+expect Daily brief
+expect not fetched yet
+expect Nothing yet
+expect Tap Refresh once the device is online.
+clean
+shot empty
