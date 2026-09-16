@@ -205,6 +205,27 @@ impl DeviceServices {
         changed
     }
 
+    /// Records the radio state the owner set outside the application, so
+    /// availability answers describe the reader as it is.
+    pub fn observe_wifi(&mut self, enabled: bool) {
+        self.wifi_enabled = enabled;
+        if !enabled {
+            self.connected_ssid = None;
+        }
+    }
+
+    /// Withdraws an owner's grant at runtime; the application's next ask
+    /// hears the refusal, with no reinstall
+    /// (docs/quality/contracts/capability-availability.md).
+    pub fn revoke_grant(&mut self, capability: Capability) {
+        self.grants.revoke(capability);
+    }
+
+    /// Hands a revoked grant back.
+    pub fn restore_grant(&mut self, capability: Capability) {
+        self.grants.restore(capability);
+    }
+
     /// The state applications currently observe.
     #[must_use]
     pub const fn state(&self) -> DeviceState {
@@ -459,6 +480,7 @@ impl DeviceServices {
     fn refusal(&self, capability: Capability) -> Option<DenyReason> {
         match self.grants.check(capability) {
             Grant::NotDeclared => return Some(DenyReason::NotDeclared),
+            Grant::Revoked => return Some(DenyReason::PolicyRejected),
             Grant::WithheldForBattery => return Some(DenyReason::WithheldForBattery),
             Grant::Allowed => {}
         }
@@ -524,6 +546,27 @@ impl DeviceServices {
     /// sensor that is present and sees nothing. An application then exercises
     /// the same path it will on hardware rather than a "no sensor" branch it
     /// would never otherwise reach.
+    /// The owner action standing between the application and a capability
+    /// the build allows and the grants permit, or `None` when it is usable
+    /// now. A radio the owner turned off needs their hand, not time, so the
+    /// answer names where to turn it back on.
+    fn owner_setup_needed(&self, capability: Capability) -> Option<String> {
+        match capability {
+            Capability::Network
+            | Capability::WifiControl
+            | Capability::HoldWifi
+            | Capability::BackgroundNetwork
+                if !self.wifi_enabled =>
+            {
+                Some("Wi-Fi is off; turn it on in Settings and the network answers".to_owned())
+            }
+            Capability::BluetoothAudio if !self.bluetooth_enabled => {
+                Some("Bluetooth is off; turn it on and pair headphones in Settings".to_owned())
+            }
+            _ => None,
+        }
+    }
+
     /// Answers one availability question with the state the evidence
     /// actually carries, never a bare boolean
     /// (docs/quality/contracts/capability-availability.md). The answer
@@ -543,7 +586,16 @@ impl DeviceServices {
             );
         };
         match self.refusal(capability) {
-            None => report(CapabilityAvailability::Available, "available".to_owned()),
+            None => self.owner_setup_needed(capability).map_or_else(
+                || report(CapabilityAvailability::Available, "available".to_owned()),
+                |action| report(CapabilityAvailability::OwnerSetupRequired, action),
+            ),
+            Some(DenyReason::PolicyRejected) if self.grants.was_revoked(capability) => report(
+                CapabilityAvailability::Denied,
+                format!(
+                    "the owner revoked '{name}' in Settings; granting it again restores it without reinstalling"
+                ),
+            ),
             Some(DenyReason::NotDeclared) => report(
                 CapabilityAvailability::Denied,
                 format!("the application has not declared '{name}' in its manifest"),
@@ -915,6 +967,83 @@ mod tests {
                 name: "network".to_owned(),
                 state: CapabilityAvailability::Unsupported,
                 reason: "this build does not implement 'network' on this device".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_revoked_grant_reports_denied_with_the_way_back() {
+        let mut services = DeviceServices::new(
+            declared(&["network", "wifi-control"]),
+            PowerPolicy::DEFAULT,
+            Backends::with(Capability::ALL),
+        );
+        services.revoke_grant(Capability::WifiControl);
+        let DeviceResult::Capability { state, reason, .. } =
+            services.handle(DeviceRequest::ReadCapability {
+                name: "wifi-control".to_owned(),
+            })
+        else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::Denied);
+        assert!(reason.contains("revoked"), "{reason}");
+        // The refusal reaches real requests on the next ask, no reinstall.
+        assert!(matches!(
+            services.handle(DeviceRequest::ScanWifi),
+            DeviceResult::Denied(DenyReason::PolicyRejected)
+        ));
+        // Granting it again restores use without reinstalling.
+        services.restore_grant(Capability::WifiControl);
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "wifi-control".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "wifi-control".to_owned(),
+                state: CapabilityAvailability::Available,
+                reason: "available".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_radio_the_owner_turned_off_reports_owner_setup_required() {
+        let mut services = DeviceServices::new(
+            declared(&["network", "audio", "bluetooth-audio"]),
+            PowerPolicy::DEFAULT,
+            Backends::with(Capability::ALL),
+        );
+        services.observe_wifi(false);
+        let DeviceResult::Capability { state, reason, .. } =
+            services.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned(),
+            })
+        else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::OwnerSetupRequired);
+        assert!(reason.contains("Wi-Fi"), "{reason}");
+        // Bluetooth starts off, as on a reader that never paired headphones.
+        let DeviceResult::Capability { state, reason, .. } =
+            services.handle(DeviceRequest::ReadCapability {
+                name: "bluetooth-audio".to_owned(),
+            })
+        else {
+            panic!("a capability report")
+        };
+        assert_eq!(state, CapabilityAvailability::OwnerSetupRequired);
+        assert!(reason.contains("Bluetooth"), "{reason}");
+        // Turning the radio back on answers available on the next ask.
+        services.observe_wifi(true);
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "network".to_owned(),
+                state: CapabilityAvailability::Available,
+                reason: "available".to_owned(),
             }
         );
     }
