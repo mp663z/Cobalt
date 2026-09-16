@@ -7,5 +7,27 @@
   "version": "0.1.2",
   "release_notes": "Keep species choices and sighting count controls on the screen when text is enlarged.",
   "glyph": "search",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who watches birds and wants the list to grow.",
+  "job": "Log a sighting while the bird is still in front of you, and watch your life list grow.",
+  "offline": "Your sightings live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "your sightings and the life list built from them",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it is the record the list is counted from",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not identify birds from photos or sound.",
+    "It does not share your list anywhere."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

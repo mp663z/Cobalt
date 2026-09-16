@@ -7,5 +7,33 @@
   "version": "0.2.4",
   "release_notes": "Preview a card's front, back and media on your computer before importing, and see how many cards and how much media a package holds. Merging and replacing a collection are now separate, named choices.",
   "glyph": "bookmark",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody keeping a memory practice going on their Kobo.",
+  "job": "Review the cards that are due, wherever the reader is.",
+  "offline": "The collection and your reviews live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the card collection you staged from your computer",
+      "location": "the app's shelf storage on the reader",
+      "export": "not needed; the originals stay on your computer",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "your review log, which drives what is due next",
+      "location": "the app's shelf storage on the reader",
+      "export": "not offered from the app; the log stays on the reader and drives what is due next",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not build collections; your computer does that.",
+    "It does not sync reviews on its own."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

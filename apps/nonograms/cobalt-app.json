@@ -7,5 +7,33 @@
   "version": "0.1.6",
   "release_notes": "Adds an original picture collection and keeps earlier puzzles and their saved games in a separate collection.",
   "glyph": "grid",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants a slow picture puzzle on their Kobo.",
+  "job": "Solve picture puzzles with undo, and keep the ones you have finished.",
+  "offline": "Every puzzle and save lives on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "each puzzle in progress, with its undo history",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-solved puzzle continues",
+      "on_remove": "retained"
+    },
+    {
+      "kind": "the list of puzzles you have solved",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it only marks which puzzles open next",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new puzzles.",
+    "It does not time you or keep scores."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

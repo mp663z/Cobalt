@@ -6,5 +6,27 @@
   "version": "1.0.11",
   "glyph": "grid",
   "capabilities": [],
-  "release_notes": "Adds three measured difficulty levels, saved answers and pencil notes, persistent undo, optional checking, clear completion and reachable landscape controls."
+  "release_notes": "Adds three measured difficulty levels, saved answers and pencil notes, persistent undo, optional checking, clear completion and reachable landscape controls.",
+  "user": "Somebody who wants a pencil-and-paper puzzle on their Kobo.",
+  "job": "Play Sudoku with pencil notes, undo and optional checking, and come back to a half-finished puzzle.",
+  "offline": "Every puzzle, note and save lives on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the puzzle in progress, with its answers, pencil notes and undo history",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-finished puzzle continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "profiles": [
+    "clara-bw-391"
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "non_goals": [
+    "It does not download new puzzles.",
+    "It does not keep scores or statistics across puzzles."
+  ]
 }

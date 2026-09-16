@@ -7,5 +7,27 @@
   "version": "0.1.2",
   "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
   "glyph": "note",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who keeps their notes in plain text.",
+  "job": "Read your notes by folder, tag, link and backlink, away from your desk.",
+  "offline": "The notes you push to the reader stay on it; it never touches the network.",
+  "data": [
+    {
+      "kind": "the notes you pushed, with their index",
+      "location": "the app's private storage on the reader",
+      "export": "not needed; the originals stay on your computer",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not edit your notes.",
+    "It does not sync them back on its own."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

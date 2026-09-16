@@ -7,5 +7,27 @@
   "version": "0.1.2",
   "release_notes": "Choose named filters and browse complete result pages at every text size.",
   "glyph": "book",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody running a tabletop game who wants the book off the table.",
+  "job": "Look up a rule in the offline reference and run the combat you are in.",
+  "offline": "The reference and your encounter live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "the encounter in progress, with its combatants and notes",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a paused combat continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new reference material.",
+    "It does not run a campaign for you."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }

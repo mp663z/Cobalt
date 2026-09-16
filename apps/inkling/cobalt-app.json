@@ -7,5 +7,27 @@
   "version": "0.1.3",
   "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for.",
   "glyph": "note",
-  "capabilities": []
+  "capabilities": [],
+  "user": "Somebody who wants one small word puzzle a day.",
+  "job": "Solve today's five-letter word and keep the streak going.",
+  "offline": "The puzzle and your guesses live on the reader; it never touches the network.",
+  "data": [
+    {
+      "kind": "today's puzzle in progress and your streak",
+      "location": "the app's private storage on the reader",
+      "export": "not offered; it exists so a half-guessed word continues",
+      "on_remove": "retained"
+    }
+  ],
+  "capabilities_required": [],
+  "capabilities_optional": [],
+  "non_goals": [
+    "It does not download new words.",
+    "It does not post your score anywhere."
+  ],
+  "maintainer": "The Cobalt app maintainers.",
+  "support": "the Cobalt issue tracker",
+  "profiles": [
+    "clara-bw-391"
+  ]
 }
