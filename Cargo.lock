@@ -1106,6 +1106,7 @@ version = "0.3.15"
 dependencies = [
  "kobo-abi",
  "kobo-doc",
+ "kobo-handoff",
  "kobo-profile",
  "kobo-protocol",
  "minimp3",
@@ -1116,6 +1117,7 @@ name = "kobo-handoff"
 version = "0.3.15"
 dependencies = [
  "kobo-hal",
+ "kobo-profile",
 ]
 
 [[package]]

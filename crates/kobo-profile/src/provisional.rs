@@ -137,6 +137,9 @@ pub fn profile_from_probe(
         // reaps nothing and the worst case is Wi-Fi that needs a restart.
         leftover_radio_daemons: &[],
         reap_nickel_supplicant: false,
+        // Unrecognised hardware owns nothing measured: every resource record
+        // is unverified, so no handoff can be driven from this profile.
+        ownership: crate::ownership::UNMEASURED,
         // Claiming a Kaleido filter that is not there tints every page of a
         // monochrome reader, while missing one that is costs only colour. The
         // asymmetry decides this on hardware nobody has looked at.

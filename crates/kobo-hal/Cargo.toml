@@ -13,6 +13,9 @@ kobo-profile = { path = "../kobo-profile" }
 kobo-protocol = { path = "../kobo-protocol" }
 minimp3 = "0.5.2"
 
+[dev-dependencies]
+kobo-handoff = { path = "../kobo-handoff" }
+
 [features]
 default = []
 device-write = ["kobo-abi/device-write"]
