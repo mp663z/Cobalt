@@ -1,4 +1,15 @@
 wait 800
 expect Morse
+expect SOS
+expect seconds to send.
 clean
-shot writing
+shot compose
+tap Send
+expect Stop
+clean
+shot sending
+tap Stop
+expect Send
+expect Edit
+clean
+shot sent

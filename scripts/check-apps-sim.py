@@ -71,33 +71,49 @@ def run_app(app, kobo, out, environment, timeout):
             # Real dice come from the operating system, so a route that says
             # what was rolled needs the fixture source rather than chance.
             env['KOBO_BACKGAMMON_SEED'] = '7'
-        try:
-            seed(app, state, kobo, env, log)
-            process = subprocess.Popen([str(kobo), 'dev', '127.0.0.1:0'], cwd=directory,
-                                       env=env, stdout=log, stderr=log, start_new_session=True)
+        def launch():
+            """Start the simulator and demand a rendered first screen."""
+            proc = subprocess.Popen([str(kobo), 'dev', '127.0.0.1:0'], cwd=directory,
+                                    env=env, stdout=log, stderr=log, start_new_session=True)
             deadline = time.monotonic() + timeout
-            address = None
             while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    raise RuntimeError(f'simulator exited with {process.returncode}; see {log_path}')
-                ready = re.search(r'Kobo app simulator: http://(127\.0\.0\.1:\d+)', log_path.read_text())
-                if ready:
-                    address = ready.group(1)
-                    probe = subprocess.run([str(kobo), 'drive', '--address', address, '--step', 'dump'],
+                if proc.poll() is not None:
+                    raise RuntimeError(f'simulator exited with {proc.returncode}; see {log_path}')
+                # The log outlives a launch: the same file holds the previous
+                # instance's line, so the address wanted is the latest one.
+                seen = re.findall(r'Kobo app simulator: http://(127\.0\.0\.1:\d+)', log_path.read_text())
+                if seen:
+                    found = seen[-1]
+                    probe = subprocess.run([str(kobo), 'drive', '--address', found, '--step', 'dump'],
                                            env=env, capture_output=True, text=True, timeout=10)
                     if probe.returncode == 0 and '["' in probe.stdout:
-                        result['launched'] = True
-                        break
+                        return proc, found
                 time.sleep(0.2)
-            if not result['launched']:
-                raise RuntimeError(f'no first screen within {timeout}s; see {log_path}')
+            stop_group(proc)
+            raise RuntimeError(f'no first screen within {timeout}s; see {log_path}')
+
+        try:
+            seed(app, state, kobo, env, log)
+            process, address = launch()
+            result['launched'] = True
             command = [str(kobo), 'drive', '--address', address, '--ideal', '--shots', str(out / (app + '-shots'))]
             command += ['--script', str(route)] if route else ['--step', 'dump']
             driven = subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=log, timeout=timeout)
             result['exit_code'] = driven.returncode
             result['status'] = 'pass' if driven.returncode == 0 else 'fail'
+            if result['status'] == 'pass':
+                # Offline reopen: same state, fresh process, no seeding, no
+                # network. A route that created anything must find the app
+                # still able to open - state persisted, nothing stranded.
+                stop_group(process)
+                process = None
+                process, _address = launch()
+                result['reopened'] = True
         except (OSError, RuntimeError, subprocess.SubprocessError) as error:
             result['error'] = str(error)
+            if result['status'] == 'pass':
+                result['status'] = 'fail'
+                result['reopened'] = False
         finally:
             stop_group(process)
     return result
@@ -143,7 +159,9 @@ def main():
         print(json.dumps(result), flush=True)
     failed = [r['app'] for r in report['results'] if r['status'] != 'pass']
     routes = sum(r.get('route') is not None for r in report['results'])
-    print(f"{len(apps) - len(failed)}/{len(apps)} apps passed; {routes} committed routes; report: {out / 'results.json'}")
+    reopened = sum(bool(r.get('reopened')) for r in report['results'])
+    print(f"{len(apps) - len(failed)}/{len(apps)} apps passed; {routes} committed routes; "
+          f"{reopened} reopened offline; report: {out / 'results.json'}")
     return 1 if failed else 0
 
 
