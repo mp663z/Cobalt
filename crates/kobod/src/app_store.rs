@@ -1492,6 +1492,7 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
+            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),
@@ -1528,6 +1529,7 @@ mod tests {
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let binary = format!("{id} app binary {version}").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
+            quality: None,
             id: id.to_owned(),
             display_name: format!("{id} application"),
             short_label: id.to_owned(),

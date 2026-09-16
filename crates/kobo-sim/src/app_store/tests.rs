@@ -32,6 +32,7 @@ impl Fixture {
     fn release(&self, version: &str, minimum: &str, signer: &[u8; 32]) -> Vec<u8> {
         let binary = format!("Original inert test payload {version}").into_bytes();
         let manifest = Manifest::new_public(ManifestInput {
+            quality: None,
             id: "quality-fixture".into(),
             display_name: "Quality fixture".into(),
             short_label: "Fixture".into(),

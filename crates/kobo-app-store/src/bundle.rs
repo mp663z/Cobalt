@@ -181,6 +181,7 @@ mod tests {
     fn manifest(binary: &[u8]) -> Manifest {
         Manifest::new(
             ManifestInput {
+                quality: None,
                 id: "reader".to_owned(),
                 display_name: "Reader".to_owned(),
                 short_label: "Reader".to_owned(),
@@ -203,6 +204,7 @@ mod tests {
         let key = derive_public_key(&seed).expect("key");
         let binary = b"binary";
         let mut input = ManifestInput {
+            quality: None,
             id: "shell-tool".to_owned(),
             display_name: "Shell Tool".to_owned(),
             short_label: "Shell".to_owned(),

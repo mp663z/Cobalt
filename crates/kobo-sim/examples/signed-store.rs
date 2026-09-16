@@ -1,7 +1,7 @@
 //! Create/update an explicitly local signed Store fixture; never a release key.
 use kobo_app_store::{
-    build_bundle, derive_public_key, sign, Catalog, CatalogEntry, CatalogEntryInput, Manifest,
-    ManifestInput,
+    build_bundle, derive_public_key, sign, Catalog, CatalogEntry, CatalogEntryInput, DataKindInput,
+    Manifest, ManifestInput, QualityInput,
 };
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
@@ -36,6 +36,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         |path| fs::read(path).expect("fixture payload readable"),
     );
     let manifest = Manifest::new_public(ManifestInput {
+        // The Store journey renders purposes, retention and update diffs from
+        // this block, so the fixture carries a complete quality manifest.
+        quality: Some(QualityInput {
+            user: "Somebody checking the Store journey.".into(),
+            job: "Stand in for a real application in install and removal checks.".into(),
+            offline: "Everything the fixture does works without the network.".into(),
+            data: vec![DataKindInput {
+                kind: "the fixture's saved state".into(),
+                location: "the app's private storage on the reader".into(),
+                export: "not offered; the bytes are inert".into(),
+                on_remove: "retained".into(),
+            }],
+            capabilities_required: vec![],
+            capabilities_optional: vec![],
+            profiles: vec!["clara-bw-391".into()],
+            maintainer: "The Cobalt app maintainers.".into(),
+            support: "the Cobalt issue tracker".into(),
+            non_goals: vec!["It does nothing a real application does.".into()],
+        }),
         id: "quality-fixture".into(),
         display_name: "Quality fixture".into(),
         short_label: "Fixture".into(),
