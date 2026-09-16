@@ -98,6 +98,9 @@ pub struct DeviceServices {
     auto_update: AutoUpdateChoices,
     update_channel: UpdateChannel,
     app_channel: UpdateChannel,
+    /// What startup probes saw, per capability, cited when the capability is
+    /// reported unsupported so the answer carries evidence, not an assumption.
+    probe_evidence: std::collections::BTreeMap<Capability, String>,
 }
 
 /// The two standing update switches, held together because they are asked
@@ -152,6 +155,7 @@ impl DeviceServices {
             },
             update_channel: UpdateChannel::Stable,
             app_channel: UpdateChannel::Stable,
+            probe_evidence: std::collections::BTreeMap::new(),
         }
     }
 
@@ -212,6 +216,12 @@ impl DeviceServices {
         if !enabled {
             self.connected_ssid = None;
         }
+    }
+
+    /// Records what a startup probe saw for a capability; the availability
+    /// answer cites it when the capability is unsupported.
+    pub fn observe_probe(&mut self, capability: Capability, evidence: impl Into<String>) {
+        self.probe_evidence.insert(capability, evidence.into());
     }
 
     /// Withdraws an owner's grant at runtime; the application's next ask
@@ -604,10 +614,15 @@ impl DeviceServices {
                 CapabilityAvailability::TemporarilyUnavailable,
                 "withheld while the battery is low; it returns as the battery recovers".to_owned(),
             ),
-            Some(DenyReason::Unsupported) => report(
-                CapabilityAvailability::Unsupported,
-                format!("this build does not implement '{name}' on this device"),
-            ),
+            Some(DenyReason::Unsupported) => {
+                let reason = self.probe_evidence.get(&capability).map_or_else(
+                    || format!("this build does not implement '{name}' on this device"),
+                    |evidence| {
+                        format!("this build does not implement '{name}' on this device ({evidence})")
+                    },
+                );
+                report(CapabilityAvailability::Unsupported, reason)
+            }
             Some(reason @ (DenyReason::PolicyRejected | DenyReason::Busy)) => {
                 report(CapabilityAvailability::Denied, reason.describe().to_owned())
             }
@@ -967,6 +982,27 @@ mod tests {
                 name: "network".to_owned(),
                 state: CapabilityAvailability::Unsupported,
                 reason: "this build does not implement 'network' on this device".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn an_unsupported_answer_cites_what_the_probe_saw() {
+        let mut services = DeviceServices::new(
+            declared(&["network"]),
+            PowerPolicy::DEFAULT,
+            Backends::none(),
+        );
+        services.observe_probe(Capability::Network, "no such node: /sys/class/net/wlan0");
+        assert_eq!(
+            services.handle(DeviceRequest::ReadCapability {
+                name: "network".to_owned()
+            }),
+            DeviceResult::Capability {
+                name: "network".to_owned(),
+                state: CapabilityAvailability::Unsupported,
+                reason: "this build does not implement 'network' on this device (no such node: /sys/class/net/wlan0)"
+                    .to_owned(),
             }
         );
     }

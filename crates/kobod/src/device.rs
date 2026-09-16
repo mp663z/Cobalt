@@ -1731,6 +1731,19 @@ fn host_applications(
         PowerPolicy::DEFAULT,
         Backends::with(backends),
     );
+    // Compose the ownership records into availability evidence: when a
+    // capability is unsupported, the report cites what the startup probe
+    // actually saw rather than an assumption. A development host matches no
+    // profile and records nothing, exactly as before.
+    if let Ok(snapshot) = kobo_hal::probe_device() {
+        if let Some(profile) = kobo_profile::identify_profile(&snapshot) {
+            for (capability, evidence) in
+                kobod::probes::probe_evidence(profile.ownership, Path::new("/"))
+            {
+                services.observe_probe(capability, evidence);
+            }
+        }
+    }
     let dictionaries = services.load_dictionaries(Path::new(DICTIONARIES));
     println!("offline dictionaries loaded: {dictionaries}");
     if let Some(light) = &frontlight {
