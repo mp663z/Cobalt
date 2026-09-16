@@ -1517,8 +1517,13 @@
     "pr": 3,
     "group": "Flashcards app",
     "task": "Test reveal, grade and restart with imported fixtures",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "The committed route apps/flashcards/drive.kobo now drives the full journey against the staged imported fixture: open deck, reveal card 1, grade Good; reveal card 2, grade Hard; reveal card 3, grade Easy; Review complete screen ('3 of 3 due cards recorded locally'); back to the picker.",
+      "Finishing every due card no longer lands on the generic 'Nothing here yet' empty state: the picker shows 'All done for now - Every due card in this collection was recorded locally. Grades stay on this reader.' with a Check collection again action (restart via re-read or relaunch).",
+      "check-apps-sim.py reopens the app offline after the route and replays it - the restart leg passes at default and XL text scales.",
+      "Pixel-verified sim captures at both scales: done.png, decks-after-review.png; regenerated golden empty.png (nothing-imported case keeps its own copy, no check glyph)."
+    ]
   },
   {
     "id": "CARDS-06",

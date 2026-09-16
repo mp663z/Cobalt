@@ -19,7 +19,29 @@ clean
 shot answer
 
 tap-id good
-wait 1000
 wait-for-id answer
+expect What is water turning into vapour called?
 clean
-shot next-card
+shot second-card
+
+tap-id answer
+wait-for-id hard
+expect Evaporation.
+tap-id hard
+wait-for-id answer
+expect How many sides does a hexagon have?
+tap-id answer
+wait-for-id easy
+expect Six.
+tap-id easy
+wait-for-id back-decks
+expect Review complete
+clean
+shot done
+
+tap-id back-decks
+wait 800
+expect All done for now
+expect Every due card in this collection was recorded locally.
+clean
+shot decks-after-review

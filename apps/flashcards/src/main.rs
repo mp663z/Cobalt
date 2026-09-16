@@ -315,13 +315,24 @@ impl Flashcards {
             ],
         );
         if total == 0 {
-            let message = if imported_total == 0 {
-                "Nothing is due in this imported collection."
+            let (title, message) = if imported_total == 0 {
+                (
+                    "Nothing here yet",
+                    "Nothing is due in this imported collection.",
+                )
             } else {
-                "All due cards in this collection were recorded locally."
+                (
+                    "All done for now",
+                    "Every due card in this collection was recorded locally. Grades stay on this reader.",
+                )
+            };
+            let glyph = if imported_total == 0 {
+                None
+            } else {
+                Some(Glyph::Check)
             };
             return screen
-                .empty_state(message)
+                .splash(glyph, title, message)
                 .bottom_action("retry", "Check collection again")
                 .build();
         }
