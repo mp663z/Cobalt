@@ -21154,6 +21154,7 @@ mod prose_tests {
         assert!(screen.validate(&CLARA_BW_METRICS).is_empty());
     }
 
+    #[test]
     fn a_button_is_as_tall_as_the_words_on_it() {
         // Two secondary actions side by side give each label half the panel,
         // and at the larger reader text settings "Clear finished" needs two
