@@ -1471,16 +1471,20 @@
     "pr": 3,
     "group": "Flashcards app",
     "task": "Replace expected missing collection error with first-use setup",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "A missing collection no longer renders as an error. The first-use screen ('Set up Flashcards') explains in plain sentences that review happens on the Kobo offline, that decks arrive by running the companion importer on a computer with the owner's Anki collection, and offers two actions: 'Start with the sample deck' and 'Read collection again'. Corrupt and unsafe-media states keep the honest error treatment. Unit test pins the setup screen rendering with both actions reachable at default and XL text scale; scripts/quality/check-flashcards-first-use-sim.py proves the journey on a fresh simulator at both scales."
+    ]
   },
   {
     "id": "CARDS-02",
     "pr": 3,
     "group": "Flashcards app",
     "task": "Include an original ready-to-review sample",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "The format crate gains sample_bundle(): three original Cobalt-owned cards ('Nature Notes') encoded with the same verified encode() a staged import produces. The demo_bundle example now calls it, so the committed fixture and the in-app sample can never drift (regeneration verified byte-identical). Tapping 'Start with the sample deck' writes the bundle to the shelf and loads it: the e2e script drives setup > sample > deck picker (Nature Notes, 3 due) > first card with Reveal answer at both text scales, pixel-verified."
+    ]
   },
   {
     "id": "CARDS-03",

@@ -129,6 +129,7 @@ struct Flashcards {
     library_download: Option<ShelfDownload>,
     review_download: Option<ShelfDownload>,
     review_upload: Option<ShelfUpload>,
+    sample_upload: Option<ShelfUpload>,
     bundle: Option<ParsedBundle>,
     bundle_digest: String,
     selected_deck: Option<usize>,
@@ -164,6 +165,7 @@ impl Default for Flashcards {
             library_download: None,
             review_download: None,
             review_upload: None,
+            sample_upload: None,
             bundle: None,
             bundle_digest: String::new(),
             selected_deck: None,
@@ -208,7 +210,11 @@ impl Flashcards {
                     ),
                     |(kind, message)| (*kind, message.clone()),
                 );
-                problem_screen(kind, &message, self.menu_open)
+                if kind == ProblemKind::Missing {
+                    first_use_screen(self.menu_open, self.sample_upload.is_some())
+                } else {
+                    problem_screen(kind, &message, self.menu_open)
+                }
             }
         }
     }
@@ -823,6 +829,56 @@ impl Flashcards {
         context.set_screen(self.screen());
     }
 
+    /// Writes the built-in sample deck when the owner asks for it on the
+    /// first-use screen. Returns whether it took the tap.
+    fn sample_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action != action_id("sample") || self.sample_upload.is_some() {
+            return false;
+        }
+        match kobo_flashcards_format::sample_bundle() {
+            Ok(bytes) => {
+                let mut upload = ShelfUpload::new(BUNDLE_NAME, bytes);
+                upload.start(context);
+                self.sample_upload = Some(upload);
+                context.set_screen(self.screen());
+            }
+            Err(_) => {
+                self.set_problem(
+                    context,
+                    ProblemKind::Corrupt,
+                    "The built-in sample could not be prepared on this reader.",
+                );
+            }
+        }
+        true
+    }
+
+    /// Drives an in-flight sample write. Returns whether the store result was
+    /// the sample's own business.
+    fn advance_sample_upload(&mut self, context: &mut Context, result: &StoreResult) -> bool {
+        let Some(upload) = &mut self.sample_upload else {
+            return false;
+        };
+        match upload.advance(context, result) {
+            ShelfProgress::Done => {
+                self.sample_upload = None;
+                self.start_download(context);
+                true
+            }
+            ShelfProgress::Moving { .. } => true,
+            ShelfProgress::Failed(_) => {
+                self.sample_upload = None;
+                self.set_problem(
+                    context,
+                    ProblemKind::Corrupt,
+                    "The sample deck could not be saved. Check storage and try again.",
+                );
+                true
+            }
+            ShelfProgress::Elsewhere => false,
+        }
+    }
+
     fn open_view(&mut self, context: &mut Context, view: View) {
         self.return_view = self.view;
         self.view = view;
@@ -922,6 +978,7 @@ impl KoboApp for Flashcards {
             self.close_supporting_screen(context);
         } else if action == action_id("retry") {
             self.start_download(context);
+        } else if self.sample_action(context, action) {
         } else if action == action_id("choose-deck") || action == action_id("back-decks") {
             self.view = View::Decks;
             self.answer = false;
@@ -1044,6 +1101,9 @@ impl KoboApp for Flashcards {
                 ShelfProgress::Elsewhere => {}
             }
         }
+        if self.advance_sample_upload(context, &result) {
+            return;
+        }
         if let Some(upload) = &mut self.review_upload {
             match upload.advance(context, &result) {
                 ShelfProgress::Done => {
@@ -1086,6 +1146,25 @@ fn loading_screen(received: u64, total: Option<u64>) -> Screen {
             .section("Opening collection")
             .skeleton(5)
             .transfer("Reading verified bundle", received, total)
+            .build()
+    }
+}
+
+/// First run, no collection yet: a setup screen, not an error. Offers the
+/// built-in sample and says plainly how a real collection arrives.
+fn first_use_screen(menu_open: bool, saving_sample: bool) -> Screen {
+    let screen = ScreenBuilder::new("flashcards-first-use")
+        .top_bar("Flashcards")
+        .top_bar_overflow("more", menu_open, [("notices", "Licences & about")])
+        .heading("Set up Flashcards")
+        .text("Review happens on this Kobo, offline. Your own decks arrive from your computer: run the Cobalt flashcards importer there with your Anki collection, transfer the bundle it writes, then read it here.")
+        .text("Want to look around first? A short sample deck is built in.");
+    if saving_sample {
+        screen.text("Saving the sample deck…").build()
+    } else {
+        screen
+            .primary_button("sample", "Start with the sample deck")
+            .bottom_action("retry", "Read collection again")
             .build()
     }
 }
@@ -1957,6 +2036,39 @@ mod tests {
             ("licenses", notice_index, None, false),
             ("license-document", notice_screen, None, false),
         ]
+    }
+
+    #[test]
+    fn first_use_is_a_setup_screen_not_an_error() {
+        install_fonts();
+        let app = Flashcards {
+            view: View::Problem,
+            problem: Some((ProblemKind::Missing, "unused".to_owned())),
+            ..Flashcards::default()
+        };
+        let screen = app.screen();
+        assert!(screen
+            .diagnostics(&CLARA_BW_METRICS, &Chrome::measuring(false))
+            .issues
+            .is_empty());
+        let layout = screen.layout_with(&CLARA_BW_METRICS, &Chrome::measuring(false));
+        assert!(layout.rect_of_action(action_id("sample")).is_some());
+        assert!(layout.rect_of_action(action_id("retry")).is_some());
+        let mut xl_metrics = CLARA_BW_METRICS;
+        xl_metrics.text_scale = TextScale::ExtraLarge;
+        let xl = screen.layout_with(&xl_metrics, &Chrome::measuring(false));
+        assert!(xl.rect_of_action(action_id("sample")).is_some());
+    }
+
+    #[test]
+    fn the_sample_collection_is_a_valid_ready_bundle() {
+        let bytes = kobo_flashcards_format::sample_bundle().expect("sample encodes");
+        let bundle = kobo_flashcards_format::decode(&bytes).expect("sample decodes");
+        let manifest = bundle.manifest();
+        assert_eq!(manifest.cards.len(), 3);
+        assert_eq!(manifest.decks[0].name, "Nature Notes");
+        assert_eq!(manifest.review_queue.card_ids.len(), 3);
+        assert!(!manifest.cards[0].front.is_empty());
     }
 
     #[test]
