@@ -477,6 +477,18 @@ pub fn uninstall(root: &Path, id: &str) -> Result<(), DeviceError> {
 /// Returns a bounded device error for an invalid identity, missing package,
 /// failed verification, unsafe filesystem object, or failed transaction.
 pub fn uninstall_using(root: &Path, id: &str, key: &Ed25519PublicKey) -> Result<(), DeviceError> {
+    uninstall_with_power(root, id, key, &mut |_| Ok(()))
+}
+
+/// The uninstall transaction with a power-loss boundary injected by tests.
+/// Checkpoints: `prepared` (staging area cleared), `retired` (the current
+/// directory set aside), `committed` (the tombstone durable).
+fn uninstall_with_power(
+    root: &Path,
+    id: &str,
+    key: &Ed25519PublicKey,
+    power: &mut PowerLoss,
+) -> Result<(), DeviceError> {
     if !kobo_protocol::valid_app_id(id) || kobo_app_store::is_public_reserved_app_id(id) {
         return Err(DeviceError::InvalidInput);
     }
@@ -495,9 +507,11 @@ pub fn uninstall_using(root: &Path, id: &str, key: &Ed25519PublicKey) -> Result<
     remove_directory(&removed)?;
     let tombstone = apps.join(format!("{id}.{UNINSTALLED_SUFFIX}"));
     remove_file(&tombstone)?;
+    power("prepared")?;
     if has_current {
         rename_synced(&current, &removed, &apps)?;
     }
+    power("retired")?;
     if write_synced(&tombstone, b"committed\n")
         .and_then(|()| sync_directory(&apps))
         .is_err()
@@ -508,6 +522,7 @@ pub fn uninstall_using(root: &Path, id: &str, key: &Ed25519PublicKey) -> Result<
         }
         return Err(DeviceError::Backend);
     }
+    power("committed")?;
     // The absence of the current directory is now the durable commit. Cleanup
     // can be retried later and must never roll a partially deleted app back.
     let _ignored = remove_directory(&removed);
@@ -623,6 +638,13 @@ fn refresh_channel_with(
 
 /// A host-injected write failure, applied only after normal verification.
 /// Real filesystem failures continue to use the same bounded backend error.
+/// A power-loss boundary inside an app transaction. Tests interrupt at a
+/// named checkpoint; the transaction then stops at once, with no in-process
+/// rollback, so the recovery that runs is the next startup's - exactly what
+/// a real power cut leaves behind. Production passes a closure that never
+/// interrupts.
+type PowerLoss<'a> = dyn FnMut(&str) -> Result<(), DeviceError> + 'a;
+
 #[derive(Clone, Copy, Debug)]
 pub enum AppWriteFault {
     NoRoom,
@@ -702,7 +724,7 @@ pub fn install_using_fault(
     fetch: impl FnMut(&str, u32) -> Result<Vec<u8>, DeviceError>,
     fault: Option<AppWriteFault>,
 ) -> Result<(), DeviceError> {
-    install_full(root, id, channel, key, fetch, fault, None)
+    install_full(root, id, channel, key, fetch, fault, None, &mut |_| Ok(()))
 }
 
 /// The install transaction with a post-install launch canary: the staged
@@ -724,7 +746,16 @@ pub fn install_with_canary(
     fault: Option<AppWriteFault>,
     canary: &dyn Fn(&Path, &Manifest) -> Result<String, String>,
 ) -> Result<(), DeviceError> {
-    install_full(root, id, channel, key, fetch, fault, Some(canary))
+    install_full(
+        root,
+        id,
+        channel,
+        key,
+        fetch,
+        fault,
+        Some(canary),
+        &mut |_| Ok(()),
+    )
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -736,6 +767,7 @@ fn install_full(
     mut fetch: impl FnMut(&str, u32) -> Result<Vec<u8>, DeviceError>,
     fault: Option<AppWriteFault>,
     canary: Option<&dyn Fn(&Path, &Manifest) -> Result<String, String>>,
+    power: &mut PowerLoss,
 ) -> Result<(), DeviceError> {
     if !kobo_protocol::valid_app_id(id) || kobo_app_store::is_public_reserved_app_id(id) {
         return Err(DeviceError::InvalidInput);
@@ -789,6 +821,7 @@ fn install_full(
         bundle.signature(),
         bundle.binary(),
         canary,
+        power,
     )
 }
 
@@ -1122,12 +1155,17 @@ fn recover_interrupted_transaction(
 }
 
 #[allow(clippy::type_complexity)]
+/// The install transaction with a power-loss boundary injected by tests.
+/// Checkpoints: `staged` (candidate written and synced), `canaried` (launch
+/// canary passed), `retired` (current set aside), `activated` (candidate
+/// renamed into place and synced).
 fn stage_and_swap(
     root: &Path,
     manifest: &Manifest,
     signature: DetachedSignature,
     binary: &[u8],
     canary: Option<&dyn Fn(&Path, &Manifest) -> Result<String, String>>,
+    power: &mut PowerLoss,
 ) -> Result<(), DeviceError> {
     let apps = apps_root(root);
     fs::create_dir_all(&apps).map_err(|_| DeviceError::Backend)?;
@@ -1154,6 +1192,7 @@ fn stage_and_swap(
     sync_directory(&staging.join("bin"))?;
     sync_directory(&staging)?;
     sync_directory(&apps)?;
+    power("staged")?;
     if let Some(canary) = canary {
         if let Err(diagnostics) = canary(&binary_path, manifest) {
             // The failed package is quarantined, not deleted: it stays under
@@ -1168,6 +1207,7 @@ fn stage_and_swap(
             return Err(DeviceError::Canary);
         }
     }
+    power("canaried")?;
     remove_directory(&previous)?;
     let retired = if safe_directory(&current)? {
         rename_synced(&current, &previous, &apps)?;
@@ -1175,6 +1215,7 @@ fn stage_and_swap(
     } else {
         false
     };
+    power("retired")?;
     if fs::rename(&staging, &current).is_err() {
         if retired {
             let _ignored = rename_synced(&previous, &current, &apps);
@@ -1183,6 +1224,7 @@ fn stage_and_swap(
         return Err(DeviceError::Backend);
     }
     sync_directory(&apps)?;
+    power("activated")?;
     remove_file(&apps.join(format!("{}.{UNINSTALLED_SUFFIX}", manifest.id())))?;
     Ok(())
 }
@@ -2395,6 +2437,129 @@ mod tests {
             b"the road goes ever on"
         );
         assert!(installed(&root).expect("removed").is_empty());
+        let _ignored = fs::remove_dir_all(root);
+    }
+
+    /// A power cut at `checkpoint` while updating word-count to 1.1.0:
+    /// the transaction stops at once, with no in-process rollback.
+    fn power_cut_update(root: &Path, key: &Ed25519PublicKey, package: &[u8], checkpoint: &str) {
+        let mut cut = |at: &str| {
+            if at == checkpoint {
+                Err(DeviceError::Backend)
+            } else {
+                Ok(())
+            }
+        };
+        let outcome = install_full(
+            root,
+            "word-count",
+            UpdateChannel::Stable,
+            key,
+            |_, _| Ok(package.to_vec()),
+            None,
+            None,
+            &mut cut,
+        );
+        assert_eq!(outcome, Err(DeviceError::Backend), "cut at {checkpoint}");
+    }
+
+    fn refreshed_to(root: &Path, key: &Ed25519PublicKey, json: &[u8], signature: &[u8]) {
+        refresh_with(root, key, |url, _| {
+            if url == CATALOG_URL {
+                Ok(json.to_vec())
+            } else {
+                Ok(signature.to_vec())
+            }
+        })
+        .expect("refresh");
+    }
+
+    #[test]
+    fn power_loss_at_every_install_checkpoint_recovers_on_restart() {
+        for checkpoint in ["staged", "canaried", "retired", "activated"] {
+            let root = root();
+            let seed = [11_u8; 32];
+            let key = derive_public_key(&seed).expect("key");
+            let (json, signature, package) = release(&seed);
+            refreshed_to(&root, &key, &json, &signature);
+            install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install");
+
+            let (json, signature, package) = release_for(&seed, "word-count", "1.1.0");
+            refreshed_to(&root, &key, &json, &signature);
+            power_cut_update(&root, &key, &package, checkpoint);
+
+            // The next operation's startup recovery is what a power cut
+            // leaves to run: one app listed, and it resolves.
+            let recovered = installed_manifests(&root, &key).expect("recover");
+            assert_eq!(recovered.len(), 1, "cut at {checkpoint}");
+            resolve_using(&root, "word-count", &key).expect("resolves after cut");
+
+            // The interrupted update can simply be asked for again.
+            install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("retry");
+            let current = installed_manifests(&root, &key).expect("final");
+            assert_eq!(current[0].version(), "1.1.0", "cut at {checkpoint}");
+            let _ignored = fs::remove_dir_all(root);
+        }
+    }
+
+    #[test]
+    fn power_loss_before_uninstall_commit_brings_the_app_back() {
+        for checkpoint in ["prepared", "retired"] {
+            let root = root();
+            let seed = [12_u8; 32];
+            let key = derive_public_key(&seed).expect("key");
+            let (json, signature, package) = release(&seed);
+            refreshed_to(&root, &key, &json, &signature);
+            install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install");
+
+            let mut cut = |at: &str| {
+                if at == checkpoint {
+                    Err(DeviceError::Backend)
+                } else {
+                    Ok(())
+                }
+            };
+            assert_eq!(
+                uninstall_with_power(&root, "word-count", &key, &mut cut),
+                Err(DeviceError::Backend),
+                "cut at {checkpoint}"
+            );
+
+            let recovered = installed_manifests(&root, &key).expect("recover");
+            assert_eq!(recovered.len(), 1, "cut at {checkpoint}");
+            resolve_using(&root, "word-count", &key).expect("resolves after cut");
+            let _ignored = fs::remove_dir_all(root);
+        }
+    }
+
+    #[test]
+    fn power_loss_after_uninstall_commit_stays_uninstalled() {
+        let root = root();
+        let seed = [13_u8; 32];
+        let key = derive_public_key(&seed).expect("key");
+        let (json, signature, package) = release(&seed);
+        refreshed_to(&root, &key, &json, &signature);
+        install_with(&root, "word-count", &key, |_, _| Ok(package.clone())).expect("install");
+
+        let mut cut = |at: &str| {
+            if at == "committed" {
+                Err(DeviceError::Backend)
+            } else {
+                Ok(())
+            }
+        };
+        assert_eq!(
+            uninstall_with_power(&root, "word-count", &key, &mut cut),
+            Err(DeviceError::Backend)
+        );
+
+        let recovered = installed_manifests(&root, &key).expect("recover");
+        assert!(
+            recovered.is_empty(),
+            "a committed uninstall survives the cut"
+        );
+        assert!(is_uninstalled(&root, "word-count").expect("tombstone"));
+        assert!(resolve_using(&root, "word-count", &key).is_err());
         let _ignored = fs::remove_dir_all(root);
     }
 }
