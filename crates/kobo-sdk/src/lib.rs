@@ -1286,6 +1286,15 @@ impl Context {
         {
             let layout = screen.layout_for(&self.metrics);
             for node in &layout.nodes {
+                // Rich text on a reading screen with an application font is
+                // drawn by that typesetter (a Japanese face, say), so the
+                // interface face has nothing to say about it here.
+                let drawn_by_reading_typesetter = screen.reading
+                    && screen.reading_font.is_some()
+                    && matches!(node.kind, kobo_ui::LayoutKind::RichText(_));
+                if drawn_by_reading_typesetter {
+                    continue;
+                }
                 for line in &node.text_lines {
                     assert!(
                         kobo_ui::undrawable_in(line, kobo_ui::Face::Text).is_none(),
