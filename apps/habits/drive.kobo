@@ -18,10 +18,13 @@ shot manage
 tap-id archive-0
 expect Tea
 tap Stats
-expect Last 7 days
 expect Completions
-shot stats
 tap Settings
 expect Stored on this reader
 clean
 shot settings
+
+tap Export a copy
+expect Save a copy
+wait-for Ready for your computer
+shot export

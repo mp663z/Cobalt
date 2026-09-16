@@ -51,6 +51,7 @@ struct Habits {
     loading: bool,
     save_in_flight: bool,
     queued_save: Option<Vec<u8>>,
+    export: Option<kobo_sdk::exports::Export>,
 }
 impl Default for Habits {
     fn default() -> Self {
@@ -66,6 +67,7 @@ impl Default for Habits {
             loading: false,
             save_in_flight: false,
             queued_save: None,
+            export: None,
         }
     }
 }
@@ -93,6 +95,79 @@ impl Habits {
             cx.store().save(HABITS, value);
         }
     }
+    /// The six pager taps. Returns whether it took the tap.
+    fn pager_action(&mut self, cx: &mut Context, a: ActionId) -> bool {
+        let moves = [
+            ("due-prev", 0usize, true),
+            ("due-next", 0, false),
+            ("manage-prev", 1, true),
+            ("manage-next", 1, false),
+            ("streaks-prev", 2, true),
+            ("streaks-next", 2, false),
+        ];
+        let Some((_, which, back)) = moves.iter().find(|(name, _, _)| a == action_id(name)) else {
+            return false;
+        };
+        let page = match which {
+            0 => &mut self.today_page,
+            1 => &mut self.manage_page,
+            _ => &mut self.streaks_page,
+        };
+        *page = if *back {
+            (*page).saturating_sub(1)
+        } else {
+            (*page).saturating_add(1)
+        };
+        self.show(cx);
+        true
+    }
+
+    /// The taps that belong to exporting an owner copy. Returns whether it
+    /// took the tap.
+    fn export_action(&mut self, cx: &mut Context, a: ActionId) -> bool {
+        if a == action_id("export") {
+            match kobo_sdk::exports::Export::new(
+                "Habits",
+                kobo_sdk::exports::Format::Text,
+                Self::export_text(&self.items, Self::day()).into_bytes(),
+            ) {
+                Ok(mut export) => {
+                    export.begin(cx);
+                    self.export = Some(export);
+                }
+                Err(reason) => {
+                    self.notice = Some(format!("The copy was refused: {reason}"));
+                }
+            }
+            self.show(cx);
+            return true;
+        }
+        if a == action_id("export-confirm") || a == action_id("export-retry") {
+            if let Some(export) = self.export.as_mut() {
+                export.begin(cx);
+            }
+            self.show(cx);
+            return true;
+        }
+        false
+    }
+
+    fn export_text(items: &[Habit], today: u32) -> String {
+        let mut text = String::from("Habits\n");
+        for h in items {
+            text.push_str(&format!(
+                "\n{} - {}{}\n  {} completions; current streak {}; best {}\n",
+                Self::display_name(&h.name),
+                h.schedule_label(),
+                if h.archived { "; archived" } else { "" },
+                h.done.len(),
+                h.current_streak(today),
+                h.best_streak(today),
+            ));
+        }
+        text
+    }
+
     fn last_week(items: &[Habit], today: u32) -> (usize, usize) {
         let first = today.saturating_sub(6);
         let mut done = 0;
@@ -178,10 +253,12 @@ impl Habits {
         }
     }
     fn owns_back(&self) -> bool {
-        self.entry.is_open() || self.back_target().is_some()
+        self.export.is_some() || self.entry.is_open() || self.back_target().is_some()
     }
     fn go_back(&mut self) {
-        if self.entry.is_open() {
+        if self.export.is_some() {
+            self.export = None;
+        } else if self.entry.is_open() {
             self.entry.close();
         } else if let Some(page) = self.back_target() {
             self.page = page;
@@ -193,6 +270,9 @@ impl Habits {
     }
     #[allow(clippy::too_many_lines)]
     fn screen(&self) -> Screen {
+        if let Some(export) = &self.export {
+            return export.screen();
+        }
         if self.entry.is_open() {
             return ScreenBuilder::new("hb-add")
                 .top_bar("Habits")
@@ -344,7 +424,8 @@ impl Habits {
                 s = s
                     .facts([("Storage", "Stored on this reader".to_owned())])
                     .text("Works without network access.")
-                    .text("Habits never connect, upload, or back up your completions.");
+                    .text("Habits never connect, upload, or back up your completions.")
+                    .button("export", "Export a copy");
             }
         }
         s.build()
@@ -356,7 +437,37 @@ impl KoboApp for Habits {
         cx.store().load(HABITS);
         self.show(cx);
     }
+    fn on_save(&mut self, cx: &mut Context, key: &str, result: StoreResult) {
+        if let Some(export) = self.export.as_mut() {
+            if export.on_save(cx, key, &result) {
+                self.show(cx);
+                return;
+            }
+        }
+        self.on_store(cx, result);
+    }
+    fn on_shelf(&mut self, cx: &mut Context, name: &str, result: StoreResult) {
+        if let Some(export) = self.export.as_mut() {
+            if export.on_shelf(cx, name, &result) {
+                self.show(cx);
+                return;
+            }
+        }
+        self.on_store(cx, result);
+    }
     fn on_store(&mut self, cx: &mut Context, result: StoreResult) {
+        // The copy prepared for a computer travels through the same store
+        // under its own keys; never answer those as if they were the habits.
+        if let Some(export) = self.export.as_mut() {
+            let key = match &result {
+                StoreResult::Loaded { key, .. } | StoreResult::Saved { key } => key.clone(),
+                _ => String::new(),
+            };
+            if key != HABITS && export.on_save(cx, &key, &result) {
+                self.show(cx);
+                return;
+            }
+        }
         match result {
             StoreResult::Loaded { key, value } if key == HABITS => {
                 let (items, ignored_blank_names) = value
@@ -440,34 +551,10 @@ impl KoboApp for Habits {
             self.show(cx);
             return;
         }
-        if a == action_id("due-prev") {
-            self.today_page = self.today_page.saturating_sub(1);
-            self.show(cx);
+        if self.export_action(cx, a) {
             return;
         }
-        if a == action_id("due-next") {
-            self.today_page = self.today_page.saturating_add(1);
-            self.show(cx);
-            return;
-        }
-        if a == action_id("manage-prev") {
-            self.manage_page = self.manage_page.saturating_sub(1);
-            self.show(cx);
-            return;
-        }
-        if a == action_id("manage-next") {
-            self.manage_page = self.manage_page.saturating_add(1);
-            self.show(cx);
-            return;
-        }
-        if a == action_id("streaks-prev") {
-            self.streaks_page = self.streaks_page.saturating_sub(1);
-            self.show(cx);
-            return;
-        }
-        if a == action_id("streaks-next") {
-            self.streaks_page = self.streaks_page.saturating_add(1);
-            self.show(cx);
+        if self.pager_action(cx, a) {
             return;
         }
         let mut changed = false;
@@ -528,6 +615,18 @@ mod tests {
             Node::Rows { rows, .. } => rows.iter().any(|row| row.action == action_id(name)),
             _ => false,
         })
+    }
+
+    #[test]
+    fn export_text_is_an_owner_readable_backup() {
+        let mut tea = Habit::new("Tea".into());
+        tea.toggle_complete(20);
+        let mut old = Habit::new("Old".into());
+        old.archived = true;
+        let text = Habits::export_text(&[tea, old], 20);
+        assert!(text.starts_with("Habits\n"));
+        assert!(text.contains("Tea - daily\n  1 completions; current streak 1; best 1\n"));
+        assert!(text.contains("Old - daily; archived\n  0 completions; current streak 0; best 0\n"));
     }
 
     #[test]

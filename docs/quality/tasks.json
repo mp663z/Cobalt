@@ -1796,8 +1796,10 @@
     "pr": 3,
     "group": "Habits",
     "task": "Provide owner export and backup",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Settings gains 'Export a copy' through the SDK export flow (owner-initiated, verified offer, original stays on the reader). Export text is an owner-readable backup (name, schedule, archived, completions, current/best streak), unit-tested. Drive route walks Settings > Export a copy > 'Ready for your computer' at both text scales, pixel-verified. scripts/quality/check-habits-export-sim.py proves the host side end to end: receive refuses before the owner exports, then receives exactly one Habits.txt with the expected content, and a repeat receive never replaces it."
+    ]
   },
   {
     "id": "HN-01",
