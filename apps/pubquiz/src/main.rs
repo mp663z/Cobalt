@@ -127,6 +127,8 @@ struct Quiz {
     page: usize,
     sync_task: Option<TaskId>,
     pack_synced: bool,
+    synced_day: Option<u32>,
+    export: Option<kobo_sdk::exports::Export>,
 }
 impl Default for Quiz {
     fn default() -> Self {
@@ -145,17 +147,27 @@ impl Default for Quiz {
             page: 0,
             sync_task: None,
             pack_synced: false,
+            synced_day: None,
+            export: None,
         }
     }
 }
+const NAMES: [&str; 4] = ["Ada", "Bert", "Cleo", "Dev"];
+
 impl Quiz {
     fn player_name(&self) -> &'static str {
-        ["Ada", "Bert", "Cleo", "Dev"][self.player]
+        NAMES[self.player]
     }
     fn save(&self, context: &mut Context) {
         context.store().save(
             STATE,
-            format!("{}|{}", self.packs, self.rounds).into_bytes(),
+            format!(
+                "{}|{}|{}",
+                self.packs,
+                self.rounds,
+                self.synced_day.map_or(String::new(), |day| day.to_string())
+            )
+            .into_bytes(),
         );
     }
     fn begin(&mut self, party: bool) {
@@ -215,6 +227,36 @@ impl Quiz {
         context.set_screen(screen_with(self, context));
     }
 }
+fn today_day() -> u32 {
+    u32::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            / 86_400,
+    )
+    .unwrap_or(u32::MAX)
+}
+
+fn civil_date(days_since_epoch: i64) -> String {
+    let shifted = days_since_epoch + 719_468;
+    let era = if shifted >= 0 {
+        shifted
+    } else {
+        shifted - 146_096
+    } / 146_097;
+    let day_of_era = shifted - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 fn choice(index: usize) -> String {
     format!("answer-{index}")
 }
@@ -422,19 +464,48 @@ fn choices_screen(quiz: &Quiz, context: &Context) -> Screen {
         .build()
 }
 
+fn scorecard_text(quiz: &Quiz) -> String {
+    let players = if quiz.party { 4 } else { 1 };
+    let mut text = format!(
+        "Pub Quiz scorecard - {}\n",
+        civil_date(i64::from(today_day()))
+    );
+    for (i, name) in NAMES.iter().enumerate().take(players) {
+        text.push_str(&format!("\n{name}: {} of 10", quiz.scores[i]));
+    }
+    text.push('\n');
+    text
+}
+
 #[allow(clippy::too_many_lines)]
 fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
+    if let Some(export) = &quiz.export {
+        return export.screen();
+    }
     let question = &quiz.round_questions[quiz.question % quiz.round_questions.len()];
     match quiz.view {
         View::Home => {
             let mut b = ScreenBuilder::new("pubquiz-home")
                 .top_bar("Pub Quiz")
-                .heading("Question packs")
-                .secondary(format!(
-                    "{} questions ready · {} rounds completed",
-                    quiz.questions.len(),
-                    quiz.rounds
-                ));
+                .facts([
+                    ("Questions", format!("{} ready", quiz.questions.len())),
+                    ("Rounds played", format!("{}", quiz.rounds)),
+                    (
+                        "Pack",
+                        if quiz.synced_day.is_some() {
+                            "Open Trivia DB".to_owned()
+                        } else {
+                            "Built-in set".to_owned()
+                        },
+                    ),
+                    (
+                        "Updated",
+                        quiz.synced_day.map_or_else(
+                            || "Ships with the app".to_owned(),
+                            |day| civil_date(i64::from(day)),
+                        ),
+                    ),
+                ]);
             if let Some(note) = &quiz.note {
                 b = b.banner(BannerLevel::Info, note);
             }
@@ -455,12 +526,18 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
         }
         View::Question => question_screen(quiz, context),
         View::Choices => choices_screen(quiz, context),
-        View::Pass => ScreenBuilder::new("pubquiz-pass")
-            .top_bar("Pass it on")
-            .heading("Answer locked")
-            .text("Hand the Kobo to the next player before the result is shown.")
-            .primary_button("reveal", "Show result")
-            .build(),
+        View::Pass => {
+            let next = NAMES[(quiz.player + 1) % 4];
+            ScreenBuilder::new("pubquiz-pass")
+                .top_bar("Pass it on")
+                .heading("Answer locked")
+                .text(format!(
+                    "Hand the Kobo to {next} before the result is shown."
+                ))
+                .text(format!("{next}, show the result when you are ready."))
+                .primary_button("reveal", "Show result")
+                .build()
+        }
         View::Reveal => {
             let right = quiz.answer == Some(question.correct);
             ScreenBuilder::new("pubquiz-reveal")
@@ -470,12 +547,10 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
                     "{} · {}",
                     question.category, question.answers[question.correct]
                 ))
-                .facts((0..if quiz.party { 4 } else { 1 }).map(|i| {
-                    (
-                        ["Ada", "Bert", "Cleo", "Dev"][i],
-                        format!("{} points", quiz.scores[i]),
-                    )
-                }))
+                .facts(
+                    (0..if quiz.party { 4 } else { 1 })
+                        .map(|i| (NAMES[i], format!("{} points", quiz.scores[i]))),
+                )
                 .primary_button(
                     "continue",
                     if quiz.question + 1 == 10 {
@@ -492,12 +567,13 @@ fn screen_with(quiz: &Quiz, context: &Context) -> Screen {
             .rows((0..if quiz.party { 4 } else { 1 }).map(|i| {
                 (
                     format!("player-{i}"),
-                    ["Ada", "Bert", "Cleo", "Dev"][i],
+                    NAMES[i],
                     format!("{} points", quiz.scores[i]),
                     Glyph::Person,
                 )
             }))
             .primary_button("home", "Finish round")
+            .button("export", "Save a copy")
             .build(),
         View::HowTo => ScreenBuilder::new("pubquiz-help")
             .top_bar("How to play")
@@ -534,6 +610,7 @@ impl KoboApp for Quiz {
                         let p: Vec<_> = s.split('|').collect();
                         self.packs = p.first().and_then(|x| x.parse().ok()).unwrap_or(0);
                         self.rounds = p.get(1).and_then(|x| x.parse().ok()).unwrap_or(0);
+                        self.synced_day = p.get(2).and_then(|x| x.parse().ok());
                     }
                 }
             } else if key == PACK && !self.pack_synced {
@@ -562,6 +639,7 @@ impl KoboApp for Quiz {
                     self.questions = questions;
                     self.pack_synced = true;
                     self.packs = 1;
+                    self.synced_day = Some(today_day());
                     context.store().save(PACK, bytes);
                     self.note = Some(format!(
                         "{} fresh questions saved for offline play.",
@@ -582,8 +660,46 @@ impl KoboApp for Quiz {
         }
         self.show(context);
     }
+    fn on_save(&mut self, context: &mut Context, key: &str, result: StoreResult) {
+        if let Some(export) = self.export.as_mut() {
+            if export.on_save(context, key, &result) {
+                self.show(context);
+                return;
+            }
+        }
+        self.on_store(context, result);
+    }
+    fn on_shelf(&mut self, context: &mut Context, name: &str, result: StoreResult) {
+        if let Some(export) = self.export.as_mut() {
+            if export.on_shelf(context, name, &result) {
+                self.show(context);
+                return;
+            }
+        }
+        self.on_store(context, result);
+    }
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
-        if action == action_id("choose") && self.view == View::Question {
+        if action == action_id("export") && self.view == View::Podium {
+            match kobo_sdk::exports::Export::new(
+                "Pub Quiz scorecard",
+                kobo_sdk::exports::Format::Text,
+                scorecard_text(self).into_bytes(),
+            ) {
+                Ok(mut export) => {
+                    export.begin(context);
+                    self.export = Some(export);
+                }
+                Err(reason) => {
+                    self.note = Some(format!("The copy was refused: {reason}"));
+                }
+            }
+        } else if action == action_id("export-confirm") || action == action_id("export-retry") {
+            if let Some(export) = self.export.as_mut() {
+                export.begin(context);
+            }
+        } else if self.export.is_some() && action == ActionId::BACK {
+            self.export = None;
+        } else if action == action_id("choose") && self.view == View::Question {
             self.view = View::Choices;
             self.page = 0;
         } else if action == action_id("question") && self.view == View::Choices {
@@ -649,6 +765,86 @@ fn main() -> ExitCode {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scorecard_names_every_player_and_the_day() {
+        let quiz = Quiz {
+            scores: [3, 5, 2, 4],
+            ..Quiz::default()
+        };
+        let text = scorecard_text(&quiz);
+        assert!(text.starts_with("Pub Quiz scorecard - "));
+        assert!(text.contains("\nAda: 3 of 10"));
+        assert!(text.contains("\nDev: 4 of 10"));
+    }
+
+    #[test]
+    fn solo_scorecard_names_only_the_player() {
+        let quiz = Quiz {
+            party: false,
+            scores: [7, 9, 9, 9],
+            ..Quiz::default()
+        };
+        let text = scorecard_text(&quiz);
+        assert!(text.contains("\nAda: 7 of 10"));
+        assert!(!text.contains("Bert"));
+    }
+
+    #[test]
+    fn state_round_trip_keeps_the_sync_day() {
+        let quiz = Quiz {
+            packs: 1,
+            rounds: 3,
+            synced_day: Some(20_000),
+            ..Quiz::default()
+        };
+        let mut context = Context::default();
+        quiz.save(&mut context);
+        let saved = context
+            .take_commands()
+            .into_iter()
+            .find_map(|command| match command {
+                kobo_sdk::Command::Store(kobo_sdk::StoreRequest::Save { key, value })
+                    if key == STATE =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("state save");
+        let text = String::from_utf8(saved).unwrap();
+        let parts: Vec<_> = text.split('|').collect();
+        assert_eq!(parts[0], "1");
+        assert_eq!(parts[1], "3");
+        assert_eq!(parts[2], "20000");
+        // The same parse on_store applies when the app next opens.
+        let parsed: Option<u32> = parts.get(2).and_then(|x| x.parse().ok());
+        assert_eq!(parsed, Some(20_000));
+    }
+
+    #[test]
+    fn state_without_a_sync_day_reads_as_built_in() {
+        let text = "1|3|";
+        let parts: Vec<_> = text.split('|').collect();
+        let parsed: Option<u32> = parts.get(2).and_then(|x| x.parse().ok());
+        assert_eq!(parsed, None);
+        let legacy = "1|3";
+        let parts: Vec<_> = legacy.split('|').collect();
+        let parsed: Option<u32> = parts.get(2).and_then(|x| x.parse().ok());
+        assert_eq!(parsed, None);
+    }
+
+    #[test]
+    fn home_names_the_pack_source_honestly() {
+        let quiz = Quiz::default();
+        let built_in = format!("{:?}", screen(&quiz));
+        let quiz = Quiz {
+            synced_day: Some(20_469),
+            ..Quiz::default()
+        };
+        let synced = format!("{:?}", screen(&quiz));
+        assert_ne!(built_in, synced);
+    }
+
     use super::*;
     use kobo_ui::{Chrome, CLARA_BW_METRICS};
     #[test]

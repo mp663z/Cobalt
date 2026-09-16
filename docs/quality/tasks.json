@@ -2745,24 +2745,30 @@
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Show pack source and freshness",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "Home shows the pack's source and freshness as facts: Pack 'Built-in set' with Updated 'Ships with the app' until a sync succeeds, then 'Open Trivia DB' with the real sync date (synced_day persisted in state as packs|rounds|day, backward-compatible with the old two-field format; a damaged cached pack also forgets the sync record). Route asserts 'Built-in set'; unit-tested round trip."
+    ]
   },
   {
     "id": "QUIZ-04",
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Clarify pass-device and answer-reveal screens",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "The pass screen names the next player twice ('Hand the Kobo to Bert before the result is shown.' / 'Bert, show the result when you are ready.') instead of a generic next-player instruction; reveal screen already names the answerer in the top bar and scores as facts. Route asserts the named pass."
+    ]
   },
   {
     "id": "QUIZ-05",
     "pr": 3,
     "group": "Pub Quiz",
     "task": "Export a scorecard",
-    "status": "todo",
-    "evidence": []
+    "status": "done",
+    "evidence": [
+      "The podium gains 'Save a copy': a plain-text scorecard (date, per-player score of 10) through the shared SDK export flow. Route walks podium > Save a copy > 'Ready for your computer' and back; unit-tested for party and solo. Host receive side is proven generically by scripts/quality/check-habits-export-sim.py (same SDK machinery); a pubquiz-specific receive e2e is not duplicated."
+    ]
   },
   {
     "id": "QUIZ-06",
