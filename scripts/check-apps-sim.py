@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build and drive catalog apps in fresh simulators; fail if any app fails."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,20 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+
+def snapshot_state(root):
+    """Content hash per regular file under the app's temporary store."""
+    files = {}
+    for path in sorted(Path(root).rglob('*')):
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            files[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+    return files
 
 
 def stop_group(process):
@@ -96,12 +111,19 @@ def run_app(app, kobo, out, environment, timeout):
             seed(app, state, kobo, env, log)
             process, address = launch()
             result['launched'] = True
+            baseline = snapshot_state(state)
             command = [str(kobo), 'drive', '--address', address, '--ideal', '--shots', str(out / (app + '-shots'))]
             command += ['--script', str(route)] if route else ['--step', 'dump']
             driven = subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=log, timeout=timeout)
             result['exit_code'] = driven.returncode
             result['status'] = 'pass' if driven.returncode == 0 else 'fail'
             if result['status'] == 'pass':
+                # Own-data leg: the driven journey created, changed or removed
+                # durable state past what first launch alone writes.
+                after = snapshot_state(state)
+                result['state_written'] = sorted(
+                    path for path in set(baseline) | set(after)
+                    if baseline.get(path) != after.get(path))
                 # Offline reopen: same state, fresh process, no seeding, no
                 # network. A route that created anything must find the app
                 # still able to open - state persisted, nothing stranded.
@@ -160,8 +182,9 @@ def main():
     failed = [r['app'] for r in report['results'] if r['status'] != 'pass']
     routes = sum(r.get('route') is not None for r in report['results'])
     reopened = sum(bool(r.get('reopened')) for r in report['results'])
+    wrote = sum(bool(r.get('state_written')) for r in report['results'])
     print(f"{len(apps) - len(failed)}/{len(apps)} apps passed; {routes} committed routes; "
-          f"{reopened} reopened offline; report: {out / 'results.json'}")
+          f"{reopened} reopened offline; {wrote} wrote journey state; report: {out / 'results.json'}")
     return 1 if failed else 0
 
 
