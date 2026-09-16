@@ -24,6 +24,14 @@ RUST = '1.85.1'
 
 PROBES = ['sim-launch', 'cli-build', 'test-sweep']
 
+# kobo-cli tests that need an ARM C cross-compiler this host does not
+# have; the contract baseline records the same gap as environmental.
+# They are skipped by name and reported as skipped, never as passed.
+ENVIRONMENTAL_SKIPS = {
+    'every_packaged_binary_is_built_with_what_it_needs': 'needs an ARM C cross-compiler',
+    'every_uploaded_artifact_is_built_from_this_workspace': 'needs an ARM C cross-compiler',
+}
+
 # Contract metrics this lane cannot measure honestly yet: the runtime
 # exposes no counters for them, and a number invented here would be
 # worse than none.
@@ -91,7 +99,8 @@ def probe_cli_build(run_dir):
 def probe_test_sweep(run_dir):
     """Timed workspace unit-test sweep with parsed pass/fail counts."""
     start = time.monotonic()
-    sweep = cargo('test', '--workspace', timeout=5400)
+    skips = [flag for name in ENVIRONMENTAL_SKIPS for flag in ('--skip', name)]
+    sweep = cargo('test', '--workspace', '--', *skips, timeout=5400)
     seconds = round(time.monotonic() - start, 2)
     log = run_dir / 'test-sweep.log'
     log.write_text(sweep.stdout + sweep.stderr)
@@ -106,6 +115,7 @@ def probe_test_sweep(run_dir):
         'wall_seconds': seconds,
         'tests_passed': passed,
         'tests_failed': failed,
+        'skipped_environmental': dict(ENVIRONMENTAL_SKIPS),
         'log': str(log),
     }
 
