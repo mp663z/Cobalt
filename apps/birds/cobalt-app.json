@@ -4,8 +4,8 @@
   "short_label": "Birds",
   "summary": "Show the birds heard by BirdNET-Go on your Mac or Linux computer.",
   "page_description": "A quiet offline viewer for bird collages detected and rendered on your own computer.",
-  "version": "0.1.1",
-  "release_notes": "The collage now changes on its own while the reader is watching, instead of waiting to be asked for a refresh.",
+  "version": "0.1.3",
+  "release_notes": "The reading menu no longer says \"Updated just now ago\" for a fresh snapshot.",
   "glyph": "app",
   "capabilities": [],
   "setup": {
