@@ -8,6 +8,7 @@
 //! as transitions rather than as taps in a simulator.
 
 pub mod address;
+pub mod fetch;
 
 use kobo_web_document::Url;
 
