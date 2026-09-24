@@ -62,8 +62,12 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 - [ ] M2.7 Loading state with Heartbeat, Cancel
 - [x] M2.8 Local HTTPS fixture server for integration tests (delayed, chunked, wrong Content-Length, truncated, gzip bomb, redirect loop, cross-origin redirect, wrong MIME, connection drop)
 - [x] M2.9 Simulator failure scenarios: offline, timeout, denied permission, full storage, background/foreground during fetch (`failures.kobo`; storage full does not touch fetch, since the browser stores nothing yet)
-- [ ] M2.10 Live-site screenshots (real pages, labelled with URL and time)
+- [x] M2.10 Live-site screenshots (real pages, labelled with URL and time) (text.npr.org, lite.cnn.com, en.wikipedia.org/wiki/E-reader on clara-bw, libra-colour and extra-large text, 2026-09-25)
 - Gate: deterministic local-server suite + simulator failure scenarios
+- Found while taking the live shots, carried forward:
+  - Typing an address is slow: the shared keyboard has no `_` at all (most Wikipedia article addresses cannot be typed) and `.` and `/` each need a layer switch. Candidate: app-local quick keys under the field; an SDK change is a release-review question.
+  - Pages open on their site chrome (Wikipedia's first screen is its navigation menu). Candidate for M4: start at `<main>`, `role=main` or a skip link's target when the page has one.
+  - Long pages: first screen now shows before the rest is paged (39090aab); the page count appears when paging finishes.
 
 ## M3: images and cache
 
