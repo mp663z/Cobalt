@@ -23,6 +23,10 @@ pub struct Entry {
     /// Zero-based page within the document, kept so that Back returns to the
     /// page that was being read rather than the top.
     pub page: usize,
+    /// Where that page begins in the text, as a piece of the document,
+    /// when the app has said. Finds the same place when the pages come out
+    /// differently: another text size, or a saved copy with its note.
+    pub place: Option<usize>,
 }
 
 /// What the app has to do to carry out a navigation.
@@ -89,8 +93,14 @@ impl History {
 
     /// Records the page the reader is on now.
     pub fn set_page(&mut self, page: usize) {
+        self.set_position(page, None);
+    }
+
+    /// Records the page being read and where it begins in the text.
+    pub fn set_position(&mut self, page: usize, place: Option<usize>) {
         if let Some(entry) = self.entries.get_mut(self.current) {
             entry.page = page;
+            entry.place = place;
         }
     }
 
@@ -107,7 +117,11 @@ impl History {
         if !self.entries.is_empty() {
             self.entries.truncate(self.current + 1);
         }
-        self.entries.push(Entry { url, page: 0 });
+        self.entries.push(Entry {
+            url,
+            page: 0,
+            place: None,
+        });
         if self.entries.len() > MAX_HISTORY {
             let excess = self.entries.len() - MAX_HISTORY;
             self.entries.drain(..excess);

@@ -394,3 +394,20 @@ fn a_picture_is_never_squeezed_into_the_foot_of_a_page() {
         assert_eq!(seen, 40, "every picture is on some page on {panel}");
     }
 }
+
+#[test]
+fn a_page_is_found_again_by_its_place_in_the_text() {
+    let pieces: Vec<Piece> = (0..20).map(|n| Piece::Note(format!("piece {n}"))).collect();
+    let mut three = Paginator::new(pieces.clone(), Vec::new());
+    let mut fits = |page: &[Piece]| page.len() <= 3;
+    while three.next_page(&mut fits) {}
+    // Pieces 0-2 on page 0, 3-5 on page 1, and so on.
+    assert_eq!(three.place_of(2), Some(6));
+    let mut five = Paginator::new(pieces, Vec::new());
+    let mut fits = |page: &[Piece]| page.len() <= 5;
+    while five.next_page(&mut fits) {}
+    // The same words, cut into bigger pages, are on page 1.
+    assert_eq!(five.page_of_place(6), Some(1));
+    assert_eq!(five.page_of_place(99), Some(five.pages().len() - 1));
+    assert_eq!(five.place_of(0), Some(0));
+}

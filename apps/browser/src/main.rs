@@ -57,6 +57,8 @@ struct Loaded {
     document: Document,
     paginator: Paginator,
     page: usize,
+    /// Pieces put before the document's own: the saved-copy note.
+    lead: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -391,6 +393,7 @@ impl Browser {
             title = format!("Saved: {title}");
         }
         let (mut pieces, mut anchors) = pieces(&document);
+        let lead = usize::from(note.is_some());
         if let Some(note) = note {
             pieces.insert(0, Piece::Note(note));
             for (_, at) in &mut anchors {
@@ -398,16 +401,25 @@ impl Browser {
             }
         }
         let paginator = Paginator::new(pieces, anchors);
-        let restore = self.history.current().map_or(0, |entry| entry.page);
+        let (restore, place) = self
+            .history
+            .current()
+            .map_or((0, None), |entry| (entry.page, entry.place));
         self.loaded = Some(Loaded {
             url: url.clone(),
             title,
             document,
             paginator,
             page: 0,
+            lead,
         });
-        let page = match url.fragment() {
-            Some(fragment) if restore == 0 => self.fragment_page(context, fragment).unwrap_or(0),
+        let page = match (url.fragment(), place) {
+            (_, Some(place)) if restore > 0 => {
+                self.place_page(context, place + lead).unwrap_or(restore)
+            }
+            (Some(fragment), _) if restore == 0 => {
+                self.fragment_page(context, fragment).unwrap_or(0)
+            }
             _ => restore,
         };
         self.turn_to(context, page);
@@ -468,6 +480,21 @@ impl Browser {
         }
     }
 
+    /// The page holding piece `place`, making pages until it exists.
+    fn place_page(&mut self, context: &Context, place: usize) -> Option<usize> {
+        loop {
+            let loaded = self.loaded.as_ref()?;
+            if let Some(page) = loaded.paginator.page_of_place(place) {
+                return Some(page);
+            }
+            let made = loaded.paginator.pages().len();
+            self.make_pages(context, made);
+            if self.loaded.as_ref()?.paginator.pages().len() == made {
+                return None;
+            }
+        }
+    }
+
     fn fragment_page(&mut self, context: &Context, fragment: &str) -> Option<usize> {
         let loaded = self.loaded.as_ref()?;
         if !loaded.paginator.has_fragment(fragment) {
@@ -494,7 +521,11 @@ impl Browser {
         if let Some(loaded) = self.loaded.as_mut() {
             let last = loaded.paginator.pages().len().saturating_sub(1);
             loaded.page = page.min(last);
-            self.history.set_page(loaded.page);
+            let place = loaded
+                .paginator
+                .place_of(loaded.page)
+                .map(|place| place.saturating_sub(loaded.lead));
+            self.history.set_position(loaded.page, place);
         }
         self.fetch_pictures(context);
     }

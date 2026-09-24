@@ -901,6 +901,36 @@ impl Paginator {
         true
     }
 
+    /// Where `page` begins in the text: the first piece that starts on it,
+    /// or the piece it continues. Kept instead of a page number, it finds
+    /// the same place again after the pages are cut differently.
+    #[must_use]
+    pub fn place_of(&self, page: usize) -> Option<usize> {
+        let first = self
+            .starts
+            .iter()
+            .filter(|(_, &start)| start == page)
+            .map(|(&origin, _)| origin)
+            .min();
+        first.or_else(|| {
+            self.starts
+                .iter()
+                .filter(|(_, &start)| start < page)
+                .map(|(&origin, _)| origin)
+                .max()
+        })
+    }
+
+    /// The page holding piece `place`, if that page has been made.
+    #[must_use]
+    pub fn page_of_place(&self, place: usize) -> Option<usize> {
+        match self.starts.range(place..).next() {
+            Some((_, &page)) => Some(page),
+            None if self.done() => Some(self.pages.len().saturating_sub(1)),
+            None => None,
+        }
+    }
+
     /// The page a fragment starts on, if that page has been made.
     #[must_use]
     pub fn page_of(&self, fragment: &str) -> Option<usize> {

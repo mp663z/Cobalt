@@ -969,3 +969,47 @@ fn a_packed_picture_reads_back_and_a_short_one_is_refused() {
     assert!(pictures::unpack(b"KGR1").is_none());
     assert!(pictures::unpack(b"<html>").is_none());
 }
+
+/// The first paragraph that begins on the screen being read. A paragraph
+/// carried over from the screen before does not count: it is cut where the
+/// pages happen to fall.
+fn first_words(runner: &AppRunner<Browser>) -> String {
+    runner
+        .app()
+        .current_pieces()
+        .iter()
+        .find_map(|piece| match piece {
+            Piece::Prose(runs) => {
+                let text: String = runs.iter().map(|run| run.text.as_str()).collect();
+                text.starts_with("Paragraph").then_some(text)
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_saved_copy_reopens_at_the_same_words_though_its_note_moves_the_pages() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let body = String::from_utf8(long_page()).expect("utf-8");
+    let arrived = open_web_page(&mut runner, &body);
+    store.pump(&mut runner, arrived);
+    for _ in 0..5 {
+        runner.action(action_id("next-page"));
+    }
+    let page = runner.app().loaded.as_ref().expect("loaded").page;
+    assert_eq!(page, 5);
+    let words = first_words(&runner);
+    assert!(words.starts_with("Paragraph"), "{words}");
+
+    runner.action(action_id("back"));
+    runner.action(action_id("forward"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    store.pump(&mut runner, failed);
+    assert_eq!(title(&runner), "Saved: Long");
+    assert_eq!(first_words(&runner), words, "the same place in the text");
+}
