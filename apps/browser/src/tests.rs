@@ -855,3 +855,99 @@ fn kept_pages_outlive_the_app_and_strays_are_cleared() {
     store.pump(&mut runner, failed);
     assert_eq!(title(&runner), "Kept page");
 }
+
+const PLATE: &str = "<title>Plate</title><p>Above.</p><img src=/plate.png width=400 height=300 alt=\"A plate\"><p>Below.</p>";
+
+#[test]
+fn a_shown_picture_is_kept_and_comes_back_with_its_page_offline() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, PLATE);
+    let rest = store.pump(&mut runner, arrived);
+    let asked = fetches(&rest);
+    assert_eq!(asked.len(), 1);
+    let shown = runner.task_outcome(asked[0].0, TaskOutcome::Completed(a_png(200, 150)));
+    let rest = store.pump(&mut runner, shown);
+    let first = put_pictures(&rest);
+    assert_eq!(first.len(), 1);
+    let kept = runner.app().saved.index().expect("index").clone();
+    let key = kept
+        .entries()
+        .iter()
+        .map(|entry| entry.url.clone())
+        .find(|url| {
+            url.starts_with("picture:grey:") && url.ends_with("https://example.com/plate.png")
+        })
+        .expect("the fitted picture is kept");
+    assert!(
+        store
+            .shelf
+            .values()
+            .any(|blob| pictures::unpack(blob).is_some()),
+        "{key}"
+    );
+
+    runner.action(action_id("back"));
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    let rest = store.pump(&mut runner, failed);
+    assert_eq!(title(&runner), "Plate");
+    assert!(
+        fetches(&rest).is_empty(),
+        "nothing asked of the network: {:?} {:?}",
+        fetches(&rest),
+        runner.app().saved.index().map(|i| i
+            .entries()
+            .iter()
+            .map(|e| e.url.clone())
+            .collect::<Vec<_>>())
+    );
+    assert_eq!(
+        put_pictures(&rest),
+        first,
+        "the same picture, from the shelf"
+    );
+    assert_eq!(runner.app().pictures.state(0), Some(pictures::State::Shown));
+}
+
+#[test]
+fn a_kept_picture_that_is_torn_is_forgotten_and_fetched_again() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, PLATE);
+    let rest = store.pump(&mut runner, arrived);
+    let shown = runner.task_outcome(fetches(&rest)[0].0, TaskOutcome::Completed(a_png(200, 150)));
+    store.pump(&mut runner, shown);
+    for blob in store.shelf.values_mut() {
+        if pictures::unpack(blob).is_some() {
+            blob.truncate(blob.len() / 2);
+        }
+    }
+    runner.action(action_id("back"));
+    let arrived = open_web_page(&mut runner, PLATE);
+    let rest = store.pump(&mut runner, arrived);
+    let asked = fetches(&rest);
+    assert_eq!(asked.len(), 1, "fetched from the site again: {asked:?}");
+    assert_eq!(asked[0].1, "https://example.com/plate.png");
+    let kept = runner.app().saved.index().expect("index");
+    assert!(!kept
+        .entries()
+        .iter()
+        .any(|entry| entry.url.starts_with("picture:")));
+}
+
+#[test]
+fn a_packed_picture_reads_back_and_a_short_one_is_refused() {
+    let packed = pictures::pack(3, 2, &[0, 1, 2, 3, 4, 5]);
+    assert_eq!(
+        pictures::unpack(&packed),
+        Some((3, 2, &[0, 1, 2, 3, 4, 5][..]))
+    );
+    assert_eq!(pictures::unpack(&packed[..packed.len() - 1]), None);
+    assert_eq!(pictures::unpack(&pictures::pack(0, 2, &[])), None);
+    assert_eq!(pictures::unpack(b"KGR1"), None);
+    assert_eq!(pictures::unpack(b"<html>"), None);
+}

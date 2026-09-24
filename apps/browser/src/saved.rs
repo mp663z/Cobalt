@@ -35,7 +35,9 @@ pub struct Saved {
     /// Blob names on the shelf, held until the index arrives to compare.
     shelf: Option<Vec<String>>,
     uploads: Vec<ShelfUpload>,
-    download: Option<(ShelfDownload, String, u64)>,
+    /// Reads under way: the transfer, the address read and when it was
+    /// fetched.
+    downloads: Vec<(ShelfDownload, String, u64)>,
     clock: Box<dyn Clock>,
 }
 
@@ -44,7 +46,7 @@ impl std::fmt::Debug for Saved {
         f.debug_struct("Saved")
             .field("index", &self.index)
             .field("uploads", &self.uploads.len())
-            .field("reading", &self.download.as_ref().map(|(_, url, _)| url))
+            .field("reading", &self.downloads.len())
             .finish_non_exhaustive()
     }
 }
@@ -82,7 +84,7 @@ impl Saved {
             index: None,
             shelf: None,
             uploads: Vec::new(),
-            download: None,
+            downloads: Vec::new(),
             clock,
         }
     }
@@ -134,19 +136,24 @@ impl Saved {
     /// Starts reading the kept copy of `url`. Returns false when there is
     /// none to read.
     pub fn read(&mut self, context: &mut Context, url: &str) -> bool {
+        if self.downloads.iter().any(|(_, reading, _)| reading == url) {
+            return true;
+        }
         let Some(entry) = self.index.as_ref().and_then(|index| index.find(url)) else {
             return false;
         };
         let limit = usize::try_from(entry.bytes).unwrap_or(usize::MAX);
         let mut download = ShelfDownload::new(entry.name.clone()).at_most(limit);
         download.start(context);
-        self.download = Some((download, url.to_owned(), entry.fetched));
+        self.downloads
+            .push((download, url.to_owned(), entry.fetched));
         true
     }
 
-    /// Stops a read that is no longer wanted.
-    pub fn stop_reading(&mut self) {
-        self.download = None;
+    /// Stops the read of `url`, no longer wanted. Its answers are then
+    /// taken as nobody's.
+    pub fn stop_reading(&mut self, url: &str) {
+        self.downloads.retain(|(_, reading, _)| reading != url);
     }
 
     fn save_index(&self, context: &mut Context) {
@@ -185,26 +192,24 @@ impl Saved {
             }
             _ => {}
         }
-        if let Some((download, url, fetched)) = self
-            .download
-            .as_mut()
-            .filter(|(download, _, _)| !refused_elsewhere(download.name()))
-        {
+        for at in 0..self.downloads.len() {
+            if refused_elsewhere(self.downloads[at].0.name()) {
+                continue;
+            }
+            let (download, _, _) = &mut self.downloads[at];
             match download.advance(context, result) {
-                ShelfProgress::Elsewhere => {}
+                ShelfProgress::Elsewhere => continue,
                 ShelfProgress::Moving { .. } => return Heard::Handled,
                 ShelfProgress::Done => {
-                    let heard = Heard::Read {
-                        url: url.clone(),
+                    let (download, url, fetched) = self.downloads.remove(at);
+                    return Heard::Read {
+                        url,
                         bytes: download.bytes().to_vec(),
-                        fetched: *fetched,
+                        fetched,
                     };
-                    self.download = None;
-                    return heard;
                 }
                 ShelfProgress::Failed(_) => {
-                    let url = url.clone();
-                    self.download = None;
+                    let (_, url, _) = self.downloads.remove(at);
                     self.forget_url(context, &url);
                     return Heard::Unreadable { url };
                 }
@@ -235,7 +240,8 @@ impl Saved {
         Heard::Elsewhere
     }
 
-    fn forget_url(&mut self, context: &mut Context, url: &str) {
+    /// Forgets the kept copy of `url`, if there is one.
+    pub fn forget_url(&mut self, context: &mut Context, url: &str) {
         let Some(name) = self
             .index
             .as_ref()

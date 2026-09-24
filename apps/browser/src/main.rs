@@ -3,6 +3,7 @@
 //! Pages are turned, not scrolled. This first build reads only the sample
 //! pages it ships with; loading from the network comes next.
 
+use std::collections::BTreeMap;
 use std::process::ExitCode;
 
 use kobo_browser_core::address::{self, DEFAULT_SEARCH};
@@ -141,8 +142,8 @@ fn cache_key(url: &Url) -> String {
 impl Browser {
     /// Drops a read of a kept copy that a newer request replaces.
     fn forget_reading(&mut self) {
-        if self.reading.take().is_some() {
-            self.saved.stop_reading();
+        if let Some((url, _, _)) = self.reading.take() {
+            self.saved.stop_reading(&cache_key(&url));
         }
     }
 
@@ -180,10 +181,12 @@ impl Browser {
     /// Stops a page on its way and goes back to the one on screen.
     fn stop(&mut self, context: &mut Context) {
         self.clock.stop(context);
-        if let Some((_, _, Some(position))) = self.reading.take() {
-            self.history.return_to(position);
+        if let Some((url, _, stepped_from)) = self.reading.take() {
+            self.saved.stop_reading(&cache_key(&url));
+            if let Some(position) = stepped_from {
+                self.history.return_to(position);
+            }
         }
-        self.saved.stop_reading();
         if let Some(pending) = self.pending.take() {
             context.cancel(pending.task);
             if let Some(position) = pending.stepped_from {
@@ -293,6 +296,9 @@ impl Browser {
                 if stepped_from.is_none() {
                     let _ = self.history.navigate(url.clone());
                 }
+                // Before the page is laid out, so the pictures on its first
+                // screen are measured on the page and not the Loading screen.
+                self.view = View::Page;
                 if kind == Kind::Plain {
                     let html = plain_page(body);
                     self.show_document_noted(context, &url, html.as_bytes(), note);
@@ -308,6 +314,21 @@ impl Browser {
     fn stored(&mut self, context: &mut Context, from: Option<&str>, result: &StoreResult) {
         match self.saved.heard(context, from, result) {
             Heard::Elsewhere | Heard::Handled => {}
+            Heard::Read {
+                url: key, bytes, ..
+            } if self.pictures.reads(&key) => {
+                self.saved.touch(context, &key);
+                if self.pictures.off_shelf(context, &key, Some(&bytes)) {
+                    self.show(context);
+                } else {
+                    self.saved.forget_url(context, &key);
+                    self.fetch_pictures(context);
+                }
+            }
+            Heard::Unreadable { url: key } if self.pictures.reads(&key) => {
+                self.pictures.off_shelf(context, &key, None);
+                self.fetch_pictures(context);
+            }
             heard => {
                 if self.reading.is_some() {
                     self.read_back(context, heard);
@@ -353,7 +374,9 @@ impl Browser {
         bytes: &[u8],
         note: Option<String>,
     ) {
-        self.pictures.clear(context);
+        for key in self.pictures.clear(context) {
+            self.saved.stop_reading(&key);
+        }
         if let Some(task) = self.pager.take() {
             context.cancel(task);
         }
@@ -488,13 +511,38 @@ impl Browser {
                 _ => None,
             })
             .collect();
+        let metrics = context.metrics();
+        let rooms: BTreeMap<usize, (u32, u32)> = wanted
+            .iter()
+            .filter_map(|&image| Some((image, self.picture_room(&metrics, image)?)))
+            .collect();
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
         let images = loaded.document.images();
-        self.pictures.want(context, &wanted, |image| {
-            images.get(image).map(|found| found.src.to_string())
-        });
+        let saved = &mut self.saved;
+        self.pictures.want(
+            context,
+            &wanted,
+            |image| images.get(image).map(|found| found.src.to_string()),
+            |context, image, url| {
+                let (width, height) = rooms.get(&image)?;
+                let key = pictures::shelf_key(url, *width, *height);
+                saved.read(context, &key).then_some(key)
+            },
+        );
     }
 
     /// Where `image` is drawn on the screen being read, if it is on it.
+    fn image_source(&self, image: usize) -> Option<String> {
+        let loaded = self.loaded.as_ref()?;
+        loaded
+            .document
+            .images()
+            .get(image)
+            .map(|found| found.src.to_string())
+    }
+
     fn picture_room(&self, metrics: &DisplayMetrics, image: usize) -> Option<(u32, u32)> {
         let screen = self.screen(metrics).build();
         kobo_web_layout::picture_box(&screen, metrics, picture_handle(image))
@@ -708,7 +756,12 @@ impl KoboApp for Browser {
         if let Some(image) = self.pictures.fetching(task) {
             match self.picture_room(&context.metrics(), image) {
                 Some(room) => {
-                    if self.pictures.arrived(context, image, outcome, Some(room)) {
+                    if let Some(packed) = self.pictures.arrived(context, image, outcome, Some(room))
+                    {
+                        if let Some(url) = self.image_source(image) {
+                            let key = pictures::shelf_key(&url, room.0, room.1);
+                            self.saved.keep(context, &key, &packed);
+                        }
                         self.show(context);
                     }
                 }
