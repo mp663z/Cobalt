@@ -1,0 +1,408 @@
+title: Some("Field notes on paper screens")
+base: Some("https://notes.example/articles/")
+warnings: [UnsupportedLinks(2)]
+links:
+  0: https://notes.example/ "Home"
+  1: https://notes.example/about "About"
+  2: https://notes.example/articles/panels/first.html "electrophoretic panels"
+  3: https://colour.example/kaleido "colour filters"
+  4: https://notes.example/articles/#top "plain black and white"
+  5: https://notes.example/changes.html "September"
+blocks:
+[
+    Paragraph {
+        content: [
+            Link {
+                index: 0,
+                label: [
+                    Text(
+                        "Home",
+                    ),
+                ],
+            },
+            Text(
+                " ",
+            ),
+            Link {
+                index: 1,
+                label: [
+                    Text(
+                        "About",
+                    ),
+                ],
+            },
+        ],
+        anchor: None,
+    },
+    Heading {
+        level: 1,
+        content: [
+            Text(
+                "Field notes on paper screens",
+            ),
+        ],
+        anchor: Some(
+            "top",
+        ),
+    },
+    Paragraph {
+        content: [
+            Text(
+                "An e-ink panel holds its image ",
+            ),
+            Emphasis(
+                [
+                    Text(
+                        "without power",
+                    ),
+                ],
+            ),
+            Text(
+                ", which makes it ",
+            ),
+            Strong(
+                [
+                    Text(
+                        "good for reading",
+                    ),
+                ],
+            ),
+            Text(
+                " and poor for animation. The ",
+            ),
+            Code(
+                "refresh",
+            ),
+            Text(
+                " policy decides how often the whole panel flashes.",
+            ),
+        ],
+        anchor: None,
+    },
+    Heading {
+        level: 2,
+        content: [
+            Text(
+                "A short history",
+            ),
+        ],
+        anchor: Some(
+            "history",
+        ),
+    },
+    Paragraph {
+        content: [
+            Text(
+                "The first readers used ",
+            ),
+            Link {
+                index: 2,
+                label: [
+                    Text(
+                        "electrophoretic panels",
+                    ),
+                ],
+            },
+            Text(
+                " with sixteen greys. Later models added ",
+            ),
+            Link {
+                index: 3,
+                label: [
+                    Text(
+                        "colour filters",
+                    ),
+                ],
+            },
+            Text(
+                ", and a few went back to ",
+            ),
+            Link {
+                index: 4,
+                label: [
+                    Text(
+                        "plain black and white",
+                    ),
+                ],
+            },
+            Text(
+                ".",
+            ),
+        ],
+        anchor: None,
+    },
+    List {
+        ordered: false,
+        start: 1,
+        items: [
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "Clara BW, 6 inch, 300 ppi",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "Libra, 7 inch, with page buttons",
+                        ),
+                    ],
+                    anchor: None,
+                },
+                List {
+                    ordered: false,
+                    start: 1,
+                    items: [
+                        [
+                            Paragraph {
+                                content: [
+                                    Text(
+                                        "Libra 2",
+                                    ),
+                                ],
+                                anchor: None,
+                            },
+                        ],
+                        [
+                            Paragraph {
+                                content: [
+                                    Text(
+                                        "Libra Colour",
+                                    ),
+                                ],
+                                anchor: None,
+                            },
+                        ],
+                    ],
+                },
+            ],
+        ],
+    },
+    List {
+        ordered: true,
+        start: 3,
+        items: [
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "Charge it.",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "Read for a month.",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+        ],
+    },
+    Quote(
+        [
+            Paragraph {
+                content: [
+                    Text(
+                        "Paper does not blink.",
+                    ),
+                ],
+                anchor: None,
+            },
+        ],
+    ),
+    Preformatted(
+        "fn refresh(panel: &mut Panel) {\n    panel.flash();\n}",
+    ),
+    Rule,
+    Image(
+        ImageRef {
+            src: Url {
+                scheme: Https,
+                host: "notes.example",
+                port: None,
+                path: "/articles/img/panel.png",
+                query: None,
+                fragment: None,
+            },
+            alt: "A Clara BW showing a page of text",
+            width: Some(
+                600,
+            ),
+            height: Some(
+                800,
+            ),
+            link: None,
+        },
+    ),
+    Table(
+        Table {
+            caption: Some(
+                "Panels",
+            ),
+            rows: [
+                [
+                    [
+                        Text(
+                            "Model",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "Size",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "PPI",
+                        ),
+                    ],
+                ],
+                [
+                    [
+                        Text(
+                            "Clara BW",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "6\"",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "300",
+                        ),
+                    ],
+                ],
+                [
+                    [
+                        Text(
+                            "Libra 2",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "7\"",
+                        ),
+                    ],
+                    [
+                        Text(
+                            "300",
+                        ),
+                    ],
+                ],
+            ],
+            header: true,
+            clipped: false,
+        },
+    ),
+    Paragraph {
+        content: [
+            Text(
+                "Write to ",
+            ),
+            Inert(
+                [
+                    Text(
+                        "the editor",
+                    ),
+                ],
+            ),
+            Text(
+                " or run ",
+            ),
+            Inert(
+                [
+                    Text(
+                        "this",
+                    ),
+                ],
+            ),
+            Text(
+                ".",
+            ),
+        ],
+        anchor: None,
+    },
+    Form(
+        Form {
+            action: Url {
+                scheme: Https,
+                host: "notes.example",
+                port: None,
+                path: "/search",
+                query: None,
+                fragment: None,
+            },
+            method: Get,
+            fields: [
+                Text {
+                    name: "q",
+                    value: "",
+                    label: "Search notes",
+                    search: true,
+                },
+                Hidden {
+                    name: "src",
+                    value: "footer",
+                },
+                Submit {
+                    name: None,
+                    value: "Go",
+                },
+            ],
+        },
+    ),
+    Paragraph {
+        content: [
+            Text(
+                "Last changed in ",
+            ),
+            Link {
+                index: 5,
+                label: [
+                    Text(
+                        "September",
+                    ),
+                ],
+            },
+            Text(
+                ".",
+            ),
+        ],
+        anchor: None,
+    },
+]
+text:
+Home About
+Field notes on paper screens
+An e-ink panel holds its image without power, which makes it good for reading and poor for animation. The refresh policy decides how often the whole panel flashes.
+A short history
+The first readers used electrophoretic panels with sixteen greys. Later models added colour filters, and a few went back to plain black and white.
+Clara BW, 6 inch, 300 ppi
+Libra, 7 inch, with page buttons
+Libra 2
+Libra Colour
+Charge it.
+Read for a month.
+Paper does not blink.
+fn refresh(panel: &mut Panel) {
+    panel.flash();
+}
+[A Clara BW showing a page of text]
+Model | Size | PPI
+Clara BW | 6" | 300
+Libra 2 | 7" | 300
+Write to the editor or run this.
+Last changed in September.

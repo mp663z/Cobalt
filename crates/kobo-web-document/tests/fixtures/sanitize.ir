@@ -1,0 +1,47 @@
+title: Some("Nothing active survives")
+base: Some("https://fixtures.example/page.html")
+warnings: [ActiveContentRemoved(4)]
+links:
+  0: https://ok.example/ "a safe link"
+blocks:
+[
+    Paragraph {
+        content: [
+            Text(
+                "Visible paragraph.",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Please enable JavaScript.",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Second visible paragraph with ",
+            ),
+            Link {
+                index: 0,
+                label: [
+                    Text(
+                        "a safe link",
+                    ),
+                ],
+            },
+            Text(
+                ".",
+            ),
+        ],
+        anchor: None,
+    },
+]
+text:
+Visible paragraph.
+Please enable JavaScript.
+Second visible paragraph with a safe link.

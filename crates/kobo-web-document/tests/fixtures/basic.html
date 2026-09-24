@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Field notes on paper screens</title>
+<base href="https://notes.example/articles/">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/about">About</a></nav>
+<main>
+<h1 id="top">Field notes on paper screens</h1>
+<p>An e-ink panel holds its image <em>without power</em>, which makes it <strong>good for reading</strong> and poor for animation. The <code>refresh</code> policy decides how often the whole panel flashes.</p>
+<h2 id="history">A short history</h2>
+<p>The first readers used <a href="panels/first.html">electrophoretic panels</a> with sixteen greys. Later models added <a href="https://colour.example/kaleido">colour filters</a>, and a few went back to <a href="#top">plain black and white</a>.</p>
+<ul>
+<li>Clara BW, 6 inch, 300 ppi</li>
+<li>Libra, 7 inch, with page buttons
+  <ul><li>Libra 2</li><li>Libra Colour</li></ul>
+</li>
+</ul>
+<ol start="3">
+<li>Charge it.</li>
+<li>Read for a month.</li>
+</ol>
+<blockquote><p>Paper does not blink.</p></blockquote>
+<pre>fn refresh(panel: &amp;mut Panel) {
+    panel.flash();
+}</pre>
+<hr>
+<img src="img/panel.png" alt="A Clara BW showing a page of text" width="600" height="800">
+<table>
+<caption>Panels</caption>
+<tr><th>Model</th><th>Size</th><th>PPI</th></tr>
+<tr><td>Clara BW</td><td>6"</td><td>300</td></tr>
+<tr><td>Libra 2</td><td>7"</td><td>300</td></tr>
+</table>
+<p>Write to <a href="mailto:notes@notes.example">the editor</a> or run <a href="javascript:alert(1)">this</a>.</p>
+<form action="/search" method="get"><label for="q">Search notes</label><input type="search" id="q" name="q"><input type="hidden" name="src" value="footer"><input type="submit" value="Go"></form>
+</main>
+<footer><p>Last changed in <a href="../changes.html">September</a>.</p></footer>
+</body>
+</html>

@@ -62,6 +62,9 @@ struct Converter<'a> {
     warnings: Vec<Warning>,
     pending_anchor: Option<String>,
     title: Option<String>,
+    /// Inside a form the model carries as a [`Form`]: its labels and buttons
+    /// are part of that form, not prose to repeat beside it.
+    in_form: bool,
 }
 
 /// Paragraph content being gathered at one block level.
@@ -89,6 +92,7 @@ pub fn convert(
         unsupported_links: 0,
         warnings,
         pending_anchor: None,
+        in_form: false,
         title: None,
     };
     converter.read_head(DOCUMENT, 0);
@@ -396,9 +400,13 @@ impl Converter<'_> {
             }
             "form" => {
                 self.flush(blocks, gather);
+                let form = self.form(handle);
+                let outer = self.in_form;
+                self.in_form = outer || form.is_some();
                 self.blocks_in(handle, depth, blocks, gather);
+                self.in_form = outer;
                 self.flush(blocks, gather);
-                if let Some(form) = self.form(handle) {
+                if let Some(form) = form {
                     self.push_block(blocks, Block::Form(form));
                 }
             }
@@ -476,6 +484,7 @@ impl Converter<'_> {
                 }
             }
             "a" => self.link(handle, depth, gather),
+            "label" | "input" if self.in_form => {}
             "input" => {
                 if let Some(value) = self.attr(handle, "value") {
                     if matches!(self.attr(handle, "type"), Some("submit" | "button")) {
@@ -704,6 +713,39 @@ impl Converter<'_> {
         }
     }
 
+    /// The words of the `<label>` that names an input: one pointing at its
+    /// `id` anywhere in the form, or one wrapped around it.
+    fn label_for(&self, form: Handle, input: Handle) -> Option<String> {
+        let id = self.attr(input, "id");
+        let mut stack = vec![form];
+        while let Some(node) = stack.pop() {
+            if self.tag(node) == Some("label") {
+                let names = id.is_some() && self.attr(node, "for") == id;
+                let wraps = self.contains(node, input);
+                if names || wraps {
+                    let text = collapse_keep_edges(&self.text_of(node));
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        return Some(text.to_owned());
+                    }
+                }
+            }
+            stack.extend(self.nodes[node].children.iter().rev().copied());
+        }
+        None
+    }
+
+    fn contains(&self, ancestor: Handle, node: Handle) -> bool {
+        let mut stack = vec![ancestor];
+        while let Some(at) = stack.pop() {
+            if at == node {
+                return true;
+            }
+            stack.extend(self.nodes[at].children.iter().copied());
+        }
+        false
+    }
+
     fn form(&mut self, handle: Handle) -> Option<Form> {
         let action = self.attr(handle, "action").unwrap_or("");
         let action = if action.trim().is_empty() {
@@ -731,8 +773,10 @@ impl Converter<'_> {
                 let value = self.attr(node, "value").unwrap_or("").to_owned();
                 match (kind.as_str(), name) {
                     ("text" | "search" | "email" | "url" | "tel" | "number", Some(name)) => {
+                        let written = self.label_for(handle, node);
                         let label = self
                             .attr(node, "aria-label")
+                            .or(written.as_deref())
                             .or_else(|| self.attr(node, "placeholder"))
                             .or_else(|| self.attr(node, "title"))
                             .unwrap_or(&name)

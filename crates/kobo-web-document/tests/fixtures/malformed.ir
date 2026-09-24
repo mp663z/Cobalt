@@ -1,0 +1,153 @@
+title: Some("Broken & mended")
+base: Some("https://fixtures.example/page.html")
+warnings: []
+links:
+  0: https://fixtures.example/x "a link"
+blocks:
+[
+    Paragraph {
+        content: [
+            Text(
+                "An unclosed paragraph",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Another, with ",
+            ),
+            Strong(
+                [
+                    Text(
+                        "bold ",
+                    ),
+                    Emphasis(
+                        [
+                            Text(
+                                "and italic",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            Emphasis(
+                [
+                    Text(
+                        " crossed",
+                    ),
+                ],
+            ),
+            Text(
+                " tags and a stray close.",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Inside a div",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "a table in a paragraph",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "after the table.",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Entities: <tag> © été — 😀 \u{a0}done &bogus; &",
+            ),
+        ],
+        anchor: None,
+    },
+    List {
+        ordered: false,
+        start: 1,
+        items: [
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "one",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "two",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+            [
+                Paragraph {
+                    content: [
+                        Text(
+                            "three",
+                        ),
+                    ],
+                    anchor: None,
+                },
+            ],
+        ],
+    },
+    Heading {
+        level: 3,
+        content: [
+            Text(
+                "Heading with ",
+            ),
+            Link {
+                index: 0,
+                label: [
+                    Text(
+                        "a link",
+                    ),
+                ],
+            },
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Last line with no closing tags",
+            ),
+        ],
+        anchor: None,
+    },
+]
+text:
+An unclosed paragraph
+Another, with bold and italic crossed tags and a stray close.
+Inside a div
+a table in a paragraph
+after the table.
+Entities: <tag> © été — 😀  done &bogus; &
+one
+two
+three
+Heading with a link
+Last line with no closing tags
