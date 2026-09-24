@@ -11,13 +11,15 @@ use kobo_browser_core::{Go, History};
 use kobo_sdk::keyboard::{TextEntry, Typing};
 use kobo_sdk::{
     action_id, ActionId, Context, DisplayMetrics, Glyph, Header, Heartbeat, KoboApp, ScreenBuilder,
-    Task, TaskError, TaskId, TaskOutcome,
+    StoreResult, Task, TaskError, TaskId, TaskOutcome,
 };
 use kobo_web_document::{parse_document, Document, Limits, Url};
-use kobo_web_layout::{link_action, page_screen, picture_handle, Paginator, Piece};
+use kobo_web_layout::{link_action, page_screen, picture_handle, pieces, Paginator, Piece};
 
 mod pictures;
+mod saved;
 use pictures::Pictures;
+use saved::{Heard, Saved};
 
 /// Where the sample pages live. `.invalid` can never be a real host, so a
 /// sample address can never be confused with a page on the web.
@@ -98,6 +100,11 @@ struct Browser {
     clock: Heartbeat,
     /// Pictures fetched for the page being read.
     pictures: Pictures,
+    /// Pages kept on the reader for reading without a network.
+    saved: Saved,
+    /// A kept copy being read back in place of a page that did not come:
+    /// its address, why the fetch failed, and the history step it came from.
+    reading: Option<(Url, Failure, Option<usize>)>,
 }
 
 impl Default for Browser {
@@ -113,11 +120,32 @@ impl Default for Browser {
             pager: None,
             clock: Heartbeat::default(),
             pictures: Pictures::default(),
+            saved: Saved::default(),
+            reading: None,
         }
     }
 }
 
+fn lower_first(words: &str) -> String {
+    let mut chars = words.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_lowercase().chain(chars).collect()
+    })
+}
+
+/// The address a page is kept under: fragments name places in one page.
+fn cache_key(url: &Url) -> String {
+    url.without_fragment().to_string()
+}
+
 impl Browser {
+    /// Drops a read of a kept copy that a newer request replaces.
+    fn forget_reading(&mut self) {
+        if self.reading.take().is_some() {
+            self.saved.stop_reading();
+        }
+    }
+
     fn open(&mut self, context: &mut Context, url: &Url) {
         let same = self
             .loaded
@@ -152,6 +180,10 @@ impl Browser {
     /// Stops a page on its way and goes back to the one on screen.
     fn stop(&mut self, context: &mut Context) {
         self.clock.stop(context);
+        if let Some((_, _, Some(position))) = self.reading.take() {
+            self.history.return_to(position);
+        }
+        self.saved.stop_reading();
         if let Some(pending) = self.pending.take() {
             context.cancel(pending.task);
             if let Some(position) = pending.stepped_from {
@@ -173,6 +205,7 @@ impl Browser {
     /// Asks the runtime for a page. One at a time: a new request replaces
     /// the one in flight.
     fn fetch(&mut self, context: &mut Context, url: &Url, stepped_from: Option<usize>) {
+        self.forget_reading();
         if let Some(pending) = self.pending.take() {
             context.cancel(pending.task);
         }
@@ -195,11 +228,28 @@ impl Browser {
                 self.clock.stop(context);
                 self.clock.start(context);
             }
-            None => self.failed(url, Failure::Unreachable, stepped_from),
+            None => self.failed(context, url, Failure::Unreachable, stepped_from),
         }
     }
 
-    fn failed(&mut self, url: &Url, failure: Failure, stepped_from: Option<usize>) {
+    fn failed(
+        &mut self,
+        context: &mut Context,
+        url: &Url,
+        failure: Failure,
+        stepped_from: Option<usize>,
+    ) {
+        if matches!(failure, Failure::Offline | Failure::Unreachable)
+            && self.saved.read(context, &cache_key(url))
+        {
+            // The Loading screen stays up while the copy comes off the shelf.
+            self.reading = Some((url.clone(), failure, stepped_from));
+            return;
+        }
+        self.show_failure(url, failure, stepped_from);
+    }
+
+    fn show_failure(&mut self, url: &Url, failure: Failure, stepped_from: Option<usize>) {
         if let Some(position) = stepped_from {
             // Back or Forward moved history onto a page that did not come;
             // the page still on screen is the one history should name.
@@ -209,31 +259,100 @@ impl Browser {
         self.view = View::Failed(url.clone(), failure);
     }
 
-    fn arrived(&mut self, context: &mut Context, pending: Pending, body: &[u8]) {
-        let url = pending.url;
+    fn arrived(&mut self, context: &mut Context, pending: &Pending, body: &[u8]) {
+        if self.display(
+            context,
+            pending.url.clone(),
+            pending.stepped_from,
+            body,
+            None,
+        ) {
+            self.saved.keep(context, &cache_key(&pending.url), body);
+        }
+    }
+
+    /// Shows a response as the page for `url`, with an optional line above
+    /// it. Returns whether it was a page.
+    fn display(
+        &mut self,
+        context: &mut Context,
+        url: Url,
+        stepped_from: Option<usize>,
+        body: &[u8],
+        note: Option<String>,
+    ) -> bool {
         match fetch::sniff(body) {
             Kind::Unsupported(what) => {
-                if let Some(position) = pending.stepped_from {
+                if let Some(position) = stepped_from {
                     self.history.return_to(position);
                 }
                 self.view = View::Unsupported(url, what);
+                false
             }
             kind => {
-                if pending.stepped_from.is_none() {
+                if stepped_from.is_none() {
                     let _ = self.history.navigate(url.clone());
                 }
                 if kind == Kind::Plain {
                     let html = plain_page(body);
-                    self.show_document(context, &url, html.as_bytes());
+                    self.show_document_noted(context, &url, html.as_bytes(), note);
                 } else {
-                    self.show_document(context, &url, body);
+                    self.show_document_noted(context, &url, body, note);
                 }
                 self.view = View::Page;
+                true
             }
         }
     }
 
+    fn stored(&mut self, context: &mut Context, from: Option<&str>, result: &StoreResult) {
+        match self.saved.heard(context, from, result) {
+            Heard::Elsewhere | Heard::Handled => {}
+            heard => {
+                if self.reading.is_some() {
+                    self.read_back(context, heard);
+                    self.show(context);
+                }
+            }
+        }
+    }
+
+    /// A kept copy came off the shelf, or could not.
+    fn read_back(&mut self, context: &mut Context, heard: Heard) {
+        let Some((url, failure, stepped_from)) = self.reading.take() else {
+            return;
+        };
+        match heard {
+            Heard::Read {
+                url: key,
+                bytes,
+                fetched,
+            } if key == cache_key(&url) => {
+                let why = lower_first(failure.explain().0);
+                let note = match self.saved.when(fetched) {
+                    Some(when) => {
+                        format!("Saved copy from {when}: {why}, so it may not be the latest.")
+                    }
+                    None => format!("Saved copy: {why}, so it may not be the latest."),
+                };
+                self.saved.touch(context, &key);
+                self.display(context, url, stepped_from, &bytes, Some(note));
+            }
+            _ => self.show_failure(&url, failure, stepped_from),
+        }
+    }
+
     fn show_document(&mut self, context: &mut Context, url: &Url, bytes: &[u8]) {
+        self.show_document_noted(context, url, bytes, None);
+    }
+
+    fn show_document_noted(
+        &mut self,
+        context: &mut Context,
+        url: &Url,
+        bytes: &[u8],
+        note: Option<String>,
+    ) {
         self.pictures.clear(context);
         if let Some(task) = self.pager.take() {
             context.cancel(task);
@@ -243,7 +362,14 @@ impl Browser {
             .title
             .clone()
             .unwrap_or_else(|| url.host().to_owned());
-        let paginator = Paginator::for_document(&document);
+        let (mut pieces, mut anchors) = pieces(&document);
+        if let Some(note) = note {
+            pieces.insert(0, Piece::Note(note));
+            for (_, at) in &mut anchors {
+                *at += 1;
+            }
+        }
+        let paginator = Paginator::new(pieces, anchors);
         let restore = self.history.current().map_or(0, |entry| entry.page);
         self.loaded = Some(Loaded {
             url: url.clone(),
@@ -485,6 +611,7 @@ impl Browser {
 
 impl KoboApp for Browser {
     fn on_start(&mut self, context: &mut Context) {
+        Saved::start(context);
         if let Ok(home) = Url::parse(SAMPLES) {
             if let Ok(index) = home.join("index.html") {
                 self.open(context, &index);
@@ -602,9 +729,9 @@ impl KoboApp for Browser {
         };
         self.clock.stop(context);
         match outcome {
-            TaskOutcome::Completed(body) => self.arrived(context, pending, &body),
+            TaskOutcome::Completed(body) => self.arrived(context, &pending, &body),
             TaskOutcome::Failed(error) => {
-                self.failed(&pending.url, failure(error), pending.stepped_from);
+                self.failed(context, &pending.url, failure(error), pending.stepped_from);
             }
             TaskOutcome::Cancelled => {
                 if let Some(position) = pending.stepped_from {
@@ -614,6 +741,22 @@ impl KoboApp for Browser {
             }
         }
         self.show(context);
+    }
+
+    fn on_load(&mut self, context: &mut Context, key: &str, result: StoreResult) {
+        self.stored(context, Some(key), &result);
+    }
+
+    fn on_save(&mut self, context: &mut Context, key: &str, result: StoreResult) {
+        self.stored(context, Some(key), &result);
+    }
+
+    fn on_shelf(&mut self, context: &mut Context, name: &str, result: StoreResult) {
+        self.stored(context, Some(name), &result);
+    }
+
+    fn on_store(&mut self, context: &mut Context, result: StoreResult) {
+        self.stored(context, None, &result);
     }
 
     fn on_page_turn(&mut self, context: &mut Context, forward: bool) {

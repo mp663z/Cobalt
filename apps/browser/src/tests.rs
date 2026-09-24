@@ -609,3 +609,249 @@ fn leaving_a_page_cancels_and_releases_its_pictures() {
     runner.action(action_id("back"));
     assert_eq!(runner.app().pictures.state(0), None);
 }
+
+fn len32(blob: &[u8]) -> u32 {
+    u32::try_from(blob.len()).expect("a test blob is small")
+}
+
+/// The reader's store and shelf, kept in memory and answered in order.
+#[derive(Default)]
+struct Store {
+    keys: std::collections::BTreeMap<String, Vec<u8>>,
+    shelf: std::collections::BTreeMap<String, Vec<u8>>,
+    /// Refuse shelf writes, as a full reader does.
+    full: bool,
+}
+
+impl Store {
+    fn answer(&mut self, request: kobo_sdk::StoreRequest) -> StoreResult {
+        use kobo_sdk::{StoreError, StoreRequest as R};
+        match request {
+            R::Save { key, value } => {
+                self.keys.insert(key.clone(), value);
+                StoreResult::Saved { key }
+            }
+            R::Load { key } => StoreResult::Loaded {
+                value: self.keys.get(&key).cloned(),
+                key,
+            },
+            R::Forget { key } => {
+                self.keys.remove(&key);
+                StoreResult::Forgotten { key }
+            }
+            R::List => StoreResult::Keys(self.keys.keys().cloned().collect()),
+            R::ShelfWrite { .. } if self.full => StoreResult::Denied(StoreError::NoRoom),
+            R::ShelfWrite {
+                name,
+                offset,
+                bytes,
+                ..
+            } => {
+                let blob = self.shelf.entry(name.clone()).or_default();
+                blob.truncate(offset as usize);
+                blob.extend_from_slice(&bytes);
+                StoreResult::ShelfWritten {
+                    size: len32(blob),
+                    name,
+                }
+            }
+            R::ShelfRead {
+                name,
+                offset,
+                length,
+            } => match self.shelf.get(&name) {
+                Some(blob) => {
+                    let from = (offset as usize).min(blob.len());
+                    let to = (from + length as usize).min(blob.len());
+                    StoreResult::ShelfRead {
+                        offset,
+                        bytes: blob[from..to].to_vec(),
+                        size: len32(blob),
+                        name,
+                    }
+                }
+                None => StoreResult::Denied(StoreError::Missing),
+            },
+            R::ShelfRemove { name } => {
+                self.shelf.remove(&name);
+                StoreResult::ShelfRemoved { name }
+            }
+            R::ShelfList => StoreResult::Shelf(
+                self.shelf
+                    .iter()
+                    .map(|(name, blob)| (name.clone(), len32(blob)))
+                    .collect(),
+            ),
+        }
+    }
+
+    /// Answers every store request in `commands`, and those the answers
+    /// lead to, and returns the other commands.
+    fn pump(
+        &mut self,
+        runner: &mut AppRunner<Browser>,
+        commands: Vec<kobo_sdk::Command>,
+    ) -> Vec<kobo_sdk::Command> {
+        let mut queue: std::collections::VecDeque<_> = commands.into();
+        let mut rest = Vec::new();
+        while let Some(command) = queue.pop_front() {
+            match command {
+                kobo_sdk::Command::Store(request) => {
+                    let answer = self.answer(request);
+                    queue.extend(runner.store_result(answer));
+                }
+                other => rest.push(other),
+            }
+        }
+        rest
+    }
+}
+
+fn runner_with(store: &mut Store) -> AppRunner<Browser> {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let mut runner = AppRunner::with_metrics(Browser::default(), kobo_ui::CLARA_BW_METRICS);
+    let started = runner.start();
+    store.pump(&mut runner, started);
+    runner
+}
+
+const KEPT: &str =
+    "<!doctype html><title>Kept page</title><h1>Kept page</h1><p>Words worth reading twice.";
+
+fn first_piece(runner: &AppRunner<Browser>) -> Piece {
+    runner.app().current_pieces()[0].clone()
+}
+
+#[test]
+fn a_page_that_arrives_is_kept_and_read_back_when_offline() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    let index = runner.app().saved.index().expect("index read").clone();
+    let entry = index.find("https://example.com/").expect("kept");
+    assert_eq!(
+        store.shelf.get(&entry.name).map(Vec::as_slice),
+        Some(KEPT.as_bytes())
+    );
+    assert!(store.keys.contains_key(saved::INDEX_KEY));
+
+    runner.action(action_id("back"));
+    assert_eq!(title(&runner), "Browse: sample pages");
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    // The copy is on its way off the shelf: still loading, not an error.
+    assert!(matches!(runner.app().view, View::Loading(_)));
+    store.pump(&mut runner, failed);
+    assert_eq!(runner.app().view, View::Page);
+    assert_eq!(title(&runner), "Kept page");
+    let Piece::Note(note) = first_piece(&runner) else {
+        panic!("the page opens with a note");
+    };
+    assert!(note.starts_with("Saved copy from today at "), "{note}");
+    assert!(
+        note.contains(": no Wi-Fi, so it may not be the latest."),
+        "{note}"
+    );
+    assert_eq!(runner.app().history.entries().len(), 2);
+    runner.action(action_id("back"));
+    assert_eq!(title(&runner), "Browse: sample pages");
+}
+
+#[test]
+fn a_page_never_kept_or_a_slow_site_still_shows_the_error() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    store.pump(&mut runner, failed);
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::Offline)
+    ));
+
+    runner.action(action_id("return"));
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    runner.action(action_id("back"));
+    runner.action(link_to(&runner, "example.com"));
+    // A site that answers slowly is there; an old copy would hide that.
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::TimedOut),
+    );
+    store.pump(&mut runner, failed);
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::TimedOut)
+    ));
+}
+
+#[test]
+fn a_kept_copy_that_cannot_be_read_is_forgotten_and_the_error_shown() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    store.shelf.clear();
+    runner.action(action_id("back"));
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    store.pump(&mut runner, failed);
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::Offline)
+    ));
+    let index = runner.app().saved.index().expect("index");
+    assert!(index.find("https://example.com/").is_none());
+}
+
+#[test]
+fn a_full_reader_keeps_nothing_and_says_nothing() {
+    let mut store = Store {
+        full: true,
+        ..Store::default()
+    };
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    assert_eq!(runner.app().view, View::Page);
+    assert_eq!(title(&runner), "Kept page");
+    assert!(store.shelf.is_empty());
+    let index = runner.app().saved.index().expect("index");
+    assert!(index.find("https://example.com/").is_none());
+}
+
+#[test]
+fn kept_pages_outlive_the_app_and_strays_are_cleared() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    store
+        .shelf
+        .insert("page-stray".into(), b"left behind".to_vec());
+    store
+        .shelf
+        .insert("other-app-blob".into(), b"not ours".to_vec());
+
+    let mut runner = runner_with(&mut store);
+    assert!(!store.shelf.contains_key("page-stray"));
+    assert!(store.shelf.contains_key("other-app-blob"));
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Unreachable),
+    );
+    store.pump(&mut runner, failed);
+    assert_eq!(title(&runner), "Kept page");
+}
