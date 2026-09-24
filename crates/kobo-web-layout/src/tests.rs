@@ -21,7 +21,7 @@ fn text_of_piece(piece: &Piece) -> String {
         | Piece::Preformatted(text)
         | Piece::Note(text) => text.clone(),
         Piece::Prose(runs) => runs.iter().map(|run| run.text.as_str()).collect(),
-        Piece::Table { rows } => rows
+        Piece::Table { rows, .. } => rows
             .iter()
             .filter(|row| !row.header)
             .map(|row| row.cells.join(" "))
@@ -289,4 +289,33 @@ fn pages_made_one_at_a_time_match_pages_made_at_once() {
     while paginator.next_page(&mut fits) {}
     assert!(paginator.done());
     assert_eq!(paginator.into_layout(), whole);
+}
+
+#[test]
+fn every_link_in_the_document_is_offered_on_some_page() {
+    let html = r#"<h2><a href="/h">Heading link</a></h2>
+        <blockquote><p>Quoted <a href="/q">link</a></p></blockquote>
+        <table><tr><th>A</th></tr><tr><td><a href="/t">cell link</a></td></tr></table>
+        <a href="/i"><img src="/i.png" alt="linked picture"></a>
+        <p>Plain <a href="/p">link</a>.</p>"#;
+    let document = parse_document(
+        html.as_bytes(),
+        &Url::parse("https://x.example/").expect("url"),
+        &Limits::DEFAULT,
+    );
+    for size in [120, 400, 5_000] {
+        let layout = paginate(&document, budget(size));
+        let mut offered: Vec<usize> = Vec::new();
+        for link in layout.pages.iter().flatten().flat_map(Piece::all_links) {
+            if !offered.contains(&link) {
+                offered.push(link);
+            }
+        }
+        assert_eq!(
+            offered,
+            (0..document.links.len()).collect::<Vec<_>>(),
+            "at {size}: {:?}",
+            document.links
+        );
+    }
 }

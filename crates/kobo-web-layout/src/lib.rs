@@ -58,18 +58,26 @@ pub struct Run {
 /// One thing the toolkit draws.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Piece {
+    /// `links` are the links the heading's words carry. The toolkit draws a
+    /// heading without inline targets, so they are offered on the Links
+    /// screen instead.
     Heading {
         level: u8,
         text: String,
+        links: Vec<usize>,
     },
     Prose(Vec<Run>),
+    /// Quoted prose, with its links offered as a heading's are.
     Quote {
         depth: u8,
         text: String,
+        links: Vec<usize>,
     },
     Preformatted(String),
+    /// `links` holds, for each row, the links its cells carry.
     Table {
         rows: Vec<TableRow>,
+        links: Vec<Vec<usize>>,
     },
     /// Something in the page that is described rather than shown: an image
     /// before images are fetched, a form before forms are supported.
@@ -82,7 +90,7 @@ impl Piece {
         matches!(self, Self::Heading { .. })
     }
 
-    /// Links this piece makes tappable, in reading order.
+    /// Links this piece makes tappable in the text, in reading order.
     #[must_use]
     pub fn links(&self) -> Vec<usize> {
         let mut out: Vec<usize> = Vec::new();
@@ -94,6 +102,17 @@ impl Piece {
             }
         }
         out
+    }
+
+    /// Every link on this piece, tappable in the text or not, in reading
+    /// order: what the Links screen offers.
+    #[must_use]
+    pub fn all_links(&self) -> Vec<usize> {
+        match self {
+            Self::Heading { links, .. } | Self::Quote { links, .. } => links.clone(),
+            Self::Table { links, .. } => links.iter().flatten().copied().collect(),
+            _ => self.links(),
+        }
     }
 }
 
@@ -169,11 +188,11 @@ pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) 
 pub fn append(mut builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
     for piece in pieces {
         builder = match piece {
-            Piece::Heading { level, text } => builder.heading_at_level(*level, text),
+            Piece::Heading { level, text, .. } => builder.heading_at_level(*level, text),
             Piece::Prose(runs) => prose(builder, runs),
-            Piece::Quote { depth, text } => builder.quote(*depth, text),
+            Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
             Piece::Preformatted(text) => builder.text(text),
-            Piece::Table { rows } => builder.table(rows.clone(), Vec::new()),
+            Piece::Table { rows, .. } => builder.table(rows.clone(), Vec::new()),
             Piece::Note(text) => builder.secondary(text),
             Piece::Rule => builder.divider(),
         };
@@ -295,6 +314,7 @@ impl Flattener {
                     self.out.push(Piece::Heading {
                         level: (*level).clamp(1, 6),
                         text: text.trim().to_owned(),
+                        links: links_in(content),
                     });
                 }
             }
@@ -342,12 +362,21 @@ impl Flattener {
             Block::Table(table) => self.table(table),
             Block::Image(image) => {
                 let alt = drawable(image.alt.trim());
-                let alt = alt.as_str();
-                self.out.push(Piece::Note(if alt.is_empty() {
+                let label = if alt.is_empty() {
                     "Image".to_owned()
                 } else {
                     format!("Image: {alt}")
-                }));
+                };
+                // An image inside a link is often the only way to follow it,
+                // so its description is the link.
+                self.out.push(match image.link {
+                    Some(link) => Piece::Prose(vec![Run {
+                        text: label,
+                        link: Some(link),
+                        ..Run::default()
+                    }]),
+                    None => Piece::Note(label),
+                });
             }
             Block::Form(form) => self.out.push(Piece::Note(form_note(form))),
             Block::Rule => self.out.push(Piece::Rule),
@@ -369,7 +398,17 @@ impl Flattener {
         }
         if quote > 0 {
             let text: String = runs.iter().map(|run| run.text.as_str()).collect();
-            self.out.push(Piece::Quote { depth: quote, text });
+            let mut links: Vec<usize> = Vec::new();
+            for link in runs.iter().filter_map(|run| run.link) {
+                if !links.contains(&link) {
+                    links.push(link);
+                }
+            }
+            self.out.push(Piece::Quote {
+                depth: quote,
+                text,
+                links,
+            });
             return;
         }
         for chunk in split_links(runs) {
@@ -396,18 +435,31 @@ impl Flattener {
         if rows.is_empty() {
             return;
         }
+        let row_links: Vec<Vec<usize>> = table
+            .rows
+            .iter()
+            .map(|row| row.iter().flat_map(|cell| links_in(cell)).collect())
+            .collect();
         let header = rows.first().filter(|row| row.header).cloned();
         let body_start = usize::from(header.is_some());
         let per = MAX_ROWS_PER_PIECE - body_start;
-        let body = &rows[body_start..];
-        if body.is_empty() {
-            self.out.push(Piece::Table { rows });
+        if rows.len() == body_start {
+            self.out.push(Piece::Table {
+                rows,
+                links: row_links,
+            });
             return;
         }
-        for chunk in body.chunks(per) {
+        let header_links: Vec<Vec<usize>> = row_links[..body_start].to_vec();
+        for (chunk, chunk_links) in rows[body_start..]
+            .chunks(per)
+            .zip(row_links[body_start..].chunks(per))
+        {
             let mut rows: Vec<TableRow> = header.iter().cloned().collect();
             rows.extend(chunk.iter().cloned());
-            self.out.push(Piece::Table { rows });
+            let mut links = header_links.clone();
+            links.extend(chunk_links.iter().cloned());
+            self.out.push(Piece::Table { rows, links });
         }
         if table.clipped {
             self.out.push(Piece::Note("Table cut short.".to_owned()));
@@ -568,6 +620,19 @@ fn split_links(runs: Vec<Run>) -> Vec<Vec<Run>> {
     }
     chunks.retain(|chunk| !chunk.is_empty());
     chunks
+}
+
+/// Links carried anywhere in some inline content, in order, once each.
+fn links_in(content: &[Inline]) -> Vec<usize> {
+    let mut runs = Vec::new();
+    inline_runs(content, Style::default(), &mut runs);
+    let mut links: Vec<usize> = Vec::new();
+    for link in runs.iter().filter_map(|run| run.link) {
+        if !links.contains(&link) {
+            links.push(link);
+        }
+    }
+    links
 }
 
 fn plain(content: &[Inline]) -> String {
@@ -839,7 +904,7 @@ fn text_of(piece: &Piece) -> Option<String> {
 /// For tables, an offset is a row count.
 fn cut_points(piece: &Piece) -> Vec<usize> {
     match piece {
-        Piece::Table { rows } => {
+        Piece::Table { rows, .. } => {
             let header = usize::from(rows.first().is_some_and(|row| row.header));
             (header + 1..rows.len()).collect()
         }
@@ -878,30 +943,39 @@ fn char_points(piece: &Piece) -> Vec<usize> {
 
 fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
     match piece {
-        Piece::Table { rows } => {
-            let header: Vec<TableRow> = rows
-                .first()
-                .filter(|row| row.header)
-                .cloned()
-                .into_iter()
-                .collect();
-            let head = rows[..at].to_vec();
-            let mut tail = header;
+        Piece::Table { rows, links } => {
+            let header = usize::from(rows.first().is_some_and(|row| row.header));
+            let mut tail = rows[..header].to_vec();
             tail.extend(rows[at..].iter().cloned());
-            (Piece::Table { rows: head }, Piece::Table { rows: tail })
+            let mut tail_links = links[..header].to_vec();
+            tail_links.extend(links[at..].iter().cloned());
+            (
+                Piece::Table {
+                    rows: rows[..at].to_vec(),
+                    links: links[..at].to_vec(),
+                },
+                Piece::Table {
+                    rows: tail,
+                    links: tail_links,
+                },
+            )
         }
         Piece::Preformatted(text) => (
             Piece::Preformatted(text[..at].trim_end_matches('\n').to_owned()),
             Piece::Preformatted(text[at..].to_owned()),
         ),
-        Piece::Quote { depth, text } => (
+        // Both halves offer the quote's links: which half a link's words fell
+        // in is not tracked, and a link offered twice is better than one lost.
+        Piece::Quote { depth, text, links } => (
             Piece::Quote {
                 depth: *depth,
                 text: text[..at].trim_end().to_owned(),
+                links: links.clone(),
             },
             Piece::Quote {
                 depth: *depth,
                 text: text[at..].to_owned(),
+                links: links.clone(),
             },
         ),
         Piece::Prose(runs) => {
