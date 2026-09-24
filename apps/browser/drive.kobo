@@ -39,12 +39,6 @@ clean
 shot browser-links-page-2
 tap-id return
 tap-id back
-tap-id link-3
-expect Web pages come next
-clean
-shot browser-not-in-this-build
-tap-id return
-expect Sample pages
 tap-id address
 expect An address, or words
 clean

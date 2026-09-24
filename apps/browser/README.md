@@ -19,6 +19,8 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
   either side. The position is shown at the bottom.
 - Headings, paragraphs, lists, quotations, code and tables are kept. Scripts,
   styles, frames, video and advertising are dropped.
+- Pages load over the network. A page that fails to arrive says why, and
+  offers Try again when that could help.
 - Tap a link to follow it. **Links** lists every link in the page, the ones on
   the page you are reading first.
 - **Back** and **Forward** return to where you were, on the same page.
@@ -27,6 +29,7 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 
 ## Limits
 
-This build reads the sample pages that ship with it and does not fetch pages
-from the web yet. There is no JavaScript. Images are not drawn; a linked image
-is offered as a link.
+There is no JavaScript. Images are not drawn yet; a linked image is offered
+as a link. Pages are read up to 2 MB. The runtime reports only the body of a
+response, so relative links on a page that was redirected are resolved from
+the address that was asked for, unless the page names its own base.

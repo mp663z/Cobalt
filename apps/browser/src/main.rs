@@ -6,9 +6,13 @@
 use std::process::ExitCode;
 
 use kobo_browser_core::address::{self, DEFAULT_SEARCH};
+use kobo_browser_core::fetch::{self, Failure, Kind};
 use kobo_browser_core::{Go, History};
 use kobo_sdk::keyboard::{TextEntry, Typing};
-use kobo_sdk::{action_id, ActionId, Context, DisplayMetrics, Glyph, KoboApp, ScreenBuilder};
+use kobo_sdk::{
+    action_id, ActionId, Context, DisplayMetrics, Glyph, Header, KoboApp, ScreenBuilder, Task,
+    TaskError, TaskId, TaskOutcome,
+};
 use kobo_web_document::{parse_document, Document, Limits, Url};
 use kobo_web_layout::{link_action, page_screen, Paginator, Piece};
 
@@ -49,8 +53,22 @@ enum View {
     Page,
     /// The Links list, at this screen of it.
     Links(usize),
-    /// Something the reader asked for that this build cannot do yet.
-    Unavailable(Url),
+    /// A page on its way.
+    Loading(Url),
+    /// A page that did not arrive.
+    Failed(Url, Failure),
+    /// A response that is not a page, named.
+    Unsupported(Url, &'static str),
+}
+
+/// A fetch in flight, and what to do with history when it lands.
+struct Pending {
+    task: TaskId,
+    url: Url,
+    /// For Back and Forward, which have already moved history, where it
+    /// was before; `None` for a link or an address, recorded only once the
+    /// page arrives.
+    stepped_from: Option<usize>,
 }
 
 struct Browser {
@@ -59,6 +77,11 @@ struct Browser {
     view: View,
     /// The address field. While it is open it covers the page.
     address: TextEntry,
+    pending: Option<Pending>,
+    /// Where history was before a Back or Forward whose page is being loaded.
+    stepped_from: Option<usize>,
+    /// The last page that failed, for Retry.
+    retry: Option<Url>,
 }
 
 impl Default for Browser {
@@ -68,6 +91,9 @@ impl Default for Browser {
             loaded: None,
             view: View::Page,
             address: TextEntry::new().opened_by("address"),
+            pending: None,
+            stepped_from: None,
+            retry: None,
         }
     }
 }
@@ -79,7 +105,7 @@ impl Browser {
             .as_ref()
             .is_some_and(|loaded| loaded.url.same_document(url));
         if !same && sample(url).is_none() {
-            self.view = View::Unavailable(url.clone());
+            self.fetch(context, url, None);
             self.show(context);
             return;
         }
@@ -88,6 +114,7 @@ impl Browser {
     }
 
     fn carry_out(&mut self, context: &mut Context, go: Go) {
+        self.view = View::Page;
         match go {
             Go::Load(url) => self.load(context, &url),
             Go::Fragment(fragment) => {
@@ -99,16 +126,92 @@ impl Browser {
             Go::Page(page) => self.turn_to(context, page),
             Go::Stay => {}
         }
-        self.view = View::Page;
+        self.stepped_from = None;
         self.show(context);
     }
 
+    /// Stops a page on its way and goes back to the one on screen.
+    fn stop(&mut self, context: &mut Context) {
+        if let Some(pending) = self.pending.take() {
+            context.cancel(pending.task);
+            if let Some(position) = pending.stepped_from {
+                self.history.return_to(position);
+            }
+        }
+        self.view = View::Page;
+    }
+
     fn load(&mut self, context: &mut Context, url: &Url) {
-        let Some(html) = sample(url) else {
-            self.view = View::Unavailable(url.clone());
-            return;
-        };
-        let document = parse_document(html.as_bytes(), url, &Limits::DEFAULT);
+        if let Some(html) = sample(url) {
+            self.show_document(context, url, html.as_bytes());
+        } else {
+            let from = self.stepped_from.take();
+            self.fetch(context, url, from);
+        }
+    }
+
+    /// Asks the runtime for a page. One at a time: a new request replaces
+    /// the one in flight.
+    fn fetch(&mut self, context: &mut Context, url: &Url, stepped_from: Option<usize>) {
+        if let Some(pending) = self.pending.take() {
+            context.cancel(pending.task);
+        }
+        let task = context.spawn(Task::Fetch {
+            url: url.without_fragment().to_string(),
+            offset: 0,
+            max_bytes: fetch::MAX_PAGE_BYTES,
+            credential: None,
+            headers: vec![Header::new("Accept", fetch::ACCEPT)],
+        });
+        match task {
+            Some(task) => {
+                self.pending = Some(Pending {
+                    task,
+                    url: url.clone(),
+                    stepped_from,
+                });
+                self.view = View::Loading(url.clone());
+            }
+            None => self.failed(url, Failure::Unreachable, stepped_from),
+        }
+    }
+
+    fn failed(&mut self, url: &Url, failure: Failure, stepped_from: Option<usize>) {
+        if let Some(position) = stepped_from {
+            // Back or Forward moved history onto a page that did not come;
+            // the page still on screen is the one history should name.
+            self.history.return_to(position);
+        }
+        self.retry = Some(url.clone());
+        self.view = View::Failed(url.clone(), failure);
+    }
+
+    fn arrived(&mut self, context: &mut Context, pending: Pending, body: &[u8]) {
+        let url = pending.url;
+        match fetch::sniff(body) {
+            Kind::Unsupported(what) => {
+                if let Some(position) = pending.stepped_from {
+                    self.history.return_to(position);
+                }
+                self.view = View::Unsupported(url, what);
+            }
+            kind => {
+                if pending.stepped_from.is_none() {
+                    let _ = self.history.navigate(url.clone());
+                }
+                if kind == Kind::Plain {
+                    let html = plain_page(body);
+                    self.show_document(context, &url, html.as_bytes());
+                } else {
+                    self.show_document(context, &url, body);
+                }
+                self.view = View::Page;
+            }
+        }
+    }
+
+    fn show_document(&mut self, context: &mut Context, url: &Url, bytes: &[u8]) {
+        let document = parse_document(bytes, url, &Limits::DEFAULT);
         let title = document
             .title
             .clone()
@@ -208,12 +311,40 @@ impl Browser {
                 .text_entry(&self.address, "An address, or words to search for", "Go");
         }
         match (&self.view, &self.loaded) {
-            (View::Unavailable(url), _) => ScreenBuilder::new("browser-unavailable")
-                .top_bar("Not in this build")
-                .heading("Web pages come next")
-                .text("This build of Browse reads only the sample pages it ships with. Loading pages from the network is the next step.")
+            (View::Loading(url), _) => ScreenBuilder::new("browser-loading")
+                .top_bar(url.host())
+                .activity("Loading the page", None)
                 .secondary(url.to_string())
-                .button("return", "Back to the page"),
+                .button("cancel-load", "Cancel"),
+            (View::Failed(url, failure), loaded) => {
+                let (heading, sentence) = failure.explain();
+                let mut builder = ScreenBuilder::new("browser-failed")
+                    .top_bar(url.host())
+                    .heading(heading)
+                    .text(sentence)
+                    .secondary(url.to_string());
+                if failure.worth_retrying() {
+                    builder = builder.button("retry", "Try again");
+                }
+                if loaded.is_some() {
+                    builder = builder.button("return", "Back to the page");
+                }
+                builder
+            }
+            (View::Unsupported(url, what), loaded) => {
+                let builder = ScreenBuilder::new("browser-unsupported")
+                    .top_bar(url.host())
+                    .heading("Not a web page")
+                    .text(format!(
+                        "This address leads to {what}. Browse shows web pages and plain text."
+                    ))
+                    .secondary(url.to_string());
+                if loaded.is_some() {
+                    builder.button("return", "Back to the page")
+                } else {
+                    builder
+                }
+            }
             (View::Links(page), Some(loaded)) => {
                 let here = self.page_links();
                 let pages = links_pages(loaded, &here, metrics);
@@ -297,11 +428,21 @@ impl KoboApp for Browser {
                 };
                 self.turn_to(context, to);
             }
+        } else if matches!(self.view, View::Loading(_))
+            && (action == action_id("cancel-load") || action == action_id("back"))
+        {
+            self.stop(context);
+        } else if action == action_id("retry") {
+            if let Some(url) = self.retry.take() {
+                self.fetch(context, &url, None);
+            }
         } else if action == action_id("back") {
+            self.stepped_from = Some(self.history.position());
             let go = self.history.back();
             self.carry_out(context, go);
             return;
         } else if action == action_id("forward") {
+            self.stepped_from = Some(self.history.position());
             let go = self.history.forward();
             self.carry_out(context, go);
             return;
@@ -326,6 +467,26 @@ impl KoboApp for Browser {
             {
                 self.open(context, &target);
                 return;
+            }
+        }
+        self.show(context);
+    }
+
+    fn on_task(&mut self, context: &mut Context, task: TaskId, outcome: TaskOutcome) {
+        let Some(pending) = self.pending.take_if(|pending| pending.task == task) else {
+            // An answer to a request that was cancelled or replaced.
+            return;
+        };
+        match outcome {
+            TaskOutcome::Completed(body) => self.arrived(context, pending, &body),
+            TaskOutcome::Failed(error) => {
+                self.failed(&pending.url, failure(error), pending.stepped_from);
+            }
+            TaskOutcome::Cancelled => {
+                if let Some(position) = pending.stepped_from {
+                    self.history.return_to(position);
+                }
+                self.view = View::Page;
             }
         }
         self.show(context);
@@ -432,3 +593,36 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests;
+
+/// What the reader is told for each way the runtime reports a failed fetch.
+fn failure(error: TaskError) -> Failure {
+    match error {
+        TaskError::Denied => Failure::Denied,
+        TaskError::NoCredential | TaskError::Unauthorized => Failure::Refused,
+        TaskError::Offline => Failure::Offline,
+        TaskError::Unreachable => Failure::Unreachable,
+        TaskError::TooLarge => Failure::TooLarge,
+        TaskError::TimedOut => Failure::TimedOut,
+        TaskError::NotFound => Failure::NotFound,
+        TaskError::RateLimited(seconds) => Failure::Busy {
+            retry_after_seconds: seconds,
+        },
+    }
+}
+
+/// Plain text, as a page: one preformatted block, so its lines stay lines.
+fn plain_page(body: &[u8]) -> String {
+    let text = String::from_utf8_lossy(body);
+    let mut html = String::with_capacity(text.len() + 32);
+    html.push_str("<!doctype html><pre>");
+    for character in text.chars() {
+        match character {
+            '<' => html.push_str("&lt;"),
+            '>' => html.push_str("&gt;"),
+            '&' => html.push_str("&amp;"),
+            other => html.push(other),
+        }
+    }
+    html.push_str("</pre>");
+    html
+}

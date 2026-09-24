@@ -71,6 +71,21 @@ impl History {
         self.current + 1 < self.entries.len()
     }
 
+    /// Where in the list the reader is, to come back to with
+    /// [`Self::return_to`].
+    #[must_use]
+    pub const fn position(&self) -> usize {
+        self.current
+    }
+
+    /// Goes back to a position read earlier, without loading anything: for a
+    /// step whose page never arrived. A position past the end is ignored.
+    pub fn return_to(&mut self, position: usize) {
+        if position < self.entries.len() {
+            self.current = position;
+        }
+    }
+
     /// Records the page the reader is on now.
     pub fn set_page(&mut self, page: usize) {
         if let Some(entry) = self.entries.get_mut(self.current) {
@@ -134,6 +149,23 @@ mod tests {
 
     fn url(text: &str) -> Url {
         Url::parse(text).expect("url")
+    }
+
+    #[test]
+    fn a_step_whose_page_never_came_can_be_undone() {
+        let mut history = History::new();
+        history.navigate(url("https://a.example/"));
+        history.navigate(url("https://b.example/"));
+        let before = history.position();
+        assert_eq!(history.back(), Go::Load(url("https://a.example/")));
+        history.return_to(before);
+        assert_eq!(
+            history.current().map(|entry| entry.url.to_string()),
+            Some("https://b.example/".into())
+        );
+        assert!(history.can_go_back());
+        history.return_to(99);
+        assert_eq!(history.position(), before);
     }
 
     #[test]

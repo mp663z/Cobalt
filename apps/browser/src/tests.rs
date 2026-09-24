@@ -97,16 +97,141 @@ fn the_links_list_follows_links_too() {
     assert_eq!(title(&runner), "A page of many links");
 }
 
+fn pending_task(runner: &AppRunner<Browser>) -> TaskId {
+    runner
+        .app()
+        .pending
+        .as_ref()
+        .expect("a fetch in flight")
+        .task
+}
+
+fn page_title(runner: &AppRunner<Browser>) -> String {
+    runner
+        .app()
+        .loaded
+        .as_ref()
+        .map(|l| l.url.to_string())
+        .unwrap_or_default()
+}
+
 #[test]
-fn a_web_address_says_it_is_not_in_this_build_and_keeps_history() {
+fn a_web_link_is_fetched_and_recorded_once_it_arrives() {
     let mut runner = runner(TextScale::Default);
     let web = link_to(&runner, "example.com");
     runner.action(web);
-    assert!(matches!(runner.app().view, View::Unavailable(_)));
+    assert!(matches!(runner.app().view, View::Loading(_)));
     assert_eq!(runner.app().history.entries().len(), 1);
+    let task = pending_task(&runner);
+    runner.task_outcome(
+        task,
+        TaskOutcome::Completed(
+            b"<!doctype html><title>Example Domain</title><h1>Example Domain</h1><p>For use in examples. <a href=\"/more\">More</a>".to_vec(),
+        ),
+    );
+    assert_eq!(runner.app().view, View::Page);
+    assert_eq!(title(&runner), "Example Domain");
+    assert_eq!(page_title(&runner), "https://example.com/");
+    assert_eq!(runner.app().history.entries().len(), 2);
+    runner.action(action_id("back"));
+    assert_eq!(title(&runner), "Browse: sample pages");
+}
+
+#[test]
+fn a_failed_fetch_explains_offers_retry_and_leaves_history_alone() {
+    let mut runner = runner(TextScale::Default);
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    let task = pending_task(&runner);
+    runner.task_outcome(task, TaskOutcome::Failed(TaskError::TimedOut));
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::TimedOut)
+    ));
+    assert_eq!(runner.app().history.entries().len(), 1);
+    runner.action(action_id("retry"));
+    assert!(matches!(runner.app().view, View::Loading(_)));
+    let task = pending_task(&runner);
+    runner.task_outcome(task, TaskOutcome::Failed(TaskError::NotFound));
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::NotFound)
+    ));
     runner.action(action_id("return"));
     assert_eq!(runner.app().view, View::Page);
     assert_eq!(title(&runner), "Browse: sample pages");
+}
+
+#[test]
+fn a_page_that_fails_on_back_puts_history_where_it_was() {
+    let mut runner = runner(TextScale::Default);
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    let task = pending_task(&runner);
+    runner.task_outcome(task, TaskOutcome::Completed(b"<title>Web</title><p><a href=\"https://samples.browse.invalid/article.html\">article</a>".to_vec()));
+    let article = link_to(&runner, "article");
+    runner.action(article);
+    assert_eq!(title(&runner), "Notes on reading from paper screens");
+    runner.action(action_id("back"));
+    assert!(matches!(runner.app().view, View::Loading(_)));
+    let task = pending_task(&runner);
+    runner.task_outcome(task, TaskOutcome::Failed(TaskError::Offline));
+    assert!(matches!(
+        runner.app().view,
+        View::Failed(_, Failure::Offline)
+    ));
+    runner.action(action_id("return"));
+    assert_eq!(title(&runner), "Notes on reading from paper screens");
+    assert_eq!(
+        runner
+            .app()
+            .history
+            .current()
+            .map(|entry| entry.url.to_string()),
+        Some("https://samples.browse.invalid/article.html".into())
+    );
+    assert!(runner.app().history.can_go_back());
+}
+
+#[test]
+fn cancelling_a_load_stays_on_the_page_and_ignores_a_late_answer() {
+    let mut runner = runner(TextScale::Default);
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    let task = pending_task(&runner);
+    runner.action(action_id("cancel-load"));
+    assert_eq!(runner.app().view, View::Page);
+    runner.task_outcome(
+        task,
+        TaskOutcome::Completed(b"<title>Late</title>".to_vec()),
+    );
+    assert_eq!(title(&runner), "Browse: sample pages");
+    assert_eq!(runner.app().history.entries().len(), 1);
+}
+
+#[test]
+fn a_file_that_is_not_a_page_is_named_and_text_is_shown_as_lines() {
+    let mut runner = runner(TextScale::Default);
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    let task = pending_task(&runner);
+    runner.task_outcome(task, TaskOutcome::Completed(b"%PDF-1.7 ...".to_vec()));
+    assert!(matches!(runner.app().view, View::Unsupported(_, "a PDF")));
+    assert_eq!(runner.app().history.entries().len(), 1);
+    runner.action(action_id("return"));
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    let task = pending_task(&runner);
+    runner.task_outcome(
+        task,
+        TaskOutcome::Completed(b"line one <b>\n    indented\n".to_vec()),
+    );
+    assert_eq!(runner.app().view, View::Page);
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    assert!(matches!(
+        loaded.document.blocks.first(),
+        Some(kobo_web_document::Block::Preformatted(text)) if text.contains("line one <b>\n    indented")
+    ));
 }
 
 #[test]
@@ -155,8 +280,10 @@ fn every_screen_fits_the_clara_at_every_text_size() {
             .url
             .join("https://example.com/")
             .unwrap();
-        runner.app_mut().view = View::Unavailable(web);
-        check(&runner, "unavailable");
+        runner.app_mut().view = View::Failed(web.clone(), Failure::Unreachable);
+        check(&runner, "failed");
+        runner.app_mut().view = View::Loading(web);
+        check(&runner, "loading");
     }
 }
 
@@ -214,7 +341,7 @@ fn the_address_field_searches_for_words() {
     assert!(!runner.app().address.is_open());
     assert_eq!(
         runner.app().view,
-        View::Unavailable(Url::parse("https://html.duckduckgo.com/html/?q=e+ink").expect("url"))
+        View::Loading(Url::parse("https://html.duckduckgo.com/html/?q=e+ink").expect("url"))
     );
 }
 
