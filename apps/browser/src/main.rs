@@ -626,3 +626,6 @@ fn plain_page(body: &[u8]) -> String {
     html.push_str("</pre>");
     html
 }
+
+#[cfg(all(test, debug_assertions))]
+mod fixture_tests;
