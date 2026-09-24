@@ -43,6 +43,9 @@ pub enum State {
 
 #[derive(Debug, Default)]
 pub struct Pictures {
+    /// Whether the panel shows colour. Until the reader says, pictures are
+    /// grey, which every panel can show.
+    colour: bool,
     states: BTreeMap<usize, State>,
     /// Shelf keys being read, and the image each is for.
     reading: BTreeMap<String, usize>,
@@ -51,11 +54,23 @@ pub struct Pictures {
 /// The shelf key a fitted picture is kept under. The room is part of it:
 /// the same picture at another text size is fitted afresh.
 #[must_use]
-pub fn shelf_key(url: &str, width: u32, height: u32) -> String {
-    format!("picture:grey:{width}x{height}:{url}")
+pub fn shelf_key(url: &str, width: u32, height: u32, colour: bool) -> String {
+    let kind = if colour { "rgb" } else { "grey" };
+    format!("picture:{kind}:{width}x{height}:{url}")
 }
 
 impl Pictures {
+    /// Draws pictures in colour from now on, or not. Pictures already
+    /// shown stay as they are until their page is opened again.
+    pub fn set_colour(&mut self, colour: bool) {
+        self.colour = colour;
+    }
+
+    #[must_use]
+    pub const fn colour(&self) -> bool {
+        self.colour
+    }
+
     /// Forgets every picture: cancels what is on its way and releases what
     /// the runtime is holding. For a new page.
     /// Returns the shelf keys that were being read, to stop.
@@ -141,8 +156,15 @@ impl Pictures {
         let Some(image) = self.reading.remove(key) else {
             return false;
         };
-        let shown = blob.and_then(unpack).and_then(|(width, height, grey)| {
-            context.put_picture(picture_handle(image), width, height, grey.to_vec())
+        let shown = blob.and_then(unpack).and_then(|picture| {
+            put(
+                context,
+                image,
+                picture.width,
+                picture.height,
+                picture.colour,
+                picture.pixels.to_vec(),
+            )
         });
         if shown.is_some() {
             self.states.insert(image, State::Shown);
@@ -175,11 +197,17 @@ impl Pictures {
     ) -> Option<Vec<u8>> {
         let packed = match (outcome, room) {
             (TaskOutcome::Completed(bytes), Some((width, height))) => {
-                prepare(&bytes, width, height).and_then(|(width, height, grey)| {
-                    let packed = pack(width, height, &grey);
-                    context
-                        .put_picture(picture_handle(image), width, height, grey)
-                        .map(|_| packed)
+                prepare_for(&bytes, width, height, self.colour).and_then(|picture| {
+                    let packed = pack(&picture);
+                    put(
+                        context,
+                        image,
+                        picture.width,
+                        picture.height,
+                        picture.colour,
+                        picture.pixels,
+                    )
+                    .map(|_| packed)
                 })
             }
             _ => None,
@@ -194,40 +222,109 @@ impl Pictures {
     }
 }
 
-/// Decodes, fits and reduces a picture to the panel's greys.
-pub(crate) fn prepare(bytes: &[u8], width: u32, height: u32) -> Option<(u32, u32, Vec<u8>)> {
-    let mut picture = kobo_image::decode(bytes)
-        .ok()?
-        .fit_enlarging(width, height)
-        .ok()?;
-    picture.dither(kobo_image::PANEL_GREYS);
-    Some((picture.width(), picture.height(), picture.into_grey()))
+fn put(
+    context: &mut Context,
+    image: usize,
+    width: u32,
+    height: u32,
+    colour: bool,
+    pixels: Vec<u8>,
+) -> Option<kobo_sdk::TilePicture> {
+    if colour {
+        context.put_colour_picture(picture_handle(image), width, height, pixels)
+    } else {
+        context.put_picture(picture_handle(image), width, height, pixels)
+    }
 }
 
-const PACKED: &[u8; 4] = b"KGR1";
+/// A picture fitted to its room, ready for the panel.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Prepared<P = Vec<u8>> {
+    pub width: u32,
+    pub height: u32,
+    /// Three bytes a pixel, red, green and blue, rather than one grey.
+    pub colour: bool,
+    pub pixels: P,
+}
 
-/// A fitted picture as kept on the shelf: a tag, the size, the greys.
+/// Decodes, fits and reduces a picture to the panel's greys.
+#[cfg(test)]
+pub(crate) fn prepare(bytes: &[u8], width: u32, height: u32) -> Option<(u32, u32, Vec<u8>)> {
+    prepare_for(bytes, width, height, false)
+        .map(|picture| (picture.width, picture.height, picture.pixels))
+}
+
+/// Decodes and fits a picture for a panel with or without colour. A colour
+/// panel still gets grey for a picture that has no colour in it, at a
+/// third of the bytes.
+pub(crate) fn prepare_for(bytes: &[u8], width: u32, height: u32, colour: bool) -> Option<Prepared> {
+    let decoded = if colour {
+        kobo_image::decode_colour(bytes)
+    } else {
+        kobo_image::decode(bytes)
+    };
+    let mut picture = decoded.ok()?.fit_enlarging(width, height).ok()?;
+    let (width, height) = (picture.width(), picture.height());
+    if colour && picture.colour().is_some() {
+        // The controller quantises colour against its own filter; dithering
+        // the grey first would put the grain in twice.
+        let rgb = picture.into_colour()?;
+        return Some(Prepared {
+            width,
+            height,
+            colour: true,
+            pixels: rgb,
+        });
+    }
+    picture.dither(kobo_image::PANEL_GREYS);
+    Some(Prepared {
+        width,
+        height,
+        colour: false,
+        pixels: picture.into_grey(),
+    })
+}
+
+const PACKED_GREY: &[u8; 4] = b"KGR1";
+const PACKED_RGB: &[u8; 4] = b"KRG1";
+
+/// A fitted picture as kept on the shelf: a tag naming grey or colour, the
+/// size, the pixels.
 #[must_use]
-pub fn pack(width: u32, height: u32, grey: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(12 + grey.len());
-    out.extend_from_slice(PACKED);
-    out.extend_from_slice(&width.to_le_bytes());
-    out.extend_from_slice(&height.to_le_bytes());
-    out.extend_from_slice(grey);
+pub fn pack(picture: &Prepared) -> Vec<u8> {
+    let mut out = Vec::with_capacity(12 + picture.pixels.len());
+    out.extend_from_slice(if picture.colour {
+        PACKED_RGB
+    } else {
+        PACKED_GREY
+    });
+    out.extend_from_slice(&picture.width.to_le_bytes());
+    out.extend_from_slice(&picture.height.to_le_bytes());
+    out.extend_from_slice(&picture.pixels);
     out
 }
 
 /// Reads a kept picture back, refusing one whose size does not match its
-/// greys: a torn write must not reach the panel as a skewed picture.
+/// pixels: a torn write must not reach the panel as a skewed picture.
 #[must_use]
-pub fn unpack(blob: &[u8]) -> Option<(u32, u32, &[u8])> {
-    let rest = blob.strip_prefix(PACKED)?;
+pub fn unpack(blob: &[u8]) -> Option<Prepared<&[u8]>> {
+    let (colour, rest) = if let Some(rest) = blob.strip_prefix(PACKED_GREY) {
+        (false, rest)
+    } else {
+        (true, blob.strip_prefix(PACKED_RGB)?)
+    };
     let (width, rest) = rest.split_first_chunk::<4>()?;
-    let (height, grey) = rest.split_first_chunk::<4>()?;
+    let (height, pixels) = rest.split_first_chunk::<4>()?;
     let width = u32::from_le_bytes(*width);
     let height = u32::from_le_bytes(*height);
     let area = usize::try_from(width)
         .ok()?
-        .checked_mul(usize::try_from(height).ok()?)?;
-    (width > 0 && height > 0 && grey.len() == area).then_some((width, height, grey))
+        .checked_mul(usize::try_from(height).ok()?)?
+        .checked_mul(if colour { 3 } else { 1 })?;
+    (width > 0 && height > 0 && pixels.len() == area).then_some(Prepared {
+        width,
+        height,
+        colour,
+        pixels,
+    })
 }

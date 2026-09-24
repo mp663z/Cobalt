@@ -73,7 +73,7 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 ## M3: images and cache
 
 - [x] M3.1 Lazy fetch of images on the visible page only, bounded count per page (6 per screen, 48 per page; sized images only, others stay a description)
-- [~] M3.2 Compressed and decoded pixel limits, downsample to panel width, grey + dither via kobo-image (grey done; colour on colour panels still to do)
+- [x] M3.2 Compressed and decoded pixel limits, downsample to panel width, grey + dither via kobo-image (grey and colour: a colour panel, known from the device identity, gets RGB for colour pictures and grey for grey ones; kept under picture:rgb keys)
 - [~] M3.3 `alt` fallback and broken-image placeholder (description always shown under the box; a failed picture leaves the empty frame)
 - [x] M3.4 Bounded LRU disk cache for pages and transformed images (app store keys), eviction policy, cache metadata format (pages and fitted pictures share one index under `page-cache-index`: 24 MiB / 200 entries, least recently read first out, strays swept at start; a picture is kept per room size, so another text size fits it afresh)
 - [x] M3.5 Offline reading of cached pages, labelled as cached with time (only for No Wi-Fi and site-did-not-answer; a slow or refusing site still shows its error)

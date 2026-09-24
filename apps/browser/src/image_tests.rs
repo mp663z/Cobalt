@@ -6,7 +6,7 @@
 //! the decoder does not read, a header that claims more pixels than the
 //! reader has memory for.
 
-use crate::pictures::prepare;
+use crate::pictures::{prepare, prepare_for};
 
 const ROOM: (u32, u32) = (300, 225);
 
@@ -187,4 +187,31 @@ fn damaged_pictures_never_panic_and_never_overflow_their_room() {
     }
     // Both outcomes happen, or the damage is not reaching the decoder.
     assert!(shown > 0 && refused > 0, "{shown} shown, {refused} refused");
+}
+
+#[test]
+fn a_colour_panel_gets_colour_for_colour_pictures_and_grey_for_grey_ones() {
+    for (name, _, _) in GOOD {
+        let picture =
+            prepare_for(&image(name), ROOM.0, ROOM.1, true).unwrap_or_else(|| panic!("{name}"));
+        assert!(
+            picture.width <= ROOM.0 && picture.height <= ROOM.1,
+            "{name}"
+        );
+        let per_pixel = if picture.colour { 3 } else { 1 };
+        assert_eq!(
+            picture.pixels.len(),
+            (picture.width * picture.height) as usize * per_pixel,
+            "{name}"
+        );
+    }
+    let photo = prepare_for(&image("baseline.jpg"), ROOM.0, ROOM.1, true).expect("shown");
+    assert!(photo.colour, "a colour photo stays in colour");
+    let red_or_blue = photo
+        .pixels
+        .chunks_exact(3)
+        .any(|rgb| rgb[0].abs_diff(rgb[1]) > 40 || rgb[2].abs_diff(rgb[1]) > 40);
+    assert!(red_or_blue, "and has colour in it");
+    let plain = prepare_for(&image("baseline.jpg"), ROOM.0, ROOM.1, false).expect("shown");
+    assert!(!plain.colour, "a grey panel never gets colour");
 }

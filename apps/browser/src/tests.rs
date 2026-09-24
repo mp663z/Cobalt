@@ -941,13 +941,31 @@ fn a_kept_picture_that_is_torn_is_forgotten_and_fetched_again() {
 
 #[test]
 fn a_packed_picture_reads_back_and_a_short_one_is_refused() {
-    let packed = pictures::pack(3, 2, &[0, 1, 2, 3, 4, 5]);
+    let grey = pictures::Prepared {
+        width: 3,
+        height: 2,
+        colour: false,
+        pixels: vec![0, 1, 2, 3, 4, 5],
+    };
+    let packed = pictures::pack(&grey);
+    let back = pictures::unpack(&packed).expect("reads back");
     assert_eq!(
-        pictures::unpack(&packed),
-        Some((3, 2, &[0, 1, 2, 3, 4, 5][..]))
+        (back.width, back.height, back.colour, back.pixels),
+        (3, 2, false, &grey.pixels[..])
     );
-    assert_eq!(pictures::unpack(&packed[..packed.len() - 1]), None);
-    assert_eq!(pictures::unpack(&pictures::pack(0, 2, &[])), None);
-    assert_eq!(pictures::unpack(b"KGR1"), None);
-    assert_eq!(pictures::unpack(b"<html>"), None);
+    assert!(pictures::unpack(&packed[..packed.len() - 1]).is_none());
+    let rgb = pictures::Prepared {
+        width: 2,
+        height: 1,
+        colour: true,
+        pixels: vec![255, 0, 0, 0, 0, 255],
+    };
+    let back = pictures::pack(&rgb);
+    assert_eq!(pictures::unpack(&back).map(|p| p.colour), Some(true));
+    // Grey-sized pixels under a colour tag are a torn write.
+    let mut mislabelled = pictures::pack(&grey);
+    mislabelled[..4].copy_from_slice(b"KRG1");
+    assert!(pictures::unpack(&mislabelled).is_none());
+    assert!(pictures::unpack(b"KGR1").is_none());
+    assert!(pictures::unpack(b"<html>").is_none());
 }

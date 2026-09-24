@@ -526,13 +526,14 @@ impl Browser {
         };
         let images = loaded.document.images();
         let saved = &mut self.saved;
+        let colour = self.pictures.colour();
         self.pictures.want(
             context,
             &wanted,
             |image| images.get(image).map(|found| found.src.to_string()),
             |context, image, url| {
                 let (width, height) = rooms.get(&image)?;
-                let key = pictures::shelf_key(url, *width, *height);
+                let key = pictures::shelf_key(url, *width, *height, colour);
                 saved.read(context, &key).then_some(key)
             },
         );
@@ -665,6 +666,7 @@ impl Browser {
 impl KoboApp for Browser {
     fn on_start(&mut self, context: &mut Context) {
         Saved::start(context);
+        context.device().read_identity();
         if let Ok(home) = Url::parse(SAMPLES) {
             if let Ok(index) = home.join("index.html") {
                 self.open(context, &index);
@@ -764,7 +766,8 @@ impl KoboApp for Browser {
                     if let Some(packed) = self.pictures.arrived(context, image, outcome, Some(room))
                     {
                         if let Some(url) = self.image_source(image) {
-                            let key = pictures::shelf_key(&url, room.0, room.1);
+                            let key =
+                                pictures::shelf_key(&url, room.0, room.1, self.pictures.colour());
                             self.saved.keep(context, &key, &packed);
                         }
                         self.show(context);
@@ -799,6 +802,19 @@ impl KoboApp for Browser {
             }
         }
         self.show(context);
+    }
+
+    fn on_device_result(
+        &mut self,
+        _context: &mut Context,
+        request: kobo_sdk::DeviceRequest,
+        result: kobo_sdk::DeviceResult,
+    ) {
+        if request == kobo_sdk::DeviceRequest::ReadIdentity {
+            if let kobo_sdk::DeviceResult::Identity(identity) = result {
+                self.pictures.set_colour(identity.colour_panel());
+            }
+        }
     }
 
     fn on_load(&mut self, context: &mut Context, key: &str, result: StoreResult) {
