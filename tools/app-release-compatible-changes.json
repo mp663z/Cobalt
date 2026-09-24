@@ -358,12 +358,12 @@
   },
   {
    "protocol_version": 15,
-   "reason": "Add the kobo-json workspace member, the kobo-zstory structural inspector wiring, and the kobo-music-host, kobo-vault-host and host-only kobo-cli to kobo-comic dependency edges for companion CLIs. The same regeneration records the version-bumped stanzas of the apps that publish with their own changes in this release. Host tooling only otherwise: no package identity a published Store app resolves moved, and no app crate that is not itself publishing gains a dependency. The kobo-web-document workspace member for the browser adds html5ever 0.39 and its markup5ever, tendril, string_cache and phf 0.13 stack; no app crate depends on it. Resolving phf 0.13 beside 0.11.3 makes Cargo name the 0.11.3 edges of phf, phf_generator, phf_macros and ratex-font by version, which rewrites those stanzas without moving any resolved version.",
+   "reason": "Add the kobo-json workspace member, the kobo-zstory structural inspector wiring, and the kobo-music-host, kobo-vault-host and host-only kobo-cli to kobo-comic dependency edges for companion CLIs. The same regeneration records the version-bumped stanzas of the apps that publish with their own changes in this release. Host tooling only otherwise: no package identity a published Store app resolves moved, and no app crate that is not itself publishing gains a dependency. The kobo-web-document workspace member for the browser adds html5ever 0.39 and its markup5ever, tendril, string_cache and phf 0.13 stack; no app crate depends on it. Resolving phf 0.13 beside 0.11.3 makes Cargo name the 0.11.3 edges of phf, phf_generator, phf_macros and ratex-font by version, which rewrites those stanzas without moving any resolved version. The kobo-web-layout member adds only workspace edges.",
    "files": [
     {
      "path": "Cargo.lock",
      "base_blob": "222f7b330431a22b5ec2a8071d0e7e55f36ec4a4",
-     "compatible_blob": "417020d8dca79d55a1cf1c15b9d97452743d2e21"
+     "compatible_blob": "0bb3c9d4361a61de1b08a0842c8f8238c612d6f2"
     }
    ]
   },

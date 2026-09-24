@@ -1714,6 +1714,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kobo-web-layout"
+version = "0.1.0"
+dependencies = [
+ "kobo-profile",
+ "kobo-sdk",
+ "kobo-text",
+ "kobo-ui",
+ "kobo-web-document",
+]
+
+[[package]]
 name = "kobo-wifi-trace"
 version = "0.3.23"
 dependencies = [
