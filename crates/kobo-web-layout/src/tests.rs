@@ -27,7 +27,7 @@ fn text_of_piece(piece: &Piece) -> String {
             .map(|row| row.cells.join(" "))
             .collect::<Vec<_>>()
             .join(" "),
-        Piece::Rule => String::new(),
+        Piece::Rule | Piece::Picture { .. } => String::new(),
     }
 }
 
@@ -317,5 +317,80 @@ fn every_link_in_the_document_is_offered_on_some_page() {
             "at {size}: {:?}",
             document.links
         );
+    }
+}
+
+fn html(markup: &str) -> Document {
+    parse_document(
+        markup.as_bytes(),
+        &Url::parse("https://fixtures.example/page.html").expect("url"),
+        &Limits::DEFAULT,
+    )
+}
+
+#[test]
+fn an_image_with_a_declared_size_gets_room_and_keeps_its_description() {
+    let document = html(
+        "<p>Before.</p><img src=a.png width=640 height=480 alt=\"A chart\">\
+         <img src=pixel.gif width=1 height=1><img src=b.png alt=\"No size\"><p>After.</p>",
+    );
+    let (pieces, _) = pieces(&document);
+    let pictures: Vec<_> = pieces
+        .iter()
+        .filter_map(|piece| match piece {
+            Piece::Picture {
+                image,
+                width,
+                height,
+            } => Some((*image, *width, *height)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        pictures,
+        vec![(0, 640, 480)],
+        "only the sized, visible image"
+    );
+    let text: Vec<String> = pieces.iter().map(text_of_piece).collect();
+    assert!(text.contains(&"Image: A chart".to_owned()));
+    assert!(text.contains(&"Image: No size".to_owned()));
+    assert_eq!(document.images()[0].src.path(), "/a.png");
+}
+
+#[test]
+fn a_picture_is_never_squeezed_into_the_foot_of_a_page() {
+    let mut markup = String::new();
+    for n in 0..40 {
+        markup.push_str(&format!(
+            "<p>Paragraph {n} with enough words to fill a line or two.</p>\
+             <img src=p{n}.png width=800 height=600 alt=\"Plate {n}\">"
+        ));
+    }
+    let document = html(&markup);
+    for (panel, metrics) in panels() {
+        let layout = paginate_for(&document, "Plates", &metrics);
+        let whole = {
+            let alone = page_screen(
+                "Plates",
+                &[Piece::Picture {
+                    image: 0,
+                    width: 800,
+                    height: 600,
+                }],
+                0,
+                Some(1),
+            )
+            .build();
+            picture_heights(&alone, &metrics)[0].1
+        };
+        let mut seen = 0;
+        for (index, page) in layout.pages.iter().enumerate() {
+            let screen = page_screen("Plates", page, index, Some(layout.pages.len())).build();
+            for (_, height) in picture_heights(&screen, &metrics) {
+                assert_eq!(height, whole, "page {index} on {panel}");
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 40, "every picture is on some page on {panel}");
     }
 }

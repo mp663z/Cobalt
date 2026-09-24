@@ -260,12 +260,7 @@ impl Browser {
             return;
         };
         let title = loaded.title.clone();
-        let mut fits = |pieces: &[Piece]| {
-            kobo_web_layout::fits(
-                &page_screen(&title, pieces, 998, Some(999)).build(),
-                &metrics,
-            )
-        };
+        let mut fits = |pieces: &[Piece]| kobo_web_layout::page_fits(&title, pieces, &metrics);
         while loaded.paginator.pages().len() <= page.saturating_add(1)
             && loaded.paginator.next_page(&mut fits)
         {}

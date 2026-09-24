@@ -16,9 +16,21 @@ use std::collections::BTreeMap;
 
 use kobo_sdk::{DisplayMetrics, Screen, ScreenBuilder};
 use kobo_ui::{
-    Chrome, LayoutIssueKind, ParagraphPresentation, RichTextSpan, TableRow, TextPresentation,
+    Chrome, LayoutIssueKind, LayoutKind, ParagraphPresentation, PictureHandle, RichTextSpan,
+    TableRow, TextPresentation, TilePicture,
 };
 use kobo_web_document::{Block, Document, Field, Form, Inline, Table, Warning};
+
+/// The tallest a picture on a page may be drawn, in millimetres.
+///
+/// About half a Clara's reading area: tall enough for a photograph or a chart
+/// to be read, short enough that a page with a picture still has words on it.
+pub const PICTURE_MAX_MM: u16 = 45;
+
+/// Pictures smaller than this on either side are left as their description.
+/// They are icons, bullets, spacers and tracking pixels far more often than
+/// anything a reader wants to see, and each would cost a fetch.
+pub const PICTURE_MIN_SIDE: u32 = 48;
 
 /// Pages past this are not made. A 2 MiB page of prose is well under it at
 /// the largest text size; the cap exists so that no input can make the
@@ -80,9 +92,24 @@ pub enum Piece {
         links: Vec<Vec<usize>>,
     },
     /// Something in the page that is described rather than shown: an image
-    /// before images are fetched, a form before forms are supported.
+    /// with no size to reserve, a form before forms are supported.
     Note(String),
     Rule,
+    /// Room for an image whose size the page declares. `image` indexes
+    /// [`Document::images`]. The room is the same before and after the picture
+    /// arrives, so nothing on the page moves when it does; its description
+    /// follows as its own piece.
+    Picture {
+        image: usize,
+        width: u32,
+        height: u32,
+    },
+}
+
+/// The handle an image's picture is sent to the runtime under.
+#[must_use]
+pub fn picture_handle(image: usize) -> PictureHandle {
+    PictureHandle(u32::try_from(image).map_or(u32::MAX, |index| index.saturating_add(1)))
 }
 
 impl Piece {
@@ -189,9 +216,57 @@ pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: Option<usize>
 /// Pages a document for one panel, measured in [`page_screen`].
 #[must_use]
 pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) -> Layout {
-    paginate(document, |pieces| {
-        fits(&page_screen(title, pieces, 998, Some(999)).build(), metrics)
+    paginate(document, |pieces| page_fits(title, pieces, metrics))
+}
+
+/// Whether `pieces` fit one page of the browser's frame, pictures included.
+///
+/// [`fits`] alone is not enough once there are pictures: the toolkit shrinks
+/// a picture to whatever room is left rather than letting it overflow, so a
+/// picture at the foot of a page would always "fit", drawn as a sliver. Here
+/// every picture must also get the full size it has on a page of its own.
+#[must_use]
+pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> bool {
+    let screen = page_screen(title, pieces, 998, Some(999)).build();
+    if !fits(&screen, metrics) {
+        return false;
+    }
+    if !pieces
+        .iter()
+        .any(|piece| matches!(piece, Piece::Picture { .. }))
+    {
+        return true;
+    }
+    let drawn = picture_heights(&screen, metrics);
+    pieces.iter().all(|piece| {
+        let Piece::Picture { image, .. } = piece else {
+            return true;
+        };
+        let alone = page_screen(title, std::slice::from_ref(piece), 998, Some(999)).build();
+        let whole = picture_heights(&alone, metrics);
+        let handle = picture_handle(*image);
+        let height = |heights: &[(PictureHandle, i32)]| {
+            heights
+                .iter()
+                .find(|(h, _)| *h == handle)
+                .map(|(_, height)| *height)
+        };
+        height(&drawn) >= height(&whole)
     })
+}
+
+fn picture_heights(screen: &Screen, metrics: &DisplayMetrics) -> Vec<(PictureHandle, i32)> {
+    screen
+        .layout_with(metrics, &Chrome::measuring(true))
+        .nodes
+        .iter()
+        .filter_map(|node| match node.kind {
+            LayoutKind::Picture(handle) | LayoutKind::FramedPicture(handle) => {
+                Some((handle, node.rect.height))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// Adds a page's pieces to a screen.
@@ -206,6 +281,14 @@ pub fn append(mut builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
             Piece::Table { rows, .. } => builder.table(rows.clone(), Vec::new()),
             Piece::Note(text) => builder.secondary(text),
             Piece::Rule => builder.divider(),
+            Piece::Picture {
+                image,
+                width,
+                height,
+            } => builder.picture(
+                TilePicture::new(picture_handle(*image), *width, *height),
+                PICTURE_MAX_MM,
+            ),
         };
     }
     builder
@@ -290,6 +373,9 @@ fn warnings_note(warnings: &[Warning]) -> Option<String> {
 struct Flattener {
     out: Vec<Piece>,
     anchors: Vec<(String, usize)>,
+    /// Images met so far, which is the next image's index in
+    /// [`Document::images`].
+    images: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -372,6 +458,17 @@ impl Flattener {
             }
             Block::Table(table) => self.table(table),
             Block::Image(image) => {
+                let index = self.images;
+                self.images = self.images.saturating_add(1);
+                if let (Some(width), Some(height)) = (image.width, image.height) {
+                    if width >= PICTURE_MIN_SIDE && height >= PICTURE_MIN_SIDE {
+                        self.out.push(Piece::Picture {
+                            image: index,
+                            width,
+                            height,
+                        });
+                    }
+                }
                 let alt = drawable(image.alt.trim());
                 let label = if alt.is_empty() {
                     "Image".to_owned()

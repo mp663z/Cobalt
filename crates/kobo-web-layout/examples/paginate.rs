@@ -24,10 +24,7 @@ fn main() {
         let started = Instant::now();
         let mut paginator = kobo_web_layout::Paginator::for_document(&document);
         let mut fits = |pieces: &[kobo_web_layout::Piece]| {
-            kobo_web_layout::fits(
-                &kobo_web_layout::page_screen(&title, pieces, 998, Some(999)).build(),
-                &metrics,
-            )
+            kobo_web_layout::page_fits(&title, pieces, &metrics)
         };
         paginator.next_page(&mut fits);
         let first = started.elapsed();
