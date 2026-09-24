@@ -61,7 +61,7 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 - [x] M2.6 Error screens: offline, timeout, denied, too large, not found, unsupported type, TLS failure; each with a way back and retry
 - [ ] M2.7 Loading state with Heartbeat, Cancel
 - [x] M2.8 Local HTTPS fixture server for integration tests (delayed, chunked, wrong Content-Length, truncated, gzip bomb, redirect loop, cross-origin redirect, wrong MIME, connection drop)
-- [ ] M2.9 Simulator failure scenarios: offline, timeout, denied permission, full storage, background/foreground during fetch
+- [x] M2.9 Simulator failure scenarios: offline, timeout, denied permission, full storage, background/foreground during fetch (`failures.kobo`; storage full does not touch fetch, since the browser stores nothing yet)
 - [ ] M2.10 Live-site screenshots (real pages, labelled with URL and time)
 - Gate: deterministic local-server suite + simulator failure scenarios
 
