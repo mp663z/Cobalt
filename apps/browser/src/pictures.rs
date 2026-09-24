@@ -195,7 +195,7 @@ impl Pictures {
 }
 
 /// Decodes, fits and reduces a picture to the panel's greys.
-fn prepare(bytes: &[u8], width: u32, height: u32) -> Option<(u32, u32, Vec<u8>)> {
+pub(crate) fn prepare(bytes: &[u8], width: u32, height: u32) -> Option<(u32, u32, Vec<u8>)> {
     let mut picture = kobo_image::decode(bytes)
         .ok()?
         .fit_enlarging(width, height)
