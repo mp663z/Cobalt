@@ -172,7 +172,15 @@ impl Index {
             ) else {
                 continue;
             };
-            if name != blob_name(url) || url.len() > MAX_URL {
+            // A damaged or hand-edited index must not keep more than the
+            // cache may hold, or the same blob twice. What is skipped here
+            // is left on the shelf unnamed and swept as a stray.
+            let total: u64 = index.entries.iter().map(|entry| entry.bytes).sum();
+            if name != blob_name(url)
+                || url.len() > MAX_URL
+                || total.saturating_add(bytes) > MAX_BYTES
+                || index.entries.iter().any(|entry| entry.name == name)
+            {
                 continue;
             }
             index.entries.push(Entry {
@@ -202,6 +210,26 @@ impl Index {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn line(url: &str, bytes: u64) -> String {
+        format!("{}\t{bytes}\t1\t1\t{url}\n", blob_name(url))
+    }
+
+    #[test]
+    fn a_stored_index_over_budget_or_repeating_itself_is_cut_back() {
+        let mut stored = format!("{MAGIC}\n3\n");
+        stored.push_str(&line("https://a.example/", MAX_BYTES - 10));
+        stored.push_str(&line("https://a.example/", 5));
+        stored.push_str(&line("https://b.example/", 20));
+        stored.push_str(&line("https://c.example/", 10));
+        let index = Index::decode(stored.as_bytes());
+        let urls: Vec<&str> = index.entries().iter().map(|e| e.url.as_str()).collect();
+        assert_eq!(urls, ["https://a.example/", "https://c.example/"]);
+        let total: u64 = index.entries().iter().map(|e| e.bytes).sum();
+        assert!(total <= MAX_BYTES);
+        let strays = index.orphans([blob_name("https://b.example/").as_str()]);
+        assert_eq!(strays.len(), 1, "the skipped blob is swept");
+    }
 
     #[test]
     fn names_are_stable_short_and_shelf_safe() {
