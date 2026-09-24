@@ -7,6 +7,8 @@
 //! to, and reports back. Keeping it here means Back and Forward can be tested
 //! as transitions rather than as taps in a simulator.
 
+pub mod address;
+
 use kobo_web_document::Url;
 
 /// Entries kept. Older ones fall off the back.
