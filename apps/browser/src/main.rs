@@ -20,6 +20,11 @@ use kobo_web_layout::{link_action, page_screen, Paginator, Piece};
 /// sample address can never be confused with a page on the web.
 const SAMPLES: &str = "https://samples.browse.invalid/";
 
+/// Pages made per background step. A page of a long article took about 10 ms
+/// in a release build on a desktop and will be several times that on the
+/// reader, so two keeps a tap from waiting long behind a step.
+const PAGES_PER_STEP: usize = 2;
+
 const PAGES: &[(&str, &str)] = &[
     ("index.html", include_str!("../pages/index.html")),
     ("article.html", include_str!("../pages/article.html")),
@@ -82,6 +87,9 @@ struct Browser {
     stepped_from: Option<usize>,
     /// The last page that failed, for Retry.
     retry: Option<Url>,
+    /// A zero-second nap that brings control back to paginate some more of
+    /// the page being read, so a long page shows its first screen at once.
+    pager: Option<TaskId>,
 }
 
 impl Default for Browser {
@@ -94,6 +102,7 @@ impl Default for Browser {
             pending: None,
             stepped_from: None,
             retry: None,
+            pager: None,
         }
     }
 }
@@ -211,6 +220,9 @@ impl Browser {
     }
 
     fn show_document(&mut self, context: &mut Context, url: &Url, bytes: &[u8]) {
+        if let Some(task) = self.pager.take() {
+            context.cancel(task);
+        }
         let document = parse_document(bytes, url, &Limits::DEFAULT);
         let title = document
             .title
@@ -241,15 +253,55 @@ impl Browser {
         };
         let title = loaded.title.clone();
         let mut fits = |pieces: &[Piece]| {
-            kobo_web_layout::fits(&page_screen(&title, pieces, 998, 999).build(), &metrics)
+            kobo_web_layout::fits(
+                &page_screen(&title, pieces, 998, Some(999)).build(),
+                &metrics,
+            )
         };
         while loaded.paginator.pages().len() <= page.saturating_add(1)
             && loaded.paginator.next_page(&mut fits)
         {}
     }
 
-    fn finish_pages(&mut self, context: &Context) {
-        self.make_pages(context, usize::MAX - 1);
+    /// Carries on paginating in the background until the page count is known.
+    ///
+    /// Every page is a layout pass for each candidate break, and a long
+    /// article is dozens of pages: doing them all before the first screen
+    /// kept a reader on "Loading" for seconds after the page had arrived.
+    /// So the first screens are made at once and the rest a few at a time,
+    /// between naps that let a tap or a page turn in first.
+    fn keep_paging(&mut self, context: &mut Context) {
+        if let Some(task) = self.pager.take() {
+            context.cancel(task);
+        }
+        if self
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| !loaded.paginator.done())
+        {
+            self.pager = context.spawn(Task::Sleep { seconds: 0 });
+        }
+    }
+
+    /// One background step: a few more pages, then either another nap or,
+    /// once the last page exists, a repaint so the count appears.
+    fn page_on(&mut self, context: &mut Context) {
+        let made = self
+            .loaded
+            .as_ref()
+            .map_or(0, |loaded| loaded.paginator.pages().len());
+        self.make_pages(context, made + PAGES_PER_STEP - 2);
+        if self
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| loaded.paginator.done())
+        {
+            if matches!(self.view, View::Page) && !self.address.is_open() {
+                self.show(context);
+            }
+        } else {
+            self.pager = context.spawn(Task::Sleep { seconds: 0 });
+        }
     }
 
     fn fragment_page(&mut self, context: &Context, fragment: &str) -> Option<usize> {
@@ -270,10 +322,11 @@ impl Browser {
         }
     }
 
-    fn turn_to(&mut self, context: &Context, page: usize) {
+    fn turn_to(&mut self, context: &mut Context, page: usize) {
         self.make_pages(context, page);
-        // The count in the bar is only honest once every page exists.
-        self.finish_pages(context);
+        if self.pager.is_none() {
+            self.keep_paging(context);
+        }
         if let Some(loaded) = self.loaded.as_mut() {
             let last = loaded.paginator.pages().len().saturating_sub(1);
             loaded.page = page.min(last);
@@ -361,7 +414,11 @@ impl Browser {
                 &loaded.title,
                 self.current_pieces(),
                 loaded.page,
-                loaded.paginator.pages().len(),
+                // The count in the bar is only honest once every page exists.
+                loaded
+                    .paginator
+                    .done()
+                    .then(|| loaded.paginator.pages().len()),
             ),
             (_, None) => ScreenBuilder::new("browser-empty")
                 .top_bar("Browse")
@@ -473,6 +530,13 @@ impl KoboApp for Browser {
     }
 
     fn on_task(&mut self, context: &mut Context, task: TaskId, outcome: TaskOutcome) {
+        if self.pager == Some(task) {
+            self.pager = None;
+            if !matches!(outcome, TaskOutcome::Cancelled) {
+                self.page_on(context);
+            }
+            return;
+        }
         let Some(pending) = self.pending.take_if(|pending| pending.task == task) else {
             // An answer to a request that was cancelled or replaced.
             return;

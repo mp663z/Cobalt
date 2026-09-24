@@ -25,7 +25,7 @@ fn main() {
         let mut paginator = kobo_web_layout::Paginator::for_document(&document);
         let mut fits = |pieces: &[kobo_web_layout::Piece]| {
             kobo_web_layout::fits(
-                &kobo_web_layout::page_screen(&title, pieces, 998, 999).build(),
+                &kobo_web_layout::page_screen(&title, pieces, 998, Some(999)).build(),
                 &metrics,
             )
         };

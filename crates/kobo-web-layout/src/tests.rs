@@ -233,7 +233,7 @@ fn fixture_pages_fit_every_supported_panel_at_every_text_size() {
                 "{name} on {panel}"
             );
             for (index, page) in layout.pages.iter().enumerate() {
-                let screen = page_screen(&title, page, index, layout.pages.len()).build();
+                let screen = page_screen(&title, page, index, Some(layout.pages.len())).build();
                 let issues: Vec<_> = screen
                     .diagnostics(&metrics, &Chrome::measuring(true))
                     .issues

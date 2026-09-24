@@ -157,25 +157,32 @@ pub fn fits(screen: &Screen, metrics: &DisplayMetrics) -> bool {
 
 /// The browser's page: the frame every page is drawn in and measured in.
 ///
-/// `page` is zero-based. Pagination measures with the frame it will be drawn
+/// `page` is zero-based. `of` is the page count, or `None` while it is still
+/// being worked out; the position strip is then left off rather than showing a
+/// count that will change. Pages are measured with the strip in place, so the
+/// words on a page are the same either way.
+///
+/// Pagination measures with the frame it will be drawn
 /// in, so the frame lives here beside the packing rather than in the app,
 /// where a change to one could quietly stop matching the other.
 #[must_use]
-pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: usize) -> ScreenBuilder {
-    let builder = ScreenBuilder::new("browser-page")
+pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: Option<usize>) -> ScreenBuilder {
+    let mut builder = ScreenBuilder::new("browser-page")
         .top_bar(title)
         .top_bar_action("links", "Links")
         .reading(true)
         .page_turns("previous-page", "next-page")
-        .page_position(
-            u16::try_from(page.saturating_add(1)).unwrap_or(u16::MAX),
-            u16::try_from(of.max(1)).unwrap_or(u16::MAX),
-        )
         .action_bar([
             ("back", "Back"),
             ("address", "Go to"),
             ("forward", "Forward"),
         ]);
+    if let Some(of) = of {
+        builder = builder.page_position(
+            u16::try_from(page.saturating_add(1)).unwrap_or(u16::MAX),
+            u16::try_from(of.max(1)).unwrap_or(u16::MAX),
+        );
+    }
     append(builder, pieces)
 }
 
@@ -183,7 +190,7 @@ pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: usize) -> Scr
 #[must_use]
 pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) -> Layout {
     paginate(document, |pieces| {
-        fits(&page_screen(title, pieces, 998, 999).build(), metrics)
+        fits(&page_screen(title, pieces, 998, Some(999)).build(), metrics)
     })
 }
 

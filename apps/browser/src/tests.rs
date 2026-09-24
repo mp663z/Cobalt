@@ -355,3 +355,85 @@ fn cancelling_the_address_field_returns_to_the_page() {
     assert_eq!(title(&runner), "Browse: sample pages");
     assert_eq!(runner.app().view, View::Page);
 }
+
+fn long_page() -> Vec<u8> {
+    let mut html = String::from("<!doctype html><title>Long</title><h1>Long</h1>");
+    for n in 0..120 {
+        html.push_str(&format!(
+            "<p>Paragraph {n}. Plain words that wrap over a few lines of the panel, \
+             so that the whole page runs to a good many screens.</p>"
+        ));
+    }
+    html.into_bytes()
+}
+
+fn pages_made(runner: &AppRunner<Browser>) -> usize {
+    runner
+        .app()
+        .loaded
+        .as_ref()
+        .unwrap()
+        .paginator
+        .pages()
+        .len()
+}
+
+#[test]
+fn a_long_page_shows_at_once_and_counts_its_pages_in_the_background() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(link_to(&runner, "example.com"));
+    runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(long_page()));
+    assert_eq!(title(&runner), "Long");
+    assert_eq!(
+        pages_made(&runner),
+        2,
+        "only the first screens are made up front"
+    );
+    assert!(!runner.app().loaded.as_ref().unwrap().paginator.done());
+    let screen = runner.app().screen(&runner.context().metrics()).build();
+    assert!(
+        format!("{screen:?}").contains("position: None"),
+        "no page count until it is known"
+    );
+
+    // A turn past the pages made so far still lands.
+    runner.page_turn(true);
+    runner.page_turn(true);
+    assert_eq!(runner.app().loaded.as_ref().unwrap().page, 2);
+
+    let mut steps = 0;
+    while let Some(nap) = runner.app().pager {
+        runner.task_outcome(nap, TaskOutcome::Completed(Vec::new()));
+        steps += 1;
+        assert!(steps < 100, "background paging should end");
+    }
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    assert!(loaded.paginator.done());
+    assert!(
+        loaded.paginator.pages().len() > 4,
+        "got {}",
+        loaded.paginator.pages().len()
+    );
+    assert_eq!(loaded.page, 2, "background paging does not move the reader");
+    let screen = runner.app().screen(&runner.context().metrics()).build();
+    assert!(
+        format!("{screen:?}").contains("position: Some"),
+        "the count appears once every page exists"
+    );
+}
+
+#[test]
+fn leaving_a_long_page_stops_its_background_paging() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(link_to(&runner, "example.com"));
+    runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(long_page()));
+    let nap = runner.app().pager.expect("paging in the background");
+    runner.action(action_id("back"));
+    assert_eq!(title(&runner), "Browse: sample pages");
+    assert_ne!(runner.app().pager, Some(nap));
+    // A nap that was already on its way when the page changed does nothing.
+    let made = pages_made(&runner);
+    runner.task_outcome(nap, TaskOutcome::Completed(Vec::new()));
+    assert_eq!(pages_made(&runner), made);
+    assert_eq!(title(&runner), "Browse: sample pages");
+}
