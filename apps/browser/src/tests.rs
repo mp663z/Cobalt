@@ -481,3 +481,131 @@ fn the_loading_screen_counts_the_wait_and_stops_when_the_page_arrives() {
     assert_eq!(runner.app().view, View::Page);
     assert!(!runner.app().clock.is_running());
 }
+
+fn fetches(commands: &[kobo_sdk::Command]) -> Vec<(TaskId, String, Vec<Header>)> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            kobo_sdk::Command::Spawn {
+                task,
+                work: Task::Fetch { url, headers, .. },
+            } => Some((*task, url.clone(), headers.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn put_pictures(commands: &[kobo_sdk::Command]) -> Vec<(u32, u32, u32)> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            kobo_sdk::Command::PutPicture {
+                handle,
+                width,
+                height,
+                ..
+            } => Some((handle.0, *width, *height)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn a_png(width: u32, height: u32) -> Vec<u8> {
+    let grey: Vec<u8> = (0..width * height).map(|n| (n % 251) as u8).collect();
+    kobo_image::encode_png_grey(width, height, &grey).expect("png")
+}
+
+/// Opens a web page with `body` and returns the commands its arrival made.
+fn open_web_page(runner: &mut AppRunner<Browser>, body: &str) -> Vec<kobo_sdk::Command> {
+    runner.action(link_to(runner, "example.com"));
+    runner.task_outcome(
+        pending_task(runner),
+        TaskOutcome::Completed(body.as_bytes().to_vec()),
+    )
+}
+
+#[test]
+fn a_sized_picture_on_the_screen_is_fetched_fitted_and_shown() {
+    let mut runner = runner(TextScale::Default);
+    let commands = open_web_page(
+        &mut runner,
+        "<title>Plate</title><p>Above.</p><img src=/plate.png width=400 height=300 alt=\"A plate\"><p>Below.</p>",
+    );
+    let asked = fetches(&commands);
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    let (task, url, headers) = &asked[0];
+    assert_eq!(url, "https://example.com/plate.png");
+    assert!(headers.iter().any(|h| h.value.starts_with("image/jpeg")));
+
+    let commands = runner.task_outcome(*task, TaskOutcome::Completed(a_png(200, 150)));
+    let put = put_pictures(&commands);
+    assert_eq!(put.len(), 1, "one picture sent");
+    let (handle, width, height) = put[0];
+    assert_eq!(handle, 1);
+    // Fitted to its room, which keeps the declared 4:3 shape.
+    assert!(
+        width > 200 && (width * 3).abs_diff(height * 4) <= 4,
+        "{width}x{height}"
+    );
+    assert_eq!(runner.app().pictures.state(0), Some(pictures::State::Shown));
+    assert!(
+        commands
+            .iter()
+            .any(|c| matches!(c, kobo_sdk::Command::SetScreen(_))),
+        "repainted with the picture"
+    );
+}
+
+#[test]
+fn a_picture_that_will_not_decode_leaves_its_description() {
+    let mut runner = runner(TextScale::Default);
+    let commands = open_web_page(
+        &mut runner,
+        "<title>Plate</title><img src=/plate.png width=400 height=300 alt=\"A plate\">",
+    );
+    let (task, ..) = fetches(&commands)[0].clone();
+    let commands = runner.task_outcome(task, TaskOutcome::Completed(b"not a picture".to_vec()));
+    assert!(put_pictures(&commands).is_empty());
+    assert_eq!(
+        runner.app().pictures.state(0),
+        Some(pictures::State::Failed)
+    );
+    let screen = format!(
+        "{:?}",
+        runner.app().screen(&runner.context().metrics()).build()
+    );
+    assert!(screen.contains("Image: A plate"));
+}
+
+#[test]
+fn pictures_further_on_wait_until_their_screen_is_read() {
+    let mut runner = runner(TextScale::Default);
+    let mut body = String::from("<title>Plates</title>");
+    for n in 0..8 {
+        body.push_str(&format!(
+            "<p>Plate {n} follows.</p><img src=/p{n}.jpg width=800 height=600 alt=\"Plate {n}\">"
+        ));
+    }
+    let commands = open_web_page(&mut runner, &body);
+    let first = fetches(&commands).len();
+    assert!(
+        (1..8).contains(&first),
+        "only this screen's pictures: {first}"
+    );
+    let commands = runner.page_turn(true);
+    assert!(!fetches(&commands).is_empty(), "the next screen's pictures");
+}
+
+#[test]
+fn leaving_a_page_cancels_and_releases_its_pictures() {
+    let mut runner = runner(TextScale::Default);
+    let commands = open_web_page(
+        &mut runner,
+        "<title>Two</title><img src=/a.png width=400 height=300><img src=/b.svg width=400 height=300>",
+    );
+    let asked = fetches(&commands);
+    assert_eq!(asked.len(), 1, "the SVG is not fetched: {asked:?}");
+    runner.task_outcome(asked[0].0, TaskOutcome::Completed(a_png(100, 75)));
+    runner.action(action_id("back"));
+    assert_eq!(runner.app().pictures.state(0), None);
+}

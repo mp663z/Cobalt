@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 kobo-browser-core = { path = "../../crates/kobo-browser" }
+kobo-image = { path = "../../crates/kobo-image" }
 kobo-sdk = { path = "../../crates/kobo-sdk" }
 kobo-web-document = { path = "../../crates/kobo-web-document" }
 kobo-web-layout = { path = "../../crates/kobo-web-layout" }

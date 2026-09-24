@@ -14,7 +14,10 @@ use kobo_sdk::{
     Task, TaskError, TaskId, TaskOutcome,
 };
 use kobo_web_document::{parse_document, Document, Limits, Url};
-use kobo_web_layout::{link_action, page_screen, Paginator, Piece};
+use kobo_web_layout::{link_action, page_screen, picture_handle, Paginator, Piece};
+
+mod pictures;
+use pictures::Pictures;
 
 /// Where the sample pages live. `.invalid` can never be a real host, so a
 /// sample address can never be confused with a page on the web.
@@ -93,6 +96,8 @@ struct Browser {
     /// Counts the wait on the Loading screen, so a slow site looks slow
     /// rather than stuck.
     clock: Heartbeat,
+    /// Pictures fetched for the page being read.
+    pictures: Pictures,
 }
 
 impl Default for Browser {
@@ -107,6 +112,7 @@ impl Default for Browser {
             retry: None,
             pager: None,
             clock: Heartbeat::default(),
+            pictures: Pictures::default(),
         }
     }
 }
@@ -228,6 +234,7 @@ impl Browser {
     }
 
     fn show_document(&mut self, context: &mut Context, url: &Url, bytes: &[u8]) {
+        self.pictures.clear(context);
         if let Some(task) = self.pager.take() {
             context.cancel(task);
         }
@@ -335,6 +342,36 @@ impl Browser {
             loaded.page = page.min(last);
             self.history.set_page(loaded.page);
         }
+        self.fetch_pictures(context);
+    }
+
+    /// Asks for the pictures on the screen being read. The sample pages are
+    /// built in and have none to fetch.
+    fn fetch_pictures(&mut self, context: &mut Context) {
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        if sample(&loaded.url).is_some() {
+            return;
+        }
+        let wanted: Vec<usize> = self
+            .current_pieces()
+            .iter()
+            .filter_map(|piece| match piece {
+                Piece::Picture { image, .. } => Some(*image),
+                _ => None,
+            })
+            .collect();
+        let images = loaded.document.images();
+        self.pictures.want(context, &wanted, |image| {
+            images.get(image).map(|found| found.src.to_string())
+        });
+    }
+
+    /// Where `image` is drawn on the screen being read, if it is on it.
+    fn picture_room(&self, metrics: &DisplayMetrics, image: usize) -> Option<(u32, u32)> {
+        let screen = self.screen(metrics).build();
+        kobo_web_layout::picture_box(&screen, metrics, picture_handle(image))
     }
 
     fn current_pieces(&self) -> &[Piece] {
@@ -538,6 +575,18 @@ impl KoboApp for Browser {
             self.pager = None;
             if !matches!(outcome, TaskOutcome::Cancelled) {
                 self.page_on(context);
+            }
+            return;
+        }
+        if let Some(image) = self.pictures.fetching(task) {
+            match self.picture_room(&context.metrics(), image) {
+                Some(room) => {
+                    if self.pictures.arrived(context, image, outcome, Some(room)) {
+                        self.show(context);
+                    }
+                }
+                // Turned away from before it came: asked for again on return.
+                None => self.pictures.forget(image),
             }
             return;
         }

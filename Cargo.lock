@@ -904,6 +904,7 @@ name = "kobo-browser"
 version = "0.1.0"
 dependencies = [
  "kobo-browser-core",
+ "kobo-image",
  "kobo-net",
  "kobo-sdk",
  "kobo-text",
