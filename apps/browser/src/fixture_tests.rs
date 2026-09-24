@@ -121,8 +121,10 @@ fn start_server() {
         listener.local_addr().expect("addr")
     ))
     .expect("fixture route");
-    kobo_net::trust_owner_root(include_bytes!("../tests-fixtures/localhost-ca.der").to_vec())
-        .expect("trust");
+    kobo_net::trust_owner_root(
+        include_bytes!("../../../crates/kobo-net/tests/fixtures/localhost-ca.der").to_vec(),
+    )
+    .expect("trust");
     let config = Arc::new(
         ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
             .with_safe_default_protocol_versions()
@@ -130,10 +132,12 @@ fn start_server() {
             .with_no_client_auth()
             .with_single_cert(
                 vec![CertificateDer::from(
-                    include_bytes!("../tests-fixtures/localhost-cert.der").to_vec(),
+                    include_bytes!("../../../crates/kobo-net/tests/fixtures/localhost-cert.der")
+                        .to_vec(),
                 )],
                 PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
-                    include_bytes!("../tests-fixtures/localhost-key.der").to_vec(),
+                    include_bytes!("../../../crates/kobo-net/tests/fixtures/localhost-key.der")
+                        .to_vec(),
                 )),
             )
             .expect("cert"),
