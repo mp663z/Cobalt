@@ -1,5 +1,8 @@
 //! Where the browser is and how it got there.
 //!
+//! The package is `kobo-browser-core` because the app registry names every
+//! app package `kobo-<id>`, and the browser app is `kobo-browser`.
+//!
 //! Pure state, no I/O: the app asks what a navigation means, fetches if told
 //! to, and reports back. Keeping it here means Back and Forward can be tested
 //! as transitions rather than as taps in a simulator.

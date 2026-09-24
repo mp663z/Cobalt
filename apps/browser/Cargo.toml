@@ -1,0 +1,20 @@
+[package]
+name = "kobo-browser"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-browser-core = { path = "../../crates/kobo-browser" }
+kobo-sdk = { path = "../../crates/kobo-sdk" }
+kobo-web-document = { path = "../../crates/kobo-web-document" }
+kobo-web-layout = { path = "../../crates/kobo-web-layout" }
+
+[dev-dependencies]
+kobo-text = { path = "../../crates/kobo-text" }
+kobo-ui = { path = "../../crates/kobo-ui" }
+
+[lints]
+workspace = true

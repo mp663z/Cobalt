@@ -903,6 +903,18 @@ dependencies = [
 name = "kobo-browser"
 version = "0.1.0"
 dependencies = [
+ "kobo-browser-core",
+ "kobo-sdk",
+ "kobo-text",
+ "kobo-ui",
+ "kobo-web-document",
+ "kobo-web-layout",
+]
+
+[[package]]
+name = "kobo-browser-core"
+version = "0.1.0"
+dependencies = [
  "kobo-web-document",
 ]
 
