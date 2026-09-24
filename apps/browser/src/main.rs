@@ -10,8 +10,8 @@ use kobo_browser_core::fetch::{self, Failure, Kind};
 use kobo_browser_core::{Go, History};
 use kobo_sdk::keyboard::{TextEntry, Typing};
 use kobo_sdk::{
-    action_id, ActionId, Context, DisplayMetrics, Glyph, Header, KoboApp, ScreenBuilder, Task,
-    TaskError, TaskId, TaskOutcome,
+    action_id, ActionId, Context, DisplayMetrics, Glyph, Header, Heartbeat, KoboApp, ScreenBuilder,
+    Task, TaskError, TaskId, TaskOutcome,
 };
 use kobo_web_document::{parse_document, Document, Limits, Url};
 use kobo_web_layout::{link_action, page_screen, Paginator, Piece};
@@ -90,6 +90,9 @@ struct Browser {
     /// A zero-second nap that brings control back to paginate some more of
     /// the page being read, so a long page shows its first screen at once.
     pager: Option<TaskId>,
+    /// Counts the wait on the Loading screen, so a slow site looks slow
+    /// rather than stuck.
+    clock: Heartbeat,
 }
 
 impl Default for Browser {
@@ -103,6 +106,7 @@ impl Default for Browser {
             stepped_from: None,
             retry: None,
             pager: None,
+            clock: Heartbeat::default(),
         }
     }
 }
@@ -141,6 +145,7 @@ impl Browser {
 
     /// Stops a page on its way and goes back to the one on screen.
     fn stop(&mut self, context: &mut Context) {
+        self.clock.stop(context);
         if let Some(pending) = self.pending.take() {
             context.cancel(pending.task);
             if let Some(position) = pending.stepped_from {
@@ -180,6 +185,9 @@ impl Browser {
                     stepped_from,
                 });
                 self.view = View::Loading(url.clone());
+                // A new request is a new wait.
+                self.clock.stop(context);
+                self.clock.start(context);
             }
             None => self.failed(url, Failure::Unreachable, stepped_from),
         }
@@ -367,6 +375,7 @@ impl Browser {
             (View::Loading(url), _) => ScreenBuilder::new("browser-loading")
                 .top_bar(url.host())
                 .activity("Loading the page", None)
+                .secondary(self.clock.waited_words())
                 .secondary(url.to_string())
                 .button("cancel-load", "Cancel"),
             (View::Failed(url, failure), loaded) => {
@@ -537,10 +546,17 @@ impl KoboApp for Browser {
             }
             return;
         }
+        if self.clock.on_task(context, task, &outcome) {
+            if matches!(self.view, View::Loading(_)) && !self.address.is_open() {
+                self.show(context);
+            }
+            return;
+        }
         let Some(pending) = self.pending.take_if(|pending| pending.task == task) else {
             // An answer to a request that was cancelled or replaced.
             return;
         };
+        self.clock.stop(context);
         match outcome {
             TaskOutcome::Completed(body) => self.arrived(context, pending, &body),
             TaskOutcome::Failed(error) => {

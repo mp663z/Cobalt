@@ -437,3 +437,47 @@ fn leaving_a_long_page_stops_its_background_paging() {
     assert_eq!(pages_made(&runner), made);
     assert_eq!(title(&runner), "Browse: sample pages");
 }
+
+fn naps(commands: &[kobo_sdk::Command]) -> Vec<TaskId> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            kobo_sdk::Command::Spawn {
+                task,
+                work: Task::Sleep { .. },
+            } => Some(*task),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_loading_screen_counts_the_wait_and_stops_when_the_page_arrives() {
+    let mut runner = runner(TextScale::Default);
+    let commands = runner.action(link_to(&runner, "example.com"));
+    let tick = *naps(&commands).first().expect("the wait is being timed");
+    let before = format!(
+        "{:?}",
+        runner.app().screen(&runner.context().metrics()).build()
+    );
+    assert!(!before.contains("so far"), "nothing to count yet");
+
+    let commands = runner.task_outcome(tick, TaskOutcome::Completed(Vec::new()));
+    let screen = format!(
+        "{:?}",
+        runner.app().screen(&runner.context().metrics()).build()
+    );
+    assert!(screen.contains("5 seconds so far"), "{screen}");
+    let next = *naps(&commands).first().expect("the clock re-arms");
+
+    runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Completed(b"<title>Here</title><p>Arrived.".to_vec()),
+    );
+    assert_eq!(title(&runner), "Here");
+    assert!(!runner.app().clock.is_running());
+    // A tick already on its way when the page landed changes nothing.
+    runner.task_outcome(next, TaskOutcome::Completed(Vec::new()));
+    assert_eq!(runner.app().view, View::Page);
+    assert!(!runner.app().clock.is_running());
+}
