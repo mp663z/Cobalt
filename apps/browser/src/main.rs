@@ -381,10 +381,15 @@ impl Browser {
             context.cancel(task);
         }
         let document = parse_document(bytes, url, &Limits::DEFAULT);
-        let title = document
+        let mut title = document
             .title
             .clone()
             .unwrap_or_else(|| url.host().to_owned());
+        if note.is_some() {
+            // The note is on the first screen only; the bar is on every one,
+            // so a copy reopened further in still says what it is.
+            title = format!("Saved: {title}");
+        }
         let (mut pieces, mut anchors) = pieces(&document);
         if let Some(note) = note {
             pieces.insert(0, Piece::Note(note));

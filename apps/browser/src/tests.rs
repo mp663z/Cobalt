@@ -747,7 +747,7 @@ fn a_page_that_arrives_is_kept_and_read_back_when_offline() {
     assert!(matches!(runner.app().view, View::Loading(_)));
     store.pump(&mut runner, failed);
     assert_eq!(runner.app().view, View::Page);
-    assert_eq!(title(&runner), "Kept page");
+    assert_eq!(title(&runner), "Saved: Kept page");
     let Piece::Note(note) = first_piece(&runner) else {
         panic!("the page opens with a note");
     };
@@ -853,7 +853,7 @@ fn kept_pages_outlive_the_app_and_strays_are_cleared() {
         TaskOutcome::Failed(TaskError::Unreachable),
     );
     store.pump(&mut runner, failed);
-    assert_eq!(title(&runner), "Kept page");
+    assert_eq!(title(&runner), "Saved: Kept page");
 }
 
 const PLATE: &str = "<title>Plate</title><p>Above.</p><img src=/plate.png width=400 height=300 alt=\"A plate\"><p>Below.</p>";
@@ -894,7 +894,7 @@ fn a_shown_picture_is_kept_and_comes_back_with_its_page_offline() {
         TaskOutcome::Failed(TaskError::Offline),
     );
     let rest = store.pump(&mut runner, failed);
-    assert_eq!(title(&runner), "Plate");
+    assert_eq!(title(&runner), "Saved: Plate");
     assert!(
         fetches(&rest).is_empty(),
         "nothing asked of the network: {:?} {:?}",
