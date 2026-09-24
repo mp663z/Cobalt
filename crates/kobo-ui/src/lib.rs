@@ -782,6 +782,61 @@ mod folio_tests {
 mod responsive_profile_tests {
     use super::*;
 
+    #[test]
+    fn a_table_that_fits_the_measure_lines_up_with_the_text() {
+        let row = |header: bool, cells: &[&str]| TableRow {
+            header,
+            cells: cells.iter().map(|cell| (*cell).to_owned()).collect(),
+        };
+        let narrow = vec![row(true, &["Mode", "Speed"]), row(false, &["Full", "Slow"])];
+        let wide = vec![row(
+            false,
+            &["a cell long enough that the prose measure cannot hold this row and its neighbour";
+                2],
+        )];
+        for (name, metrics) in panels() {
+            let screen = Screen::new(
+                1,
+                vec![
+                    Node::Text {
+                        id: NodeId(1),
+                        text: "Prose above the table.".into(),
+                        links: Vec::new(),
+                    },
+                    Node::Table {
+                        id: NodeId(2),
+                        rows: narrow.clone(),
+                        weights: Vec::new(),
+                    },
+                    Node::Table {
+                        id: NodeId(3),
+                        rows: wide.clone(),
+                        weights: Vec::new(),
+                    },
+                ],
+            );
+            let layout = screen.layout_with(&metrics, &Chrome::with_back(true));
+            let left = |id: u32| {
+                layout
+                    .nodes
+                    .iter()
+                    .filter(|node| node.id == NodeId(id))
+                    .map(|node| node.rect.x)
+                    .min()
+                    .expect("the node was laid out")
+            };
+            assert_eq!(
+                left(2),
+                left(1),
+                "{name}: a narrow table leaves the text column"
+            );
+            assert!(
+                left(3) <= left(1),
+                "{name}: a wide table was squeezed into the measure"
+            );
+        }
+    }
+
     fn panels() -> Vec<(String, DisplayMetrics)> {
         kobo_profile::SUPPORTED_PROFILES
             .iter()
@@ -6977,6 +7032,15 @@ fn layout_flow_node(
             | Node::Splash { .. }
             | Node::Skeleton { .. }
             | Node::Activity { .. } => width.min(metrics.readable_width()),
+            // A table that fits the prose measure sits in it, lined up with
+            // the text around it. Only one that needs the room is given the
+            // whole panel.
+            Node::Table { rows, weights, .. }
+                if table_natural_width(rows, weights, metrics, prose)
+                    <= metrics.readable_width() =>
+            {
+                width.min(metrics.readable_width())
+            }
             Node::Section { .. }
             | Node::Button { .. }
             | Node::Field { .. }
@@ -7004,6 +7068,39 @@ fn layout_flow_node(
     .max(0);
     let x = x.saturating_add(width.saturating_sub(maximum) / 2);
     layout_node(node, x, y, maximum, bottom, depth, metrics, prose, layout)
+}
+
+/// How wide a table is when every column has what its widest cell wants,
+/// measured the way [`Node::Table`] is laid out.
+fn table_natural_width(
+    rows: &[TableRow],
+    weights: &[u16],
+    metrics: &DisplayMetrics,
+    prose: Face,
+) -> i32 {
+    let rows = &rows[..min(rows.len(), MAX_TABLE_ROWS)];
+    let columns = min(
+        rows.iter().map(|row| row.cells.len()).max().unwrap_or(0),
+        MAX_TABLE_COLUMNS,
+    );
+    let mut wants = vec![0_i32; columns];
+    for row in rows {
+        for (column, cell) in row.cells.iter().take(columns).enumerate() {
+            wants[column] = max(
+                wants[column],
+                measure_text_in(cell, FontSize::Body, prose).0,
+            );
+        }
+    }
+    for (column, want) in wants.iter_mut().enumerate() {
+        if let Some(weight) = weights.get(column) {
+            *want = i32::from(*weight);
+        }
+    }
+    let gaps = metrics
+        .space(Space::Small)
+        .saturating_mul(i32::try_from(columns.saturating_sub(1)).unwrap_or(0));
+    wants.iter().copied().fold(gaps, i32::saturating_add)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -11514,8 +11611,15 @@ fn wrap_ranges_with(
         });
     let mut lines: Vec<(usize, usize)> = Vec::new();
     let mut start = 0;
+    // A line the text itself begins keeps its indentation: code and verse
+    // say something with it. Only a line the wrap began drops the spaces it
+    // was broken at.
+    let mut hard = true;
     while start < text.len() {
-        start = skip_soft_whitespace(text, start);
+        if !hard {
+            start = skip_soft_whitespace(text, start);
+        }
+        hard = false;
         if start == text.len() {
             break;
         }
@@ -11544,6 +11648,7 @@ fn wrap_ranges_with(
                 if opportunity == BreakOpportunity::Mandatory {
                     lines.push((start, candidate_end));
                     start = end;
+                    hard = true;
                     emitted = true;
                     break;
                 }
@@ -16958,6 +17063,23 @@ mod tests {
             .find(|node| matches!(node.kind, LayoutKind::CellLabel(_)))
             .expect("the mark drew a label");
         assert_eq!(label.kind, LayoutKind::CellLabel(true));
+    }
+
+    #[test]
+    fn a_line_the_text_begins_keeps_its_indentation() {
+        let code = "fn turn() {\n    *page += 1;\n}";
+        assert_eq!(
+            wrap_text(code, 10_000, FontSize::Body),
+            vec!["fn turn() {", "    *page += 1;", "}"]
+        );
+        let prose = "one two three four five six seven eight nine ten";
+        let lines = wrap_text(
+            prose,
+            measure_text("one two three", FontSize::Body).0,
+            FontSize::Body,
+        );
+        assert!(lines.len() > 1);
+        assert!(lines.iter().all(|line| !line.starts_with(' ')), "{lines:?}");
     }
 
     #[test]
