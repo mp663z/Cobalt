@@ -22,6 +22,7 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 - Tap a link to follow it. **Links** lists every link in the page, the ones on
   the page you are reading first.
 - **Back** and **Forward** return to where you were, on the same page.
+- **Go to** takes an address, or words to search for.
 - A link to a section opens on the page that section starts on.
 
 ## Limits

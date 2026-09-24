@@ -5,7 +5,9 @@
 
 use std::process::ExitCode;
 
+use kobo_browser_core::address::{self, DEFAULT_SEARCH};
 use kobo_browser_core::{Go, History};
+use kobo_sdk::keyboard::{TextEntry, Typing};
 use kobo_sdk::{action_id, ActionId, Context, DisplayMetrics, Glyph, KoboApp, ScreenBuilder};
 use kobo_web_document::{parse_document, Document, Limits, Url};
 use kobo_web_layout::{link_action, page_screen, Paginator, Piece};
@@ -55,6 +57,8 @@ struct Browser {
     history: History,
     loaded: Option<Loaded>,
     view: View,
+    /// The address field. While it is open it covers the page.
+    address: TextEntry,
 }
 
 impl Default for Browser {
@@ -63,6 +67,7 @@ impl Default for Browser {
             history: History::new(),
             loaded: None,
             view: View::Page,
+            address: TextEntry::new().opened_by("address"),
         }
     }
 }
@@ -197,6 +202,11 @@ impl Browser {
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
+        if self.address.is_open() {
+            return ScreenBuilder::new("browser-address")
+                .top_bar("Go to")
+                .text_entry(&self.address, "An address, or words to search for", "Go");
+        }
         match (&self.view, &self.loaded) {
             (View::Unavailable(url), _) => ScreenBuilder::new("browser-unavailable")
                 .top_bar("Not in this build")
@@ -254,6 +264,30 @@ impl KoboApp for Browser {
     }
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
+        match self.address.handle(action) {
+            Some(Typing::Submitted(typed)) => {
+                if let Some(to) = address::resolve(&typed, DEFAULT_SEARCH) {
+                    self.open(context, to.url());
+                    return;
+                }
+                self.show(context);
+                return;
+            }
+            Some(Typing::Changed | Typing::Cancelled) => {
+                self.show(context);
+                return;
+            }
+            // The top bar's Back closes the field; it is not a step back
+            // through history from behind a keyboard.
+            None if self.address.is_open() => {
+                if action == action_id("back") {
+                    self.address.close();
+                    self.show(context);
+                }
+                return;
+            }
+            None => {}
+        }
         if action == action_id("next-page") || action == action_id("previous-page") {
             if let Some(page) = self.loaded.as_ref().map(|loaded| loaded.page) {
                 let to = if action == action_id("next-page") {
@@ -298,6 +332,9 @@ impl KoboApp for Browser {
     }
 
     fn on_page_turn(&mut self, context: &mut Context, forward: bool) {
+        if self.address.is_open() {
+            return;
+        }
         let name = match (&self.view, forward) {
             (View::Links(_), true) => "links-next",
             (View::Links(_), false) => "links-previous",

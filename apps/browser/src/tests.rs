@@ -200,3 +200,31 @@ fn the_links_list_for_a_page_of_many_links_fits_and_offers_every_link() {
         }
     }
 }
+
+#[test]
+fn the_address_field_searches_for_words() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(action_id("address"));
+    assert!(runner.app().address.is_open());
+    for key in [
+        "kb.r0c2", "kb.space", "kb.r0c7", "kb.r2c5", "kb.r1c7", "kb.enter",
+    ] {
+        runner.action(action_id(key));
+    }
+    assert!(!runner.app().address.is_open());
+    assert_eq!(
+        runner.app().view,
+        View::Unavailable(Url::parse("https://html.duckduckgo.com/html/?q=e+ink").expect("url"))
+    );
+}
+
+#[test]
+fn cancelling_the_address_field_returns_to_the_page() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(action_id("address"));
+    runner.action(action_id("kb.r0c0"));
+    runner.action(action_id("kb.cancel"));
+    assert!(!runner.app().address.is_open());
+    assert_eq!(title(&runner), "Browse: sample pages");
+    assert_eq!(runner.app().view, View::Page);
+}

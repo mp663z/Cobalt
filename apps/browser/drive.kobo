@@ -45,3 +45,9 @@ clean
 shot browser-not-in-this-build
 tap-id return
 expect Sample pages
+tap-id address
+expect An address, or words
+clean
+shot browser-address
+tap-id kb.cancel
+expect Sample pages

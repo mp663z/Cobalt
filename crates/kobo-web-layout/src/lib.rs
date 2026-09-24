@@ -171,7 +171,11 @@ pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: usize) -> Scr
             u16::try_from(page.saturating_add(1)).unwrap_or(u16::MAX),
             u16::try_from(of.max(1)).unwrap_or(u16::MAX),
         )
-        .action_bar([("back", "Back"), ("forward", "Forward")]);
+        .action_bar([
+            ("back", "Back"),
+            ("address", "Go to"),
+            ("forward", "Forward"),
+        ]);
     append(builder, pieces)
 }
 
