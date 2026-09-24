@@ -3,9 +3,9 @@
   "display_name": "Browse",
   "short_label": "Browse",
   "summary": "Read web pages as pages you turn.",
-  "page_description": "A reader's browser: web pages set as pages that turn, with links you tap, a list of every link on the page, and an address field that also searches. No JavaScript; images are not drawn yet.",
+  "page_description": "A reader's browser: web pages set as pages that turn, with links you tap, a list of every link on the page, and an address field that also searches. No JavaScript. Pictures are drawn in grey when the page gives their size.",
   "version": "0.1.0",
-  "release_notes": "Open web pages over the network: tap a link or use Go to for an address or a search. Pages that fail say why and offer Try again.",
+  "release_notes": "Open web pages over the network: tap a link or use Go to for an address or a search. Pages that fail say why and offer Try again. Long pages show their first screen at once, and pictures on the screen you are reading are fetched and drawn.",
   "glyph": "reader",
   "capabilities": [
     "network"
