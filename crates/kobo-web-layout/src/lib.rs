@@ -255,6 +255,29 @@ pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> boo
     })
 }
 
+/// The width and height, in panel pixels, the picture under `handle` is drawn
+/// at on `screen`: the size to fit the picture's pixels to before sending.
+#[must_use]
+pub fn picture_box(
+    screen: &Screen,
+    metrics: &DisplayMetrics,
+    handle: PictureHandle,
+) -> Option<(u32, u32)> {
+    screen
+        .layout_with(metrics, &Chrome::measuring(true))
+        .nodes
+        .iter()
+        .find(|node| {
+            matches!(node.kind, LayoutKind::Picture(h) | LayoutKind::FramedPicture(h) if h == handle)
+        })
+        .and_then(|node| {
+            Some((
+                u32::try_from(node.rect.width).ok()?,
+                u32::try_from(node.rect.height).ok()?,
+            ))
+        })
+}
+
 fn picture_heights(screen: &Screen, metrics: &DisplayMetrics) -> Vec<(PictureHandle, i32)> {
     screen
         .layout_with(metrics, &Chrome::measuring(true))
