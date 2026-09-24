@@ -53,14 +53,14 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
 ## M2: bounded HTTPS navigation
 
-- [~] M2.1 Address/search editor (keyboard screen), URL normalization, search fallback to a configured search engine (HTML endpoint, no JS)
-- [ ] M2.2 `kobo-web-fetch` over `Task::Fetch`: max bytes, timeout, cancellation, explicit user agent
+- [x] M2.1 Address/search editor (keyboard screen), URL normalization, search fallback to a configured search engine (HTML endpoint, no JS)
+- [x] M2.2 `kobo-web-fetch` over `Task::Fetch`: max bytes, timeout, cancellation, explicit user agent
 - [ ] M2.3 Response metadata: final URL after redirects, status, content type. Runtime currently returns body bytes only; decide between a protocol extension (new task tag, rebuilt runtime/app/sim) and a documented limitation
-- [ ] M2.4 MIME and charset handling: HTML, XHTML, plain text; refuse others with a clear screen; charset from meta/BOM
+- [~] M2.4 MIME and charset handling: HTML, XHTML, plain text; refuse others with a clear screen; charset from meta/BOM
 - [ ] M2.5 Redirect policy and redirect-loop handling (runtime max 5), cross-origin redirect reporting
-- [ ] M2.6 Error screens: offline, timeout, denied, too large, not found, unsupported type, TLS failure; each with a way back and retry
+- [x] M2.6 Error screens: offline, timeout, denied, too large, not found, unsupported type, TLS failure; each with a way back and retry
 - [ ] M2.7 Loading state with Heartbeat, Cancel
-- [ ] M2.8 Local HTTPS fixture server for integration tests (delayed, chunked, wrong Content-Length, truncated, gzip bomb, redirect loop, cross-origin redirect, wrong MIME, connection drop)
+- [x] M2.8 Local HTTPS fixture server for integration tests (delayed, chunked, wrong Content-Length, truncated, gzip bomb, redirect loop, cross-origin redirect, wrong MIME, connection drop)
 - [ ] M2.9 Simulator failure scenarios: offline, timeout, denied permission, full storage, background/foreground during fetch
 - [ ] M2.10 Live-site screenshots (real pages, labelled with URL and time)
 - Gate: deterministic local-server suite + simulator failure scenarios
