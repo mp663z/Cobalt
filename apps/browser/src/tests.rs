@@ -1,5 +1,5 @@
 use super::*;
-use kobo_sdk::{AppRunner, Chrome, DiagnosticSeverity, DisplayMetrics};
+use kobo_sdk::{AppRunner, Chrome, DiagnosticSeverity};
 use kobo_ui::TextScale;
 
 fn runner(text_scale: TextScale) -> AppRunner<Browser> {
@@ -90,7 +90,7 @@ fn a_fragment_link_opens_on_the_page_holding_its_section() {
 fn the_links_list_follows_links_too() {
     let mut runner = runner(TextScale::Default);
     runner.action(action_id("links"));
-    assert_eq!(runner.app().view, View::Links);
+    assert_eq!(runner.app().view, View::Links(0));
     let many = link_to(&runner, "many links");
     runner.action(many);
     assert_eq!(runner.app().view, View::Page);
@@ -120,7 +120,7 @@ fn every_screen_fits_the_clara_at_every_text_size() {
         let check = |runner: &AppRunner<Browser>, what: &str| {
             let issues: Vec<_> = runner
                 .app()
-                .screen()
+                .screen(&metrics)
                 .build()
                 .diagnostics(&metrics, &Chrome::measuring(true))
                 .issues
@@ -157,5 +157,46 @@ fn every_screen_fits_the_clara_at_every_text_size() {
             .unwrap();
         runner.app_mut().view = View::Unavailable(web);
         check(&runner, "unavailable");
+    }
+}
+
+#[test]
+fn the_links_list_for_a_page_of_many_links_fits_and_offers_every_link() {
+    for scale in [TextScale::Default, TextScale::ExtraLarge] {
+        let metrics = DisplayMetrics {
+            text_scale: scale,
+            ..kobo_ui::CLARA_BW_METRICS
+        };
+        let mut runner = runner(scale);
+        let many = link_to(&runner, "many links");
+        runner.action(many);
+        runner.action(action_id("links"));
+        let loaded = runner.app().loaded.as_ref().unwrap();
+        let pages = links_pages(loaded, &runner.app().page_links(), &metrics);
+        assert!(
+            pages.len() > 1,
+            "{scale:?}: expected the list to need paging"
+        );
+        let mut offered: Vec<usize> = pages.iter().flatten().copied().collect();
+        offered.sort_unstable();
+        assert_eq!(
+            offered,
+            (0..loaded.document.links.len()).collect::<Vec<_>>()
+        );
+        for page in 0..pages.len() {
+            assert_eq!(runner.app().view, View::Links(page));
+            let issues: Vec<_> = runner
+                .app()
+                .screen(&metrics)
+                .build()
+                .diagnostics(&metrics, &Chrome::measuring(true))
+                .issues
+                .into_iter()
+                .filter(|issue| issue.severity == DiagnosticSeverity::Error)
+                .collect();
+            assert!(issues.is_empty(), "{scale:?} links page {page}: {issues:?}");
+            // The page button turns the list, not the document behind it.
+            runner.page_turn(true);
+        }
     }
 }

@@ -1,0 +1,47 @@
+wait-for Sample pages
+expect 1 of
+clean
+shot browser-index
+tap-id link-0
+expect Notes on reading from paper screens
+expect 1 of
+clean
+shot browser-article
+tap-at 1000,800
+expect 2 of
+clean
+shot browser-article-page-2
+tap-id links
+expect in the document
+clean
+shot browser-links-article
+tap-id return
+expect 2 of
+tap-id back
+expect Sample pages
+tap-id forward
+expect 2 of
+tap-id back
+tap-id link-1
+expect Refresh and ghosting
+clean
+shot browser-fragment
+tap-id back
+tap-id link-2
+expect A page of many links
+tap-id links
+expect on this page
+clean
+shot browser-links
+tap-id links-next
+expect 2 of
+clean
+shot browser-links-page-2
+tap-id return
+tap-id back
+tap-id link-3
+expect Web pages come next
+clean
+shot browser-not-in-this-build
+tap-id return
+expect Sample pages
