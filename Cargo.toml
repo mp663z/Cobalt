@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/kobo-abi",
+    "crates/kobo-web-document",
     "crates/kobo-app-store",
     "crates/kobo-bookview",
     "crates/kobo-cli",
