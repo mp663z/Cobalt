@@ -78,7 +78,7 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 - [x] M3.4 Bounded LRU disk cache for pages and transformed images (app store keys), eviction policy, cache metadata format (pages and fitted pictures share one index under `page-cache-index`: 24 MiB / 200 entries, least recently read first out, strays swept at start; a picture is kept per room size, so another text size fits it afresh)
 - [x] M3.5 Offline reading of cached pages, labelled as cached with time (only for No Wi-Fi and site-did-not-answer; a slow or refusing site still shows its error)
 - [~] M3.6 Cache-pressure and full-storage behavior (a refused write drops the entry quietly; eviction by size and count is tested in the core crate)
-- [ ] M3.7 Image corpus tests, corrupted-image fuzz target
+- [x] M3.7 Image corpus tests, corrupted-image fuzz target (18 files in `apps/browser/tests/images`, a seeded damage test in the normal suite, and cargo-fuzz targets in `crates/kobo-browser/fuzz` with `smoke.sh`; the first smoke run found a cache index bug, fixed)
 - Gate: image corpus, fuzz smoke, cache-pressure and full-storage scenarios
 
 ## M4: real-world compatibility corpus
