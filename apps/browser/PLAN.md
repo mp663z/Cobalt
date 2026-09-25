@@ -133,6 +133,24 @@ not a WebKit version or anecdotes alone, as the acceptance oracle.
   form GET/POST, cookies, downloads, redirects, scrolling/zoom, history and
   offline errors. Keep the probe pages, screenshots, results and firmware IDs.
   An inaccessible device stays an explicit qualification gap, not a pass.
+  Confirmed firmware baseline: Kobo's official beta-browser table lists Clara BW,
+  Clara Colour, Clara 2E and Nia. Official update packages for Clara BW N365
+  and P365 (4.46.23836, August 2026), Nia N306 (4.38.23684, April 2026)
+  and Clara 2E N506 (same April release) each contain a 19,941,528-byte
+  ARM Qt WebKit shared library with a `libQt5WebKit.so.5` symlink; each
+  `nickel` ELF links it and WebKitWidgets. Official model/update map:
+  https://help.kobo.com/hc/en-us/articles/35059171032727-Manually-Updating-your-Kobo-eReader-device-Firmware .
+  Downloaded packages inspected, not executed on a reader:
+  https://ereaderfiles.kobo.com/firmwares/kobo12/Aug2026/kobo-update-4.46.23836.zip
+  https://ereaderfiles.kobo.com/firmwares/kobo14/Aug2026/kobo-update-4.46.23836.zip
+  https://ereaderfiles.kobo.com/firmwares/kobo7/Apr2026/kobo-update-4.38.23684.zip
+  https://ereaderfiles.kobo.com/firmwares/kobo10/Apr2026/kobo-update-4.38.23684.zip .
+  This verifies shipped engine bits and linkage, not active browser RSS,
+  exact engine source revision, or on-device web-feature behavior. A Clara BW
+  SSH report independently finds one CPU and 438 MiB usable of nominal 512 MB:
+  https://leo3418.github.io/2025/12/26/kobo-clara-bw-ssh.html . Its ~178 MiB
+  ordinary-session process use is not browser-active memory. Measure Nickel's
+  idle and browser-active PSS/RSS with a real device before comparing engines.
 - [ ] N1. Add a safe CSS parser and style model, not just token scanning.
   Measure parser/selector dependency cost on armv7 and add its license before
   adopting one. Support bounded inline `<style>`, `style` attributes and
