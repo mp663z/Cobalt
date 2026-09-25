@@ -8,6 +8,7 @@ use std::process::ExitCode;
 
 use kobo_browser_core::address::{self, DEFAULT_SEARCH};
 use kobo_browser_core::fetch::{self, Failure, Kind};
+use kobo_browser_core::library::{Library, Place};
 use kobo_browser_core::{Go, History};
 use kobo_sdk::keyboard::{TextEntry, Typing};
 use kobo_sdk::{
@@ -75,6 +76,8 @@ enum View {
     Sections(usize),
     /// The navigation choices where the reader switch uses a bar slot.
     Navigate,
+    Bookmarks(usize),
+    Recent(usize),
     /// One form, at this screen of its controls.
     Form(usize, usize),
     /// Choices for one select or radio field.
@@ -103,6 +106,8 @@ struct Pending {
 
 struct Browser {
     history: History,
+    library: Library,
+    library_loaded: bool,
     loaded: Option<Loaded>,
     view: View,
     /// The address field. While it is open it covers the page.
@@ -133,6 +138,8 @@ impl Default for Browser {
     fn default() -> Self {
         Self {
             history: History::new(),
+            library: Library::default(),
+            library_loaded: false,
             loaded: None,
             view: View::Page,
             address: TextEntry::new().opened_by("address"),
@@ -335,6 +342,30 @@ impl Browser {
     }
 
     fn stored(&mut self, context: &mut Context, from: Option<&str>, result: &StoreResult) {
+        if let StoreResult::Loaded { key, value } = result {
+            if key == "browser-library" && !self.library_loaded {
+                let mut library = value.as_deref().map(Library::decode).unwrap_or_default();
+                // The sample can arrive before the startup store load. Keep
+                // visits made in this process ahead of older stored visits.
+                let pending_changes =
+                    !self.library.recent.is_empty() || !self.library.bookmarks.is_empty();
+                for place in self.library.bookmarks.iter().rev() {
+                    if !library.contains(&place.url) {
+                        library.toggle(place.url.clone(), &place.title);
+                    }
+                }
+                for place in self.library.recent.iter().rev() {
+                    library.visit(place.url.clone(), &place.title);
+                }
+                self.library = library;
+                self.library_loaded = true;
+                if pending_changes {
+                    self.save_library(context);
+                }
+                self.show(context);
+                return;
+            }
+        }
         match self.saved.heard(context, from, result) {
             Heard::Elsewhere | Heard::Handled => {}
             Heard::Read {
@@ -444,6 +475,23 @@ impl Browser {
             _ => restore,
         };
         self.turn_to(context, page);
+        if let Some(loaded) = &self.loaded {
+            let title = loaded
+                .document
+                .title
+                .as_deref()
+                .unwrap_or_else(|| loaded.url.host());
+            self.library.visit(loaded.url.without_fragment(), title);
+            self.save_library(context);
+        }
+    }
+
+    fn save_library(&self, context: &mut Context) {
+        if self.library_loaded {
+            context
+                .store()
+                .save("browser-library", self.library.encode());
+        }
     }
 
     /// Makes pages until `page` and the one after it exist, or the document
@@ -948,14 +996,146 @@ impl Browser {
             .button("return-to-form", "Back to the page")
     }
 
-    fn navigate_screen() -> ScreenBuilder {
+    fn navigate_screen(&self) -> ScreenBuilder {
+        let marked = self
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| self.library.contains(&loaded.url.without_fragment()));
         ScreenBuilder::new("browser-navigate")
             .top_bar("Navigate")
             .top_bar_action("return", "Done")
             .rows([
                 ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
                 ("links", "Links", "Links on this page", Glyph::Bookmark),
+                (
+                    "mark",
+                    if marked {
+                        "Remove bookmark"
+                    } else {
+                        "Bookmark this page"
+                    },
+                    "Save or remove this address",
+                    Glyph::Bookmark,
+                ),
+                (
+                    "bookmarks",
+                    "Bookmarks",
+                    "Pages you marked",
+                    Glyph::Bookmark,
+                ),
+                (
+                    "recent",
+                    "History",
+                    "Recently visited pages",
+                    Glyph::Bookmark,
+                ),
             ])
+    }
+
+    fn handle_form_return(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if let View::PostConfirm(index) = self.view {
+            if action == action_id("cancel-post") || action == action_id("back") {
+                self.view = View::Form(index, 0);
+                self.show(context);
+                return true;
+            }
+        }
+        if matches!(self.view, View::FormUnavailable(_)) && action == action_id("return-to-form") {
+            self.view = View::Page;
+            self.show(context);
+            return true;
+        }
+        false
+    }
+
+    fn library_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action == action_id("back") || action == action_id("return") {
+            return false;
+        }
+        if action == action_id("mark") && matches!(self.view, View::Navigate) {
+            if let Some(loaded) = &self.loaded {
+                let title = loaded
+                    .document
+                    .title
+                    .as_deref()
+                    .unwrap_or_else(|| loaded.url.host());
+                self.library.toggle(loaded.url.without_fragment(), title);
+                self.save_library(context);
+            }
+        } else if action == action_id("bookmarks") {
+            self.view = View::Bookmarks(0);
+        } else if action == action_id("recent") {
+            self.view = View::Recent(0);
+        } else if action == action_id("places-next") || action == action_id("places-previous") {
+            let next = action == action_id("places-next");
+            self.view = match self.view {
+                View::Bookmarks(page) => View::Bookmarks(if next {
+                    page.saturating_add(1)
+                } else {
+                    page.saturating_sub(1)
+                }),
+                View::Recent(page) => View::Recent(if next {
+                    page.saturating_add(1)
+                } else {
+                    page.saturating_sub(1)
+                }),
+                _ => self.view.clone(),
+            };
+        } else if matches!(self.view, View::Bookmarks(_) | View::Recent(_)) {
+            let recent = matches!(self.view, View::Recent(_));
+            let places = if recent {
+                &self.library.recent
+            } else {
+                &self.library.bookmarks
+            };
+            let pages = fit_pages(places, &context.metrics(), |entries| {
+                place_screen(entries, places.len(), 998, 999, recent)
+            });
+            let page = match self.view {
+                View::Bookmarks(page) | View::Recent(page) => page,
+                _ => 0,
+            }
+            .min(pages.len().saturating_sub(1));
+            let first = pages.iter().take(page).map(Vec::len).sum::<usize>();
+            let selected = pages
+                .get(page)
+                .and_then(|rows| {
+                    rows.iter()
+                        .enumerate()
+                        .find(|(i, _)| action == action_id(&format!("place-{i}")))
+                })
+                .map(|(i, _)| first + i);
+            if let Some(url) = selected
+                .and_then(|index| places.get(index))
+                .map(|place| place.url.clone())
+            {
+                self.open(context, &url);
+                return true;
+            }
+        } else {
+            return false;
+        }
+        self.show(context);
+        true
+    }
+
+    fn library_screen(&self, recent: bool, page: usize, metrics: &DisplayMetrics) -> ScreenBuilder {
+        let places = if recent {
+            &self.library.recent
+        } else {
+            &self.library.bookmarks
+        };
+        let pages = fit_pages(places, metrics, |entries| {
+            place_screen(entries, places.len(), 998, 999, recent)
+        });
+        let page = page.min(pages.len().saturating_sub(1));
+        place_screen(
+            pages.get(page).map_or(&[], Vec::as_slice),
+            places.len(),
+            page,
+            pages.len(),
+            recent,
+        )
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
@@ -1025,7 +1205,9 @@ impl Browser {
                     pages.len(),
                 )
             }
-            (View::Navigate, Some(_)) => Self::navigate_screen(),
+            (View::Navigate, Some(_)) => self.navigate_screen(),
+            (View::Bookmarks(page), _) => self.library_screen(false, *page, metrics),
+            (View::Recent(page), _) => self.library_screen(true, *page, metrics),
             (View::Sections(page), Some(loaded)) => {
                 let headings = headings(loaded);
                 let pages = sections_pages(&headings, metrics);
@@ -1077,6 +1259,7 @@ impl Browser {
 impl KoboApp for Browser {
     fn on_start(&mut self, context: &mut Context) {
         Saved::start(context);
+        context.store().load("browser-library");
         context.device().read_identity();
         if let Ok(home) = Url::parse(SAMPLES) {
             if let Ok(index) = home.join("index.html") {
@@ -1093,19 +1276,13 @@ impl KoboApp for Browser {
         if self.handle_address(context, action) {
             return;
         }
+        if self.library_action(context, action) {
+            return;
+        }
         if self.submit_form(context, action) {
             return;
         }
-        if let View::PostConfirm(index) = self.view {
-            if action == action_id("cancel-post") || action == action_id("back") {
-                self.view = View::Form(index, 0);
-                self.show(context);
-                return;
-            }
-        }
-        if matches!(self.view, View::FormUnavailable(_)) && action == action_id("return-to-form") {
-            self.view = View::Page;
-            self.show(context);
+        if self.handle_form_return(context, action) {
             return;
         }
         if self.form_action(context, action) {
@@ -1132,7 +1309,11 @@ impl KoboApp for Browser {
         } else if action == action_id("back")
             && matches!(
                 self.view,
-                View::Links(_) | View::Sections(_) | View::Navigate
+                View::Links(_)
+                    | View::Sections(_)
+                    | View::Navigate
+                    | View::Bookmarks(_)
+                    | View::Recent(_)
             )
         {
             self.view = View::Page;
@@ -1282,6 +1463,8 @@ impl KoboApp for Browser {
             (View::Options(_, _, _), false) => "option-previous",
             (View::Sections(_), true) => "sections-next",
             (View::Sections(_), false) => "sections-previous",
+            (View::Bookmarks(_) | View::Recent(_), true) => "places-next",
+            (View::Bookmarks(_) | View::Recent(_), false) => "places-previous",
             (_, true) => "next-page",
             (_, false) => "previous-page",
         };
@@ -1308,6 +1491,43 @@ fn headings(loaded: &Loaded) -> Vec<(usize, u8, String)> {
 
 fn section_action(place: usize) -> String {
     format!("section-{place}")
+}
+
+fn place_screen(
+    entries: &[Place],
+    total: usize,
+    page: usize,
+    of: usize,
+    recent: bool,
+) -> ScreenBuilder {
+    let name = if recent { "History" } else { "Bookmarks" };
+    let builder = ScreenBuilder::new("browser-places")
+        .top_bar(name)
+        .top_bar_action("return", "Done")
+        .secondary(format!(
+            "{total} {}",
+            if total == 1 { "page" } else { "pages" }
+        ))
+        .page_turns("places-previous", "places-next")
+        .page_position(
+            u16::try_from(page + 1).unwrap_or(u16::MAX),
+            u16::try_from(of.max(1)).unwrap_or(u16::MAX),
+        );
+    if total == 0 {
+        return builder.text(if recent {
+            "No pages visited yet."
+        } else {
+            "No bookmarks yet."
+        });
+    }
+    builder.rows(entries.iter().enumerate().map(|(i, place)| {
+        (
+            format!("place-{i}"),
+            place.title.clone(),
+            place.url.to_string(),
+            Glyph::Bookmark,
+        )
+    }))
 }
 
 fn sections_screen(

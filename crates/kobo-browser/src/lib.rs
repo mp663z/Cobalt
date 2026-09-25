@@ -10,6 +10,7 @@
 pub mod address;
 pub mod cache;
 pub mod fetch;
+pub mod library;
 
 use kobo_web_document::Url;
 

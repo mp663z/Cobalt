@@ -216,12 +216,8 @@ pub fn page_screen_with(
     let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
     if let Some(reading) = reader {
         builder = builder.top_bar_action("reader", if reading { "Whole page" } else { "Reader" });
-        builder = builder.top_bar_action("navigate", "Navigate");
-    } else {
-        builder = builder
-            .top_bar_action("sections", "Sections")
-            .top_bar_action("links", "Links");
     }
+    builder = builder.top_bar_action("navigate", "Navigate");
     builder = builder
         .reading(true)
         .page_turns("previous-page", "next-page")
@@ -253,7 +249,7 @@ pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) 
 /// every picture must also get the full size it has on a page of its own.
 #[must_use]
 pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> bool {
-    let screen = page_screen(title, pieces, 998, Some(999)).build();
+    let screen = page_screen_with(title, pieces, 998, Some(999), Some(false)).build();
     if !fits(&screen, metrics) {
         return false;
     }
@@ -268,7 +264,14 @@ pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> boo
         let Piece::Picture { image, .. } = piece else {
             return true;
         };
-        let alone = page_screen(title, std::slice::from_ref(piece), 998, Some(999)).build();
+        let alone = page_screen_with(
+            title,
+            std::slice::from_ref(piece),
+            998,
+            Some(999),
+            Some(false),
+        )
+        .build();
         let whole = picture_heights(&alone, metrics);
         let handle = picture_handle(*image);
         let height = |heights: &[(PictureHandle, i32)]| {

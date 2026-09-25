@@ -1011,8 +1011,10 @@ fn a_kept_copy_that_cannot_be_read_is_forgotten_and_the_error_shown() {
     let arrived = open_web_page(&mut runner, KEPT);
     store.pump(&mut runner, arrived);
     store.shelf.clear();
-    runner.action(action_id("back"));
-    runner.action(link_to(&runner, "example.com"));
+    let back = runner.action(action_id("back"));
+    store.pump(&mut runner, back);
+    let link = runner.action(link_to(&runner, "example.com"));
+    store.pump(&mut runner, link);
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -1286,4 +1288,151 @@ fn choices_only_accept_the_current_options_page() {
     assert_eq!(runner.app().view, View::Form(0, 0));
     let form = forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
     assert!(matches!(&form.fields[0], Field::Select { chosen: Some(i), .. } if *i == later));
+}
+
+#[test]
+fn bookmarks_and_recent_pages_survive_restart_and_open() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let article = link_to(&runner, "Notes on reading");
+    let commands = runner.action(article);
+    store.pump(&mut runner, commands);
+    assert!(title(&runner).contains("Notes on reading"));
+    runner.action(action_id("navigate"));
+    assert_eq!(runner.app().view, View::Navigate);
+    let commands = runner.action(action_id("mark"));
+    store.pump(&mut runner, commands);
+    assert_eq!(runner.app().library.bookmarks.len(), 1);
+    runner.action(action_id("bookmarks"));
+    assert_eq!(runner.app().view, View::Bookmarks(0));
+    assert!(kobo_web_layout::fits(
+        &runner.app().screen(&kobo_ui::CLARA_BW_METRICS).build(),
+        &kobo_ui::CLARA_BW_METRICS
+    ));
+    runner.action(action_id("return"));
+    assert_eq!(runner.app().view, View::Page);
+    let mut runner = runner_with(&mut store);
+    assert_eq!(runner.app().library.bookmarks.len(), 1);
+    assert_eq!(runner.app().library.recent.len(), 2);
+    runner.action(action_id("navigate"));
+    runner.action(action_id("bookmarks"));
+    let commands = runner.action(action_id("place-0"));
+    store.pump(&mut runner, commands);
+    assert!(title(&runner).contains("Notes on reading"));
+    runner.action(action_id("navigate"));
+    runner.action(action_id("recent"));
+    assert_eq!(runner.app().view, View::Recent(0));
+    assert_eq!(runner.app().library.recent[0].title, title(&runner));
+    let commands = runner.action(action_id("place-1"));
+    store.pump(&mut runner, commands);
+    assert_eq!(title(&runner), "Browse: sample pages");
+}
+
+#[test]
+fn library_lists_fit_all_profiles_and_text_sizes() {
+    for profile in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let metrics = DisplayMetrics {
+                text_scale: scale,
+                ..profile
+            };
+            let mut browser = Browser::default();
+            for i in 0..100 {
+                let url = Url::parse(&format!("https://example.com/article/{i}")).unwrap();
+                browser
+                    .library
+                    .visit(url.clone(), &format!("A fairly long article title {i}"));
+                browser
+                    .library
+                    .toggle(url, &format!("A fairly long article title {i}"));
+            }
+            assert!(
+                kobo_web_layout::fits(&browser.navigate_screen().build(), &metrics),
+                "navigate menu {scale:?}"
+            );
+            for recent in [false, true] {
+                let places = if recent {
+                    &browser.library.recent
+                } else {
+                    &browser.library.bookmarks
+                };
+                let pages = fit_pages(places, &metrics, |entries| {
+                    place_screen(entries, places.len(), 998, 999, recent)
+                });
+                assert!(pages.len() > 1);
+                for (page, _) in pages.iter().enumerate() {
+                    let screen = browser.library_screen(recent, page, &metrics).build();
+                    assert!(
+                        kobo_web_layout::fits(&screen, &metrics),
+                        "{recent} {page} {scale:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn failed_pages_are_not_added_and_saved_copy_titles_stay_clean() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let before = runner.app().library.recent.len();
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    store.pump(&mut runner, failed);
+    assert_eq!(runner.app().library.recent.len(), before);
+    let arrived = open_web_page(&mut runner, KEPT);
+    store.pump(&mut runner, arrived);
+    runner.action(action_id("back"));
+    runner.action(link_to(&runner, "example.com"));
+    let failed = runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Failed(TaskError::Offline),
+    );
+    store.pump(&mut runner, failed);
+    assert!(title(&runner).starts_with("Saved: "));
+    assert_eq!(runner.app().library.recent[0].title, "Kept page");
+}
+
+#[test]
+fn library_page_turn_and_selection_only_touch_visible_rows() {
+    let mut browser = Browser::default();
+    let metrics = DisplayMetrics {
+        text_scale: TextScale::ExtraLarge,
+        ..kobo_ui::CLARA_BW_METRICS
+    };
+    for i in 0..100 {
+        let url = Url::parse(&format!("https://example.com/{i}")).unwrap();
+        browser.library.toggle(url, &format!("Article {i}"));
+    }
+    browser.view = View::Bookmarks(0);
+    let mut runner = AppRunner::with_metrics(browser, metrics);
+    let pages = fit_pages(
+        &runner.app().library.bookmarks,
+        &runner.context().metrics(),
+        |entries| place_screen(entries, 100, 998, 999, false),
+    );
+    assert!(pages.len() > 1);
+    let expected = pages[1][0].url.clone();
+    runner.action(action_id("places-next"));
+    assert_eq!(runner.app().view, View::Bookmarks(1));
+    runner.action(action_id("place-0"));
+    assert_eq!(runner.app().pending.as_ref().unwrap().url, expected);
 }
