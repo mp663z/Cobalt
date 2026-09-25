@@ -189,6 +189,15 @@ impl Converter<'_> {
         }
     }
 
+    /// Whether an `<a href>` is somewhere inside, a few levels down at most.
+    fn has_link(&self, handle: Handle, depth: usize) -> bool {
+        depth < 8
+            && self.nodes[handle].children.iter().any(|&child| {
+                (self.tag(child) == Some("a") && self.attr(child, "href").is_some())
+                    || self.has_link(child, depth + 1)
+            })
+    }
+
     fn hidden(&self, handle: Handle) -> bool {
         if self.attr(handle, "hidden").is_some() || self.attr(handle, "aria-hidden") == Some("true")
         {
@@ -480,6 +489,12 @@ impl Converter<'_> {
                 if !inner.is_empty() {
                     gather.inlines.push(Inline::Strong(inner));
                 }
+            }
+            "code" | "kbd" | "samp" | "tt" if self.has_link(handle, 0) => {
+                // Code with links in it, as API docs write `Option<Box<T>>`:
+                // the links are kept and the words stay code.
+                let inner = self.nested(handle, depth, gather);
+                gather.inlines.extend(as_code(inner));
             }
             "code" | "kbd" | "samp" | "tt" => {
                 let text = collapse_keep_edges(&self.text_of(handle));
@@ -937,4 +952,23 @@ pub fn visible_text(blocks: &[Block], out: &mut String) {
             Block::Form(_) | Block::Rule => {}
         }
     }
+}
+
+/// Turns the words in `inlines` into code, links and all.
+fn as_code(inlines: Vec<Inline>) -> Vec<Inline> {
+    inlines
+        .into_iter()
+        .map(|inline| match inline {
+            Inline::Text(text) if text.trim().is_empty() => Inline::Text(text),
+            Inline::Text(text) => Inline::Code(text),
+            Inline::Link { index, label } => Inline::Link {
+                index,
+                label: as_code(label),
+            },
+            Inline::Inert(label) => Inline::Inert(as_code(label)),
+            Inline::Emphasis(inner) => Inline::Emphasis(as_code(inner)),
+            Inline::Strong(inner) => Inline::Strong(as_code(inner)),
+            other => other,
+        })
+        .collect()
 }
