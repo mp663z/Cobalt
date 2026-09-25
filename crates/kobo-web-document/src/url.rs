@@ -97,9 +97,7 @@ impl Url {
         let rest = rest.trim_start_matches(['/', '\\']);
         let authority_end = rest.find(['/', '\\', '?', '#']).unwrap_or(rest.len());
         let (authority, tail) = rest.split_at(authority_end);
-        // Non-ASCII host names are not mapped to Punycode yet; encoded, they
-        // at least stay one inert name.
-        let (host, port) = parse_authority(&encode(authority, &[]), scheme)?;
+        let (host, port) = parse_authority(authority, scheme)?;
         let (path, query, fragment) = split_tail(tail);
         Ok(Self {
             scheme,
@@ -315,29 +313,15 @@ fn parse_authority(authority: &str, scheme: Scheme) -> Result<(String, Option<u1
     if authority.contains('@') {
         return Err(UrlError::Credentials);
     }
-    let (host, port) = if let Some(rest) = authority.strip_prefix('[') {
-        let end = rest.find(']').ok_or(UrlError::InvalidHost)?;
-        let host = &rest[..end];
-        if host.is_empty()
-            || !host
-                .chars()
-                .all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.')
-        {
-            return Err(UrlError::InvalidHost);
-        }
-        (format!("[{}]", host.to_ascii_lowercase()), &rest[end + 1..])
+    let port_at = if authority.starts_with('[') {
+        authority.find(']').map_or(authority.len(), |end| end + 1)
     } else {
-        let end = authority.find(':').unwrap_or(authority.len());
-        (authority[..end].to_ascii_lowercase(), &authority[end..])
+        authority.find(':').unwrap_or(authority.len())
     };
+    let (host, port) = authority.split_at(port_at);
+    let host = crate::host::parse(host).ok_or(UrlError::InvalidHost)?;
     let host = host.trim_end_matches('.').to_owned();
-    if host.is_empty()
-        || host.len() > 253
-        || !host.starts_with('[')
-            && !host
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '%'))
-    {
+    if host.is_empty() || host.len() > 253 {
         return Err(UrlError::InvalidHost);
     }
     let port = match port.strip_prefix(':') {

@@ -8,6 +8,7 @@
 
 mod convert;
 mod dom;
+mod host;
 pub mod url;
 
 use html5ever::tendril::TendrilSink;
