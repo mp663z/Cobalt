@@ -191,7 +191,15 @@ pub struct Document {
     pub warnings: Vec<Warning>,
     /// Parse errors html5ever recovered from. A count, for diagnostics.
     pub parse_errors: usize,
+    /// The anchor where the page's own content starts, past its site
+    /// navigation: the first heading or paragraph in `<main>` or
+    /// `role="main"`, else the target of a "skip to content" link.
+    pub main: Option<String>,
 }
+
+/// The anchor given to the start of the main content when its first block
+/// has no id of its own. An id cannot hold a space, so no page can name it.
+pub const MAIN_ANCHOR: &str = " main";
 
 impl Document {
     /// Every image in reading order.

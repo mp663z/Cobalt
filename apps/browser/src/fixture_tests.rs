@@ -75,6 +75,10 @@ fn respond(stream: &mut impl Write, path: &str) {
         "/away" => b"HTTP/1.1 302 Found\r\nLocation: https://elsewhere.invalid/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
         "/moved" => b"HTTP/1.1 301 Moved Permanently\r\nLocation: /page\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
         "/pdf" => ok("text/html", b"%PDF-1.7\n1 0 obj <<>> endobj"),
+        "/wikipedia" => ok(
+            "text/html; charset=utf-8",
+            include_bytes!("../tests/corpus/wikipedia-e-reader.html"),
+        ),
         "/mislabelled" => ok("application/octet-stream", PAGE.as_bytes()),
         "/text" => ok("text/plain", b"RFC 0000\n\n    An indented line.\n"),
         "/drop" => b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Le".to_vec(),
@@ -114,7 +118,14 @@ fn handle(socket: TcpStream, config: &Arc<ServerConfig>) {
     let _ = stream.flush();
 }
 
+/// The route and the trusted root are process-wide, so every test shares
+/// one server.
 fn start_server() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(start);
+}
+
+fn start() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     kobo_net::fixture::install(&format!(
         "localhost={}",
@@ -216,4 +227,36 @@ fn every_kind_of_server_reply_ends_on_a_screen_that_says_what_happened() {
     for (path, want) in expected {
         assert_eq!(shows(&visit(path)), want, "{path}");
     }
+}
+
+#[test]
+fn a_page_opens_where_its_main_content_starts() {
+    start_server();
+    let mut runner = visit("/wikipedia");
+    assert_eq!(shows(&runner), "page: E-reader - Wikipedia");
+    let loaded = runner.app().loaded.as_ref().expect("loaded");
+    let start = loaded
+        .paginator
+        .page_of("firstHeading")
+        .expect("main start");
+    assert!(
+        start > 0,
+        "the article's menus fill at least the first page"
+    );
+    assert_eq!(loaded.page, start);
+    let words = |runner: &AppRunner<Browser>| {
+        let loaded = runner.app().loaded.as_ref().expect("loaded");
+        let mut text = String::new();
+        for piece in &loaded.paginator.pages()[loaded.page] {
+            text.push_str(&format!("{piece:?}"));
+        }
+        text
+    };
+    assert!(words(&runner).contains("E-reader"));
+    // The menus are still there, a page turn back.
+    for _ in 0..start {
+        runner.page_turn(false);
+    }
+    assert_eq!(runner.app().loaded.as_ref().expect("loaded").page, 0);
+    assert!(words(&runner).contains("Main menu") || words(&runner).contains("Jump to content"));
 }

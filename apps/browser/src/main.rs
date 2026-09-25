@@ -420,6 +420,10 @@ impl Browser {
             (Some(fragment), _) if restore == 0 => {
                 self.fragment_page(context, fragment).unwrap_or(0)
             }
+            // A new page opens where its own content starts, past the site's
+            // menus; they are a page turn back. A saved copy still opens on
+            // its first screen, which says when it was saved.
+            (None, _) if restore == 0 && lead == 0 => self.main_page(context).unwrap_or(0),
             _ => restore,
         };
         self.turn_to(context, page);
@@ -493,6 +497,12 @@ impl Browser {
                 return None;
             }
         }
+    }
+
+    /// The page the main content starts on, when the page marks one.
+    fn main_page(&mut self, context: &Context) -> Option<usize> {
+        let main = self.loaded.as_ref()?.document.main.clone()?;
+        self.fragment_page(context, &main)
     }
 
     fn fragment_page(&mut self, context: &Context, fragment: &str) -> Option<usize> {

@@ -62,9 +62,22 @@ struct Converter<'a> {
     warnings: Vec<Warning>,
     pending_anchor: Option<String>,
     title: Option<String>,
+    main: Main,
+    /// Where the first "skip to content" link points, for a page without
+    /// `<main>`.
+    skip_target: Option<String>,
     /// Inside a form the model carries as a [`Form`]: its labels and buttons
     /// are part of that form, not prose to repeat beside it.
     in_form: bool,
+}
+
+/// Finding where the main content starts.
+#[derive(PartialEq)]
+enum Main {
+    Looking,
+    /// Inside `<main>`, waiting for its first heading or paragraph.
+    Entered,
+    Found(String),
 }
 
 /// Paragraph content being gathered at one block level.
@@ -94,6 +107,8 @@ pub fn convert(
         pending_anchor: None,
         in_form: false,
         title: None,
+        main: Main::Looking,
+        skip_target: None,
     };
     converter.read_head(DOCUMENT, 0);
     converter.read_base();
@@ -120,6 +135,10 @@ pub fn convert(
         links: converter.links,
         warnings: converter.warnings,
         parse_errors: 0,
+        main: match converter.main {
+            Main::Found(anchor) => Some(anchor),
+            _ => converter.skip_target,
+        },
     }
 }
 
@@ -242,10 +261,16 @@ impl Converter<'_> {
             .or_else(|| self.pending_anchor.take())
     }
 
-    fn push_block(&mut self, blocks: &mut Vec<Block>, block: Block) {
+    fn push_block(&mut self, blocks: &mut Vec<Block>, mut block: Block) {
         if self.blocks_made >= self.limits.max_blocks {
             self.warnings.push(Warning::TooManyBlocks);
             return;
+        }
+        if self.main == Main::Entered {
+            if let Block::Heading { anchor, .. } | Block::Paragraph { anchor, .. } = &mut block {
+                let name = anchor.get_or_insert_with(|| crate::MAIN_ANCHOR.to_owned());
+                self.main = Main::Found(name.clone());
+            }
         }
         self.blocks_made += 1;
         blocks.push(block);
@@ -309,6 +334,12 @@ impl Converter<'_> {
             self.warnings.push(Warning::TooDeep);
             push_text(&mut gather.inlines, &self.text_of(handle));
             return;
+        }
+        if self.main == Main::Looking
+            && (tag == "main" || self.attr(handle, "role") == Some("main"))
+        {
+            self.flush(blocks, gather);
+            self.main = Main::Entered;
         }
         match tag.as_str() {
             "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
@@ -571,6 +602,13 @@ impl Converter<'_> {
                         .first()
                         .map(|image| image.alt.clone())
                         .unwrap_or_default();
+                }
+                if self.skip_target.is_none() {
+                    if let Some(fragment) = href.trim().strip_prefix('#') {
+                        if is_skip_link(&text) && !fragment.is_empty() {
+                            self.skip_target = Some(fragment.to_owned());
+                        }
+                    }
                 }
                 self.links.push(Link { target, text });
                 for mut image in inner.images {
@@ -971,4 +1009,11 @@ fn as_code(inlines: Vec<Inline>) -> Vec<Inline> {
             other => other,
         })
         .collect()
+}
+
+/// "Skip to main content", "Jump to content" and the like.
+fn is_skip_link(text: &str) -> bool {
+    let text = text.to_lowercase();
+    (text.contains("skip") || text.contains("jump"))
+        && (text.contains("content") || text.contains("main"))
 }

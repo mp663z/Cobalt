@@ -1,8 +1,9 @@
 //! Real pages, saved and shrunk, read the way the browser reads them.
 //!
 //! Each page in `tests/corpus` has its expected reading next to it in
-//! `tests/corpus/expected`: the title and visible text, every link in order,
-//! and how many pages it takes on each supported reader at each text size.
+//! `tests/corpus/expected`: the title, where the main content starts, the
+//! visible text, every link in order, and how many pages it takes on each
+//! supported reader at each text size.
 //! Where the pages came from, and when, is in `tests/corpus/SOURCES.md`.
 //!
 //! A change to parsing or layout that moves any of these shows up here as a
@@ -126,6 +127,9 @@ fn corpus_text_and_links_read_as_expected() {
     for (name, address) in PAGES {
         let (document, title) = read(name, address);
         let mut text = format!("title: {title}\n");
+        if let Some(main) = &document.main {
+            let _ = writeln!(text, "main: {main:?}");
+        }
         for warning in &document.warnings {
             let _ = writeln!(text, "warning: {warning:?}");
         }
