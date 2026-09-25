@@ -27,7 +27,7 @@ fn text_of_piece(piece: &Piece) -> String {
             .map(|row| row.cells.join(" "))
             .collect::<Vec<_>>()
             .join(" "),
-        Piece::Rule | Piece::Picture { .. } => String::new(),
+        Piece::Rule | Piece::Picture { .. } | Piece::Form { .. } => String::new(),
     }
 }
 

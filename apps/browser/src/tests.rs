@@ -36,6 +36,112 @@ fn link_to(runner: &AppRunner<Browser>, words: &str) -> ActionId {
     action_id(&link_action(index))
 }
 
+fn form_runner(scale: TextScale) -> AppRunner<Browser> {
+    let mut runner = runner(scale);
+    let web = link_to(&runner, "example.com");
+    runner.action(web);
+    runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(br#"
+        <title>Form test</title><main><h1>Form test</h1>
+        <form action="/search" method="get"><label for=q>Search</label><input id=q type=search name=q value=ink>
+        <select name=size><option value=s>Small</option><option value=l selected>Large</option></select>
+        <label><input type=checkbox name=stock checked>In stock</label>
+        <input type=hidden name=src value=reader><input type=submit name=go value=Find>
+        </form></main>"#.to_vec()));
+    runner
+}
+
+#[test]
+fn form_controls_edit_and_keep_their_values_across_the_view() {
+    let mut runner = form_runner(TextScale::Default);
+    assert!(runner
+        .app()
+        .current_pieces()
+        .iter()
+        .any(|p| matches!(p, Piece::Form { index: 0, .. })));
+    runner.action(action_id("form-0"));
+    assert_eq!(runner.app().view, View::Form(0, 0));
+    runner.action(action_id("field-0"));
+    assert!(runner.app().form_entry.is_open());
+    runner.action(action_id("kb.enter"));
+    assert!(!runner.app().form_entry.is_open());
+    runner.action(action_id("field-1"));
+    assert_eq!(runner.app().view, View::Options(0, 1, 0));
+    runner.action(action_id("option-0"));
+    assert_eq!(runner.app().view, View::Form(0, 0));
+    runner.action(action_id("field-2"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    let form = forms::forms(&loaded.document.blocks)[0];
+    assert!(matches!(&form.fields[0], Field::Text { value, .. } if value == "ink"));
+    assert!(matches!(
+        &form.fields[1],
+        Field::Select {
+            chosen: Some(0),
+            ..
+        }
+    ));
+    assert!(matches!(
+        &form.fields[2],
+        Field::Checkbox { checked: false, .. }
+    ));
+    runner.action(action_id("return"));
+    assert_eq!(runner.app().view, View::Page);
+}
+
+#[test]
+fn get_form_submits_current_values_and_waits_for_the_result() {
+    let mut runner = form_runner(TextScale::Default);
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-1"));
+    runner.action(action_id("option-0"));
+    runner.action(action_id("field-2"));
+    runner.action(action_id("submit-form"));
+    assert_eq!(
+        runner.app().view,
+        View::Loading(Url::parse("https://example.com/search?q=ink&size=s&src=reader").unwrap())
+    );
+    assert_eq!(
+        runner.app().history.entries().len(),
+        2,
+        "not recorded until a response arrives"
+    );
+}
+
+#[test]
+fn form_control_screen_fits_on_three_profiles_and_sizes() {
+    for profile in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let runner = form_runner(scale);
+            let metrics = DisplayMetrics {
+                text_scale: scale,
+                ..profile
+            };
+            let loaded = runner.app().loaded.as_ref().unwrap();
+            let screen = forms::form_screen(loaded, 0, 0, &metrics).build();
+            let issues: Vec<_> = screen
+                .diagnostics(&metrics, &Chrome::measuring(true))
+                .issues
+                .into_iter()
+                .filter(|issue| issue.severity == DiagnosticSeverity::Error)
+                .collect();
+            assert!(issues.is_empty(), "{} {scale:?}: {issues:?}", metrics.width);
+        }
+    }
+}
+
 #[test]
 fn starts_on_the_sample_index() {
     let runner = runner(TextScale::Default);

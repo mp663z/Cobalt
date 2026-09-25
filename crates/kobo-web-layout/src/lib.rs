@@ -91,8 +91,13 @@ pub enum Piece {
         rows: Vec<TableRow>,
         links: Vec<Vec<usize>>,
     },
-    /// Something in the page that is described rather than shown: an image
-    /// with no size to reserve, a form before forms are supported.
+    /// A form's index in the active document. The app opens its controls
+    /// on a separate screen; the page keeps a small stable placeholder.
+    Form {
+        index: usize,
+        label: String,
+    },
+    /// Something in the page that is described rather than shown.
     Note(String),
     Rule,
     /// Room for an image whose size the page declares. `image` indexes
@@ -324,6 +329,7 @@ pub fn append(mut builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
             Piece::Preformatted(text) => builder.text(text),
             Piece::Table { rows, .. } => builder.table(rows.clone(), Vec::new()),
             Piece::Note(text) => builder.secondary(text),
+            Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
             Piece::Rule => builder.divider(),
             Piece::Picture {
                 image,
@@ -420,6 +426,7 @@ struct Flattener {
     /// Images met so far, which is the next image's index in
     /// [`Document::images`].
     images: usize,
+    forms: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -530,7 +537,14 @@ impl Flattener {
                     None => Piece::Note(label),
                 });
             }
-            Block::Form(form) => self.out.push(Piece::Note(form_note(form))),
+            Block::Form(form) => {
+                let index = self.forms;
+                self.forms += 1;
+                self.out.push(Piece::Form {
+                    index,
+                    label: form_note(form),
+                });
+            }
             Block::Rule => self.out.push(Piece::Rule),
         }
     }
@@ -632,7 +646,7 @@ fn form_note(form: &Form) -> String {
         _ => None,
     });
     format!(
-        "Form: {} (forms are not supported yet)",
+        "Open form: {}",
         label.unwrap_or_else(|| "fields".to_owned())
     )
 }

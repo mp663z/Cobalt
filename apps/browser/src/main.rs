@@ -14,9 +14,10 @@ use kobo_sdk::{
     action_id, ActionId, Context, DisplayMetrics, Glyph, Header, Heartbeat, KoboApp, ScreenBuilder,
     StoreResult, Task, TaskError, TaskId, TaskOutcome,
 };
-use kobo_web_document::{parse_document, Document, Limits, Url};
+use kobo_web_document::{parse_document, Document, Field, Limits, Url};
 use kobo_web_layout::{link_action, page_screen_with, picture_handle, pieces, Paginator, Piece};
 
+mod forms;
 mod pictures;
 mod saved;
 use pictures::Pictures;
@@ -35,6 +36,7 @@ const PAGES: &[(&str, &str)] = &[
     ("index.html", include_str!("../pages/index.html")),
     ("article.html", include_str!("../pages/article.html")),
     ("links.html", include_str!("../pages/links.html")),
+    ("forms.html", include_str!("../pages/forms.html")),
 ];
 
 fn sample(url: &Url) -> Option<&'static str> {
@@ -73,12 +75,18 @@ enum View {
     Sections(usize),
     /// The navigation choices where the reader switch uses a bar slot.
     Navigate,
+    /// One form, at this screen of its controls.
+    Form(usize, usize),
+    /// Choices for one select or radio field.
+    Options(usize, usize, usize),
     /// A page on its way.
     Loading(Url),
     /// A page that did not arrive.
     Failed(Url, Failure),
     /// A response that is not a page, named.
     Unsupported(Url, &'static str),
+    /// A form cannot be sent with the browser's current network support.
+    FormUnavailable(String),
 }
 
 /// A fetch in flight, and what to do with history when it lands.
@@ -97,6 +105,8 @@ struct Browser {
     view: View,
     /// The address field. While it is open it covers the page.
     address: TextEntry,
+    form_entry: TextEntry,
+    editing: Option<(usize, usize)>,
     pending: Option<Pending>,
     /// Where history was before a Back or Forward whose page is being loaded.
     stepped_from: Option<usize>,
@@ -124,6 +134,8 @@ impl Default for Browser {
             loaded: None,
             view: View::Page,
             address: TextEntry::new().opened_by("address"),
+            form_entry: TextEntry::new(),
+            editing: None,
             pending: None,
             stepped_from: None,
             retry: None,
@@ -404,6 +416,8 @@ impl Browser {
             .history
             .current()
             .map_or((0, None), |entry| (entry.page, entry.place));
+        self.editing = None;
+        self.form_entry.close();
         self.loaded = Some(Loaded {
             url: url.clone(),
             title,
@@ -654,6 +668,154 @@ impl Browser {
         links
     }
 
+    fn form_action(&mut self, context: &Context, action: ActionId) -> bool {
+        match self.view {
+            View::Page => {
+                let selected = self.current_pieces().iter().find_map(|piece| {
+                    if let Piece::Form { index, .. } = piece {
+                        (action == action_id(&format!("form-{index}"))).then_some(*index)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(index) = selected {
+                    self.view = View::Form(index, 0);
+                    return true;
+                }
+            }
+            View::Form(index, page) => {
+                if action == action_id("return") || action == action_id("back") {
+                    self.view = View::Page;
+                    return true;
+                }
+                if action == action_id("form-next") || action == action_id("form-previous") {
+                    self.view = View::Form(
+                        index,
+                        if action == action_id("form-next") {
+                            page.saturating_add(1)
+                        } else {
+                            page.saturating_sub(1)
+                        },
+                    );
+                    return true;
+                }
+                let selected = self.loaded.as_ref().and_then(|loaded| {
+                    let pages = forms::form_pages(loaded, index, &context.metrics());
+                    let allowed = pages.get(page.min(pages.len().saturating_sub(1)))?;
+                    let form = forms::forms(&loaded.document.blocks).get(index).copied()?;
+                    forms::field_action(form, action).filter(|field| allowed.contains(field))
+                });
+                if let Some(field) = selected {
+                    if let Some(loaded) = self.loaded.as_mut() {
+                        match forms::form_mut(&mut loaded.document.blocks, index)
+                            .and_then(|form| form.fields.get_mut(field))
+                        {
+                            Some(Field::Text { value, .. }) => {
+                                self.editing = Some((index, field));
+                                self.form_entry.open_with(value.clone());
+                            }
+                            Some(Field::Checkbox { checked, .. }) => *checked = !*checked,
+                            Some(Field::Select { .. }) => {
+                                self.view = View::Options(index, field, 0);
+                            }
+                            _ => {}
+                        }
+                    }
+                    return true;
+                }
+                if action == action_id("submit-form") {
+                    // Submission is handled by the caller with a Context.
+                    return false;
+                }
+            }
+            View::Options(index, field, page) => {
+                if action == action_id("return-to-form") || action == action_id("back") {
+                    self.view = View::Form(index, 0);
+                    return true;
+                }
+                if action == action_id("option-next") || action == action_id("option-previous") {
+                    self.view = View::Options(
+                        index,
+                        field,
+                        if action == action_id("option-next") {
+                            page.saturating_add(1)
+                        } else {
+                            page.saturating_sub(1)
+                        },
+                    );
+                    return true;
+                }
+                return self.choose_option(context, index, field, page, action);
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn choose_option(
+        &mut self,
+        context: &Context,
+        index: usize,
+        field: usize,
+        page: usize,
+        action: ActionId,
+    ) -> bool {
+        let allowed = self
+            .loaded
+            .as_ref()
+            .and_then(|loaded| {
+                let form = forms::forms(&loaded.document.blocks).get(index).copied()?;
+                let pages = forms::option_pages(form, field, &context.metrics());
+                pages.get(page.min(pages.len().saturating_sub(1))).cloned()
+            })
+            .unwrap_or_default();
+        if let Some(Field::Select {
+            chosen, options, ..
+        }) = self
+            .loaded
+            .as_mut()
+            .and_then(|loaded| forms::form_mut(&mut loaded.document.blocks, index))
+            .and_then(|form| form.fields.get_mut(field))
+        {
+            if let Some(option) = allowed
+                .into_iter()
+                .find(|i| *i < options.len() && action_id(&format!("option-{i}")) == action)
+            {
+                *chosen = Some(option);
+                self.view = View::Form(index, 0);
+                return true;
+            }
+        }
+        false
+    }
+
+    fn submit_form(&mut self, context: &mut Context, action: ActionId) -> bool {
+        let View::Form(index, _) = self.view else {
+            return false;
+        };
+        if action != action_id("submit-form") {
+            return false;
+        }
+        let Some(loaded) = self.loaded.as_ref() else {
+            return false;
+        };
+        let form = forms::forms(&loaded.document.blocks).get(index).copied();
+        let to = form.and_then(|form| forms::get_url(form, None));
+        if let Some(to) = to {
+            self.open(context, &to);
+        } else {
+            self.view = View::FormUnavailable(
+                if form.is_some_and(|f| f.method == kobo_web_document::Method::Post) {
+                    "POST forms are not available yet. Nothing was sent.".to_owned()
+                } else {
+                    "This form cannot be sent. Nothing was sent.".to_owned()
+                },
+            );
+        }
+        self.show(context);
+        true
+    }
+
     fn select_section(&mut self, context: &mut Context, action: ActionId) {
         if action == action_id("return") {
             self.view = View::Page;
@@ -677,7 +839,103 @@ impl Browser {
         context.set_screen(self.screen(&context.metrics()).build());
     }
 
+    fn form_entry_screen(&self) -> ScreenBuilder {
+        let label = self
+            .editing
+            .and_then(|(index, field)| {
+                self.loaded
+                    .as_ref()
+                    .and_then(|loaded| forms::forms(&loaded.document.blocks).get(index).copied())
+                    .and_then(|form| form.fields.get(field))
+                    .and_then(|field| match field {
+                        Field::Text { label, .. } => Some(label.as_str()),
+                        _ => None,
+                    })
+            })
+            .unwrap_or("Text");
+        ScreenBuilder::new("browser-form-entry")
+            .top_bar(label)
+            .text_entry(&self.form_entry, label, "Save")
+    }
+
+    fn handle_form_entry(&mut self, context: &mut Context, action: ActionId) {
+        match self.form_entry.handle(action) {
+            Some(Typing::Submitted(value)) => {
+                if let (Some((index, field)), Some(loaded)) =
+                    (self.editing.take(), self.loaded.as_mut())
+                {
+                    if let Some(Field::Text { value: current, .. }) =
+                        forms::form_mut(&mut loaded.document.blocks, index)
+                            .and_then(|form| form.fields.get_mut(field))
+                    {
+                        *current = value;
+                    }
+                }
+            }
+            Some(Typing::Cancelled) => {
+                self.editing = None;
+            }
+            Some(Typing::Changed) | None => {}
+        }
+        self.show(context);
+    }
+
+    fn options_screen(
+        loaded: &Loaded,
+        index: usize,
+        field: usize,
+        page: usize,
+        metrics: &DisplayMetrics,
+    ) -> ScreenBuilder {
+        forms::forms(&loaded.document.blocks)
+            .get(index)
+            .map_or_else(
+                || {
+                    ScreenBuilder::new("browser-options")
+                        .top_bar("Choose")
+                        .text("Form no longer available.")
+                },
+                |form| forms::option_screen(form, field, page, metrics),
+            )
+    }
+
+    fn handle_address(&mut self, context: &mut Context, action: ActionId) -> bool {
+        match self.address.handle(action) {
+            Some(Typing::Submitted(typed)) => {
+                if let Some(to) = address::resolve(&typed, DEFAULT_SEARCH) {
+                    self.open(context, to.url());
+                } else {
+                    self.show(context);
+                }
+                true
+            }
+            Some(Typing::Changed | Typing::Cancelled) => {
+                self.show(context);
+                true
+            }
+            None if self.address.is_open() => {
+                if action == action_id("back") {
+                    self.address.close();
+                    self.show(context);
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn form_unavailable_screen(reason: &str) -> ScreenBuilder {
+        ScreenBuilder::new("browser-form-unavailable")
+            .top_bar("Form")
+            .heading("Not sent")
+            .text(reason)
+            .button("return-to-form", "Back to the page")
+    }
+
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
+        if self.form_entry.is_open() {
+            return self.form_entry_screen();
+        }
         if self.address.is_open() {
             return ScreenBuilder::new("browser-address")
                 .top_bar("Go to")
@@ -705,6 +963,7 @@ impl Browser {
                 }
                 builder
             }
+            (View::FormUnavailable(reason), _) => Self::form_unavailable_screen(reason),
             (View::Unsupported(url, what), loaded) => {
                 let builder = ScreenBuilder::new("browser-unsupported")
                     .top_bar(url.host())
@@ -718,6 +977,12 @@ impl Browser {
                 } else {
                     builder
                 }
+            }
+            (View::Form(index, page), Some(loaded)) => {
+                forms::form_screen(loaded, *index, *page, metrics)
+            }
+            (View::Options(index, field, page), Some(loaded)) => {
+                Self::options_screen(loaded, *index, *field, *page, metrics)
             }
             (View::Links(page), Some(loaded)) => {
                 let links = self.page_links();
@@ -798,29 +1063,24 @@ impl KoboApp for Browser {
     }
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
-        match self.address.handle(action) {
-            Some(Typing::Submitted(typed)) => {
-                if let Some(to) = address::resolve(&typed, DEFAULT_SEARCH) {
-                    self.open(context, to.url());
-                    return;
-                }
-                self.show(context);
-                return;
-            }
-            Some(Typing::Changed | Typing::Cancelled) => {
-                self.show(context);
-                return;
-            }
-            // The top bar's Back closes the field; it is not a step back
-            // through history from behind a keyboard.
-            None if self.address.is_open() => {
-                if action == action_id("back") {
-                    self.address.close();
-                    self.show(context);
-                }
-                return;
-            }
-            None => {}
+        if self.form_entry.is_open() {
+            self.handle_form_entry(context, action);
+            return;
+        }
+        if self.handle_address(context, action) {
+            return;
+        }
+        if self.submit_form(context, action) {
+            return;
+        }
+        if matches!(self.view, View::FormUnavailable(_)) && action == action_id("return-to-form") {
+            self.view = View::Page;
+            self.show(context);
+            return;
+        }
+        if self.form_action(context, action) {
+            self.show(context);
+            return;
         }
         if action == action_id("next-page") || action == action_id("previous-page") {
             if let Some(page) = self.loaded.as_ref().map(|loaded| loaded.page) {
@@ -986,6 +1246,10 @@ impl KoboApp for Browser {
         let name = match (&self.view, forward) {
             (View::Links(_), true) => "links-next",
             (View::Links(_), false) => "links-previous",
+            (View::Form(_, _), true) => "form-next",
+            (View::Form(_, _), false) => "form-previous",
+            (View::Options(_, _, _), true) => "option-next",
+            (View::Options(_, _, _), false) => "option-previous",
             (View::Sections(_), true) => "sections-next",
             (View::Sections(_), false) => "sections-previous",
             (_, true) => "next-page",
