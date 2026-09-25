@@ -114,9 +114,7 @@ fn screen(form: &Form, entries: &[usize], page: usize, of: usize, last: bool) ->
     }
     match (form.urlencoded, form.method) {
         (true, kobo_web_document::Method::Get) => builder.button("submit-form", "Submit"),
-        (true, kobo_web_document::Method::Post) => {
-            builder.secondary("POST is not available yet. Nothing will be sent.")
-        }
+        (true, kobo_web_document::Method::Post) => builder.button("submit-form", "Review POST"),
         (false, _) => builder.secondary("This form's encoding is not supported."),
     }
 }
@@ -243,6 +241,14 @@ pub fn option_screen(
     )
 }
 
+/// The app's single Submit button activates the first HTML submit control.
+/// With no such control, Enter-style implicit submission has no button value.
+pub fn default_submit(form: &Form) -> Option<usize> {
+    form.fields
+        .iter()
+        .position(|field| matches!(field, Field::Submit { .. }))
+}
+
 /// Successful controls, in form order, as application/x-www-form-urlencoded.
 /// Submit buttons contribute only when the chosen button is known.
 pub fn body(form: &Form, submit: Option<usize>) -> Option<String> {
@@ -293,8 +299,8 @@ pub fn get_url(form: &Form, submit: Option<usize>) -> Option<kobo_web_document::
         return None;
     }
     let body = body(form, submit)?;
-    // GET replaces the action's query, per HTML form submission; it does not
-    // append to it. A failed parse means the form is not sent anywhere.
+    // GET replaces the action's query and drops its fragment. An action
+    // without fields still has an empty query; no stale query is retained.
     let url = form.action.join(&format!("?{body}")).ok()?;
     (url.to_string().len() <= kobo_web_document::url::MAX_URL_LEN).then_some(url)
 }
@@ -361,6 +367,22 @@ mod tests {
             get_url(&form, Some(5)).unwrap().to_string(),
             "https://example.com/find?q=e+ink+%26+caf%C3%A9&source=reader&sort=new&go=Find"
         );
+    }
+
+    #[test]
+    fn oversized_get_is_refused_rather_than_truncated() {
+        let form = Form {
+            action: Url::parse("https://example.com/search").unwrap(),
+            method: Method::Get,
+            urlencoded: true,
+            fields: vec![Field::Text {
+                name: "q".into(),
+                value: "x".repeat(4096),
+                label: "Search".into(),
+                search: true,
+            }],
+        };
+        assert!(get_url(&form, None).is_none());
     }
 
     #[test]

@@ -87,6 +87,8 @@ enum View {
     Unsupported(Url, &'static str),
     /// A form cannot be sent with the browser's current network support.
     FormUnavailable(String),
+    /// POST confirmation: still does not send until a supported runtime path exists.
+    PostConfirm(usize),
 }
 
 /// A fetch in flight, and what to do with history when it lands.
@@ -800,17 +802,17 @@ impl Browser {
             return false;
         };
         let form = forms::forms(&loaded.document.blocks).get(index).copied();
-        let to = form.and_then(|form| forms::get_url(form, None));
+        if form.is_some_and(|f| f.method == kobo_web_document::Method::Post && f.urlencoded) {
+            self.view = View::PostConfirm(index);
+            self.show(context);
+            return true;
+        }
+        let to = form.and_then(|form| forms::get_url(form, forms::default_submit(form)));
         if let Some(to) = to {
             self.open(context, &to);
         } else {
-            self.view = View::FormUnavailable(
-                if form.is_some_and(|f| f.method == kobo_web_document::Method::Post) {
-                    "POST forms are not available yet. Nothing was sent.".to_owned()
-                } else {
-                    "This form cannot be sent. Nothing was sent.".to_owned()
-                },
-            );
+            self.view =
+                View::FormUnavailable("This form cannot be sent. Nothing was sent.".to_owned());
         }
         self.show(context);
         true
@@ -924,12 +926,36 @@ impl Browser {
         }
     }
 
+    fn post_screen(form: Option<&kobo_web_document::Form>) -> ScreenBuilder {
+        let Some(form) = form else {
+            return ScreenBuilder::new("browser-post")
+                .top_bar("POST form")
+                .text("Form no longer available.");
+        };
+        ScreenBuilder::new("browser-post")
+            .top_bar("POST form")
+            .heading("Review submission")
+            .text(format!("Send form data to {}?", form.action.origin()))
+            .secondary("POST may change data on this site. This browser cannot send POST yet.")
+            .button("cancel-post", "Cancel")
+    }
+
     fn form_unavailable_screen(reason: &str) -> ScreenBuilder {
         ScreenBuilder::new("browser-form-unavailable")
             .top_bar("Form")
             .heading("Not sent")
             .text(reason)
             .button("return-to-form", "Back to the page")
+    }
+
+    fn navigate_screen() -> ScreenBuilder {
+        ScreenBuilder::new("browser-navigate")
+            .top_bar("Navigate")
+            .top_bar_action("return", "Done")
+            .rows([
+                ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
+                ("links", "Links", "Links on this page", Glyph::Bookmark),
+            ])
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
@@ -962,6 +988,9 @@ impl Browser {
                     builder = builder.button("return", "Back to the page");
                 }
                 builder
+            }
+            (View::PostConfirm(index), Some(loaded)) => {
+                Self::post_screen(forms::forms(&loaded.document.blocks).get(*index).copied())
             }
             (View::FormUnavailable(reason), _) => Self::form_unavailable_screen(reason),
             (View::Unsupported(url, what), loaded) => {
@@ -996,13 +1025,7 @@ impl Browser {
                     pages.len(),
                 )
             }
-            (View::Navigate, Some(_)) => ScreenBuilder::new("browser-navigate")
-                .top_bar("Navigate")
-                .top_bar_action("return", "Done")
-                .rows([
-                    ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
-                    ("links", "Links", "Links on this page", Glyph::Bookmark),
-                ]),
+            (View::Navigate, Some(_)) => Self::navigate_screen(),
             (View::Sections(page), Some(loaded)) => {
                 let headings = headings(loaded);
                 let pages = sections_pages(&headings, metrics);
@@ -1072,6 +1095,13 @@ impl KoboApp for Browser {
         }
         if self.submit_form(context, action) {
             return;
+        }
+        if let View::PostConfirm(index) = self.view {
+            if action == action_id("cancel-post") || action == action_id("back") {
+                self.view = View::Form(index, 0);
+                self.show(context);
+                return;
+            }
         }
         if matches!(self.view, View::FormUnavailable(_)) && action == action_id("return-to-form") {
             self.view = View::Page;

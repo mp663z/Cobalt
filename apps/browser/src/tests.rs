@@ -97,13 +97,31 @@ fn get_form_submits_current_values_and_waits_for_the_result() {
     runner.action(action_id("submit-form"));
     assert_eq!(
         runner.app().view,
-        View::Loading(Url::parse("https://example.com/search?q=ink&size=s&src=reader").unwrap())
+        View::Loading(
+            Url::parse("https://example.com/search?q=ink&size=s&src=reader&go=Find").unwrap()
+        )
     );
     assert_eq!(
         runner.app().history.entries().len(),
         2,
         "not recorded until a response arrives"
     );
+}
+
+#[test]
+fn post_review_does_not_send_and_cancel_returns_to_form() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(link_to(&runner, "example.com"));
+    runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(
+        br#"<title>POST</title><form method=post action="/order"><input name=note value=hello><input type=submit name=go value=Send></form>"#.to_vec()));
+    runner.action(action_id("form-0"));
+    let history = runner.app().history.entries().len();
+    runner.action(action_id("submit-form"));
+    assert_eq!(runner.app().view, View::PostConfirm(0));
+    assert!(runner.app().pending.is_none());
+    assert_eq!(runner.app().history.entries().len(), history);
+    runner.action(action_id("cancel-post"));
+    assert_eq!(runner.app().view, View::Form(0, 0));
 }
 
 #[test]
@@ -1205,4 +1223,67 @@ fn a_saved_copy_reopens_at_the_same_words_though_its_note_moves_the_pages() {
     store.pump(&mut runner, failed);
     assert_eq!(title(&runner), "Saved: Long");
     assert_eq!(first_words(&runner), words, "the same place in the text");
+}
+
+#[test]
+fn form_lists_page_and_only_visible_controls_can_change() {
+    let mut runner = runner(TextScale::ExtraLarge);
+    runner.action(link_to(&runner, "example.com"));
+    let mut html = "<title>Long form</title><form method=get action=/find>".to_owned();
+    for index in 0..35 {
+        write!(
+            html,
+            "<label>Field {index}<input name=f{index} value={index}></label>"
+        )
+        .unwrap();
+    }
+    html.push_str("</form>");
+    runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Completed(html.into_bytes()),
+    );
+    runner.action(action_id("form-0"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    let pages = forms::form_pages(loaded, 0, &runner.context().metrics());
+    assert!(pages.len() > 1);
+    assert!(pages[0].len() < 35);
+    let later = pages[1][0];
+    runner.action(action_id(&format!("field-{later}")));
+    assert!(
+        !runner.app().form_entry.is_open(),
+        "off-page control ignored"
+    );
+    runner.page_turn(true);
+    assert_eq!(runner.app().view, View::Form(0, 1));
+    runner.action(action_id(&format!("field-{later}")));
+    assert!(runner.app().form_entry.is_open());
+}
+
+#[test]
+fn choices_only_accept_the_current_options_page() {
+    let mut runner = runner(TextScale::ExtraLarge);
+    runner.action(link_to(&runner, "example.com"));
+    let mut html = "<title>Long choice</title><form><select name=item>".to_owned();
+    for index in 0..30 {
+        write!(html, "<option value={index}>Choice number {index}</option>").unwrap();
+    }
+    html.push_str("</select></form>");
+    runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Completed(html.into_bytes()),
+    );
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-0"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    let form = forms::forms(&loaded.document.blocks)[0];
+    let pages = forms::option_pages(form, 0, &runner.context().metrics());
+    assert!(pages.len() > 1);
+    let later = pages[1][0];
+    runner.action(action_id(&format!("option-{later}")));
+    assert_eq!(runner.app().view, View::Options(0, 0, 0));
+    runner.page_turn(true);
+    runner.action(action_id(&format!("option-{later}")));
+    assert_eq!(runner.app().view, View::Form(0, 0));
+    let form = forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
+    assert!(matches!(&form.fields[0], Field::Select { chosen: Some(i), .. } if *i == later));
 }

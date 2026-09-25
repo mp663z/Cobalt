@@ -96,8 +96,8 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
 ## M5: forms and sessions
 
-- [ ] M5.1 Form model: GET forms, single-line text, search inputs, hidden inputs, select/radio/checkbox as choose
-- [ ] M5.2 URL-encoded GET submission; POST with a confirmation screen
+- [x] M5.1 Form model: GET forms, single-line text, search inputs, hidden inputs, select/radio/checkbox as choose (bounded IR and form UI, text editor, selection lists and checkbox toggles; sample form and tests across three profiles and text sizes)
+- [~] M5.2 URL-encoded GET submission; POST with a confirmation screen (GET sends successful controls in order and replaces query; POST shows a review screen but cannot send until runtime supports request bodies, so no POST effect occurs)
 - [ ] M5.3 Bounded cookie jar and per-origin session storage (needs runtime headers; decide protocol path)
 - [ ] M5.4 Bookmarks and history screens with durable storage
 - [ ] M5.5 Form URL encoding WPT subset
