@@ -9,3 +9,24 @@
 # must fail. Other schemes are refused by this browser and are left out.
 # url/cases.tsv is made by url/vendor.py; test: tests/wpt_url.rs
 url/resources/urltestdata.json
+
+# Named character references, all 2231, from the HTML Standard's
+# entities.json (CC BY 4.0, WHATWG), fetched 2026-09-25 from
+# https://html.spec.whatwg.org/entities.json. Numeric references and their
+# repairs are checked by hand-written cases in the same test.
+# entities/entities.tsv; test: tests/wpt_entities.rs
+html/syntax/named-character-references (entities.json)
+
+# Encoding: the Encoding Standard's Windows-1252 index (CC BY 4.0, WHATWG),
+# fetched 2026-09-25 from https://encoding.spec.whatwg.org/index-windows-1252.txt.
+# Only UTF-8 and the Windows-1252 fallback are decoded. A page in another
+# legacy encoding (Shift_JIS, GBK, KOI8-R, UTF-16 and the rest) is read as
+# Windows-1252 whatever its charset says; that is a known limit, not tested.
+# test: tests/wpt_encoding.rs
+encoding/index-windows-1252.txt
+
+# Base URL: hand-written cases for the rules the WPT directory
+# html/semantics/document-metadata/the-base-element checks. Its tests run
+# script in a browser, so they are restated here rather than copied.
+# test: tests/wpt_base.rs
+html/semantics/document-metadata/the-base-element (restated)

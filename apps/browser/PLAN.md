@@ -85,7 +85,7 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
 - [x] M4.1 Saved, minimized fixtures with provenance: Wikipedia, Rust docs, Hacker News, lightweight blogs, docs sites, search results, bad pages (8 in `tests/corpus`, sources and licences in `SOURCES.md`; `minimize.py` is checked to leave the reading unchanged; Hacker News left out for licence; bad pages: cut short, Windows-1252)
 - [x] M4.2 Expected title, visible text, link order, page counts per fixture per profile (`tests/corpus/expected`, `BLESS_CORPUS=1` rewrites; page counts on 3 distinct screens x 3 text sizes, release builds only since the long article takes minutes unoptimised)
-- [ ] M4.3 WPT subsets: URL parsing, HTML tree construction (if html5ever), encoding, entities, base URL; `tests/wpt/include.txt` and `expected-failures.txt`
+- [~] M4.3 WPT subsets: URL parsing, HTML tree construction (if html5ever), encoding, entities, base URL; `tests/wpt/include.txt` and `expected-failures.txt` (in `crates/kobo-web-document/tests/wpt`. URL: 506 http(s) cases, 465 pass, 39 refused on purpose, 2 gaps. Entities: all 2231 plus numeric repairs. Encoding: the Windows-1252 index; other legacy encodings not decoded. Base URL: restated cases, two bugs fixed. Tree construction through our DOM sink still to do)
 - [ ] M4.4 Differential test vs html5ever (and optionally Chromium) on host for visible text and link order
 - [ ] M4.5 Reader mode (main-content extraction) for article pages
 - [ ] M4.6 Section navigation (heading list), link list per page
