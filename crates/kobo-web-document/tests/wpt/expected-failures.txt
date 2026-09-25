@@ -53,7 +53,6 @@ url http://[::127.0.0.1] http://example.org/foo/bar
 url http://[::127.0.0.1.] http://example.org/foo/bar
 url http://[0:0:0:0:0:0:13.1.68.3] http://example.org/foo/bar
 url http://192.0x00A80001 -
-url http://example example.com http://other.com/
 url http://[:] http://other.com/
 url http://GOO 　goo.com http://other.com/
 url http://﷐zyx.com http://other.com/
@@ -71,8 +70,6 @@ url http://%30%78%63%30%2e%30%32%35%30.01 http://other.com/
 url http://%30%78%63%30%2e%30%32%35%30.01%2e http://other.com/
 url http://192.168.0.257 http://other.com/
 url http://%3g%78%63%30%2e%30%32%35%30%2E.01 http://other.com/
-url http://192.168.0.1 hello http://other.com/
-url https://x x:12 -
 url http://[::1.2.3.] http://other.com/
 url http://[::1.2.] http://other.com/
 url http://[::.1.2] http://other.com/
@@ -107,7 +104,6 @@ url http://a\u{1C}b/ -
 url http://a\u{1D}b/ -
 url http://a\u{1E}b/ -
 url http://a\u{1F}b/ -
-url http://a b/ -
 url http://a%b/ -
 url http://a\u{7F}b/ -
 url http://ho%00st/ -
@@ -226,37 +222,14 @@ url https://a%C2%ADb/ -
 url https://­/ -
 url https://%C2%AD/ -
 
-# Not yet: characters the URL standard percent-encodes in paths, queries and fragments are kept or dropped as they are.
-url http://example.com/foo\t%91 -
-url http://host/?' -
-url http://foo.bar/baz?qux#foo\u{8}bar -
-url http://foo.bar/baz?qux#foo"bar -
-url http://foo.bar/baz?qux#foo<bar -
-url http://foo.bar/baz?qux#foo>bar -
-url http://foo.bar/baz?qux#foo`bar -
-url http://example.org/test?" -
-url http://example.org/test?< -
-url http://example.org/test?> -
-url http://example.org/test?a#b\u{0}c -
-url https://www.example.com/path{\u{7F}path.html?query'\u{7F}=query#fragment<\u{7F}fragment -
-url https://x/\u{0}y -
-url https://x/?\u{0}y -
-url https://x/?#\u{0}y -
-url https://example.com/"quoted" -
+# Not yet: a reference of slashes and backslashes mixed is read as a new host rather than a path.
 url /\\/\\//example.org/../path http://example.org/
 
-# Not yet: 'http:foo' against an http base, and empty or blank references, resolve as the standard says.
-url http:foo.com http://example.org/foo/bar
-url  http://example.org/foo/bar
-url   \t http://example.org/foo/bar
-url http::@c:29 http://example.org/foo/bar
-url http:[61:27]/:foo http://example.org/foo/bar
-url http:/example.com/ http://example.org/foo/bar
-url http:/ http://example.com/
-url http:example.com/ http://example.org/foo/bar
+# By design: a bare '@' reads as the start of credentials and is refused.
 url http:@www.example.com -
 url http:/@www.example.com -
+
+# Not yet: host names of dots or punctuation are refused; the standard keeps them.
 url http://./ -
 url http://../ -
 url http://!"$&'()*+,-.;=_`{}~/ -
-url http: http://example.org/foo/bar

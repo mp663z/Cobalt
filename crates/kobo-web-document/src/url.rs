@@ -97,7 +97,9 @@ impl Url {
         let rest = rest.trim_start_matches(['/', '\\']);
         let authority_end = rest.find(['/', '\\', '?', '#']).unwrap_or(rest.len());
         let (authority, tail) = rest.split_at(authority_end);
-        let (host, port) = parse_authority(authority, scheme)?;
+        // Non-ASCII host names are not mapped to Punycode yet; encoded, they
+        // at least stay one inert name.
+        let (host, port) = parse_authority(&encode(authority, &[]), scheme)?;
         let (path, query, fragment) = split_tail(tail);
         Ok(Self {
             scheme,
@@ -115,8 +117,26 @@ impl Url {
     ///
     /// The reference names an unsupported scheme or is otherwise unusable.
     pub fn join(&self, reference: &str) -> Result<Self, UrlError> {
-        let reference = clean(reference)?;
-        if let Some((scheme, _)) = split_scheme(&reference) {
+        let reference = match clean(reference) {
+            // An empty reference is the page itself.
+            Err(UrlError::Empty) => return Ok(self.without_fragment()),
+            other => other?,
+        };
+        if let Some((scheme, rest)) = split_scheme(&reference) {
+            // `http:g` against an http page is relative, as is `http:/g`:
+            // only `http://` starts a new authority.
+            if scheme.eq_ignore_ascii_case(self.scheme.as_str())
+                && !rest.starts_with("//")
+                && !rest.starts_with("\\\\")
+                && !rest.starts_with("/\\")
+                && !rest.starts_with("\\/")
+            {
+                return if rest.is_empty() {
+                    Ok(self.without_fragment())
+                } else {
+                    self.join(rest)
+                };
+            }
             if scheme.eq_ignore_ascii_case(self.scheme.as_str())
                 || scheme.eq_ignore_ascii_case("https")
                 || scheme.eq_ignore_ascii_case("http")
@@ -236,6 +256,10 @@ impl fmt::Display for Url {
 }
 
 /// Trims what browsers trim and refuses what they would not fetch.
+///
+/// Leading and trailing controls and spaces go, and tabs and newlines inside
+/// are removed. Nothing is encoded yet: each part of the address has its own
+/// rule, applied once the parts are known.
 fn clean(input: &str) -> Result<String, UrlError> {
     let trimmed = input.trim_matches(|c: char| c <= ' ');
     if trimmed.is_empty() {
@@ -244,24 +268,34 @@ fn clean(input: &str) -> Result<String, UrlError> {
     if trimmed.len() > MAX_URL_LEN {
         return Err(UrlError::TooLong);
     }
-    // Tabs and newlines inside a URL are removed, not encoded.
-    let mut out = String::with_capacity(trimmed.len());
-    for c in trimmed.chars() {
-        match c {
-            '\t' | '\n' | '\r' => {}
-            ' ' => out.push_str("%20"),
-            c if c.is_control() => {}
-            c if c.is_ascii() => out.push(c),
-            c => {
-                let mut buffer = [0; 4];
-                for byte in c.encode_utf8(&mut buffer).bytes() {
-                    out.push_str(&format!("%{byte:02X}"));
-                }
+    Ok(trimmed
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
+        .collect())
+}
+
+/// Percent-encodes `text` as UTF-8: controls, everything outside ASCII, and
+/// the ASCII characters `also` names. Escapes already present are kept.
+fn encode(text: &str, also: &[char]) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_ascii() && !c.is_ascii_control() && !also.contains(&c) {
+            out.push(c);
+        } else {
+            let mut buffer = [0; 4];
+            for byte in c.encode_utf8(&mut buffer).bytes() {
+                out.push_str(&format!("%{byte:02X}"));
             }
         }
     }
-    Ok(out)
+    out
 }
+
+/// What the URL standard encodes in each part, beyond controls and
+/// non-ASCII.
+const FRAGMENT_SET: &[char] = &[' ', '"', '<', '>', '`'];
+const QUERY_SET: &[char] = &[' ', '"', '#', '<', '>', '\''];
+const PATH_SET: &[char] = &[' ', '"', '#', '<', '>', '?', '^', '`', '{', '}'];
 
 /// Splits `scheme:rest` when the prefix is a valid scheme.
 fn split_scheme(input: &str) -> Option<(&str, &str)> {
@@ -331,7 +365,11 @@ fn split_tail(tail: &str) -> (String, Option<String>, Option<String>) {
         Some((path, query)) => (path, Some(query.to_owned())),
         None => (rest, None),
     };
-    (path.replace('\\', "/"), query, fragment)
+    (
+        encode(&path.replace('\\', "/"), PATH_SET),
+        query.map(|query| encode(&query, QUERY_SET)),
+        fragment.map(|fragment| encode(&fragment, FRAGMENT_SET)),
+    )
 }
 
 /// Removes `.` and `..` segments (RFC 3986 section 5.2.4).
