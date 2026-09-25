@@ -1,0 +1,8 @@
+# Form URL encoding: upstream WPT commit 7efa3ab5de117cfd01ac23b65a7ab58d43397238
+# (same pin as crates/kobo-web-document/tests/wpt/include.txt), BSD-3-Clause.
+# Source: https://github.com/web-platform-tests/wpt/blob/7efa3ab5de117cfd01ac23b65a7ab58d43397238/html/semantics/forms/form-submission-0/urlencoded2.window.js
+# vendored source: urlencoded2.window.js; vendor-urlencoded.mjs extracts
+# 18 UTF-8 string cases as hex TSV so NUL/newlines survive fixture transport.
+# Excluded: File values, formdata-event duplicate run, Windows-1252 forms,
+# and lone surrogates. POST/body transport is not exposed to the app yet;
+# these cases assert the shared URL-encoded serializer and the GET target.

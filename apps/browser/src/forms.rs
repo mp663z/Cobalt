@@ -249,6 +249,33 @@ pub fn default_submit(form: &Form) -> Option<usize> {
         .position(|field| matches!(field, Field::Submit { .. }))
 }
 
+/// The UTF-8 form serializer. Normalize each newline to CRLF before
+/// percent-encoding; a pre-existing CRLF is one newline, not two. The
+/// application/x-www-form-urlencoded encode set leaves only ASCII alphanumerics
+/// and `*`, `-`, `.`, `_` unescaped. This differs from address search's
+/// unreserved encode set, where `~` stays literal.
+fn encode_form_component(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    let mut bytes = value.bytes().peekable();
+    while let Some(byte) = bytes.next() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => {
+                encoded.push(char::from(byte));
+            }
+            b' ' => encoded.push('+'),
+            b'\r' => {
+                if bytes.peek() == Some(&b'\n') {
+                    bytes.next();
+                }
+                encoded.push_str("%0D%0A");
+            }
+            b'\n' => encoded.push_str("%0D%0A"),
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
 /// Successful controls, in form order, as application/x-www-form-urlencoded.
 /// Submit buttons contribute only when the chosen button is known.
 pub fn body(form: &Form, submit: Option<usize>) -> Option<String> {
@@ -282,13 +309,11 @@ pub fn body(form: &Form, submit: Option<usize>) -> Option<String> {
             _ => None,
         };
         if let Some((name, value)) = value {
-            if !name.is_empty() {
-                pairs.push(format!(
-                    "{}={}",
-                    super::address::encode_query(name),
-                    super::address::encode_query(value)
-                ));
-            }
+            pairs.push(format!(
+                "{}={}",
+                encode_form_component(name),
+                encode_form_component(value)
+            ));
         }
     }
     Some(pairs.join("&"))
@@ -309,6 +334,97 @@ pub fn get_url(form: &Form, submit: Option<usize>) -> Option<kobo_web_document::
 mod tests {
     use super::*;
     use kobo_web_document::{Method, OptionValue, Url};
+
+    fn unhex(input: &str) -> String {
+        let bytes = input
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn wpt_urlencoded_utf8_string_entries() {
+        // Pinned WPT at apps/browser/tests/wpt/include.txt. The upstream
+        // POST harness compares a body; our GET form uses the same body bytes.
+        let source = include_str!("../tests/wpt/urlencoded2.tsv");
+        let mut checked = 0;
+        for line in source.lines().filter(|line| !line.starts_with('#')) {
+            let [description, name, value, expected] = line.split('\t').collect::<Vec<_>>()[..]
+            else {
+                panic!("bad WPT case {line:?}");
+            };
+            let (description, name, value, expected) = (
+                unhex(description),
+                unhex(name),
+                unhex(value),
+                unhex(expected),
+            );
+            let form = Form {
+                action: Url::parse("https://example.com/submit").unwrap(),
+                method: Method::Get,
+                urlencoded: true,
+                fields: vec![Field::Hidden { name, value }],
+            };
+            assert_eq!(
+                body(&form, None).as_deref(),
+                Some(expected.as_str()),
+                "{description}"
+            );
+            assert_eq!(
+                get_url(&form, None).unwrap().to_string(),
+                format!("https://example.com/submit?{expected}"),
+                "{description}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 18, "the pinned WPT subset changed");
+    }
+
+    #[test]
+    fn empty_name_and_repeated_names_keep_form_order() {
+        let form = Form {
+            action: Url::parse("https://example.com/find?previous=1#section").unwrap(),
+            method: Method::Get,
+            urlencoded: true,
+            fields: vec![
+                Field::Hidden {
+                    name: String::new(),
+                    value: "empty name".into(),
+                },
+                Field::Text {
+                    name: "tag".into(),
+                    value: "one".into(),
+                    label: "First".into(),
+                    search: false,
+                },
+                Field::Text {
+                    name: "tag".into(),
+                    value: "two".into(),
+                    label: "Second".into(),
+                    search: false,
+                },
+                Field::Submit {
+                    name: None,
+                    value: "Go".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            body(&form, default_submit(&form)).unwrap(),
+            "=empty+name&tag=one&tag=two"
+        );
+        assert_eq!(
+            get_url(&form, default_submit(&form)).unwrap().to_string(),
+            "https://example.com/find?=empty+name&tag=one&tag=two"
+        );
+    }
+
+    #[test]
+    fn form_space_and_tilde_are_distinct_from_address_search_encoding() {
+        assert_eq!(encode_form_component("a b*~!"), "a+b*%7E%21");
+    }
 
     #[test]
     fn get_replaces_existing_query_and_encodes_unicode_and_successful_controls() {
