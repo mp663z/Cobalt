@@ -1,8 +1,11 @@
 # Cobalt Browse: plan and task list
 
-Level A reader browser for Cobalt. HTML goes into a bounded semantic Document IR,
-the IR is paginated with kobo-ui metrics, and the runtime's refresh planner draws it.
-No JavaScript, no author CSS in the first release, no scrolling.
+Original Level A reader browser for Cobalt: HTML enters a bounded semantic Document IR,
+which kobo-ui paginates and draws. The original target had no JavaScript, no author CSS
+and no scrolling. On September 25 the owner raised the target to "at least the beta
+Nickel Kobo browser" and explicitly requested CSS parsing. The reader build remains
+real, but it is NOT yet Nickel-equivalent. The extension below is a proposed
+re-baseline, not a claim that the user has approved a particular engine or tradeoff.
 
 Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
@@ -108,6 +111,90 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 - [ ] M6.1 Clara BW, an older single-core Kobo, a larger display, a colour model
 - [ ] M6.2 20-page session, rapid Back/Forward, suspend during fetch, network loss during image load, termination, low storage, exit to Cobalt, stock reader restoration, frame timing and residue
 - [ ] M6.3 Device RSS, first paint and page-turn timing against M0 budgets
+
+## Re-baseline proposal: beta Nickel browser bar (September 25, 2026)
+
+The owner now wants CSS parsing and at least beta Nickel browser capability. Kobo's
+beta-feature page confirms that the browser exists on current readers but does not
+specify behavior: https://help.kobo.com/hc/en-us/articles/360017763733-About-Beta-Features .
+A June 2026 Libra Colour hands-on probe reports older WebKit (UA 538.1), working
+JavaScript-dependent editing and localStorage, but no fetch/XHR and no CSS
+Flexbox/Grid: https://robertcedwards.com/posts/eink-notepad-kobo/ . This is one
+model/firmware, not a universal specification. An older Touch review reports
+CSS layout and scripting features but describes a different engine/version:
+https://broken-links.com/2012/07/27/browser-review-kobo-touch/ . Reports of
+localStorage conflict across models/years:
+https://github.com/kobolabs/Kobo-Reader/issues/59 . Use physical-device probes,
+not a WebKit version or anecdotes alone, as the acceptance oracle.
+
+- [ ] N0. Measure the target. On available current Kobo firmware and an older
+  supported model, probe UA, HTML/CSS selector and layout features, media
+  queries, scripting (DOM events, `contentEditable`, localStorage), native
+  form GET/POST, cookies, downloads, redirects, scrolling/zoom, history and
+  offline errors. Keep the probe pages, screenshots, results and firmware IDs.
+  An inaccessible device stays an explicit qualification gap, not a pass.
+- [ ] N1. Add a safe CSS parser and style model, not just token scanning.
+  Measure parser/selector dependency cost on armv7 and add its license before
+  adopting one. Support bounded inline `<style>`, `style` attributes and
+  linked stylesheets through runtime fetch (explicit cross-origin policy,
+  MIME/size/request-count limits). Parse selectors `type`, `.class`, `#id`, descendant/child and
+  grouped selectors; cascade specificity, source order, inheritance and a
+  bounded `!important`, with conservative unsupported-declaration fallback.
+  Sanitize `url()`, `@import`, visited-link disclosure and external fonts;
+  no background asset fetch until separately bounded and tested.
+- [ ] N2. Reader-first CSS rendering subset: `display:none`, block/inline,
+  headings/strong/emphasis, font size/weight/style, text alignment and
+  decoration, line height, whitespace, margins/padding, simple borders,
+  foreground/background colours mapped to panel grey or colour. Retain
+  readable contrast and minimum tap targets. Check what Document IR and
+  kobo-ui can actually express; do not claim `display:flex`, grid, float,
+  absolute positioning, arbitrary box geometry, transitions or pixel fidelity
+  from this subset. Preserve a readable unstyled mode and reader view.
+- [ ] N3. Browser-critical network protocol: return final URL, status,
+  content type/charset and selected bounded response headers; add a scoped
+  request-body/method path for POST and a per-origin cookie jar with explicit
+  persistence/clear policy. Version protocol/runtime/app/simulator together,
+  restrict redirect credential/header forwarding, and test against local HTTPS
+  fixtures. This is a release-review decision, not an unreviewed protocol edit.
+- [ ] N4. Basic browser interaction parity: textarea/multiline editing,
+  missing ordinary form controls, submitter semantics, POST review and send,
+  sign-in/session behavior, images without declared dimensions, address-field
+  quick keys, navigable viewport/zoom and an explicit downloads policy.
+  Verify per feature against the Nickel probes, not a broad "browser" claim.
+- [ ] N5. Engine feasibility gate for *actual* Nickel-level interactive
+  pages. Spike an embedded web engine/JS path separately: armv7 static-musl
+  build, stripped binary/RSS, Cobalt sandbox/network/credential boundaries,
+  offscreen e-ink framebuffer, touch and keyboard, startup/page latency, and
+  security update burden. Servo has an embed API but generic Linux support
+  does not establish this target's viability: https://servo.org/ . If no
+  bounded engine is viable, present the measured capability gap and ask the
+  owner to approve a lower reader-plus-CSS target instead of calling it parity.
+- [ ] N6. Qualification: CSS/JS/form WPT subsets as applicable, real-site
+  screenshots against Nickel on each target profile, security fixtures for
+  hostile CSS and network content, simulator regressions and actual hardware
+  memory/refresh/suspend/20-page journeys. Add no new CI workflow yet.
+
+**Execution order:** Measure N0, then run the N5 engine spike before committing
+to a custom box-layout/JS implementation; N3 is needed whichever rendering
+track wins. If the embedded engine fails the measured device/sandbox budget,
+N1-N2 remain a valuable styled-reader track, but not an honest parity claim.
+
+**Acceptance language:** The existing M1-M5 document-reader work is a base,
+not completed Nickel parity. N1-N2 alone make styled documents more useful
+but do not meet the observed JavaScript/editing bar. M6 hardware work expands
+into N0/N6. Keep M2.3/M2.5 and M5.2/M5.3 open until N3; keep the known
+legacy-encoding limit unless a separately measured dependency decision changes
+it. Do not open a PR without the owner's OK.
+
+**Decisions now framed against the new bar:** (1) Whether to authorize the
+cross-component N3 protocol change, strongly recommended for meaningful
+forms/session/redirect behavior; (2) default search provider and truthful
+user agent, now selected against live-site compatibility rather than a guess;
+(3) how to resolve the kobo-ui release-review source pin (test 64 currently
+red). In addition, the Nickel-parity request itself needs the N5 engine
+feasibility result before choosing full interactive parity versus a named
+reader-plus-CSS compromise. No dependency, protocol or PR authorization is
+implied by recording this proposal.
 
 ## Testing infrastructure (cross-cutting)
 
