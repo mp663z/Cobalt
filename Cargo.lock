@@ -906,6 +906,7 @@ dependencies = [
  "kobo-browser-core",
  "kobo-image",
  "kobo-net",
+ "kobo-profile",
  "kobo-sdk",
  "kobo-text",
  "kobo-ui",

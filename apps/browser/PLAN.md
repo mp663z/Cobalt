@@ -83,8 +83,8 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
 ## M4: real-world compatibility corpus
 
-- [ ] M4.1 Saved, minimized fixtures with provenance: Wikipedia, Rust docs, Hacker News, lightweight blogs, docs sites, search results, bad pages
-- [ ] M4.2 Expected title, visible text, link order, page counts per fixture per profile
+- [x] M4.1 Saved, minimized fixtures with provenance: Wikipedia, Rust docs, Hacker News, lightweight blogs, docs sites, search results, bad pages (8 in `tests/corpus`, sources and licences in `SOURCES.md`; `minimize.py` is checked to leave the reading unchanged; Hacker News left out for licence; bad pages: cut short, Windows-1252)
+- [x] M4.2 Expected title, visible text, link order, page counts per fixture per profile (`tests/corpus/expected`, `BLESS_CORPUS=1` rewrites; page counts on 3 distinct screens x 3 text sizes, release builds only since the long article takes minutes unoptimised)
 - [ ] M4.3 WPT subsets: URL parsing, HTML tree construction (if html5ever), encoding, entities, base URL; `tests/wpt/include.txt` and `expected-failures.txt`
 - [ ] M4.4 Differential test vs html5ever (and optionally Chromium) on host for visible text and link order
 - [ ] M4.5 Reader mode (main-content extraction) for article pages

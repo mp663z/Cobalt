@@ -15,6 +15,7 @@ kobo-web-layout = { path = "../../crates/kobo-web-layout" }
 
 [dev-dependencies]
 kobo-net = { path = "../../crates/kobo-net" }
+kobo-profile = { path = "../../crates/kobo-profile" }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 kobo-text = { path = "../../crates/kobo-text" }
 kobo-ui = { path = "../../crates/kobo-ui" }

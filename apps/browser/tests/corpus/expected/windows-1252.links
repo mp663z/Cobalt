@@ -1,0 +1,84 @@
+Python logo	https://www.python.org/
+Table of Contents	https://docs.python.org/3/contents.html
+3. An Informal Introduction to Python	https://docs.python.org/3/tutorial/introduction.html#
+3.1. Using Python as a Calculator	https://docs.python.org/3/tutorial/introduction.html#using-python-as-a-calculator
+3.1.1. Numbers	https://docs.python.org/3/tutorial/introduction.html#numbers
+3.1.2. Text	https://docs.python.org/3/tutorial/introduction.html#text
+3.1.3. Lists	https://docs.python.org/3/tutorial/introduction.html#lists
+3.2. First Steps Towards Programming	https://docs.python.org/3/tutorial/introduction.html#first-steps-towards-programming
+2. Using the Python Interpreter	https://docs.python.org/3/tutorial/interpreter.html
+4. More Control Flow Tools	https://docs.python.org/3/tutorial/controlflow.html
+Report a bug	https://docs.python.org/3/bugs.html
+Improve this page	https://docs.python.org/3/improve-page-nojs.html
+Show source	https://github.com/python/cpython/blob/3.14/Doc/tutorial/introduction.rst?plain=1
+index	https://docs.python.org/3/genindex.html
+modules	https://docs.python.org/3/py-modindex.html
+next	https://docs.python.org/3/tutorial/controlflow.html
+previous	https://docs.python.org/3/tutorial/interpreter.html
+Python	https://www.python.org/
+3.14.7 Documentation	https://docs.python.org/3/index.html
+The Python Tutorial	https://docs.python.org/3/tutorial/index.html
+¶	https://docs.python.org/3/tutorial/introduction.html#an-informal-introduction-to-python
+>>>	https://docs.python.org/3/glossary.html#term-0
+…	https://docs.python.org/3/glossary.html#term-...
+¶	https://docs.python.org/3/tutorial/introduction.html#using-python-as-a-calculator
+¶	https://docs.python.org/3/tutorial/introduction.html#numbers
+int	https://docs.python.org/3/builtins/functions.html#int
+float	https://docs.python.org/3/builtins/functions.html#float
+floor division	https://docs.python.org/3/glossary.html#term-floor-division
+[1]	https://docs.python.org/3/tutorial/introduction.html#id3
+int	https://docs.python.org/3/builtins/functions.html#int
+float	https://docs.python.org/3/builtins/functions.html#float
+Decimal	https://docs.python.org/3/library/decimal.html#decimal.Decimal
+Fraction	https://docs.python.org/3/library/fractions.html#fractions.Fraction
+complex numbers	https://docs.python.org/3/builtins/stdtypes.html#typesnumeric
+¶	https://docs.python.org/3/tutorial/introduction.html#text
+str	https://docs.python.org/3/builtins/stdtypes.html#str
+[2]	https://docs.python.org/3/tutorial/introduction.html#id4
+print()	https://docs.python.org/3/builtins/functions.html#print
+the FAQ entry	https://docs.python.org/3/faq/programming.html#faq-programming-raw-string-backslash
+immutable	https://docs.python.org/3/glossary.html#term-immutable
+len()	https://docs.python.org/3/builtins/functions.html#len
+Text Sequence Type — str	https://docs.python.org/3/builtins/stdtypes.html#textseq
+String Methods	https://docs.python.org/3/builtins/stdtypes.html#string-methods
+f-strings	https://docs.python.org/3/reference/lexical_analysis.html#f-strings
+Format string syntax	https://docs.python.org/3/library/string.html#formatstrings
+str.format()	https://docs.python.org/3/builtins/stdtypes.html#str.format
+printf-style String Formatting	https://docs.python.org/3/builtins/stdtypes.html#old-string-formatting
+¶	https://docs.python.org/3/tutorial/introduction.html#lists
+sequence	https://docs.python.org/3/glossary.html#term-sequence
+immutable	https://docs.python.org/3/glossary.html#term-immutable
+mutable	https://docs.python.org/3/glossary.html#term-mutable
+list.append()	https://docs.python.org/3/builtins/stdtypes.html#list.append
+shallow copy	https://docs.python.org/3/library/copy.html#shallow-vs-deep-copy
+len()	https://docs.python.org/3/builtins/functions.html#len
+¶	https://docs.python.org/3/tutorial/introduction.html#first-steps-towards-programming
+Fibonacci series	https://en.wikipedia.org/wiki/Fibonacci_sequence
+while	https://docs.python.org/3/reference/compound_stmts.html#while
+print()	https://docs.python.org/3/builtins/functions.html#print
+1	https://docs.python.org/3/tutorial/introduction.html#id1
+2	https://docs.python.org/3/tutorial/introduction.html#id2
+Table of Contents	https://docs.python.org/3/contents.html
+3. An Informal Introduction to Python	https://docs.python.org/3/tutorial/introduction.html#
+3.1. Using Python as a Calculator	https://docs.python.org/3/tutorial/introduction.html#using-python-as-a-calculator
+3.1.1. Numbers	https://docs.python.org/3/tutorial/introduction.html#numbers
+3.1.2. Text	https://docs.python.org/3/tutorial/introduction.html#text
+3.1.3. Lists	https://docs.python.org/3/tutorial/introduction.html#lists
+3.2. First Steps Towards Programming	https://docs.python.org/3/tutorial/introduction.html#first-steps-towards-programming
+2. Using the Python Interpreter	https://docs.python.org/3/tutorial/interpreter.html
+4. More Control Flow Tools	https://docs.python.org/3/tutorial/controlflow.html
+Report a bug	https://docs.python.org/3/bugs.html
+Improve this page	https://docs.python.org/3/improve-page-nojs.html
+Show source	https://github.com/python/cpython/blob/3.14/Doc/tutorial/introduction.rst?plain=1
+index	https://docs.python.org/3/genindex.html
+modules	https://docs.python.org/3/py-modindex.html
+next	https://docs.python.org/3/tutorial/controlflow.html
+previous	https://docs.python.org/3/tutorial/interpreter.html
+Python	https://www.python.org/
+3.14.7 Documentation	https://docs.python.org/3/index.html
+The Python Tutorial	https://docs.python.org/3/tutorial/index.html
+Copyright	https://docs.python.org/3/copyright.html
+History and License	https://docs.python.org/license.html
+Please donate.	https://www.python.org/psf/donations/
+Found a bug	https://docs.python.org/bugs.html
+Sphinx	https://www.sphinx-doc.org/

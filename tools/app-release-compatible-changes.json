@@ -358,12 +358,12 @@
   },
   {
    "protocol_version": 15,
-   "reason": "Add the kobo-json workspace member, the kobo-zstory structural inspector wiring, and the kobo-music-host, kobo-vault-host and host-only kobo-cli to kobo-comic dependency edges for companion CLIs. The same regeneration records the version-bumped stanzas of the apps that publish with their own changes in this release. Host tooling only otherwise: no package identity a published Store app resolves moved, and no app crate that is not itself publishing gains a dependency. The kobo-web-document workspace member for the browser adds html5ever 0.39 and its markup5ever, tendril, string_cache and phf 0.13 stack; no app crate depends on it. Resolving phf 0.13 beside 0.11.3 makes Cargo name the 0.11.3 edges of phf, phf_generator, phf_macros and ratex-font by version, which rewrites those stanzas without moving any resolved version. The kobo-web-layout and kobo-browser-core members and the new browser app add only workspace edges; the browser app publishes with its own first release.",
+   "reason": "Add the kobo-json workspace member, the kobo-zstory structural inspector wiring, and the kobo-music-host, kobo-vault-host and host-only kobo-cli to kobo-comic dependency edges for companion CLIs. The same regeneration records the version-bumped stanzas of the apps that publish with their own changes in this release. Host tooling only otherwise: no package identity a published Store app resolves moved, and no app crate that is not itself publishing gains a dependency. The kobo-web-document workspace member for the browser adds html5ever 0.39 and its markup5ever, tendril, string_cache and phf 0.13 stack; no app crate depends on it. Resolving phf 0.13 beside 0.11.3 makes Cargo name the 0.11.3 edges of phf, phf_generator, phf_macros and ratex-font by version, which rewrites those stanzas without moving any resolved version. The kobo-web-layout and kobo-browser-core members and the new browser app add only workspace edges; the browser app publishes with its own first release. The browser app's test-only use of kobo-profile adds one more workspace edge.",
    "files": [
     {
      "path": "Cargo.lock",
      "base_blob": "222f7b330431a22b5ec2a8071d0e7e55f36ec4a4",
-     "compatible_blob": "a99d4f26e17fb0e6007cf84dafaa84211368d0b0"
+     "compatible_blob": "e277f1733a41cbedb57322d77978feb00487642d"
     }
    ]
   },

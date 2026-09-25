@@ -999,6 +999,8 @@ fn plain_page(body: &[u8]) -> String {
     html
 }
 
+#[cfg(test)]
+mod corpus_tests;
 #[cfg(all(test, debug_assertions))]
 mod fixture_tests;
 #[cfg(test)]
