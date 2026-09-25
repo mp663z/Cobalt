@@ -52,3 +52,39 @@ url http:/@www.example.com -
 # By design: a trailing dot is dropped from a host name, so a host of dots alone is empty.
 url http://./ -
 url http://../ -
+
+# By design: the tree keeps attribute local names only, so an xlink: or xml:
+# attribute in SVG or MathML prints without its namespace. Nothing reads it.
+tree tests9.dat#24
+tree tests9.dat#25
+tree tests9.dat#26
+tree tests9.dat#27
+tree tests10.dat#23
+tree tests10.dat#24
+tree tests10.dat#25
+tree tests10.dat#26
+tree webkit02.dat#23
+tree webkit02.dat#24
+
+# By design: an element keeps at most 32 attributes; these have 58.
+tree tests11.dat#1
+tree tests11.dat#2
+tree tests11.dat#3
+tree tests11.dat#4
+
+# Not yet: html5ever 0.39 predates these rules of the current standard
+# (annotation-xml as an HTML integration point for XHTML and NUL, frameset
+# after template, form inside a template's table, selectedcontent).
+tree plain-text-unsafe.dat#37
+tree template.dat#44
+tree template.dat#45
+tree template.dat#46
+tree template.dat#117
+tree tests20.dat#55
+tree tests20.dat#56
+tree tests20.dat#57
+tree tests20.dat#58
+tree webkit02.dat#45
+tree webkit02.dat#46
+tree webkit02.dat#47
+tree webkit02.dat#48

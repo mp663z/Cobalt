@@ -9,6 +9,8 @@
 mod convert;
 mod dom;
 mod host;
+#[cfg(test)]
+mod tree_tests;
 pub mod url;
 
 use html5ever::tendril::TendrilSink;

@@ -30,3 +30,11 @@ encoding/index-windows-1252.txt
 # script in a browser, so they are restated here rather than copied.
 # test: tests/wpt_base.rs
 html/semantics/document-metadata/the-base-element (restated)
+
+# HTML tree construction: the html5lib .dat files, now kept in WPT (MIT
+# licence, html5lib contributors), at the commit above. Run through
+# dom::Sink by src/tree_tests.rs. Left out: scripted_*.dat (need a script
+# engine) and the fragment-only files foreign-fragment.dat and
+# tests_innerHTML_1.dat; fragment and #script-on cases in other files are
+# skipped by the test.
+html/syntax/parsing/resources/*.dat
