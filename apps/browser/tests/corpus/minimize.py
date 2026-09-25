@@ -17,7 +17,9 @@ KEEP = {"href", "src", "alt", "title", "id", "name", "width", "height",
         "action", "method", "for", "hidden", "charset", "content",
         "http-equiv", "start", "reversed", "headers", "scope", "rel", "style",
         "data-src", "srcset", "sizes", "loading", "summary", "label",
-        "selected", "checked", "placeholder", "size", "maxlength", "align"}
+        "selected", "checked", "placeholder", "size", "maxlength", "align",
+        "open", "disabled", "readonly", "multiple", "required", "datetime",
+        "cite", "abbr", "inert", "translate", "accesskey", "tabindex"}
 
 def attrs(match):
     name, rest = match.group(1), match.group(2)
