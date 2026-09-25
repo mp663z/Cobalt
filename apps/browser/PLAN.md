@@ -180,21 +180,75 @@ not a WebKit version or anecdotes alone, as the acceptance oracle.
   quick keys, navigable viewport/zoom and an explicit downloads policy.
   Verify per feature against the Nickel probes, not a broad "browser" claim.
 - [ ] N5. Engine feasibility gate for *actual* Nickel-level interactive
-  pages. Spike an embedded web engine/JS path separately: armv7 static-musl
-  build, stripped binary/RSS, Cobalt sandbox/network/credential boundaries,
-  offscreen e-ink framebuffer, touch and keyboard, startup/page latency, and
-  security update burden. Servo has an embed API but generic Linux support
-  does not establish this target's viability: https://servo.org/ . If no
-  bounded engine is viable, present the measured capability gap and ask the
-  owner to approve a lower reader-plus-CSS target instead of calling it parity.
+  pages. Compare two isolated prototypes before selecting a renderer, with
+  device measurements and an explicit architecture review:
+
+  | Path | Plausible gain | Unproved cost or blocker |
+  | --- | --- | --- |
+  | **Device Qt WebKit** in a separately supervised, firmware-native helper | Reuses the engine Nickel actually loads for HTML/CSS, DOM, JavaScript and forms; no ~20 MB WebKit ELF bundled if the installed firmware supplies it. Likely the shortest route to the *observed* beta-browser bar, not modern-web parity. | Cobalt's apps are static musl binaries in a chroot exposing only `/app` and `/runtime.sock`; `nickel` is a dynamically linked, vendor-Qt program. A glibc/Qt C++ helper would need a new tightly scoped launch/runtime model, validated loader and dependencies, framebuffer/input handoff or a bounded offscreen rendering bridge, crash recovery and network/credential isolation. Existing Cobalt app sandbox rules cannot silently be relaxed to let an untrusted engine open device nodes or sockets. |
+  | **Modern embedded engine** (Servo or another demonstrably portable option) | May cover newer CSS/JS/web APIs than Nickel. | Build and port for this exact armv7 Linux target; unsupported assumptions about static-musl, graphic backend, e-ink input and fonts, architecture-specific JS/JIT, TLS and sandboxing. Bundle size, load time, PSS/RSS and ongoing patch burden are unknown until measured. Servo's general WebView description alone proves none of these: https://servo.org/ . |
+
+  Firmware inspection establishes that official Clara BW N365/P365 4.46.23836
+  packages carry identical SHA-256
+  `5d97e31bd81af10dbe6390b9439146acc922b29dd230387d5156c4232ea1775a`
+  for the 19,941,528-byte ARM WebKit ELF. Nia/Clara 2E 4.38.23684 carry
+  identical SHA-256
+  `cb030032404adc9e09c554b53aa003ce2484111d101aac8371fdd833dfbaa485`:
+  same size, **different hash across firmware waves**. These are four
+  inspected packages, not eight or nine targets or an ABI guarantee. A
+  `libQt5WebKit.so.5` symlink ultimately points into a legacy-named Qt path;
+  the path's version string is not proof of the actual Qt/WebKit source version.
+  Before support, inventory exact ELF SONAME, interpreter, needed libraries,
+  GLIBC/GLIBCXX and Qt symbols, loader/plugin paths and signatures/hashes per
+  model and firmware branch; confirm on-device behavior and fail closed on
+  unsupported or mismatched libraries. Never overwrite, shadow or redistribute
+  vendor libraries as a shortcut. This is an exception to the static-musl and
+  no-device-library rule in `.cargo/config.toml`, requiring explicit review.
+
+  Budget both paths against `BUDGETS.md` (the current stripped browser budget
+  is +5 MiB over the simple app; peak RSS budget +32 MiB). Device reuse avoids
+  *bundling* the 19.9 MB engine file, not its loaded memory. Capture idle
+  Cobalt and Nickel, browser-active and 20-page session `/proc/*/smaps_rollup`
+  PSS/RSS (including helper, Qt dependencies, runtime and browser), peak
+  allocations, startup/first paint, page turns, suspend/restart and low-memory
+  recovery on low-end and colour devices. Do not compare a disk ELF against
+  RSS or ordinary-session process use. With a helper, measure pixel or bounded
+  tile transport, touch and keyboard focus, e-ink refresh, exclusive-display
+  ownership and clean return to Nickel. Add origin-isolated cookies/storage,
+  web-to-native IPC validation, URL/navigation limits and a clear policy on
+  whether requests go through runtime N3 or a separately confined Qt stack;
+  do not give WebKit direct unchecked access to Cobalt secrets or unrestricted
+  network. Old WebKit may meet Nickel's beta bar but has a greater unsupported
+  sites and web-content security burden than a maintained modern engine.
+
+  Licensing is a review gate, not a dynamic-linking slogan. Qt's own LGPL
+  guidance describes obligations for notices, source, replacement/relinking and
+  distribution: https://www.qt.io/development/open-source-lgpl-obligations .
+  Qt 5.6 also inventories separately licensed WebKit components:
+  https://doc.qt.io/archives/qt-5.6/licensing.html . Establish the *actual*
+  Kobo binary's applicable licenses, corresponding source and third-party
+  notices, whether the library is only used from the owner's already-installed
+  firmware or is distributed, and how Cobalt's signed distribution/updates
+  affect replacement rights. Seek legal review before release. Kobo Qt app and
+  platform-plugin projects show native GUI ports, but use separate Qt runtimes,
+  not proven safe linking to Nickel's system WebKit:
+  https://github.com/Szybet/nickel-qt-apps/blob/main/README.md and
+  https://github.com/Rain92/qt5-kobo-platform-plugin .
+
+  Gate the choice on an isolated *read-only* ABI/load probe, then a guarded
+  physical-device prototype with stock-reader recovery and a matched Nickel
+  feature/page test suite from N0. Only then choose Qt helper, modern embed,
+  or a clearly named reader-plus-CSS target. Neither path is shipped or
+  declared feasible by this comparison.
 - [ ] N6. Qualification: CSS/JS/form WPT subsets as applicable, real-site
   screenshots against Nickel on each target profile, security fixtures for
   hostile CSS and network content, simulator regressions and actual hardware
   memory/refresh/suspend/20-page journeys. Add no new CI workflow yet.
 
 **Execution order:** Measure N0, then run the N5 engine spike before committing
-to a custom box-layout/JS implementation; N3 is needed whichever rendering
-track wins. If the embedded engine fails the measured device/sandbox budget,
+to a custom box-layout/JS implementation; network/credential policy is needed
+whichever renderer wins, though the exact N3 API may differ for a guarded
+engine helper. If both engine paths fail the measured device/sandbox budget,
 N1-N2 remain a valuable styled-reader track, but not an honest parity claim.
 
 **Acceptance language:** The existing M1-M5 document-reader work is a base,
