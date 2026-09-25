@@ -1,0 +1,11 @@
+# Web Platform Tests taken into this crate, and from which upstream commit.
+# WPT is under the 3-Clause BSD License, copyright web-platform-tests
+# contributors: https://github.com/web-platform-tests/wpt/blob/master/LICENSE.md
+#
+# upstream: https://github.com/web-platform-tests/wpt
+# commit: 7efa3ab5de117cfd01ac23b65a7ab58d43397238 (fetched 2026-09-25)
+
+# URL parsing. Cases whose base and result are both http or https, or that
+# must fail. Other schemes are refused by this browser and are left out.
+# url/cases.tsv is made by url/vendor.py; test: tests/wpt_url.rs
+url/resources/urltestdata.json
