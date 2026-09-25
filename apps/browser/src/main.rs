@@ -15,7 +15,7 @@ use kobo_sdk::{
     StoreResult, Task, TaskError, TaskId, TaskOutcome,
 };
 use kobo_web_document::{parse_document, Document, Limits, Url};
-use kobo_web_layout::{link_action, page_screen, picture_handle, pieces, Paginator, Piece};
+use kobo_web_layout::{link_action, page_screen_with, picture_handle, pieces, Paginator, Piece};
 
 mod pictures;
 mod saved;
@@ -59,6 +59,9 @@ struct Loaded {
     page: usize,
     /// Pieces put before the document's own: the saved-copy note.
     lead: usize,
+    note: Option<String>,
+    /// The whole page, set aside while `document` is its reader view.
+    full: Option<Document>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -392,15 +395,7 @@ impl Browser {
             // so a copy reopened further in still says what it is.
             title = format!("Saved: {title}");
         }
-        let (mut pieces, mut anchors) = pieces(&document);
-        let lead = usize::from(note.is_some());
-        if let Some(note) = note {
-            pieces.insert(0, Piece::Note(note));
-            for (_, at) in &mut anchors {
-                *at += 1;
-            }
-        }
-        let paginator = Paginator::new(pieces, anchors);
+        let (paginator, lead) = paginator_for(&document, note.as_deref());
         let (restore, place) = self
             .history
             .current()
@@ -412,6 +407,8 @@ impl Browser {
             paginator,
             page: 0,
             lead,
+            note,
+            full: None,
         });
         let page = match (url.fragment(), place) {
             (_, Some(place)) if restore > 0 => {
@@ -523,6 +520,41 @@ impl Browser {
         }
     }
 
+    /// Swaps between the whole page and its reader view. The reader view
+    /// starts at its top; leaving it returns to where the whole page was.
+    fn toggle_reader(&mut self, context: &mut Context) {
+        let Some(loaded) = self.loaded.as_mut() else {
+            return;
+        };
+        let (document, full, page) = if let Some(full) = loaded.full.take() {
+            let page = self.history.current().map_or(0, |entry| entry.page);
+            (full, None, page)
+        } else {
+            let Some(view) = loaded.document.reader_view() else {
+                return;
+            };
+            (view, Some(std::mem::take(&mut loaded.document)), 0)
+        };
+        let note = if full.is_some() {
+            None
+        } else {
+            loaded.note.as_deref()
+        };
+        let (paginator, lead) = paginator_for(&document, note);
+        loaded.document = document;
+        loaded.full = full;
+        loaded.paginator = paginator;
+        loaded.lead = lead;
+        loaded.page = 0;
+        if let Some(task) = self.pager.take() {
+            context.cancel(task);
+        }
+        for key in self.pictures.clear(context) {
+            self.saved.stop_reading(&key);
+        }
+        self.turn_to(context, page);
+    }
+
     fn turn_to(&mut self, context: &mut Context, page: usize) {
         self.make_pages(context, page);
         if self.pager.is_none() {
@@ -531,11 +563,15 @@ impl Browser {
         if let Some(loaded) = self.loaded.as_mut() {
             let last = loaded.paginator.pages().len().saturating_sub(1);
             loaded.page = page.min(last);
-            let place = loaded
-                .paginator
-                .place_of(loaded.page)
-                .map(|place| place.saturating_sub(loaded.lead));
-            self.history.set_position(loaded.page, place);
+            // History keeps the place in the whole page, which is what
+            // reopens; a reader view is always entered from there.
+            if loaded.full.is_none() {
+                let place = loaded
+                    .paginator
+                    .place_of(loaded.page)
+                    .map(|place| place.saturating_sub(loaded.lead));
+                self.history.set_position(loaded.page, place);
+            }
         }
         self.fetch_pictures(context);
     }
@@ -672,7 +708,7 @@ impl Browser {
                     pages.len(),
                 )
             }
-            (_, Some(loaded)) => page_screen(
+            (_, Some(loaded)) => page_screen_with(
                 &loaded.title,
                 self.current_pieces(),
                 loaded.page,
@@ -681,6 +717,11 @@ impl Browser {
                     .paginator
                     .done()
                     .then(|| loaded.paginator.pages().len()),
+                if loaded.full.is_some() {
+                    Some(true)
+                } else {
+                    loaded.document.has_reader_view().then_some(false)
+                },
             ),
             (_, None) => ScreenBuilder::new("browser-empty")
                 .top_bar("Browse")
@@ -769,6 +810,8 @@ impl KoboApp for Browser {
             return;
         } else if action == action_id("links") {
             self.view = View::Links(0);
+        } else if action == action_id("reader") {
+            self.toggle_reader(context);
         } else if action == action_id("links-next") || action == action_id("links-previous") {
             if let View::Links(page) = self.view {
                 self.view = View::Links(if action == action_id("links-next") {
@@ -1015,3 +1058,17 @@ mod corpus_tests;
 mod fixture_tests;
 #[cfg(test)]
 mod image_tests;
+
+/// Pages `document`, with the saved-copy note first when there is one.
+/// Returns the paginator and how many pieces come before the document's own.
+fn paginator_for(document: &Document, note: Option<&str>) -> (Paginator, usize) {
+    let (mut pieces, mut anchors) = pieces(document);
+    let lead = usize::from(note.is_some());
+    if let Some(note) = note {
+        pieces.insert(0, Piece::Note(note.to_owned()));
+        for (_, at) in &mut anchors {
+            *at += 1;
+        }
+    }
+    (Paginator::new(pieces, anchors), lead)
+}

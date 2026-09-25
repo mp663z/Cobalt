@@ -195,6 +195,10 @@ pub struct Document {
     /// navigation: the first heading or paragraph in `<main>` or
     /// `role="main"`, else the target of a "skip to content" link.
     pub main: Option<String>,
+    /// Positions in `blocks` of the page's own content, with the site's
+    /// navigation, sidebars and page furniture left out. Empty when the page
+    /// gives no sign of where its content is.
+    pub reader: Vec<usize>,
 }
 
 /// The anchor given to the start of the main content when its first block
@@ -202,6 +206,36 @@ pub struct Document {
 pub const MAIN_ANCHOR: &str = " main";
 
 impl Document {
+    /// Whether [`Document::reader_view`] would leave anything out.
+    #[must_use]
+    pub fn has_reader_view(&self) -> bool {
+        !self.reader.is_empty() && self.reader.len() < self.blocks.len()
+    }
+
+    /// The page with only its own content, for reading: the blocks named by
+    /// `reader`, starting at the top. `None` when the page gives no sign of
+    /// where its content is, or when nothing would be left out.
+    #[must_use]
+    pub fn reader_view(&self) -> Option<Document> {
+        if !self.has_reader_view() {
+            return None;
+        }
+        Some(Document {
+            title: self.title.clone(),
+            base: self.base.clone(),
+            blocks: self
+                .reader
+                .iter()
+                .map(|&i| self.blocks[i].clone())
+                .collect(),
+            links: self.links.clone(),
+            warnings: self.warnings.clone(),
+            parse_errors: self.parse_errors,
+            main: None,
+            reader: Vec::new(),
+        })
+    }
+
     /// Every image in reading order.
     #[must_use]
     pub fn images(&self) -> Vec<&ImageRef> {

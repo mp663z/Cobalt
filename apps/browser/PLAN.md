@@ -87,9 +87,10 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 - [x] M4.2 Expected title, visible text, link order, page counts per fixture per profile (`tests/corpus/expected`, `BLESS_CORPUS=1` rewrites; page counts on 3 distinct screens x 3 text sizes, release builds only since the long article takes minutes unoptimised)
 - [x] M4.3 WPT subsets: URL parsing, HTML tree construction (if html5ever), encoding, entities, base URL; `tests/wpt/include.txt` and `expected-failures.txt` (in `crates/kobo-web-document/tests/wpt`. URL: 506 http(s) cases, 465 pass, 39 refused on purpose, 2 gaps. Entities: all 2231 plus numeric repairs. Encoding: the Windows-1252 index; other legacy encodings not decoded. Base URL: restated cases, two bugs fixed. Tree construction: 1739 html5lib cases through our DOM sink, 1712 pass; 14 differ by design (attribute namespaces, 32-attribute cap), 13 are rules html5ever 0.39 and 0.40 do not have yet)
 - [x] M4.4 Differential test vs html5ever (and optionally Chromium) on host for visible text and link order (against Chrome, `tests/differential`, run by hand: every link on all 8 pages matches in order; words match except image descriptions, controls outside forms and literal `|`. It found links inside `<code>` being dropped and a minimiser bug, both fixed)
-- [ ] M4.5 Reader mode (main-content extraction) for article pages
-  - done: main content detected (`<main>`, role=main, else first heading after a skip link); new pages open on the page where it starts
-  - todo: a reader view that shows only the main content, starting at the top of a screen
+- [x] M4.5 Reader mode (main-content extraction) for article pages
+  - main content detected (`<main>`, role=main, else the skip-link target); new pages open on the page where it starts
+  - Reader in the bar shows only that content, from the top of a screen, without navigation, sidebars, site header and footer, or language lists; Whole page goes back to where the page was
+  - known gap: in-article chrome with no markup to tell it apart (Wikipedia's "Edit links", "[edit]") stays
 - [ ] M4.6 Section navigation (heading list), link list per page
 - Gate: stable text, link order, screenshots and page counts
 

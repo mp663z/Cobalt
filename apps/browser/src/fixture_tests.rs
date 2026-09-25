@@ -260,3 +260,38 @@ fn a_page_opens_where_its_main_content_starts() {
     assert_eq!(runner.app().loaded.as_ref().expect("loaded").page, 0);
     assert!(words(&runner).contains("Main menu") || words(&runner).contains("Jump to content"));
 }
+
+#[test]
+fn the_reader_view_keeps_the_article_and_goes_back_to_where_the_page_was() {
+    start_server();
+    let mut runner = visit("/wikipedia");
+    let text = |runner: &AppRunner<Browser>| {
+        let loaded = runner.app().loaded.as_ref().expect("loaded");
+        format!("{:?}", loaded.paginator.pages()[loaded.page])
+    };
+    let whole = runner.app().loaded.as_ref().expect("loaded").page;
+    let blocks = runner
+        .app()
+        .loaded
+        .as_ref()
+        .expect("loaded")
+        .document
+        .blocks
+        .len();
+
+    runner.action(action_id("reader"));
+    let loaded = runner.app().loaded.as_ref().expect("loaded");
+    assert_eq!(loaded.page, 0);
+    assert!(loaded.document.blocks.len() < blocks);
+    let first = text(&runner);
+    assert!(first.contains("E-reader"), "{first}");
+    for menu in ["Main menu", "Afrikaans", "Contents"] {
+        assert!(!first.contains(menu), "{menu} in the reader view: {first}");
+    }
+
+    runner.action(action_id("reader"));
+    let loaded = runner.app().loaded.as_ref().expect("loaded");
+    assert!(loaded.full.is_none());
+    assert_eq!(loaded.document.blocks.len(), blocks);
+    assert_eq!(loaded.page, whole);
+}

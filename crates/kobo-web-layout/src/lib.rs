@@ -194,8 +194,25 @@ pub fn fits(screen: &Screen, metrics: &DisplayMetrics) -> bool {
 /// where a change to one could quietly stop matching the other.
 #[must_use]
 pub fn page_screen(title: &str, pieces: &[Piece], page: usize, of: Option<usize>) -> ScreenBuilder {
-    let mut builder = ScreenBuilder::new("browser-page")
-        .top_bar(title)
+    page_screen_with(title, pieces, page, of, None)
+}
+
+/// [`page_screen`] with the reader view's switch in the bar: `Some(false)`
+/// offers the reader view, `Some(true)` the way back to the whole page, and
+/// `None` leaves it out for a page without one.
+#[must_use]
+pub fn page_screen_with(
+    title: &str,
+    pieces: &[Piece],
+    page: usize,
+    of: Option<usize>,
+    reader: Option<bool>,
+) -> ScreenBuilder {
+    let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
+    if let Some(reading) = reader {
+        builder = builder.top_bar_action("reader", if reading { "Whole page" } else { "Reader" });
+    }
+    builder = builder
         .top_bar_action("links", "Links")
         .reading(true)
         .page_turns("previous-page", "next-page")

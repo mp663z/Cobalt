@@ -2,7 +2,7 @@
 //!
 //! Each page in `tests/corpus` has its expected reading next to it in
 //! `tests/corpus/expected`: the title, where the main content starts, the
-//! visible text, every link in order, and how many pages it takes on each
+//! visible text, every link in order, what the reader view keeps, and how many pages it takes on each
 //! supported reader at each text size.
 //! Where the pages came from, and when, is in `tests/corpus/SOURCES.md`.
 //!
@@ -142,6 +142,19 @@ fn corpus_text_and_links_read_as_expected() {
             let _ = writeln!(links, "{}\t{}", link.text, link.target);
         }
         check(name, "links", &links, &mut failures);
+
+        let reader = document.reader_view().map_or_else(
+            || "no reader view\n".to_owned(),
+            |view| {
+                format!(
+                    "{} of {} blocks\n\n{}",
+                    view.blocks.len(),
+                    document.blocks.len(),
+                    view.visible_text()
+                )
+            },
+        );
+        check(name, "reader", &reader, &mut failures);
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

@@ -69,6 +69,22 @@ struct Converter<'a> {
     /// Inside a form the model carries as a [`Form`]: its labels and buttons
     /// are part of that form, not prose to repeat beside it.
     in_form: bool,
+    /// Inside the `<main>` element that `main` found.
+    in_main: bool,
+    /// How many site-furniture elements (navigation, sidebars, page
+    /// header and footer) enclose the current node.
+    chrome: usize,
+    /// How many list items or quotes enclose the current node: blocks made
+    /// inside one are not top-level.
+    nested: usize,
+    /// Where each top-level block came from, for the reader view.
+    marks: Vec<Mark>,
+}
+
+/// Where one top-level block came from.
+struct Mark {
+    in_main: bool,
+    chrome: bool,
 }
 
 /// Finding where the main content starts.
@@ -109,6 +125,10 @@ pub fn convert(
         title: None,
         main: Main::Looking,
         skip_target: None,
+        in_main: false,
+        chrome: 0,
+        nested: 0,
+        marks: Vec::new(),
     };
     converter.read_head(DOCUMENT, 0);
     converter.read_base();
@@ -126,6 +146,7 @@ pub fn convert(
             .warnings
             .push(Warning::UnsupportedLinks(converter.unsupported_links));
     }
+    let reader = reader_blocks(&converter.marks, &blocks, converter.skip_target.as_deref());
     converter.warnings.sort();
     converter.warnings.dedup();
     crate::Document {
@@ -139,7 +160,37 @@ pub fn convert(
             Main::Found(anchor) => Some(anchor),
             _ => converter.skip_target,
         },
+        reader,
     }
+}
+
+/// The top-level blocks that make up the page's own content: those in
+/// `<main>` when it has one, else everything from the "skip to content"
+/// target on. Site furniture is left out either way. Empty when the page
+/// gives no sign of where its content is.
+fn reader_blocks(marks: &[Mark], blocks: &[Block], skip_target: Option<&str>) -> Vec<usize> {
+    let start = if marks.iter().any(|mark| mark.in_main) {
+        None
+    } else {
+        let Some(target) = skip_target else {
+            return Vec::new();
+        };
+        let found = blocks.iter().position(|block| {
+            matches!(block,
+                Block::Heading { anchor: Some(a), .. } | Block::Paragraph { anchor: Some(a), .. }
+                    if a == target)
+        });
+        let Some(found) = found else {
+            return Vec::new();
+        };
+        Some(found)
+    };
+    marks
+        .iter()
+        .enumerate()
+        .filter(|(index, mark)| !mark.chrome && start.map_or(mark.in_main, |start| *index >= start))
+        .map(|(index, _)| index)
+        .collect()
 }
 
 impl Converter<'_> {
@@ -273,6 +324,12 @@ impl Converter<'_> {
             }
         }
         self.blocks_made += 1;
+        if self.nested == 0 {
+            self.marks.push(Mark {
+                in_main: self.in_main,
+                chrome: self.chrome > 0,
+            });
+        }
         blocks.push(block);
     }
 
@@ -304,8 +361,77 @@ impl Converter<'_> {
 
     /// One match over every block element the model knows, kept whole so
     /// the mapping from tag to block reads in one place.
-    #[allow(clippy::too_many_lines)]
     fn block(
+        &mut self,
+        handle: Handle,
+        depth: usize,
+        blocks: &mut Vec<Block>,
+        gather: &mut Gather,
+    ) {
+        let role = self.attr(handle, "role").unwrap_or("");
+        let tag = self.tag(handle).unwrap_or("");
+        let enters_main = self.main == Main::Looking && (tag == "main" || role == "main");
+        // A header or footer inside the content is the article's own, often
+        // holding its title; outside it, it is the site's.
+        let chrome = matches!(tag, "nav" | "aside")
+            || self.is_language_list(handle)
+            || matches!(role, "navigation" | "complementary")
+            || (!self.in_main
+                && !enters_main
+                && (matches!(tag, "header" | "footer")
+                    || matches!(role, "banner" | "contentinfo")));
+        if chrome {
+            self.chrome += 1;
+        }
+        if enters_main {
+            self.in_main = true;
+        }
+        self.block_content(handle, depth, blocks, gather);
+        if enters_main {
+            self.flush(blocks, gather);
+            self.in_main = false;
+        }
+        if chrome {
+            self.flush(blocks, gather);
+            self.chrome -= 1;
+        }
+    }
+
+    /// A list of the same page in other languages: every item a single
+    /// link marked with the language it leads to.
+    fn is_language_list(&self, handle: Handle) -> bool {
+        if !matches!(self.tag(handle), Some("ul" | "ol")) {
+            return false;
+        }
+        let mut items = 0;
+        for &child in &self.nodes[handle].children {
+            if matches!(self.nodes[child].data, Data::Text(_)) {
+                continue;
+            }
+            let mut links = Vec::new();
+            self.links_under(child, &mut links);
+            if self.tag(child) != Some("li")
+                || links.len() != 1
+                || self.attr(links[0], "lang").is_none()
+            {
+                return false;
+            }
+            items += 1;
+        }
+        items >= 3
+    }
+
+    fn links_under(&self, handle: Handle, out: &mut Vec<Handle>) {
+        for &child in &self.nodes[handle].children {
+            if self.tag(child) == Some("a") {
+                out.push(child);
+            }
+            self.links_under(child, out);
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn block_content(
         &mut self,
         handle: Handle,
         depth: usize,
@@ -379,6 +505,7 @@ impl Converter<'_> {
                     .and_then(|s| s.trim().parse().ok())
                     .unwrap_or(1);
                 let mut items = Vec::new();
+                self.nested += 1;
                 for index in 0..self.nodes[handle].children.len() {
                     let child = self.nodes[handle].children[index];
                     if matches!(self.nodes[child].data, Data::Text(_)) || self.hidden(child) {
@@ -396,6 +523,7 @@ impl Converter<'_> {
                         items.push(item);
                     }
                 }
+                self.nested -= 1;
                 if !items.is_empty() {
                     self.push_block(
                         blocks,
@@ -411,8 +539,10 @@ impl Converter<'_> {
                 self.flush(blocks, gather);
                 let mut inner = Vec::new();
                 let mut inner_gather = Gather::default();
+                self.nested += 1;
                 self.blocks_in(handle, depth, &mut inner, &mut inner_gather);
                 self.flush(&mut inner, &mut inner_gather);
+                self.nested -= 1;
                 if !inner.is_empty() {
                     self.push_block(blocks, Block::Quote(inner));
                 }
