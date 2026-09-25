@@ -129,6 +129,9 @@ pub struct Form {
     pub action: Url,
     pub method: Method,
     pub fields: Vec<Field>,
+    /// True when this form was declared as multipart or plain text and
+    /// therefore cannot be sent as URL-encoded data by this browser.
+    pub urlencoded: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -149,10 +152,32 @@ pub enum Field {
         name: String,
         value: String,
     },
+    /// A single selection, including a radio group. The chosen index is
+    /// absent for a radio group with nothing checked. `radio` distinguishes
+    /// an unselected group from a select with a default first option.
+    Select {
+        name: String,
+        label: String,
+        options: Vec<OptionValue>,
+        chosen: Option<usize>,
+        radio: bool,
+    },
+    Checkbox {
+        name: String,
+        value: String,
+        label: String,
+        checked: bool,
+    },
     Submit {
         name: Option<String>,
         value: String,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OptionValue {
+    pub value: String,
+    pub label: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

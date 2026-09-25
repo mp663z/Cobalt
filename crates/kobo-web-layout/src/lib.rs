@@ -621,6 +621,7 @@ impl Flattener {
 
 fn form_note(form: &Form) -> String {
     let label = form.fields.iter().find_map(|field| match field {
+        Field::Select { label, .. } | Field::Checkbox { label, .. } => Some(label.clone()),
         Field::Text { label, search, .. } if *search || !label.is_empty() => {
             Some(if label.is_empty() {
                 "Search".to_owned()

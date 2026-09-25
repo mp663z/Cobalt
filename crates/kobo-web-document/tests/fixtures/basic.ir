@@ -362,6 +362,7 @@ blocks:
                     value: "Go",
                 },
             ],
+            urlencoded: true,
         },
     ),
     Paragraph {

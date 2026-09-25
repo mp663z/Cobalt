@@ -173,3 +173,139 @@ fn every_link_in_the_model_is_referenced_once_in_reading_order() {
         );
     }
 }
+
+#[test]
+fn form_controls_keep_names_values_labels_and_defaults() {
+    use kobo_web_document::{Block, Field, Method};
+    let page = parse(
+        r#"<form action="/find" method="get">
+        <label for="q">Search terms</label><input id="q" type="search" name="q" value="ink">
+        <input type="hidden" name="source" value="reader">
+        <label for="size">Size</label><select id="size" name="size"><option value="s">Small</option><option value="l" selected>Large</option></select>
+        <label><input type="checkbox" name="available" checked>Available only</label>
+        <label><input type="radio" name="sort" value="new">Newest</label>
+        <label><input type="radio" name="sort" value="old" checked>Oldest</label>
+        <input type="submit" name="go" value="Find">
+    </form>"#,
+    );
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .expect("form");
+    assert_eq!(form.action.to_string(), "https://fixtures.example/find");
+    assert_eq!(form.method, Method::Get);
+    assert!(
+        matches!(&form.fields[0], Field::Text { name, value, label, search: true } if name == "q" && value == "ink" && label == "Search terms")
+    );
+    assert!(
+        matches!(&form.fields[1], Field::Hidden { name, value } if name == "source" && value == "reader")
+    );
+    assert!(
+        matches!(&form.fields[2], Field::Select { name, options, chosen: Some(1), .. } if name == "size" && options[1].value == "l" && options[1].label == "Large")
+    );
+    assert!(
+        matches!(&form.fields[3], Field::Checkbox { name, checked: true, label, .. } if name == "available" && label.contains("Available only"))
+    );
+    assert!(
+        matches!(&form.fields[4], Field::Select { name, options, chosen: Some(1), .. } if name == "sort" && options[0].value == "new" && options[1].label.contains("Oldest"))
+    );
+    assert!(
+        matches!(&form.fields[5], Field::Submit { name: Some(name), value } if name == "go" && value == "Find")
+    );
+}
+
+#[test]
+fn unsupported_and_disabled_form_controls_are_not_submitted() {
+    use kobo_web_document::{Block, Field};
+    let page = parse(
+        r#"<form method="post"><input name="a" disabled>
+        <select name="multi" multiple><option>A</option></select>
+        <input type="radio" name="choice" value="a"><input type="radio" name="choice" value="b">
+        <input type="checkbox" name="yes"><input type="password" name="password" value="secret">
+    </form>"#,
+    );
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .expect("form");
+    assert!(matches!(form.method, kobo_web_document::Method::Post));
+    assert_eq!(form.fields.len(), 2);
+    assert!(matches!(
+        &form.fields[0],
+        Field::Select { chosen: None, .. }
+    ));
+    assert!(matches!(
+        &form.fields[1],
+        Field::Checkbox { checked: false, .. }
+    ));
+}
+
+#[test]
+fn form_count_and_field_count_are_bounded() {
+    use kobo_web_document::Block;
+    let mut html = String::new();
+    for _ in 0..(Limits::DEFAULT.max_forms + 10) {
+        html.push_str("<form><input name=q><input name=submit type=submit>");
+        html.push_str(&"<input name=x>".repeat(100));
+        html.push_str("</form>");
+    }
+    let document = parse(&html);
+    let forms: Vec<_> = document
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(forms.len(), Limits::DEFAULT.max_forms);
+    assert!(forms.iter().all(|form| form.fields.len() <= 64));
+}
+
+#[test]
+fn radio_and_select_with_the_same_name_remain_separate_controls() {
+    use kobo_web_document::{Block, Field};
+    let page = parse(
+        r"<form><select name=option><option value=s>Small</option></select>
+        <input type=radio name=option value=a checked><input type=radio name=option value=b>
+    </form>",
+    );
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(form.fields.len(), 2);
+    assert!(
+        matches!(&form.fields[0], Field::Select { radio: false, options, .. } if options.len() == 1)
+    );
+    assert!(
+        matches!(&form.fields[1], Field::Select { radio: true, options, chosen: Some(0), .. } if options.len() == 2)
+    );
+}
+
+#[test]
+fn multipart_form_is_modelled_but_marked_as_not_urlencoded() {
+    use kobo_web_document::Block;
+    let page = parse(r#"<form enctype="multipart/form-data"><input name=q></form>"#);
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .unwrap();
+    assert!(!form.urlencoded);
+}

@@ -9,7 +9,8 @@ use html5ever::{local_name, ns};
 
 use crate::dom::{Data, Handle, Node, DOCUMENT};
 use crate::{
-    Block, Field, Form, ImageRef, Inline, Limits, Link, Method, Table, Url, UrlError, Warning,
+    Block, Field, Form, ImageRef, Inline, Limits, Link, Method, OptionValue, Table, Url, UrlError,
+    Warning,
 };
 
 /// Dropped with everything inside them.
@@ -69,6 +70,7 @@ struct Converter<'a> {
     /// Inside a form the model carries as a [`Form`]: its labels and buttons
     /// are part of that form, not prose to repeat beside it.
     in_form: bool,
+    forms: usize,
     /// Inside the `<main>` element that `main` found.
     in_main: bool,
     /// How many site-furniture elements (navigation, sidebars, page
@@ -122,6 +124,7 @@ pub fn convert(
         warnings,
         pending_anchor: None,
         in_form: false,
+        forms: 0,
         title: None,
         main: Main::Looking,
         skip_target: None,
@@ -590,7 +593,10 @@ impl Converter<'_> {
                 self.in_form = outer;
                 self.flush(blocks, gather);
                 if let Some(form) = form {
-                    self.push_block(blocks, Block::Form(form));
+                    if self.forms < self.limits.max_forms {
+                        self.forms += 1;
+                        self.push_block(blocks, Block::Form(form));
+                    }
                 }
             }
             "br" => gather.inlines.push(Inline::LineBreak),
@@ -942,6 +948,110 @@ impl Converter<'_> {
         false
     }
 
+    fn field_label(&self, form: Handle, field: Handle, fallback: &str) -> String {
+        let written = self.label_for(form, field);
+        self.attr(field, "aria-label")
+            .or(written.as_deref())
+            .or_else(|| self.attr(field, "placeholder"))
+            .or_else(|| self.attr(field, "title"))
+            .unwrap_or(fallback)
+            .to_owned()
+    }
+
+    fn option_text(&self, handle: Handle) -> String {
+        let mut out = String::new();
+        let mut stack = vec![handle];
+        while let Some(node) = stack.pop() {
+            match &self.nodes[node].data {
+                Data::Text(text) => out.push_str(text),
+                _ => stack.extend(self.nodes[node].children.iter().rev().copied()),
+            }
+        }
+        out
+    }
+
+    fn select_field(&self, form: Handle, node: Handle) -> Option<Field> {
+        if self.attr(node, "multiple").is_some() {
+            return None;
+        }
+        let name = self.attr(node, "name")?.to_owned();
+        if name.len() > 128 {
+            return None;
+        }
+        let label = self.field_label(form, node, &name);
+        let mut options = Vec::new();
+        let mut chosen = None;
+        let mut nodes = vec![node];
+        while let Some(option) = nodes.pop() {
+            if self.tag(option) == Some("option") {
+                if self.attr(option, "disabled").is_none() && options.len() < 32 {
+                    let text = collapse_keep_edges(&self.option_text(option));
+                    let label = text.trim().to_owned();
+                    let value = self
+                        .attr(option, "value")
+                        .map_or_else(|| label.clone(), str::to_owned);
+                    if label.len() > 512 || value.len() > 512 {
+                        continue;
+                    }
+                    if self.attr(option, "selected").is_some() {
+                        chosen = Some(options.len());
+                    }
+                    options.push(OptionValue { value, label });
+                }
+            } else {
+                nodes.extend(self.nodes[option].children.iter().rev().copied());
+            }
+        }
+        if options.is_empty() {
+            return None;
+        }
+        Some(Field::Select {
+            name,
+            label,
+            options,
+            chosen: Some(chosen.unwrap_or(0)),
+            radio: false,
+        })
+    }
+
+    fn radio_field(
+        &self,
+        form: Handle,
+        node: Handle,
+        name: String,
+        value: String,
+        fields: &mut Vec<Field>,
+    ) {
+        let label = self.field_label(form, node, &name);
+        let value = if value.is_empty() {
+            "on".to_owned()
+        } else {
+            value
+        };
+        if let Some(Field::Select {
+            options, chosen, ..
+        }) = fields
+            .iter_mut()
+            .find(|f| matches!(f, Field::Select { name: n, radio: true, .. } if n == &name))
+        {
+            if options.len() < 32 {
+                if self.attr(node, "checked").is_some() {
+                    *chosen = Some(options.len());
+                }
+                options.push(OptionValue { value, label });
+            }
+        } else {
+            let checked = self.attr(node, "checked").is_some();
+            fields.push(Field::Select {
+                label: name.clone(),
+                name,
+                options: vec![OptionValue { value, label }],
+                chosen: checked.then_some(0),
+                radio: true,
+            });
+        }
+    }
+
     fn form(&mut self, handle: Handle) -> Option<Form> {
         let action = self.attr(handle, "action").unwrap_or("");
         let action = if action.trim().is_empty() {
@@ -960,6 +1070,20 @@ impl Converter<'_> {
         let mut fields = Vec::new();
         let mut stack = vec![handle];
         while let Some(node) = stack.pop() {
+            if fields.len() >= 64 {
+                break;
+            }
+            if self.attr(node, "disabled").is_some()
+                || (node != handle && self.tag(node) == Some("form"))
+            {
+                continue;
+            }
+            if self.tag(node) == Some("select") {
+                if let Some(field) = self.select_field(handle, node) {
+                    fields.push(field);
+                }
+                continue;
+            }
             if self.tag(node) == Some("input") {
                 let kind = self
                     .attr(node, "type")
@@ -967,16 +1091,12 @@ impl Converter<'_> {
                     .to_ascii_lowercase();
                 let name = self.attr(node, "name").map(str::to_owned);
                 let value = self.attr(node, "value").unwrap_or("").to_owned();
+                if name.as_ref().is_some_and(|n| n.len() > 128) || value.len() > 512 {
+                    continue;
+                }
                 match (kind.as_str(), name) {
                     ("text" | "search" | "email" | "url" | "tel" | "number", Some(name)) => {
-                        let written = self.label_for(handle, node);
-                        let label = self
-                            .attr(node, "aria-label")
-                            .or(written.as_deref())
-                            .or_else(|| self.attr(node, "placeholder"))
-                            .or_else(|| self.attr(node, "title"))
-                            .unwrap_or(&name)
-                            .to_owned();
+                        let label = self.field_label(handle, node, &name);
                         fields.push(Field::Text {
                             name,
                             value,
@@ -985,6 +1105,19 @@ impl Converter<'_> {
                         });
                     }
                     ("hidden", Some(name)) => fields.push(Field::Hidden { name, value }),
+                    ("checkbox", Some(name)) => fields.push(Field::Checkbox {
+                        label: self.field_label(handle, node, &name),
+                        name,
+                        value: if value.is_empty() {
+                            "on".to_owned()
+                        } else {
+                            value
+                        },
+                        checked: self.attr(node, "checked").is_some(),
+                    }),
+                    ("radio", Some(name)) => {
+                        self.radio_field(handle, node, name, value, &mut fields);
+                    }
                     ("submit", name) => fields.push(Field::Submit {
                         name,
                         value: if value.is_empty() {
@@ -998,11 +1131,19 @@ impl Converter<'_> {
             }
             stack.extend(self.nodes[node].children.iter().rev().copied());
         }
-        let has_text = fields.iter().any(|f| matches!(f, Field::Text { .. }));
-        has_text.then_some(Form {
+        let has_control = fields.iter().any(|f| {
+            matches!(
+                f,
+                Field::Text { .. } | Field::Select { .. } | Field::Checkbox { .. }
+            )
+        });
+        has_control.then_some(Form {
             action,
             method,
             fields,
+            urlencoded: self.attr(handle, "enctype").is_none_or(|type_| {
+                type_.eq_ignore_ascii_case("application/x-www-form-urlencoded")
+            }),
         })
     }
 }
