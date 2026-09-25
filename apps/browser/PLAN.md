@@ -91,7 +91,7 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
   - main content detected (`<main>`, role=main, else the skip-link target); new pages open on the page where it starts
   - Reader in the bar shows only that content, from the top of a screen, without navigation, sidebars, site header and footer, or language lists; Whole page goes back to where the page was
   - known gap: in-article chrome with no markup to tell it apart (Wikipedia's "Edit links", "[edit]") stays
-- [ ] M4.6 Section navigation (heading list), link list per page
+- [x] M4.6 Section navigation (heading list), link list per page (Sections lists headings in the active whole or reader view and jumps to their paginated place; the reader view uses a Navigate chooser to keep both lists reachable within the two-action bar limit; Links lists only the current screen, including links in headings and tables; app and Wikipedia fixture tests, simulator screenshots across three profiles)
 - Gate: stable text, link order, screenshots and page counts
 
 ## M5: forms and sessions

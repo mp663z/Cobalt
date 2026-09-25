@@ -1,6 +1,7 @@
 use super::*;
 use kobo_sdk::{AppRunner, Chrome, DiagnosticSeverity};
 use kobo_ui::TextScale;
+use std::fmt::Write;
 
 fn runner(text_scale: TextScale) -> AppRunner<Browser> {
     kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
@@ -95,6 +96,93 @@ fn the_links_list_follows_links_too() {
     runner.action(many);
     assert_eq!(runner.app().view, View::Page);
     assert_eq!(title(&runner), "A page of many links");
+}
+
+#[test]
+fn sections_jump_to_headings_and_return_to_page() {
+    for scale in [TextScale::Default, TextScale::ExtraLarge] {
+        let mut runner = runner(scale);
+        let article = link_to(&runner, "Notes on reading");
+        runner.action(article);
+        let headings = headings(runner.app().loaded.as_ref().unwrap());
+        assert!(headings.len() >= 2);
+        runner.action(action_id("sections"));
+        assert_eq!(runner.app().view, View::Sections(0));
+        let (place, _, label) = headings.last().unwrap();
+        runner.action(action_id(&section_action(*place)));
+        assert_eq!(runner.app().view, View::Page);
+        let loaded = runner.app().loaded.as_ref().unwrap();
+        assert!(loaded.paginator.pages()[loaded.page]
+            .iter()
+            .any(|piece| matches!(piece, Piece::Heading { text, .. } if text == label)));
+        runner.action(action_id("sections"));
+        runner.action(action_id("back"));
+        assert_eq!(runner.app().view, View::Page);
+        assert_eq!(title(&runner), "Notes on reading from paper screens");
+    }
+}
+
+#[test]
+fn a_long_sections_list_fits_and_pages_on_a_small_screen() {
+    let mut runner = runner(TextScale::ExtraLarge);
+    runner.action(link_to(&runner, "example.com"));
+    let mut html = "<title>Many headings</title>".to_owned();
+    for i in 0..80 {
+        write!(html, "<h2>Part {i}</h2><p>A sentence for part {i}.</p>").unwrap();
+    }
+    runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Completed(html.into_bytes()),
+    );
+    let headings = headings(runner.app().loaded.as_ref().unwrap());
+    let pages = sections_pages(&headings, &runner.context().metrics());
+    assert!(pages.len() > 1);
+    assert_eq!(
+        pages.iter().flatten().cloned().collect::<Vec<_>>(),
+        headings
+    );
+    runner.action(action_id("sections"));
+    for page in 0..pages.len() {
+        assert_eq!(runner.app().view, View::Sections(page));
+        let issues: Vec<_> = runner
+            .app()
+            .screen(&runner.context().metrics())
+            .build()
+            .diagnostics(&runner.context().metrics(), &Chrome::measuring(true))
+            .issues
+            .into_iter()
+            .filter(|issue| issue.severity == DiagnosticSeverity::Error)
+            .collect();
+        assert!(issues.is_empty(), "sections page {page}: {issues:?}");
+        runner.page_turn(true);
+    }
+}
+
+#[test]
+fn links_list_does_not_offer_links_from_other_pages() {
+    let mut runner = runner(TextScale::ExtraLarge);
+    runner.action(link_to(&runner, "example.com"));
+    let mut html = "<title>Long links</title>".to_owned();
+    for i in 0..120 {
+        write!(html, r#"<p><a href="/item/{i}">Item {i}</a> A sentence around the link, with plenty of room for words.</p>"#).unwrap();
+    }
+    runner.task_outcome(
+        pending_task(&runner),
+        TaskOutcome::Completed(html.into_bytes()),
+    );
+    let total = runner.app().loaded.as_ref().unwrap().document.links.len();
+    let here = runner.app().page_links();
+    assert!(!here.is_empty());
+    assert!(here.len() < total);
+    runner.action(action_id("links"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    let pages = links_pages(loaded, &here, &runner.context().metrics());
+    assert_eq!(pages.iter().flatten().copied().collect::<Vec<_>>(), here);
+    let absent = (0..total).find(|index| !here.contains(index)).unwrap();
+    assert!(runner
+        .app()
+        .link_named(action_id(&link_action(absent)))
+        .is_none());
 }
 
 fn pending_task(runner: &AppRunner<Browser>) -> TaskId {
@@ -288,7 +376,7 @@ fn every_screen_fits_the_clara_at_every_text_size() {
 }
 
 #[test]
-fn the_links_list_for_a_page_of_many_links_fits_and_offers_every_link() {
+fn the_links_list_for_a_page_of_many_links_fits_and_offers_this_page() {
     for scale in [TextScale::Default, TextScale::ExtraLarge] {
         let metrics = DisplayMetrics {
             text_scale: scale,
@@ -302,14 +390,13 @@ fn the_links_list_for_a_page_of_many_links_fits_and_offers_every_link() {
         let pages = links_pages(loaded, &runner.app().page_links(), &metrics);
         assert!(
             pages.len() > 1,
-            "{scale:?}: expected the list to need paging"
+            "{scale:?}: expected the page links to need paging"
         );
-        let mut offered: Vec<usize> = pages.iter().flatten().copied().collect();
-        offered.sort_unstable();
-        assert_eq!(
-            offered,
-            (0..loaded.document.links.len()).collect::<Vec<_>>()
-        );
+        let offered: Vec<usize> = pages.iter().flatten().copied().collect();
+        assert_eq!(offered, runner.app().page_links());
+        assert!(offered
+            .iter()
+            .all(|&index| index < loaded.document.links.len()));
         for page in 0..pages.len() {
             assert_eq!(runner.app().view, View::Links(page));
             let issues: Vec<_> = runner

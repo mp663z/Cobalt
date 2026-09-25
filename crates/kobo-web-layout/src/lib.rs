@@ -211,9 +211,13 @@ pub fn page_screen_with(
     let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
     if let Some(reading) = reader {
         builder = builder.top_bar_action("reader", if reading { "Whole page" } else { "Reader" });
+        builder = builder.top_bar_action("navigate", "Navigate");
+    } else {
+        builder = builder
+            .top_bar_action("sections", "Sections")
+            .top_bar_action("links", "Links");
     }
     builder = builder
-        .top_bar_action("links", "Links")
         .reading(true)
         .page_turns("previous-page", "next-page")
         .action_bar([

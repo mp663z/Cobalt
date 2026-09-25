@@ -295,3 +295,33 @@ fn the_reader_view_keeps_the_article_and_goes_back_to_where_the_page_was() {
     assert_eq!(loaded.document.blocks.len(), blocks);
     assert_eq!(loaded.page, whole);
 }
+
+#[test]
+fn reader_sections_and_links_only_name_content_in_that_view() {
+    start_server();
+    let mut runner = visit("/wikipedia");
+    runner.action(action_id("reader"));
+    let headings = headings(runner.app().loaded.as_ref().unwrap());
+    assert!(headings.iter().any(|(_, _, title)| title == "E-reader"));
+    assert!(!headings.iter().any(|(_, _, title)| title == "Main menu"));
+    let visible = runner.app().page_links();
+    let total = runner.app().loaded.as_ref().unwrap().document.links.len();
+    assert!(visible.len() < total);
+    runner.action(action_id("navigate"));
+    assert_eq!(runner.app().view, View::Navigate);
+    runner.action(action_id("links"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    let pages = links_pages(loaded, &visible, &runner.context().metrics());
+    assert_eq!(pages.iter().flatten().copied().collect::<Vec<_>>(), visible);
+    runner.action(action_id("return"));
+    runner.action(action_id("navigate"));
+    runner.action(action_id("sections"));
+    let target = headings
+        .iter()
+        .find(|(_, _, title)| title == "E-reader")
+        .unwrap()
+        .0;
+    runner.action(action_id(&section_action(target)));
+    assert_eq!(runner.app().view, View::Page);
+    assert!(runner.app().loaded.as_ref().unwrap().full.is_some());
+}

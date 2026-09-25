@@ -69,6 +69,10 @@ enum View {
     Page,
     /// The Links list, at this screen of it.
     Links(usize),
+    /// The heading list, at this screen of it.
+    Sections(usize),
+    /// The navigation choices where the reader switch uses a bar slot.
+    Navigate,
     /// A page on its way.
     Loading(Url),
     /// A page that did not arrive.
@@ -650,6 +654,25 @@ impl Browser {
         links
     }
 
+    fn select_section(&mut self, context: &mut Context, action: ActionId) {
+        if action == action_id("return") {
+            self.view = View::Page;
+            return;
+        }
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        let selected = headings(loaded)
+            .into_iter()
+            .find(|(place, _, _)| action_id(&section_action(*place)) == action);
+        if let Some((place, _, _)) = selected {
+            if let Some(page) = self.place_page(context, place) {
+                self.view = View::Page;
+                self.turn_to(context, page);
+            }
+        }
+    }
+
     fn show(&self, context: &mut Context) {
         context.set_screen(self.screen(&context.metrics()).build());
     }
@@ -697,13 +720,31 @@ impl Browser {
                 }
             }
             (View::Links(page), Some(loaded)) => {
-                let here = self.page_links();
-                let pages = links_pages(loaded, &here, metrics);
+                let links = self.page_links();
+                let pages = links_pages(loaded, &links, metrics);
                 let page = (*page).min(pages.len().saturating_sub(1));
                 links_screen(
                     loaded,
                     pages.get(page).map_or(&[], Vec::as_slice),
-                    here.len(),
+                    links.len(),
+                    page,
+                    pages.len(),
+                )
+            }
+            (View::Navigate, Some(_)) => ScreenBuilder::new("browser-navigate")
+                .top_bar("Navigate")
+                .top_bar_action("return", "Done")
+                .rows([
+                    ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
+                    ("links", "Links", "Links on this page", Glyph::Bookmark),
+                ]),
+            (View::Sections(page), Some(loaded)) => {
+                let headings = headings(loaded);
+                let pages = sections_pages(&headings, metrics);
+                let page = (*page).min(pages.len().saturating_sub(1));
+                sections_screen(
+                    pages.get(page).map_or(&[], Vec::as_slice),
+                    headings.len(),
                     page,
                     pages.len(),
                 )
@@ -732,7 +773,7 @@ impl Browser {
     fn link_named(&self, action: ActionId) -> Option<usize> {
         let loaded = self.loaded.as_ref()?;
         let candidates: Vec<usize> = match self.view {
-            View::Links(_) => (0..loaded.document.links.len()).collect(),
+            View::Links(_) => self.page_links(),
             _ => self
                 .current_pieces()
                 .iter()
@@ -798,6 +839,13 @@ impl KoboApp for Browser {
             if let Some(url) = self.retry.take() {
                 self.fetch(context, &url, None);
             }
+        } else if action == action_id("back")
+            && matches!(
+                self.view,
+                View::Links(_) | View::Sections(_) | View::Navigate
+            )
+        {
+            self.view = View::Page;
         } else if action == action_id("back") {
             self.stepped_from = Some(self.history.position());
             let go = self.history.back();
@@ -808,8 +856,12 @@ impl KoboApp for Browser {
             let go = self.history.forward();
             self.carry_out(context, go);
             return;
+        } else if action == action_id("navigate") {
+            self.view = View::Navigate;
         } else if action == action_id("links") {
             self.view = View::Links(0);
+        } else if action == action_id("sections") {
+            self.view = View::Sections(0);
         } else if action == action_id("reader") {
             self.toggle_reader(context);
         } else if action == action_id("links-next") || action == action_id("links-previous") {
@@ -820,6 +872,16 @@ impl KoboApp for Browser {
                     page.saturating_sub(1)
                 });
             }
+        } else if action == action_id("sections-next") || action == action_id("sections-previous") {
+            if let View::Sections(page) = self.view {
+                self.view = View::Sections(if action == action_id("sections-next") {
+                    page.saturating_add(1)
+                } else {
+                    page.saturating_sub(1)
+                });
+            }
+        } else if matches!(self.view, View::Sections(_)) {
+            self.select_section(context, action);
         } else if action == action_id("return") {
             self.view = View::Page;
         } else if let Some(index) = self.link_named(action) {
@@ -924,6 +986,8 @@ impl KoboApp for Browser {
         let name = match (&self.view, forward) {
             (View::Links(_), true) => "links-next",
             (View::Links(_), false) => "links-previous",
+            (View::Sections(_), true) => "sections-next",
+            (View::Sections(_), false) => "sections-previous",
             (_, true) => "next-page",
             (_, false) => "previous-page",
         };
@@ -931,27 +995,67 @@ impl KoboApp for Browser {
     }
 }
 
-/// One screen of the Links list: `entries` are link indices, `here` how
-/// many of the document's links are on the page being read.
-///
-/// The page's own links come first. A page of prose often has none, and a
-/// Links screen that only said so would send the reader paging to find one.
-fn links_screen(
-    loaded: &Loaded,
-    entries: &[usize],
-    here: usize,
+/// A heading's place in the paginator, depth, and visible title. Use the
+/// paginator's own pieces rather than document block indices: lists, quotes
+/// and the saved-copy note can change the positions of headings.
+fn headings(loaded: &Loaded) -> Vec<(usize, u8, String)> {
+    let (flat, _) = pieces(&loaded.document);
+    flat.into_iter()
+        .enumerate()
+        .filter_map(|(place, piece)| {
+            if let Piece::Heading { level, text, .. } = piece {
+                Some((place + loaded.lead, level, text))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn section_action(place: usize) -> String {
+    format!("section-{place}")
+}
+
+fn sections_screen(
+    entries: &[(usize, u8, String)],
+    total: usize,
     page: usize,
     of: usize,
 ) -> ScreenBuilder {
-    let total = loaded.document.links.len();
-    let summary = match here {
-        0 => format!("None on this page, {total} in the document."),
-        _ => format!("{here} on this page, {total} in the document. These come first."),
-    };
+    let builder = ScreenBuilder::new("browser-sections")
+        .top_bar("Sections")
+        .top_bar_action("return", "Done")
+        .secondary(format!("{total} sections in this view."))
+        .page_turns("sections-previous", "sections-next")
+        .page_position(
+            u16::try_from(page + 1).unwrap_or(u16::MAX),
+            u16::try_from(of.max(1)).unwrap_or(u16::MAX),
+        );
+    if total == 0 {
+        return builder.text("This page has no headings.");
+    }
+    builder.rows(entries.iter().map(|(place, level, title)| {
+        (
+            section_action(*place),
+            title.clone(),
+            format!("Level {level}"),
+            Glyph::Bookmark,
+        )
+    }))
+}
+
+/// Only the links on the screen being read, in reading order.
+fn links_screen(
+    loaded: &Loaded,
+    entries: &[usize],
+    total: usize,
+    page: usize,
+    of: usize,
+) -> ScreenBuilder {
     let builder = ScreenBuilder::new("browser-links")
         .top_bar("Links")
         .top_bar_action("return", "Done")
-        .secondary(summary)
+        .secondary(format!("{total} links on this page."))
         .page_turns("links-previous", "links-next")
         .page_position(
             u16::try_from(page + 1).unwrap_or(u16::MAX),
@@ -976,21 +1080,18 @@ fn links_screen(
     }))
 }
 
-/// Cuts the Links list into screens that fit, the page's own links first.
-fn links_pages(loaded: &Loaded, here: &[usize], metrics: &DisplayMetrics) -> Vec<Vec<usize>> {
-    let mut entries: Vec<usize> = here.to_vec();
-    entries.extend((0..loaded.document.links.len()).filter(|index| !here.contains(index)));
+fn fit_pages<T: Clone>(
+    entries: &[T],
+    metrics: &DisplayMetrics,
+    screen: impl Fn(&[T]) -> ScreenBuilder,
+) -> Vec<Vec<T>> {
     let mut pages = Vec::new();
-    let mut rest = entries.as_slice();
+    let mut rest = entries;
     while !rest.is_empty() {
         let fits = |count: usize| {
             count <= kobo_sdk::MAX_ROWS
-                && kobo_web_layout::fits(
-                    &links_screen(loaded, &rest[..count], here.len(), 998, 999).build(),
-                    metrics,
-                )
+                && kobo_web_layout::fits(&screen(&rest[..count]).build(), metrics)
         };
-        // Always at least one row, so a list too tall for one row still ends.
         let (mut good, mut bad) = (1, rest.len() + 1);
         while bad - good > 1 {
             let middle = good + (bad - good) / 2;
@@ -1004,6 +1105,21 @@ fn links_pages(loaded: &Loaded, here: &[usize], metrics: &DisplayMetrics) -> Vec
         rest = &rest[good..];
     }
     pages
+}
+
+fn links_pages(loaded: &Loaded, here: &[usize], metrics: &DisplayMetrics) -> Vec<Vec<usize>> {
+    fit_pages(here, metrics, |entries| {
+        links_screen(loaded, entries, here.len(), 998, 999)
+    })
+}
+
+fn sections_pages(
+    headings: &[(usize, u8, String)],
+    metrics: &DisplayMetrics,
+) -> Vec<Vec<(usize, u8, String)>> {
+    fit_pages(headings, metrics, |entries| {
+        sections_screen(entries, headings.len(), 998, 999)
+    })
 }
 
 fn main() -> ExitCode {
