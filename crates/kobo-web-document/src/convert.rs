@@ -96,6 +96,7 @@ pub fn convert(
         title: None,
     };
     converter.read_head(DOCUMENT, 0);
+    converter.read_base();
     let mut blocks = Vec::new();
     let mut gather = Gather::default();
     converter.blocks_in(DOCUMENT, 0, &mut blocks, &mut gather);
@@ -150,7 +151,26 @@ impl Converter<'_> {
         }
     }
 
-    /// Reads `<title>` and `<base href>` wherever the parser put them.
+    /// Takes the page's base address from the first `<base>` with an `href`,
+    /// wherever it is: in the head, or in the body where a careless page put
+    /// it. A later one does not count, and if the first cannot be used the
+    /// page's own address stays.
+    fn read_base(&mut self) {
+        let mut stack = vec![DOCUMENT];
+        while let Some(handle) = stack.pop() {
+            if self.tag(handle) == Some("base") {
+                if let Some(href) = self.attr(handle, "href") {
+                    if let Ok(base) = self.base.join(href) {
+                        self.base = base;
+                    }
+                    return;
+                }
+            }
+            stack.extend(self.nodes[handle].children.iter().rev());
+        }
+    }
+
+    /// Reads `<title>` wherever the parser put it.
     fn read_head(&mut self, handle: Handle, depth: usize) {
         if depth > 8 {
             return;
@@ -161,13 +181,6 @@ impl Converter<'_> {
                     let text = collapse(&self.text_of(child));
                     if !text.is_empty() {
                         self.title = Some(text);
-                    }
-                }
-                Some("base") => {
-                    if let Some(href) = self.attr(child, "href") {
-                        if let Ok(base) = self.base.join(href) {
-                            self.base = base;
-                        }
                     }
                 }
                 Some("head" | "html") => self.read_head(child, depth + 1),
