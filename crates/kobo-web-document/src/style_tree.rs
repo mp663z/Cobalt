@@ -365,6 +365,24 @@ mod tests {
     }
 
     #[test]
+    fn height_cascade_keeps_percentage_until_layout() {
+        let styled = tree("<style>p{height:50%;height:12px!important}</style><p style='height:75px'>A</p><p style='height:25% !important'>B</p><div style='height:1.5px'>C</div>", &[]);
+        let paragraphs: Vec<_> = styled.nodes.iter().filter(|n| n.tag == "p").collect();
+        assert_eq!(paragraphs[0].style.height, Length::Px(12));
+        assert_eq!(paragraphs[1].style.height, Length::Percent(2500));
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .height,
+            Length::Auto
+        );
+    }
+
+    #[test]
     fn external_and_inline_order_share_one_cascade() {
         let css = [b".item{display:none}".to_vec()];
         let visible = tree("<link rel=stylesheet href=/x><style>.item{display:block}</style><p class=item>Words</p>", &css);
