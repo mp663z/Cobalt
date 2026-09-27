@@ -234,23 +234,26 @@ impl HeightPass {
     }
 }
 
-/// A width-only pass. `None` means this box is not a normal-flow block;
-/// this is not a paintable rectangle (height, y position and line widths are
-/// still missing). The reader remains the only user-facing renderer.
+/// A width-only pass. `None` means an unknown width, not a paintable box.
+/// Height, y position, and line widths are still missing. The reader remains
+/// the only user-facing renderer.
 pub struct WidthPass {
     pub widths: Vec<Option<UsedBlockWidth>>,
+    /// Content-box x in viewport pixels, only on verified block paths.
+    pub content_x: Vec<Option<i64>>,
     pub unsupported: bool,
     pub truncated: bool,
 }
 
 impl WidthPass {
-    /// Compute content widths top-down using each block container's content
-    /// width. Inline boxes pass through the nearest block container; inline-
-    /// block needs shrink-to-fit and is explicitly unsupported here.
+    /// Compute block content widths top-down. Inline formatting does not
+    /// supply a known x; an inline-block needs shrink-to-fit and cuts off
+    /// its descendants' containing width as well.
     #[must_use]
     pub fn from_boxes(tree: &BoxTree, viewport_width: u32) -> Self {
         let mut result = Self {
             widths: vec![None; tree.boxes.len()],
+            content_x: vec![None; tree.boxes.len()],
             unsupported: tree.unsupported,
             truncated: tree.truncated,
         };
@@ -258,36 +261,41 @@ impl WidthPass {
             .roots
             .iter()
             .rev()
-            .map(|&root| (root, viewport_width))
+            .map(|&root| (root, Some(viewport_width), Some(0_i64)))
             .collect();
         let mut visited = 0_usize;
-        while let Some((index, containing)) = stack.pop() {
+        while let Some((index, containing, containing_x)) = stack.pop() {
             visited += 1;
             if visited > tree.boxes.len() {
                 result.truncated = true;
                 break;
             }
             let node = &tree.boxes[index];
-            let content = match node.kind {
+            let (content, x) = match node.kind {
                 BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock => {
-                    // Anonymous block boxes fill their containing block.
-                    let specified = if node.kind == BoxKind::AnonymousBlock {
-                        Length::Auto
-                    } else {
-                        node.style.width
-                    };
-                    let width = used_block_width(specified, containing);
-                    result.widths[index] = Some(width);
-                    width.content
+                    let width = containing.map(|base| {
+                        let specified = if node.kind == BoxKind::AnonymousBlock {
+                            Length::Auto
+                        } else {
+                            node.style.width
+                        };
+                        used_block_width(specified, base)
+                    });
+                    result.widths[index] = width;
+                    let x = containing_x.and_then(|parent_x| {
+                        width.and_then(|w| parent_x.checked_add(w.margin_left))
+                    });
+                    result.content_x[index] = x;
+                    (width.map(|w| w.content), x)
                 }
                 BoxKind::InlineBlock => {
                     result.unsupported = true;
-                    containing // preserve traversal, not a guessed used width
+                    (None, None)
                 }
-                BoxKind::Inline | BoxKind::Text => containing,
+                BoxKind::Inline | BoxKind::Text => (containing, None),
             };
             for &child in node.children.iter().rev() {
-                stack.push((child, content));
+                stack.push((child, content, x));
             }
         }
         result
@@ -605,6 +613,40 @@ mod tests {
         assert!(!used.unsupported);
         assert!(!used.truncated);
         assert_eq!(used.widths.len(), tree.boxes.len());
+    }
+
+    #[test]
+    fn width_position_is_known_only_on_block_paths() {
+        let tree = boxes("<div style='width:200px'><section style='width:50%'>One</section><span><div style='width:20px'>Two</div></span></div>");
+        let pass = WidthPass::from_boxes(&tree, 400);
+        let styled = parse_style_tree(b"<div style='width:200px'><section style='width:50%'>One</section><span><div style='width:20px'>Two</div></span></div>", &[], &Limits::DEFAULT);
+        let find = |tag: &str| {
+            tree.boxes
+                .iter()
+                .enumerate()
+                .find(|(_, b)| {
+                    b.source
+                        .is_some_and(|source| styled.nodes[source].tag == tag)
+                })
+                .map(|(index, _)| index)
+                .unwrap()
+        };
+        assert_eq!(pass.widths[find("section")].unwrap().content, 100);
+        assert_eq!(pass.content_x[find("section")], Some(0));
+        assert_eq!(pass.widths[find("div")].unwrap().content, 200);
+        let nested = tree
+            .boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                b.source
+                    .is_some_and(|source| styled.nodes[source].tag == "div")
+            })
+            .nth(1)
+            .unwrap()
+            .0;
+        assert_eq!(pass.widths[nested].unwrap().content, 20);
+        assert_eq!(pass.content_x[nested], None);
     }
 
     #[test]
