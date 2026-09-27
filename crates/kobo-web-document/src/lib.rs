@@ -7,6 +7,7 @@
 //! marked with a [`Warning`] saying what was left out.
 
 mod convert;
+mod css;
 mod dom;
 mod host;
 #[cfg(test)]
@@ -291,6 +292,17 @@ impl Document {
 /// Parses a page fetched from `url`.
 #[must_use]
 pub fn parse_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
+    parse_with_styles(bytes, url, limits, false)
+}
+
+/// Parse inline author stylesheets for the bounded CSS visibility subset.
+/// The unstyled entry point remains stable for reader and corpus expectations.
+#[must_use]
+pub fn parse_styled_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
+    parse_with_styles(bytes, url, limits, true)
+}
+
+fn parse_with_styles(bytes: &[u8], url: &Url, limits: &Limits, styled: bool) -> Document {
     let mut warnings = Vec::new();
     let input = if bytes.len() > limits.max_input_bytes {
         warnings.push(Warning::InputTruncated);
@@ -333,7 +345,12 @@ pub fn parse_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
     }
     let parse_errors = sink.errors.get();
     let nodes = sink.into_nodes();
-    let mut document = convert::convert(&nodes, url, limits, warnings);
+    let author_styles = if styled {
+        css::Styles::from_dom(&nodes)
+    } else {
+        css::Styles::default()
+    };
+    let mut document = convert::convert(&nodes, url, limits, warnings, author_styles);
     document.parse_errors = parse_errors;
     document
 }

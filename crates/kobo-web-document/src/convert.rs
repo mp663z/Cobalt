@@ -7,6 +7,7 @@
 
 use html5ever::{local_name, ns};
 
+use crate::css::Styles;
 use crate::dom::{Data, Handle, Node, DOCUMENT};
 use crate::{
     Block, Field, Form, ImageRef, Inline, Limits, Link, Method, OptionValue, Table, Url, UrlError,
@@ -53,6 +54,7 @@ const CONTAINERS: &[&str] = &[
 
 struct Converter<'a> {
     nodes: &'a [Node],
+    styles: Styles,
     base: Url,
     limits: &'a Limits,
     links: Vec<Link>,
@@ -111,9 +113,11 @@ pub fn convert(
     url: &Url,
     limits: &Limits,
     warnings: Vec<Warning>,
+    styles: Styles,
 ) -> crate::Document {
     let mut converter = Converter {
         nodes,
+        styles,
         base: url.clone(),
         limits,
         links: Vec::new(),
@@ -276,14 +280,15 @@ impl Converter<'_> {
         {
             return true;
         }
-        self.attr(handle, "style").is_some_and(|style| {
-            let style: String = style
-                .chars()
-                .filter(|c| !c.is_whitespace())
-                .collect::<String>()
-                .to_ascii_lowercase();
-            style.contains("display:none") || style.contains("visibility:hidden")
-        })
+        self.styles.hidden(self.nodes, handle)
+            || self.attr(handle, "style").is_some_and(|style| {
+                let compact: String = style
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .to_ascii_lowercase();
+                compact.contains("visibility:hidden")
+            })
     }
 
     /// All text under a node, without structure. Iterative, so depth is free.
