@@ -11,6 +11,7 @@ pub enum Property {
     Display,
     Color,
     Width,
+    Height,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28,6 +29,7 @@ pub enum Value {
     /// Opaque sRGB. Painting on a monochrome panel converts this later.
     Color(u32),
     Width(Length),
+    Height(Length),
     Inherit,
     Initial,
     Unset,
@@ -69,6 +71,7 @@ pub struct Computed {
     pub display: Display,
     pub color: u32,
     pub width: Length,
+    pub height: Length,
 }
 
 impl Computed {
@@ -76,6 +79,7 @@ impl Computed {
         display: Display::Inline,
         color: 0x00_00_00,
         width: Length::Auto,
+        height: Length::Auto,
     };
 
     #[must_use]
@@ -85,8 +89,14 @@ impl Computed {
             display: initial.display,
             color: parent.unwrap_or(initial).color,
             width: initial.width,
+            height: initial.height,
         };
-        for property in [Property::Display, Property::Color, Property::Width] {
+        for property in [
+            Property::Display,
+            Property::Color,
+            Property::Width,
+            Property::Height,
+        ] {
             let chosen = declarations
                 .iter()
                 .filter(|decl| decl.property == property)
@@ -101,6 +111,7 @@ impl Computed {
                 Property::Display => Value::Display(initial.display),
                 Property::Color => Value::Color(parent.unwrap_or(initial).color),
                 Property::Width => Value::Width(initial.width),
+                Property::Height => Value::Height(initial.height),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -118,6 +129,7 @@ impl Computed {
                 }
                 Value::Color(color) if property == Property::Color => computed.color = color,
                 Value::Width(width) if property == Property::Width => computed.width = width,
+                Value::Height(height) if property == Property::Height => computed.height = height,
                 _ => unreachable!("resolved property value has the wrong type"),
             }
         }
@@ -148,17 +160,19 @@ fn resolve(
         Property::Display => Value::Display(initial.display),
         Property::Color => Value::Color(initial.color),
         Property::Width => Value::Width(initial.width),
+        Property::Height => Value::Height(initial.height),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
         Property::Color => Value::Color(parent.unwrap_or(initial).color),
         Property::Width => Value::Width(parent.unwrap_or(initial).width),
+        Property::Height => Value::Height(parent.unwrap_or(initial).height),
     };
     match value {
         Value::Inherit => inherited,
         Value::Initial => initial_value,
         Value::Unset => match property {
-            Property::Display | Property::Width => initial_value,
+            Property::Display | Property::Width | Property::Height => initial_value,
             Property::Color => inherited,
         },
         Value::Revert => {
@@ -231,13 +245,15 @@ mod tests {
             display: Display::Block,
             color: 0x12_34_56,
             width: Length::Px(42),
+            height: Length::Auto,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
             Computed {
                 display: Display::Inline,
                 color: parent.color,
-                width: Length::Auto
+                width: Length::Auto,
+                height: Length::Auto
             }
         );
     }
@@ -260,6 +276,30 @@ mod tests {
                 &[declaration(Property::Width, value, Origin::Author, 0)],
             );
             assert_eq!(got.width, expected);
+        }
+    }
+
+    #[test]
+    fn height_is_not_inherited_without_a_declaration() {
+        let parent = Computed {
+            height: Length::Px(240),
+            ..Computed::INITIAL
+        };
+        assert_eq!(Computed::cascade(Some(parent), &[]).height, Length::Auto);
+        for (value, expected) in [
+            (Value::Inherit, Length::Px(240)),
+            (Value::Initial, Length::Auto),
+            (Value::Unset, Length::Auto),
+            (Value::Height(Length::Percent(5000)), Length::Percent(5000)),
+        ] {
+            assert_eq!(
+                Computed::cascade(
+                    Some(parent),
+                    &[declaration(Property::Height, value, Origin::Author, 0)]
+                )
+                .height,
+                expected
+            );
         }
     }
 
@@ -305,6 +345,7 @@ mod tests {
             display: Display::Block,
             color: 0x22_33_44,
             width: Length::Px(42),
+            height: Length::Auto,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -320,7 +361,8 @@ mod tests {
                 Computed {
                     display: expected_display,
                     color: expected_color,
-                    width: Length::Auto
+                    width: Length::Auto,
+                    height: Length::Auto
                 }
             );
         }

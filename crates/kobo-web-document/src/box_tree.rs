@@ -69,6 +69,71 @@ pub fn used_block_width(width: Length, containing: u32) -> UsedBlockWidth {
     }
 }
 
+/// A definite specified height only; `auto` needs child layout, and a
+/// percentage needs a definite containing-block content height. This is not
+/// the used height of content that could overflow the specified height.
+#[must_use]
+pub fn specified_block_height(height: Length, containing: Option<u32>) -> Option<u32> {
+    match height {
+        Length::Auto => None,
+        Length::Px(px) => Some(px),
+        Length::Percent(hundredths) => containing.map(|base| {
+            u32::try_from(u64::from(base) * u64::from(hundredths) / 10_000).unwrap_or(u32::MAX)
+        }),
+    }
+}
+
+/// Top-down diagnostic of definite block heights. Missing heights remain
+/// unknown for descendant percentage heights. No y position is inferred.
+pub struct HeightPass {
+    pub heights: Vec<Option<u32>>,
+    pub unsupported: bool,
+    pub truncated: bool,
+}
+
+impl HeightPass {
+    #[must_use]
+    pub fn from_boxes(tree: &BoxTree, viewport_height: u32) -> Self {
+        let mut result = Self {
+            heights: vec![None; tree.boxes.len()],
+            unsupported: tree.unsupported,
+            truncated: tree.truncated,
+        };
+        let mut stack: Vec<_> = tree
+            .roots
+            .iter()
+            .rev()
+            .map(|&root| (root, Some(viewport_height)))
+            .collect();
+        let mut visited = 0_usize;
+        while let Some((index, containing)) = stack.pop() {
+            visited += 1;
+            if visited > tree.boxes.len() {
+                result.truncated = true;
+                break;
+            }
+            let node = &tree.boxes[index];
+            let height = match node.kind {
+                BoxKind::Block | BoxKind::ListItem => {
+                    specified_block_height(node.style.height, containing)
+                }
+                BoxKind::AnonymousBlock => None,
+                BoxKind::InlineBlock | BoxKind::Inline | BoxKind::Text => {
+                    if node.kind == BoxKind::InlineBlock {
+                        result.unsupported = true;
+                    }
+                    None
+                }
+            };
+            result.heights[index] = height;
+            for &child in node.children.iter().rev() {
+                stack.push((child, height));
+            }
+        }
+        result
+    }
+}
+
 /// A width-only pass. `None` means this box is not a normal-flow block;
 /// this is not a paintable rectangle (height, y position and line widths are
 /// still missing). The reader remains the only user-facing renderer.
@@ -252,6 +317,40 @@ mod tests {
 
     fn boxes(html: &str) -> BoxTree {
         BoxTree::from_style(&parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT))
+    }
+
+    #[test]
+    fn definite_height_does_not_guess_auto_or_indefinite_percent() {
+        assert_eq!(specified_block_height(Length::Px(80), None), Some(80));
+        assert_eq!(specified_block_height(Length::Auto, Some(300)), None);
+        assert_eq!(specified_block_height(Length::Percent(2500), None), None);
+        assert_eq!(
+            specified_block_height(Length::Percent(2500), Some(300)),
+            Some(75)
+        );
+        assert_eq!(
+            specified_block_height(Length::Percent(10_000), Some(u32::MAX)),
+            Some(u32::MAX)
+        );
+        let tree = boxes("<html style='height:400px'><body style='height:50%'><main style='height:25%'>a</main><aside><div style='height:20%'>b</div></aside></body></html>");
+        let pass = HeightPass::from_boxes(&tree, 600);
+        let styled = parse_style_tree(b"<html style='height:400px'><body style='height:50%'><main style='height:25%'>a</main><aside><div style='height:20%'>b</div></aside></body></html>", &[], &Limits::DEFAULT);
+        let height = |tag: &str| {
+            tree.boxes
+                .iter()
+                .enumerate()
+                .find(|(_, b)| {
+                    b.source
+                        .is_some_and(|source| styled.nodes[source].tag == tag)
+                })
+                .and_then(|(index, _)| pass.heights[index])
+        };
+        assert_eq!(height("html"), Some(400));
+        assert_eq!(height("body"), Some(200));
+        assert_eq!(height("main"), Some(50));
+        assert_eq!(height("aside"), None);
+        assert_eq!(height("div"), None);
+        assert!(!pass.truncated);
     }
 
     #[test]

@@ -256,6 +256,9 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
             "width" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Width))
                 .map(|value| (Property::Width, value)),
+            "height" => parse_keyword(value)
+                .or_else(|| parse_width(value).map(Value::Height))
+                .map(|value| (Property::Height, value)),
             _ => None,
         };
         if let Some((property, value)) = parsed {
