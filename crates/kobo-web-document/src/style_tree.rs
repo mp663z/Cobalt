@@ -105,7 +105,8 @@ impl StyleTree {
                 break;
             }
             if let Some(inline) = css::attribute(nodes, handle, "style") {
-                let parsed = properties(inline);
+                let (parsed, unknown) = properties(inline);
+                tree.unsupported |= unknown;
                 if declarations.len() + parsed.len() > MAX_DECLARATIONS_PER_ELEMENT {
                     tree.truncated = true;
                     break;
@@ -209,7 +210,8 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                 continue;
             }
             let selectors = rule.prelude.split(',').take(16);
-            let properties = properties(rule.declarations);
+            let (properties, unknown) = properties(rule.declarations);
+            unsupported |= unknown;
             for selector in selectors {
                 let Some(selector) = css::selector(selector.trim()) else {
                     unsupported = true;
@@ -233,8 +235,9 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
     (rules, unsupported)
 }
 
-fn properties(body: &str) -> Vec<(Property, Value, bool)> {
+fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
     let mut result = Vec::new();
+    let mut unsupported = false;
     for (name, raw) in style_syntax::declarations(body) {
         let name = css::strip_comments(name);
         let cleaned = css::strip_comments(raw);
@@ -291,9 +294,11 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
         };
         if let Some((property, value)) = parsed {
             result.push((property, value, important));
+        } else {
+            unsupported = true;
         }
     }
-    result
+    (result, unsupported)
 }
 
 fn parse_keyword(value: &str) -> Option<Value> {
