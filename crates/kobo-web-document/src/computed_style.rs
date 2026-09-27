@@ -18,6 +18,7 @@ pub enum Property {
     MarginTop,
     MarginBottom,
     Direction,
+    BackgroundColor,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +40,7 @@ pub enum Value {
     BoxSizing(BoxSizing),
     Margin(Margin),
     Direction(Direction),
+    BackgroundColor(Option<u32>),
     Inherit,
     Initial,
     Unset,
@@ -107,6 +109,8 @@ pub struct Computed {
     pub margin_top: Margin,
     pub margin_bottom: Margin,
     pub direction: Direction,
+    /// Transparent unless explicitly painted; unlike foreground color, not inherited.
+    pub background_color: Option<u32>,
 }
 
 impl Computed {
@@ -121,6 +125,7 @@ impl Computed {
         margin_top: Margin::Px(0),
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
+        background_color: None,
     };
 
     #[must_use]
@@ -137,6 +142,7 @@ impl Computed {
             margin_top: initial.margin_top,
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
+            background_color: initial.background_color,
         };
         for property in [
             Property::Display,
@@ -149,6 +155,7 @@ impl Computed {
             Property::MarginTop,
             Property::MarginBottom,
             Property::Direction,
+            Property::BackgroundColor,
         ] {
             let chosen = declarations
                 .iter()
@@ -171,6 +178,7 @@ impl Computed {
                 Property::MarginTop => Value::Margin(initial.margin_top),
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+                Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -206,6 +214,9 @@ impl Computed {
                 }
                 Value::Direction(direction) if property == Property::Direction => {
                     computed.direction = direction;
+                }
+                Value::BackgroundColor(color) if property == Property::BackgroundColor => {
+                    computed.background_color = color;
                 }
                 _ => unreachable!("resolved property value has the wrong type"),
             }
@@ -244,6 +255,7 @@ fn resolve(
         Property::MarginTop => Value::Margin(initial.margin_top),
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
+        Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
@@ -256,6 +268,9 @@ fn resolve(
         Property::MarginTop => Value::Margin(parent.unwrap_or(initial).margin_top),
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+        Property::BackgroundColor => {
+            Value::BackgroundColor(parent.unwrap_or(initial).background_color)
+        }
     };
     match value {
         Value::Inherit => inherited,
@@ -268,7 +283,8 @@ fn resolve(
             | Property::MarginLeft
             | Property::MarginRight
             | Property::MarginTop
-            | Property::MarginBottom => initial_value,
+            | Property::MarginBottom
+            | Property::BackgroundColor => initial_value,
             Property::Color | Property::Direction => inherited,
         },
         Value::Revert => {
@@ -348,6 +364,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+            background_color: None,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
@@ -361,7 +378,8 @@ mod tests {
                 margin_right: Margin::Px(0),
                 margin_top: Margin::Px(0),
                 margin_bottom: Margin::Px(0),
-                direction: Direction::Ltr
+                direction: Direction::Ltr,
+                background_color: None
             }
         );
     }
@@ -460,6 +478,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+            background_color: None,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -482,7 +501,8 @@ mod tests {
                     margin_right: Margin::Px(0),
                     margin_top: Margin::Px(0),
                     margin_bottom: Margin::Px(0),
-                    direction: Direction::Ltr
+                    direction: Direction::Ltr,
+                    background_color: None
                 }
             );
         }

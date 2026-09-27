@@ -255,6 +255,14 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None,
                 })
                 .map(|value| (Property::Display, value)),
+            "background-color" => parse_keyword(value)
+                .or_else(|| match value {
+                    "transparent" => Some(Value::BackgroundColor(None)),
+                    "white" => Some(Value::BackgroundColor(Some(0xff_ff_ff))),
+                    "black" => Some(Value::BackgroundColor(Some(0))),
+                    _ => hex_color(value).map(|color| Value::BackgroundColor(Some(color))),
+                })
+                .map(|value| (Property::BackgroundColor, value)),
             "color" => parse_keyword(value)
                 .or_else(|| hex_color(value).map(Value::Color))
                 .map(|value| (Property::Color, value)),
@@ -437,6 +445,41 @@ mod tests {
         assert_eq!(section.style.direction, Direction::Rtl);
         assert_eq!(section.style.margin_left, Margin::Px(7));
         assert_eq!(section.style.margin_right, Margin::Px(0));
+    }
+
+    #[test]
+    fn background_color_is_noninherited_and_transparent_by_default() {
+        let styled = tree("<div style='background-color:#123456'><p style='background-color:transparent'>A</p><section style='background-color:white'>B</section></div>", &[]);
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .background_color,
+            Some(0x12_34_56)
+        );
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .background_color,
+            None
+        );
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "section")
+                .unwrap()
+                .style
+                .background_color,
+            Some(0xff_ff_ff)
+        );
     }
 
     #[test]
