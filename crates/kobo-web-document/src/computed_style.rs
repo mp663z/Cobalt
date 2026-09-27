@@ -15,6 +15,8 @@ pub enum Property {
     BoxSizing,
     MarginLeft,
     MarginRight,
+    MarginTop,
+    MarginBottom,
     Direction,
 }
 
@@ -102,6 +104,8 @@ pub struct Computed {
     pub box_sizing: BoxSizing,
     pub margin_left: Margin,
     pub margin_right: Margin,
+    pub margin_top: Margin,
+    pub margin_bottom: Margin,
     pub direction: Direction,
 }
 
@@ -114,6 +118,8 @@ impl Computed {
         box_sizing: BoxSizing::ContentBox,
         margin_left: Margin::Px(0),
         margin_right: Margin::Px(0),
+        margin_top: Margin::Px(0),
+        margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
     };
 
@@ -128,6 +134,8 @@ impl Computed {
             box_sizing: initial.box_sizing,
             margin_left: initial.margin_left,
             margin_right: initial.margin_right,
+            margin_top: initial.margin_top,
+            margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
         };
         for property in [
@@ -138,6 +146,8 @@ impl Computed {
             Property::BoxSizing,
             Property::MarginLeft,
             Property::MarginRight,
+            Property::MarginTop,
+            Property::MarginBottom,
             Property::Direction,
         ] {
             let chosen = declarations
@@ -158,6 +168,8 @@ impl Computed {
                 Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
                 Property::MarginLeft => Value::Margin(initial.margin_left),
                 Property::MarginRight => Value::Margin(initial.margin_right),
+                Property::MarginTop => Value::Margin(initial.margin_top),
+                Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
             };
             let value = chosen.map_or(fallback, |decl| {
@@ -185,6 +197,12 @@ impl Computed {
                 }
                 Value::Margin(margin) if property == Property::MarginRight => {
                     computed.margin_right = margin;
+                }
+                Value::Margin(margin) if property == Property::MarginTop => {
+                    computed.margin_top = margin;
+                }
+                Value::Margin(margin) if property == Property::MarginBottom => {
+                    computed.margin_bottom = margin;
                 }
                 Value::Direction(direction) if property == Property::Direction => {
                     computed.direction = direction;
@@ -223,6 +241,8 @@ fn resolve(
         Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
         Property::MarginLeft => Value::Margin(initial.margin_left),
         Property::MarginRight => Value::Margin(initial.margin_right),
+        Property::MarginTop => Value::Margin(initial.margin_top),
+        Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
     };
     let inherited = match property {
@@ -233,6 +253,8 @@ fn resolve(
         Property::BoxSizing => Value::BoxSizing(parent.unwrap_or(initial).box_sizing),
         Property::MarginLeft => Value::Margin(parent.unwrap_or(initial).margin_left),
         Property::MarginRight => Value::Margin(parent.unwrap_or(initial).margin_right),
+        Property::MarginTop => Value::Margin(parent.unwrap_or(initial).margin_top),
+        Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
     };
     match value {
@@ -244,7 +266,9 @@ fn resolve(
             | Property::Height
             | Property::BoxSizing
             | Property::MarginLeft
-            | Property::MarginRight => initial_value,
+            | Property::MarginRight
+            | Property::MarginTop
+            | Property::MarginBottom => initial_value,
             Property::Color | Property::Direction => inherited,
         },
         Value::Revert => {
@@ -321,6 +345,8 @@ mod tests {
             box_sizing: BoxSizing::ContentBox,
             margin_left: Margin::Px(0),
             margin_right: Margin::Px(0),
+            margin_top: Margin::Px(0),
+            margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
         };
         assert_eq!(
@@ -333,6 +359,8 @@ mod tests {
                 box_sizing: BoxSizing::ContentBox,
                 margin_left: Margin::Px(0),
                 margin_right: Margin::Px(0),
+                margin_top: Margin::Px(0),
+                margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr
             }
         );
@@ -429,6 +457,8 @@ mod tests {
             box_sizing: BoxSizing::ContentBox,
             margin_left: Margin::Px(0),
             margin_right: Margin::Px(0),
+            margin_top: Margin::Px(0),
+            margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
         };
         for (keyword, expected_display, expected_color) in [
@@ -450,6 +480,8 @@ mod tests {
                     box_sizing: BoxSizing::ContentBox,
                     margin_left: Margin::Px(0),
                     margin_right: Margin::Px(0),
+                    margin_top: Margin::Px(0),
+                    margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr
                 }
             );

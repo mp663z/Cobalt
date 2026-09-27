@@ -274,6 +274,12 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
             "margin-right" => parse_keyword(value)
                 .or_else(|| parse_margin(value).map(Value::Margin))
                 .map(|value| (Property::MarginRight, value)),
+            "margin-top" => parse_keyword(value)
+                .or_else(|| parse_margin(value).map(Value::Margin))
+                .map(|value| (Property::MarginTop, value)),
+            "margin-bottom" => parse_keyword(value)
+                .or_else(|| parse_margin(value).map(Value::Margin))
+                .map(|value| (Property::MarginBottom, value)),
             "direction" => parse_keyword(value)
                 .or(match value {
                     "ltr" => Some(Value::Direction(Direction::Ltr)),
@@ -402,6 +408,17 @@ mod tests {
         assert_eq!(styled.nodes[paragraph].style.color, 0x12_34_56);
         assert_eq!(styled.nodes[paragraph].style.display, Display::None);
         assert!(!styled.truncated);
+    }
+
+    #[test]
+    fn vertical_margins_are_signed_and_noninherited() {
+        let styled = tree("<div style='margin-top:10%;margin-bottom:-6px'><p style='margin-top:auto'>child</p></div>", &[]);
+        let div = styled.nodes.iter().find(|n| n.tag == "div").unwrap();
+        let p = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(div.style.margin_top, Margin::Percent(1000));
+        assert_eq!(div.style.margin_bottom, Margin::Px(-6));
+        assert_eq!(p.style.margin_top, Margin::Auto);
+        assert_eq!(p.style.margin_bottom, Margin::Px(0));
     }
 
     #[test]
