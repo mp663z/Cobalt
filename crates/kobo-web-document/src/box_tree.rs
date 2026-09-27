@@ -229,6 +229,13 @@ pub fn stack_definite_siblings(
     positions
 }
 
+/// Vertical margins resolve percentage against the containing block's
+/// content width, not its height. Auto computes to zero in normal flow.
+#[must_use]
+pub fn resolve_vertical_margin(margin: Margin, containing_width: u32) -> i64 {
+    resolve_margin(margin, containing_width).unwrap_or(0)
+}
+
 /// Top-down diagnostic of definite block heights. Missing heights remain
 /// unknown for descendant percentage heights. No y position is inferred.
 pub struct HeightPass {
@@ -521,6 +528,13 @@ mod tests {
         assert_eq!(height("aside"), None);
         assert_eq!(height("div"), None);
         assert!(!pass.truncated);
+    }
+
+    #[test]
+    fn vertical_percentage_margin_uses_containing_width_and_auto_zero() {
+        assert_eq!(resolve_vertical_margin(Margin::Percent(1000), 300), 30);
+        assert_eq!(resolve_vertical_margin(Margin::Percent(-2500), 200), -50);
+        assert_eq!(resolve_vertical_margin(Margin::Auto, 300), 0);
     }
 
     #[test]
