@@ -10,6 +10,7 @@ pub mod box_tree;
 pub mod computed_style;
 mod convert;
 mod css;
+pub mod display_list;
 mod dom;
 mod host;
 mod style_syntax;
