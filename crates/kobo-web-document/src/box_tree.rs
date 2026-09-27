@@ -48,25 +48,77 @@ pub struct UsedBlockWidth {
     pub margin_right: i64,
 }
 
-/// Resolve a block's width from the containing block's content width. The
-/// viewport supplies the initial containing block width; inline boxes have
-/// different rules and must not be passed here. With zero (not auto) margins,
-/// unused or negative space is assigned to the right margin in LTR.
+/// Resolve a restricted CSS 2.2 §10.3.3 non-replaced normal-flow block.
+/// Border and padding have been combined into nonnegative pixel edges; signed
+/// margins are `None` for auto. The containing block's direction determines
+/// which margin absorbs an over-constrained width. Callers must separately
+/// reject floating, positioned, replaced, min/max-width, and box-sizing cases.
 #[must_use]
-pub fn used_block_width(width: Length, containing: u32) -> UsedBlockWidth {
-    let content = match width {
-        Length::Auto => containing,
-        Length::Px(px) => px,
-        Length::Percent(hundredths) => {
+pub fn used_block_width_edges(
+    width: Length,
+    containing: u32,
+    left_edge: u32,
+    right_edge: u32,
+    left_margin: Option<i64>,
+    right_margin: Option<i64>,
+    rtl: bool,
+) -> UsedBlockWidth {
+    let specified = match width {
+        Length::Auto => None,
+        Length::Px(px) => Some(px),
+        Length::Percent(hundredths) => Some(
             u32::try_from(u64::from(containing) * u64::from(hundredths) / 10_000)
-                .unwrap_or(u32::MAX)
-        }
+                .unwrap_or(u32::MAX),
+        ),
+    };
+    let edges = i64::from(left_edge) + i64::from(right_edge);
+    if specified.is_none() {
+        let left = left_margin.unwrap_or(0);
+        let right = right_margin.unwrap_or(0);
+        let available = i64::from(containing) - edges - left - right;
+        let content = u32::try_from(available.max(0)).unwrap_or(u32::MAX);
+        let remaining = i64::from(containing) - edges - i64::from(content);
+        return if rtl {
+            UsedBlockWidth {
+                content,
+                margin_left: remaining - right,
+                margin_right: right,
+            }
+        } else {
+            UsedBlockWidth {
+                content,
+                margin_left: left,
+                margin_right: remaining - left,
+            }
+        };
+    }
+    let content = specified.unwrap_or(0);
+    let mut left = left_margin;
+    let mut right = right_margin;
+    let minimum = edges + i64::from(content) + left.unwrap_or(0) + right.unwrap_or(0);
+    if minimum > i64::from(containing) {
+        left.get_or_insert(0);
+        right.get_or_insert(0);
+    }
+    let free = i64::from(containing) - edges - i64::from(content);
+    let (margin_left, margin_right) = match (left, right) {
+        (None, None) => (free / 2, free - free / 2),
+        (None, Some(right)) => (free - right, right),
+        (Some(_), Some(right)) if rtl => (free - right, right),
+        (Some(left), _) => (left, free - left),
     };
     UsedBlockWidth {
         content,
-        margin_left: 0,
-        margin_right: i64::from(containing) - i64::from(content),
+        margin_left,
+        margin_right,
     }
+}
+
+/// Fast path for LTR blocks with zero border, padding, and fixed zero margins.
+/// It does not center a fixed-width block: spare width goes to the right.
+#[must_use]
+pub fn used_block_width(width: Length, containing: u32) -> UsedBlockWidth {
+    used_block_width_edges(width, containing, 0, 0, Some(0), Some(0), false)
 }
 
 /// A definite specified height only; `auto` needs child layout, and a
@@ -351,6 +403,64 @@ mod tests {
         assert_eq!(height("aside"), None);
         assert_eq!(height("div"), None);
         assert!(!pass.truncated);
+    }
+
+    #[test]
+    fn block_width_edges_auto_margins_and_direction() {
+        let result = used_block_width_edges(Length::Auto, 300, 10, 10, None, Some(20), false);
+        assert_eq!(
+            result,
+            UsedBlockWidth {
+                content: 260,
+                margin_left: 0,
+                margin_right: 20
+            }
+        );
+        let centered = used_block_width_edges(Length::Px(100), 301, 10, 10, None, None, false);
+        assert_eq!(
+            centered,
+            UsedBlockWidth {
+                content: 100,
+                margin_left: 90,
+                margin_right: 91
+            }
+        );
+        let rtl = used_block_width_edges(Length::Px(100), 301, 10, 10, Some(20), Some(30), true);
+        assert_eq!(
+            rtl,
+            UsedBlockWidth {
+                content: 100,
+                margin_left: 151,
+                margin_right: 30
+            }
+        );
+        let overflow = used_block_width_edges(Length::Px(350), 300, 0, 0, None, None, false);
+        assert_eq!(
+            overflow,
+            UsedBlockWidth {
+                content: 350,
+                margin_left: 0,
+                margin_right: -50
+            }
+        );
+        let rtl_overflow = used_block_width_edges(Length::Px(350), 300, 0, 0, None, None, true);
+        assert_eq!(
+            rtl_overflow,
+            UsedBlockWidth {
+                content: 350,
+                margin_left: -50,
+                margin_right: 0
+            }
+        );
+        let negative_auto = used_block_width_edges(Length::Auto, 10, 20, 20, Some(5), None, false);
+        assert_eq!(
+            negative_auto,
+            UsedBlockWidth {
+                content: 0,
+                margin_left: 5,
+                margin_right: -35
+            }
+        );
     }
 
     #[test]
