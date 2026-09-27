@@ -18,6 +18,8 @@ pub struct StyledNode {
     pub parent: Option<usize>,
     pub children: Vec<usize>,
     pub tag: String,
+    /// Text content for a retained #text node.
+    pub text: Option<String>,
     pub style: Computed,
 }
 
@@ -39,6 +41,7 @@ struct MatchedRule {
 impl StyleTree {
     /// Compute a bounded style arena from the browser's HTML5 tree. This is a
     /// separate path: current reader conversion stays unchanged.
+    #[allow(clippy::too_many_lines)] // One bounded tree walk retains parentage and cascade.
     pub(crate) fn from_dom(nodes: &[Node], sheets: &[Vec<u8>]) -> Self {
         let mut tree = Self::default();
         let (rules, incomplete) = matched_rules(nodes, sheets);
@@ -46,6 +49,24 @@ impl StyleTree {
         let mut stack = vec![(DOCUMENT, None::<usize>, Computed::INITIAL)];
         let mut match_work = 0_usize;
         while let Some((handle, parent, inherited)) = stack.pop() {
+            if let Data::Text(text) = &nodes[handle].data {
+                if tree.nodes.len() >= nodes.len() {
+                    tree.truncated = true;
+                    break;
+                }
+                let index = tree.nodes.len();
+                tree.nodes.push(StyledNode {
+                    parent,
+                    children: Vec::new(),
+                    tag: "#text".to_owned(),
+                    text: Some(text.clone()),
+                    style: inherited,
+                });
+                if let Some(parent) = parent {
+                    tree.nodes[parent].children.push(index);
+                }
+                continue;
+            }
             let Data::Element { name, .. } = &nodes[handle].data else {
                 for &child in nodes[handle].children.iter().rev() {
                     stack.push((child, parent, inherited));
@@ -98,12 +119,21 @@ impl StyleTree {
                     },
                 ));
             }
+            declarations.push(Declaration {
+                property: Property::Display,
+                value: Value::Display(ua_display(&name.local)),
+                origin: Origin::UserAgent,
+                important: false,
+                specificity: (0, 0, 0),
+                source_order: 0,
+            });
             let style = Computed::cascade(Some(inherited), &declarations);
             let index = tree.nodes.len();
             tree.nodes.push(StyledNode {
                 parent,
                 children: Vec::new(),
                 tag: name.local.to_string(),
+                text: None,
                 style,
             });
             if let Some(parent) = parent {
@@ -114,6 +144,17 @@ impl StyleTree {
             }
         }
         tree
+    }
+}
+
+fn ua_display(tag: &str) -> Display {
+    match tag {
+        "html" | "body" | "main" | "article" | "section" | "header" | "footer" | "aside"
+        | "nav" | "div" | "p" | "blockquote" | "pre" | "figure" | "figcaption" | "form"
+        | "fieldset" | "ul" | "ol" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => Display::Block,
+        "li" => Display::ListItem,
+        "head" | "title" | "meta" | "link" | "style" | "script" | "template" => Display::None,
+        _ => Display::Inline,
     }
 }
 

@@ -6,6 +6,7 @@
 //! ceiling set by [`Limits`]. A page that reaches a ceiling is still shown,
 //! marked with a [`Warning`] saying what was left out.
 
+pub mod box_tree;
 pub mod computed_style;
 mod convert;
 mod css;
