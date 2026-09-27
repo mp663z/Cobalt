@@ -4,7 +4,7 @@
 //! arena keeps DOM ancestry and computed values for a separate box renderer.
 //! It is not painted yet. Unsupported CSS does not become a guessed layout.
 
-use crate::computed_style::{Computed, Declaration, Display, Origin, Property, Value};
+use crate::computed_style::{Computed, Declaration, Display, Length, Origin, Property, Value};
 use crate::css;
 use crate::dom::{Data, Node, DOCUMENT};
 use crate::style_syntax;
@@ -253,6 +253,9 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
             "color" => parse_keyword(value)
                 .or_else(|| hex_color(value).map(Value::Color))
                 .map(|value| (Property::Color, value)),
+            "width" => parse_keyword(value)
+                .or_else(|| parse_width(value).map(Value::Width))
+                .map(|value| (Property::Width, value)),
             _ => None,
         };
         if let Some((property, value)) = parsed {
@@ -269,6 +272,42 @@ fn parse_keyword(value: &str) -> Option<Value> {
         "unset" => Some(Value::Unset),
         "revert" => Some(Value::Revert),
         _ => None,
+    }
+}
+
+fn parse_width(value: &str) -> Option<Length> {
+    if value == "auto" {
+        return Some(Length::Auto);
+    }
+    let (number, percent) = if let Some(n) = value.strip_suffix("px") {
+        (n, false)
+    } else if let Some(n) = value.strip_suffix('%') {
+        (n, true)
+    } else {
+        return (value == "0").then_some(Length::Px(0));
+    };
+    let (whole, fractional) = number.split_once('.').unwrap_or((number, ""));
+    if whole.is_empty()
+        || !whole.bytes().all(|c| c.is_ascii_digit())
+        || fractional.len() > 2
+        || !fractional.bytes().all(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    let base = whole.parse::<u32>().ok()?;
+    let mut value = base.checked_mul(100)?;
+    if !fractional.is_empty() {
+        value = value.checked_add(
+            fractional.parse::<u32>().ok()? * if fractional.len() == 1 { 10 } else { 1 },
+        )?;
+    }
+    if percent {
+        Some(Length::Percent(value))
+    } else if value % 100 == 0 {
+        Some(Length::Px(value / 100))
+    } else {
+        // Fractional px needs fixed-point support in used values.
+        None
     }
 }
 

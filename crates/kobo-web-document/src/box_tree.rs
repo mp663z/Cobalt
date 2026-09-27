@@ -5,7 +5,7 @@
 //! §9.2.1.1 for mixed block and inline children. It does not claim to layout
 //! those boxes, and calls out block-in-inline splitting as unsupported.
 
-use crate::computed_style::{Computed, Display};
+use crate::computed_style::{Computed, Display, Length};
 use crate::style_tree::StyleTree;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +36,97 @@ pub struct BoxTree {
     pub roots: Vec<usize>,
     pub truncated: bool,
     pub unsupported: bool,
+}
+
+/// CSS 2.2 §10.3.3, restricted to zero margin/padding/border, LTR,
+/// non-replaced block boxes in normal flow. These are content widths only.
+/// A future full algorithm must include box edges and direction rules.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UsedBlockWidth {
+    pub content: u32,
+    pub margin_left: i64,
+    pub margin_right: i64,
+}
+
+/// Resolve a block's width from the containing block's content width. The
+/// viewport supplies the initial containing block width; inline boxes have
+/// different rules and must not be passed here. With zero (not auto) margins,
+/// unused or negative space is assigned to the right margin in LTR.
+#[must_use]
+pub fn used_block_width(width: Length, containing: u32) -> UsedBlockWidth {
+    let content = match width {
+        Length::Auto => containing,
+        Length::Px(px) => px,
+        Length::Percent(hundredths) => {
+            u32::try_from(u64::from(containing) * u64::from(hundredths) / 10_000)
+                .unwrap_or(u32::MAX)
+        }
+    };
+    UsedBlockWidth {
+        content,
+        margin_left: 0,
+        margin_right: i64::from(containing) - i64::from(content),
+    }
+}
+
+/// A width-only pass. `None` means this box is not a normal-flow block;
+/// this is not a paintable rectangle (height, y position and line widths are
+/// still missing). The reader remains the only user-facing renderer.
+pub struct WidthPass {
+    pub widths: Vec<Option<UsedBlockWidth>>,
+    pub unsupported: bool,
+    pub truncated: bool,
+}
+
+impl WidthPass {
+    /// Compute content widths top-down using each block container's content
+    /// width. Inline boxes pass through the nearest block container; inline-
+    /// block needs shrink-to-fit and is explicitly unsupported here.
+    #[must_use]
+    pub fn from_boxes(tree: &BoxTree, viewport_width: u32) -> Self {
+        let mut result = Self {
+            widths: vec![None; tree.boxes.len()],
+            unsupported: tree.unsupported,
+            truncated: tree.truncated,
+        };
+        let mut stack: Vec<_> = tree
+            .roots
+            .iter()
+            .rev()
+            .map(|&root| (root, viewport_width))
+            .collect();
+        let mut visited = 0_usize;
+        while let Some((index, containing)) = stack.pop() {
+            visited += 1;
+            if visited > tree.boxes.len() {
+                result.truncated = true;
+                break;
+            }
+            let node = &tree.boxes[index];
+            let content = match node.kind {
+                BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock => {
+                    // Anonymous block boxes fill their containing block.
+                    let specified = if node.kind == BoxKind::AnonymousBlock {
+                        Length::Auto
+                    } else {
+                        node.style.width
+                    };
+                    let width = used_block_width(specified, containing);
+                    result.widths[index] = Some(width);
+                    width.content
+                }
+                BoxKind::InlineBlock => {
+                    result.unsupported = true;
+                    containing // preserve traversal, not a guessed used width
+                }
+                BoxKind::Inline | BoxKind::Text => containing,
+            };
+            for &child in node.children.iter().rev() {
+                stack.push((child, content));
+            }
+        }
+        result
+    }
 }
 
 impl BoxTree {
@@ -161,6 +252,76 @@ mod tests {
 
     fn boxes(html: &str) -> BoxTree {
         BoxTree::from_style(&parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT))
+    }
+
+    #[test]
+    fn css_2_2_block_width_with_zero_edges() {
+        assert_eq!(
+            used_block_width(Length::Auto, 300),
+            UsedBlockWidth {
+                content: 300,
+                margin_left: 0,
+                margin_right: 0
+            }
+        );
+        assert_eq!(
+            used_block_width(Length::Px(200), 301),
+            UsedBlockWidth {
+                content: 200,
+                margin_left: 0,
+                margin_right: 101
+            }
+        );
+        assert_eq!(
+            used_block_width(Length::Percent(2500), 400),
+            UsedBlockWidth {
+                content: 100,
+                margin_left: 0,
+                margin_right: 300
+            }
+        );
+        assert_eq!(
+            used_block_width(Length::Px(360), 300),
+            UsedBlockWidth {
+                content: 360,
+                margin_left: 0,
+                margin_right: -60
+            }
+        );
+        assert_eq!(
+            used_block_width(Length::Percent(10_000), u32::MAX).content,
+            u32::MAX
+        );
+    }
+
+    #[test]
+    fn widths_follow_nearest_block_content_width() {
+        let tree = boxes("<style>body{width:50%}section{width:25%}</style><body><section><div>Text</div></section></body>");
+        let used = WidthPass::from_boxes(&tree, 400);
+        let blocks: Vec<_> = tree
+            .boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.kind == BoxKind::Block)
+            .map(|(i, _)| used.widths[i].unwrap().content)
+            .collect();
+        assert_eq!(blocks, [400, 200, 50, 50]); // html, body, section, div
+        assert!(!used.unsupported);
+        assert!(!used.truncated);
+        assert_eq!(used.widths.len(), tree.boxes.len());
+    }
+
+    #[test]
+    fn inline_block_width_is_not_guessed() {
+        let tree = boxes("<div><span style='display:inline-block;width:80px'>A</span></div>");
+        let used = WidthPass::from_boxes(&tree, 300);
+        let index = tree
+            .boxes
+            .iter()
+            .position(|b| b.kind == BoxKind::InlineBlock)
+            .unwrap();
+        assert_eq!(used.widths[index], None);
+        assert!(used.unsupported);
     }
 
     #[test]
