@@ -5,7 +5,7 @@
 //! It is not painted yet. Unsupported CSS does not become a guessed layout.
 
 use crate::computed_style::{
-    BoxSizing, Computed, Declaration, Display, Length, Origin, Property, Value,
+    BoxSizing, Computed, Declaration, Direction, Display, Length, Margin, Origin, Property, Value,
 };
 use crate::css;
 use crate::dom::{Data, Node, DOCUMENT};
@@ -268,6 +268,19 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
                     _ => None,
                 })
                 .map(|value| (Property::BoxSizing, value)),
+            "margin-left" => parse_keyword(value)
+                .or_else(|| parse_margin(value).map(Value::Margin))
+                .map(|value| (Property::MarginLeft, value)),
+            "margin-right" => parse_keyword(value)
+                .or_else(|| parse_margin(value).map(Value::Margin))
+                .map(|value| (Property::MarginRight, value)),
+            "direction" => parse_keyword(value)
+                .or(match value {
+                    "ltr" => Some(Value::Direction(Direction::Ltr)),
+                    "rtl" => Some(Value::Direction(Direction::Rtl)),
+                    _ => None,
+                })
+                .map(|value| (Property::Direction, value)),
             _ => None,
         };
         if let Some((property, value)) = parsed {
@@ -323,6 +336,24 @@ fn parse_width(value: &str) -> Option<Length> {
     }
 }
 
+fn parse_margin(value: &str) -> Option<Margin> {
+    if value == "auto" {
+        return Some(Margin::Auto);
+    }
+    let (negative, value) = value
+        .strip_prefix('-')
+        .map_or((false, value), |rest| (true, rest));
+    let length = parse_width(value)?;
+    let sign = if negative { -1 } else { 1 };
+    match length {
+        Length::Auto => None,
+        Length::Px(px) => Some(Margin::Px(i32::try_from(px).ok()?.checked_mul(sign)?)),
+        Length::Percent(percent) => Some(Margin::Percent(
+            i32::try_from(percent).ok()?.checked_mul(sign)?,
+        )),
+    }
+}
+
 fn hex_color(value: &str) -> Option<u32> {
     let digits = value.strip_prefix('#')?;
     match digits.len() {
@@ -371,6 +402,19 @@ mod tests {
         assert_eq!(styled.nodes[paragraph].style.color, 0x12_34_56);
         assert_eq!(styled.nodes[paragraph].style.display, Display::None);
         assert!(!styled.truncated);
+    }
+
+    #[test]
+    fn horizontal_margins_and_direction_have_distinct_inheritance() {
+        let styled = tree("<div style='direction:rtl;margin-left:-25%;margin-right:auto'><section style='margin-left:7px'>child</section></div>", &[]);
+        let div = styled.nodes.iter().find(|n| n.tag == "div").unwrap();
+        let section = styled.nodes.iter().find(|n| n.tag == "section").unwrap();
+        assert_eq!(div.style.direction, Direction::Rtl);
+        assert_eq!(div.style.margin_left, Margin::Percent(-2500));
+        assert_eq!(div.style.margin_right, Margin::Auto);
+        assert_eq!(section.style.direction, Direction::Rtl);
+        assert_eq!(section.style.margin_left, Margin::Px(7));
+        assert_eq!(section.style.margin_right, Margin::Px(0));
     }
 
     #[test]

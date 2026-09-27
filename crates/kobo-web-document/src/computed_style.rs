@@ -13,6 +13,9 @@ pub enum Property {
     Width,
     Height,
     BoxSizing,
+    MarginLeft,
+    MarginRight,
+    Direction,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,6 +35,8 @@ pub enum Value {
     Width(Length),
     Height(Length),
     BoxSizing(BoxSizing),
+    Margin(Margin),
+    Direction(Direction),
     Inherit,
     Initial,
     Unset,
@@ -51,6 +56,20 @@ pub enum Length {
 pub enum BoxSizing {
     ContentBox,
     BorderBox,
+}
+
+/// Computed horizontal margin before resolving percentage against block width.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Margin {
+    Auto,
+    Px(i32),
+    Percent(i32),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Direction {
+    Ltr,
+    Rtl,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,6 +100,9 @@ pub struct Computed {
     pub width: Length,
     pub height: Length,
     pub box_sizing: BoxSizing,
+    pub margin_left: Margin,
+    pub margin_right: Margin,
+    pub direction: Direction,
 }
 
 impl Computed {
@@ -90,6 +112,9 @@ impl Computed {
         width: Length::Auto,
         height: Length::Auto,
         box_sizing: BoxSizing::ContentBox,
+        margin_left: Margin::Px(0),
+        margin_right: Margin::Px(0),
+        direction: Direction::Ltr,
     };
 
     #[must_use]
@@ -101,6 +126,9 @@ impl Computed {
             width: initial.width,
             height: initial.height,
             box_sizing: initial.box_sizing,
+            margin_left: initial.margin_left,
+            margin_right: initial.margin_right,
+            direction: parent.unwrap_or(initial).direction,
         };
         for property in [
             Property::Display,
@@ -108,6 +136,9 @@ impl Computed {
             Property::Width,
             Property::Height,
             Property::BoxSizing,
+            Property::MarginLeft,
+            Property::MarginRight,
+            Property::Direction,
         ] {
             let chosen = declarations
                 .iter()
@@ -125,6 +156,9 @@ impl Computed {
                 Property::Width => Value::Width(initial.width),
                 Property::Height => Value::Height(initial.height),
                 Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
+                Property::MarginLeft => Value::Margin(initial.margin_left),
+                Property::MarginRight => Value::Margin(initial.margin_right),
+                Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -145,6 +179,15 @@ impl Computed {
                 Value::Height(height) if property == Property::Height => computed.height = height,
                 Value::BoxSizing(sizing) if property == Property::BoxSizing => {
                     computed.box_sizing = sizing;
+                }
+                Value::Margin(margin) if property == Property::MarginLeft => {
+                    computed.margin_left = margin;
+                }
+                Value::Margin(margin) if property == Property::MarginRight => {
+                    computed.margin_right = margin;
+                }
+                Value::Direction(direction) if property == Property::Direction => {
+                    computed.direction = direction;
                 }
                 _ => unreachable!("resolved property value has the wrong type"),
             }
@@ -178,6 +221,9 @@ fn resolve(
         Property::Width => Value::Width(initial.width),
         Property::Height => Value::Height(initial.height),
         Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
+        Property::MarginLeft => Value::Margin(initial.margin_left),
+        Property::MarginRight => Value::Margin(initial.margin_right),
+        Property::Direction => Value::Direction(initial.direction),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
@@ -185,15 +231,21 @@ fn resolve(
         Property::Width => Value::Width(parent.unwrap_or(initial).width),
         Property::Height => Value::Height(parent.unwrap_or(initial).height),
         Property::BoxSizing => Value::BoxSizing(parent.unwrap_or(initial).box_sizing),
+        Property::MarginLeft => Value::Margin(parent.unwrap_or(initial).margin_left),
+        Property::MarginRight => Value::Margin(parent.unwrap_or(initial).margin_right),
+        Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
     };
     match value {
         Value::Inherit => inherited,
         Value::Initial => initial_value,
         Value::Unset => match property {
-            Property::Display | Property::Width | Property::Height | Property::BoxSizing => {
-                initial_value
-            }
-            Property::Color => inherited,
+            Property::Display
+            | Property::Width
+            | Property::Height
+            | Property::BoxSizing
+            | Property::MarginLeft
+            | Property::MarginRight => initial_value,
+            Property::Color | Property::Direction => inherited,
         },
         Value::Revert => {
             // Revert crosses the *origin* boundary, even for important values.
@@ -214,7 +266,7 @@ fn resolve(
                 });
             lower.map_or_else(
                 || {
-                    if property == Property::Color {
+                    if matches!(property, Property::Color | Property::Direction) {
                         inherited
                     } else {
                         initial_value
@@ -267,6 +319,9 @@ mod tests {
             width: Length::Px(42),
             height: Length::Auto,
             box_sizing: BoxSizing::ContentBox,
+            margin_left: Margin::Px(0),
+            margin_right: Margin::Px(0),
+            direction: Direction::Ltr,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
@@ -275,7 +330,10 @@ mod tests {
                 color: parent.color,
                 width: Length::Auto,
                 height: Length::Auto,
-                box_sizing: BoxSizing::ContentBox
+                box_sizing: BoxSizing::ContentBox,
+                margin_left: Margin::Px(0),
+                margin_right: Margin::Px(0),
+                direction: Direction::Ltr
             }
         );
     }
@@ -369,6 +427,9 @@ mod tests {
             width: Length::Px(42),
             height: Length::Auto,
             box_sizing: BoxSizing::ContentBox,
+            margin_left: Margin::Px(0),
+            margin_right: Margin::Px(0),
+            direction: Direction::Ltr,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -386,7 +447,10 @@ mod tests {
                     color: expected_color,
                     width: Length::Auto,
                     height: Length::Auto,
-                    box_sizing: BoxSizing::ContentBox
+                    box_sizing: BoxSizing::ContentBox,
+                    margin_left: Margin::Px(0),
+                    margin_right: Margin::Px(0),
+                    direction: Direction::Ltr
                 }
             );
         }

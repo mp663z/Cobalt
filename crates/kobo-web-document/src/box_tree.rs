@@ -5,7 +5,7 @@
 //! §9.2.1.1 for mixed block and inline children. It does not claim to layout
 //! those boxes, and calls out block-in-inline splitting as unsupported.
 
-use crate::computed_style::{BoxSizing, Computed, Display, Length};
+use crate::computed_style::{BoxSizing, Computed, Direction, Display, Length, Margin};
 use crate::style_tree::StyleTree;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -147,6 +147,17 @@ pub fn used_block_width_sized(
         margins[1],
         rtl,
     )
+}
+
+/// Resolve a signed horizontal margin against containing-block content width.
+/// Auto remains unknown until the block-width equation is solved.
+#[must_use]
+pub fn resolve_margin(margin: Margin, containing: u32) -> Option<i64> {
+    match margin {
+        Margin::Auto => None,
+        Margin::Px(px) => Some(i64::from(px)),
+        Margin::Percent(hundredths) => Some(i64::from(containing) * i64::from(hundredths) / 10_000),
+    }
 }
 
 /// Fast path for LTR blocks with zero border, padding, and fixed zero margins.
@@ -309,12 +320,23 @@ impl WidthPass {
             let (content, x) = match node.kind {
                 BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock => {
                     let width = containing.map(|base| {
-                        let specified = if node.kind == BoxKind::AnonymousBlock {
-                            Length::Auto
+                        if node.kind == BoxKind::AnonymousBlock {
+                            used_block_width(Length::Auto, base)
                         } else {
-                            node.style.width
-                        };
-                        used_block_width(specified, base)
+                            used_block_width_sized(
+                                node.style.width,
+                                base,
+                                [0, 0],
+                                [
+                                    resolve_margin(node.style.margin_left, base),
+                                    resolve_margin(node.style.margin_right, base),
+                                ],
+                                node.parent.is_some_and(|p| {
+                                    tree.boxes[p].style.direction == Direction::Rtl
+                                }),
+                                node.style.box_sizing,
+                            )
+                        }
                     });
                     result.widths[index] = width;
                     let x = containing_x.and_then(|parent_x| {
@@ -437,7 +459,12 @@ impl BoxTree {
             return;
         }
         let index = self.boxes.len();
-        let style = self.boxes[parent].style;
+        // Anonymous blocks inherit inherited properties (color, direction),
+        // not their parent's non-inherited margins, width, or sizing.
+        let style = Computed {
+            display: Display::Block,
+            ..Computed::cascade(Some(self.boxes[parent].style), &[])
+        };
         for &child in run.iter() {
             self.boxes[child].parent = Some(index);
         }
@@ -706,6 +733,40 @@ mod tests {
         assert!(!used.unsupported);
         assert!(!used.truncated);
         assert_eq!(used.widths.len(), tree.boxes.len());
+    }
+
+    #[test]
+    fn horizontal_margins_and_anonymous_blocks_reset_noninherited_values() {
+        assert_eq!(resolve_margin(Margin::Auto, 200), None);
+        assert_eq!(resolve_margin(Margin::Px(-5), 200), Some(-5));
+        assert_eq!(resolve_margin(Margin::Percent(2500), 200), Some(50));
+        let html = "<div style='direction:rtl;width:200px;margin-left:20px'>A<p style='width:100px;margin-right:auto'>B</p>C</div>";
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let tree = BoxTree::from_style(&styled);
+        let pass = WidthPass::from_boxes(&tree, 400);
+        let div = tree
+            .boxes
+            .iter()
+            .position(|b| b.source.is_some_and(|i| styled.nodes[i].tag == "div"))
+            .unwrap();
+        let paragraph = tree
+            .boxes
+            .iter()
+            .position(|b| b.source.is_some_and(|i| styled.nodes[i].tag == "p"))
+            .unwrap();
+        assert_eq!(pass.widths[div].unwrap().margin_left, 20);
+        assert_eq!(pass.content_x[div], Some(20));
+        assert_eq!(pass.widths[paragraph].unwrap().margin_right, 100);
+        assert_eq!(pass.widths[paragraph].unwrap().margin_left, 0);
+        assert_eq!(pass.content_x[paragraph], Some(20));
+        for &index in &tree.boxes[div].children {
+            let child = &tree.boxes[index];
+            if child.kind == BoxKind::AnonymousBlock {
+                assert_eq!(child.style.margin_left, Margin::Px(0));
+                assert_eq!(child.style.direction, Direction::Rtl);
+                assert_eq!(pass.widths[index].unwrap().content, 200);
+            }
+        }
     }
 
     #[test]
