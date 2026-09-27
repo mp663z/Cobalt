@@ -5,7 +5,7 @@
 //! §9.2.1.1 for mixed block and inline children. It does not claim to layout
 //! those boxes, and calls out block-in-inline splitting as unsupported.
 
-use crate::computed_style::{Computed, Display, Length};
+use crate::computed_style::{BoxSizing, Computed, Display, Length};
 use crate::style_tree::StyleTree;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -112,6 +112,41 @@ pub fn used_block_width_edges(
         margin_left,
         margin_right,
     }
+}
+
+/// The same restricted equation, converting a declared border-box width to
+/// a nonnegative content width after the given border/padding pixel edges.
+#[must_use]
+pub fn used_block_width_sized(
+    width: Length,
+    containing: u32,
+    [left_edge, right_edge]: [u32; 2],
+    margins: [Option<i64>; 2],
+    rtl: bool,
+    sizing: BoxSizing,
+) -> UsedBlockWidth {
+    let edges = i64::from(left_edge) + i64::from(right_edge);
+    let declared = match width {
+        Length::Auto => None,
+        Length::Px(px) => Some(px),
+        Length::Percent(hundredths) => Some(
+            u32::try_from(u64::from(containing) * u64::from(hundredths) / 10_000)
+                .unwrap_or(u32::MAX),
+        ),
+    };
+    let content = declared.map(|px| match sizing {
+        BoxSizing::ContentBox => px,
+        BoxSizing::BorderBox => u32::try_from((i64::from(px) - edges).max(0)).unwrap_or(u32::MAX),
+    });
+    used_block_width_edges(
+        content.map_or(Length::Auto, Length::Px),
+        containing,
+        left_edge,
+        right_edge,
+        margins[0],
+        margins[1],
+        rtl,
+    )
 }
 
 /// Fast path for LTR blocks with zero border, padding, and fixed zero margins.
@@ -497,6 +532,64 @@ mod tests {
         assert_eq!(
             stack_definite_siblings(i64::MAX, &[(Some(1), Some(1), Some(0))]),
             [None]
+        );
+    }
+
+    #[test]
+    fn border_box_width_excludes_nonnegative_edges() {
+        assert_eq!(
+            used_block_width_sized(
+                Length::Px(100),
+                300,
+                [8, 12],
+                [Some(0), Some(0)],
+                false,
+                BoxSizing::BorderBox
+            ),
+            UsedBlockWidth {
+                content: 80,
+                margin_left: 0,
+                margin_right: 200
+            }
+        );
+        assert_eq!(
+            used_block_width_sized(
+                Length::Percent(5000),
+                300,
+                [8, 12],
+                [None, None],
+                false,
+                BoxSizing::BorderBox
+            ),
+            UsedBlockWidth {
+                content: 130,
+                margin_left: 75,
+                margin_right: 75
+            }
+        );
+        assert_eq!(
+            used_block_width_sized(
+                Length::Px(5),
+                300,
+                [8, 12],
+                [Some(0), Some(0)],
+                false,
+                BoxSizing::BorderBox
+            )
+            .content,
+            0
+        );
+        assert_eq!(
+            used_block_width_sized(
+                Length::Auto,
+                300,
+                [8, 12],
+                [Some(0), Some(0)],
+                false,
+                BoxSizing::BorderBox
+            )
+            .content,
+            280
         );
     }
 

@@ -4,7 +4,9 @@
 //! arena keeps DOM ancestry and computed values for a separate box renderer.
 //! It is not painted yet. Unsupported CSS does not become a guessed layout.
 
-use crate::computed_style::{Computed, Declaration, Display, Length, Origin, Property, Value};
+use crate::computed_style::{
+    BoxSizing, Computed, Declaration, Display, Length, Origin, Property, Value,
+};
 use crate::css;
 use crate::dom::{Data, Node, DOCUMENT};
 use crate::style_syntax;
@@ -259,6 +261,13 @@ fn properties(body: &str) -> Vec<(Property, Value, bool)> {
             "height" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Height))
                 .map(|value| (Property::Height, value)),
+            "box-sizing" => parse_keyword(value)
+                .or(match value {
+                    "content-box" => Some(Value::BoxSizing(BoxSizing::ContentBox)),
+                    "border-box" => Some(Value::BoxSizing(BoxSizing::BorderBox)),
+                    _ => None,
+                })
+                .map(|value| (Property::BoxSizing, value)),
             _ => None,
         };
         if let Some((property, value)) = parsed {
@@ -362,6 +371,31 @@ mod tests {
         assert_eq!(styled.nodes[paragraph].style.color, 0x12_34_56);
         assert_eq!(styled.nodes[paragraph].style.display, Display::None);
         assert!(!styled.truncated);
+    }
+
+    #[test]
+    fn box_sizing_cascade_is_noninherited() {
+        let styled = tree("<style>div{box-sizing:border-box!important}</style><div style='box-sizing:content-box'><section>child</section></div>", &[]);
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .box_sizing,
+            BoxSizing::BorderBox
+        );
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "section")
+                .unwrap()
+                .style
+                .box_sizing,
+            BoxSizing::ContentBox
+        );
     }
 
     #[test]

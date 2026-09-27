@@ -12,6 +12,7 @@ pub enum Property {
     Color,
     Width,
     Height,
+    BoxSizing,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +31,7 @@ pub enum Value {
     Color(u32),
     Width(Length),
     Height(Length),
+    BoxSizing(BoxSizing),
     Inherit,
     Initial,
     Unset,
@@ -43,6 +45,12 @@ pub enum Length {
     Auto,
     Px(u32),
     Percent(u32),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BoxSizing {
+    ContentBox,
+    BorderBox,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -72,6 +80,7 @@ pub struct Computed {
     pub color: u32,
     pub width: Length,
     pub height: Length,
+    pub box_sizing: BoxSizing,
 }
 
 impl Computed {
@@ -80,6 +89,7 @@ impl Computed {
         color: 0x00_00_00,
         width: Length::Auto,
         height: Length::Auto,
+        box_sizing: BoxSizing::ContentBox,
     };
 
     #[must_use]
@@ -90,12 +100,14 @@ impl Computed {
             color: parent.unwrap_or(initial).color,
             width: initial.width,
             height: initial.height,
+            box_sizing: initial.box_sizing,
         };
         for property in [
             Property::Display,
             Property::Color,
             Property::Width,
             Property::Height,
+            Property::BoxSizing,
         ] {
             let chosen = declarations
                 .iter()
@@ -112,6 +124,7 @@ impl Computed {
                 Property::Color => Value::Color(parent.unwrap_or(initial).color),
                 Property::Width => Value::Width(initial.width),
                 Property::Height => Value::Height(initial.height),
+                Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -130,6 +143,9 @@ impl Computed {
                 Value::Color(color) if property == Property::Color => computed.color = color,
                 Value::Width(width) if property == Property::Width => computed.width = width,
                 Value::Height(height) if property == Property::Height => computed.height = height,
+                Value::BoxSizing(sizing) if property == Property::BoxSizing => {
+                    computed.box_sizing = sizing;
+                }
                 _ => unreachable!("resolved property value has the wrong type"),
             }
         }
@@ -161,18 +177,22 @@ fn resolve(
         Property::Color => Value::Color(initial.color),
         Property::Width => Value::Width(initial.width),
         Property::Height => Value::Height(initial.height),
+        Property::BoxSizing => Value::BoxSizing(initial.box_sizing),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
         Property::Color => Value::Color(parent.unwrap_or(initial).color),
         Property::Width => Value::Width(parent.unwrap_or(initial).width),
         Property::Height => Value::Height(parent.unwrap_or(initial).height),
+        Property::BoxSizing => Value::BoxSizing(parent.unwrap_or(initial).box_sizing),
     };
     match value {
         Value::Inherit => inherited,
         Value::Initial => initial_value,
         Value::Unset => match property {
-            Property::Display | Property::Width | Property::Height => initial_value,
+            Property::Display | Property::Width | Property::Height | Property::BoxSizing => {
+                initial_value
+            }
             Property::Color => inherited,
         },
         Value::Revert => {
@@ -246,6 +266,7 @@ mod tests {
             color: 0x12_34_56,
             width: Length::Px(42),
             height: Length::Auto,
+            box_sizing: BoxSizing::ContentBox,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
@@ -253,7 +274,8 @@ mod tests {
                 display: Display::Inline,
                 color: parent.color,
                 width: Length::Auto,
-                height: Length::Auto
+                height: Length::Auto,
+                box_sizing: BoxSizing::ContentBox
             }
         );
     }
@@ -346,6 +368,7 @@ mod tests {
             color: 0x22_33_44,
             width: Length::Px(42),
             height: Length::Auto,
+            box_sizing: BoxSizing::ContentBox,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -362,7 +385,8 @@ mod tests {
                     display: expected_display,
                     color: expected_color,
                     width: Length::Auto,
-                    height: Length::Auto
+                    height: Length::Auto,
+                    box_sizing: BoxSizing::ContentBox
                 }
             );
         }
