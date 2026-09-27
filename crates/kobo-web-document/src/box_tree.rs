@@ -135,6 +135,54 @@ pub fn specified_block_height(height: Length, containing: Option<u32>) -> Option
     }
 }
 
+/// Collapse a set of margins proven adjoining by the caller. This numeric
+/// primitive does not decide whether parent/child, sibling, or empty-block
+/// margins actually adjoin in the formatting context.
+#[must_use]
+pub fn collapse_adjoining_margins(margins: &[i64]) -> i64 {
+    let positive = margins
+        .iter()
+        .copied()
+        .filter(|&m| m > 0)
+        .max()
+        .unwrap_or(0);
+    let negative = margins
+        .iter()
+        .copied()
+        .filter(|&m| m < 0)
+        .min()
+        .unwrap_or(0);
+    positive.saturating_add(negative)
+}
+
+/// Place a restricted run of sibling block border boxes under a parent content
+/// origin. Inputs must be normal-flow siblings with known heights and margins,
+/// no parent-child margin collapse, clearance, line boxes, or vertical edges.
+/// A missing dimension stops placement of this and all following siblings.
+#[must_use]
+pub fn stack_definite_siblings(
+    origin: i64,
+    siblings: &[(Option<u32>, Option<i64>, Option<i64>)],
+) -> Vec<Option<i64>> {
+    let mut positions = Vec::with_capacity(siblings.len());
+    let mut bottom = Some(origin);
+    let mut previous_bottom_margin = None;
+    for (index, &(height, top_margin, bottom_margin)) in siblings.iter().enumerate() {
+        let top = bottom.and_then(|last_bottom| {
+            let gap = if index == 0 {
+                top_margin?
+            } else {
+                collapse_adjoining_margins(&[previous_bottom_margin?, top_margin?])
+            };
+            last_bottom.checked_add(gap)
+        });
+        positions.push(top);
+        bottom = top.and_then(|y| y.checked_add(i64::from(height?)));
+        previous_bottom_margin = bottom_margin;
+    }
+    positions
+}
+
 /// Top-down diagnostic of definite block heights. Missing heights remain
 /// unknown for descendant percentage heights. No y position is inferred.
 pub struct HeightPass {
@@ -403,6 +451,45 @@ mod tests {
         assert_eq!(height("aside"), None);
         assert_eq!(height("div"), None);
         assert!(!pass.truncated);
+    }
+
+    #[test]
+    fn adjoining_margin_equation_handles_positive_negative_and_zero() {
+        assert_eq!(collapse_adjoining_margins(&[12, 30, 5]), 30);
+        assert_eq!(collapse_adjoining_margins(&[-12, -30, -5]), -30);
+        assert_eq!(collapse_adjoining_margins(&[20, -8, 10]), 12);
+        assert_eq!(collapse_adjoining_margins(&[0, 0]), 0);
+        assert_eq!(collapse_adjoining_margins(&[i64::MAX, i64::MIN]), -1);
+    }
+
+    #[test]
+    fn definite_sibling_stack_stops_at_first_unknown() {
+        assert_eq!(
+            stack_definite_siblings(
+                100,
+                &[
+                    (Some(40), Some(10), Some(20)),
+                    (Some(30), Some(15), Some(-5)),
+                    (Some(12), Some(-10), Some(8)),
+                ]
+            ),
+            [Some(110), Some(170), Some(190)]
+        );
+        assert_eq!(
+            stack_definite_siblings(
+                0,
+                &[
+                    (Some(20), Some(0), Some(0)),
+                    (None, Some(0), Some(0)),
+                    (Some(20), Some(0), Some(0)),
+                ]
+            ),
+            [Some(0), Some(20), None]
+        );
+        assert_eq!(
+            stack_definite_siblings(i64::MAX, &[(Some(1), Some(1), Some(0))]),
+            [None]
+        );
     }
 
     #[test]
