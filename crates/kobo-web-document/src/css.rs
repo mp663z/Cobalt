@@ -15,10 +15,10 @@ struct Simple {
     classes: Vec<String>,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Selector {
+pub(crate) struct Selector {
     // Rightmost first. Relation says how the next step to the left connects.
     steps: Vec<(Simple, Relation)>,
-    specificity: u32,
+    pub(crate) specificity: (u16, u16, u16),
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Relation {
@@ -37,6 +37,8 @@ struct Rule {
     important: bool,
     order: usize,
 }
+
+type RankedVisibility = (bool, (u16, u16, u16), usize, Visibility);
 
 #[derive(Default)]
 pub(super) struct Styles {
@@ -124,7 +126,7 @@ impl Styles {
     }
     pub fn hidden(&self, nodes: &[Node], handle: Handle) -> bool {
         let inline = attribute(nodes, handle, "style").and_then(display);
-        let mut chosen: Option<(bool, u32, usize, Visibility)> = None;
+        let mut chosen: Option<RankedVisibility> = None;
         for rule in &self.rules {
             if !rule.selector.matches(nodes, handle) {
                 continue;
@@ -137,7 +139,7 @@ impl Styles {
             }
         }
         if let Some((value, important)) = inline {
-            let rank = (important, 1000, usize::MAX);
+            let rank = (important, (1, 0, 0), usize::MAX);
             if chosen.is_none_or(|(a, b, c, _)| rank >= (a, b, c)) {
                 chosen = Some((rank.0, rank.1, rank.2, value));
             }
@@ -145,7 +147,7 @@ impl Styles {
         matches!(chosen, Some((_, _, _, Visibility::Hidden)))
     }
 }
-fn strip_comments(input: &str) -> String {
+pub(crate) fn strip_comments(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
     while let Some(start) = rest.find("/*") {
@@ -183,7 +185,7 @@ fn display(input: &str) -> Option<(Visibility, bool)> {
     }
     value
 }
-fn selector(input: &str) -> Option<Selector> {
+pub(crate) fn selector(input: &str) -> Option<Selector> {
     if input.is_empty() || input.len() > 256 || input.contains([':', '[', ']', '+', '~', '*', '|'])
     {
         return None;
@@ -222,14 +224,16 @@ fn selector(input: &str) -> Option<Selector> {
     if expecting_step {
         return None;
     }
-    let specificity = parsed
-        .iter()
-        .map(|(part, _)| {
-            u32::from(part.tag.is_some())
-                + u32::from(part.id.is_some()) * 100
-                + u32::try_from(part.classes.len()).unwrap_or(8) * 10
-        })
-        .sum();
+    let specificity =
+        parsed
+            .iter()
+            .fold((0_u16, 0_u16, 0_u16), |(ids, classes, types), (part, _)| {
+                (
+                    ids + u16::from(part.id.is_some()),
+                    classes + u16::try_from(part.classes.len()).unwrap_or(8),
+                    types + u16::from(part.tag.is_some()),
+                )
+            });
     parsed.reverse();
     Some(Selector {
         steps: parsed,
@@ -268,7 +272,7 @@ fn simple(part: &str) -> Option<Simple> {
     }
     Some(Simple { tag, id, classes })
 }
-fn attribute<'a>(nodes: &'a [Node], handle: Handle, name: &str) -> Option<&'a str> {
+pub(crate) fn attribute<'a>(nodes: &'a [Node], handle: Handle, name: &str) -> Option<&'a str> {
     let Data::Element { attrs, .. } = &nodes[handle].data else {
         return None;
     };
@@ -278,7 +282,7 @@ fn attribute<'a>(nodes: &'a [Node], handle: Handle, name: &str) -> Option<&'a st
         .map(|(_, value)| value.as_str())
 }
 impl Selector {
-    fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
+    pub(crate) fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
         let mut current = handle;
         for (index, (simple, _)) in self.steps.iter().enumerate() {
             if index == 0 {

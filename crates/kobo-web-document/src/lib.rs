@@ -6,10 +6,13 @@
 //! ceiling set by [`Limits`]. A page that reaches a ceiling is still shown,
 //! marked with a [`Warning`] saying what was left out.
 
+pub mod computed_style;
 mod convert;
 mod css;
 mod dom;
 mod host;
+mod style_syntax;
+pub mod style_tree;
 #[cfg(test)]
 mod tree_tests;
 pub mod url;
@@ -353,6 +356,49 @@ fn parse_with_styles(bytes: &[u8], url: &Url, limits: &Limits, styled: bool) -> 
     let mut document = convert::convert(&nodes, url, limits, warnings, author_styles);
     document.parse_errors = parse_errors;
     document
+}
+
+/// Parse HTML into a retained style arena, separate from reader conversion.
+/// This does not paint or fetch resources. Callers must handle `unsupported`
+/// and `truncated` rather than claim a complete rendered page.
+#[must_use]
+pub fn parse_style_tree(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+) -> style_tree::StyleTree {
+    let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
+    let mut warnings = Vec::new();
+    let text = decode(input, &mut warnings);
+    let sink = dom::Sink::new(limits.max_text_bytes);
+    let options = html5ever::ParseOpts {
+        tree_builder: html5ever::tree_builder::TreeBuilderOpts {
+            scripting_enabled: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut parser = html5ever::parse_document(sink, options);
+    let mut rest: &str = &text;
+    let mut input_truncated = bytes.len() > limits.max_input_bytes;
+    while !rest.is_empty() {
+        let mut end = rest.len().min(16 * 1024);
+        while !rest.is_char_boundary(end) {
+            end += 1;
+        }
+        parser.process(rest[..end].into());
+        rest = &rest[end..];
+        if parser.tokenizer.sink.sink.len() > limits.max_nodes {
+            input_truncated = true;
+            break;
+        }
+    }
+    let sink = parser.finish();
+    let dropped = sink.dropped_text.get() || sink.dropped_attributes.get() > 0;
+    let nodes = sink.into_nodes();
+    let mut tree = style_tree::StyleTree::from_dom(&nodes, sheets);
+    tree.truncated |= input_truncated || dropped;
+    tree
 }
 
 /// Bytes to text. UTF-8 (with or without a byte-order mark) is read as is.
