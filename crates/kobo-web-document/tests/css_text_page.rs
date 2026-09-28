@@ -93,6 +93,8 @@ fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
         "<html style='height:100px'><body><p>hi <em>there</em></p></body></html>",
         "<html style='height:100px'><body><p style='border:1px solid red'>hi</p></body></html>",
         "<html style='height:100px'><body><p>emoji🙂</p></body></html>",
+        "<html style='height:100px;background-color:#123456'><body><p>hi</p></body></html>",
+        "<html style='height:100px'><body><p style='margin-top:10px'>hi</p></body></html>",
     ] {
         assert_eq!(
             paint_single_text_page(&tree(html), 100, 100, &face).err(),

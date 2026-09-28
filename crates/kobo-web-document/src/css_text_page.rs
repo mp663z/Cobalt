@@ -149,6 +149,21 @@ pub fn paint_single_text_page(
     if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
         return Err(PageError::Unsupported);
     }
+    // This path cannot yet do viewport/root background propagation or
+    // parent-child margin collapse. A root fill could otherwise look like a
+    // correct full page while silently covering the wrong area.
+    let root = tree.roots[0];
+    if tree.boxes[root].style.background_color.is_some()
+        || tree.boxes.iter().any(|node| {
+            node.kind != BoxKind::Text
+                && (node.style.margin_left != crate::computed_style::Margin::Px(0)
+                    || node.style.margin_right != crate::computed_style::Margin::Px(0)
+                    || node.style.margin_top != crate::computed_style::Margin::Px(0)
+                    || node.style.margin_bottom != crate::computed_style::Margin::Px(0))
+        })
+    {
+        return Err(PageError::Unsupported);
+    }
     let mut list = DisplayList::default();
     for (index, node) in tree.boxes.iter().enumerate() {
         if node.kind == BoxKind::Text {
