@@ -4,6 +4,7 @@
 //! not invent font metrics, ligatures, kerning, bidi, CSS line-height, or
 //! Unicode break rules. Callers must reject unsupported inline contexts.
 
+use crate::box_tree::{BoxKind, BoxTree};
 use crate::display_list::MAX_GLYPH_BYTES;
 
 const MAX_LINES: usize = 4096;
@@ -28,6 +29,7 @@ pub enum LineError {
     UnbreakableWord,
     TooManyGlyphs,
     TooManyLines,
+    UnsupportedTree,
 }
 
 /// Place a single block's normal-white-space ASCII text at given integer
@@ -121,6 +123,69 @@ pub fn place_ascii_normal(
     })
 }
 
+/// Measured lines for one directly contained text node. Multiple inline
+/// children, nested spans, anonymous blocks and other inline contexts need a
+/// shared formatting context, so they cannot use this narrow entry point.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DirectTextLines {
+    pub source: usize,
+    pub lines: Lines,
+    pub content_height: u32,
+}
+
+/// Measure a single direct text child with an external, exact font provider.
+/// The parent must be a normal-flow block whose only child is one text box.
+/// Font size comes from the text node's inherited computed style. This result
+/// is geometry, not a glyph raster or a license to paint a partial document.
+///
+/// # Errors
+/// Fails on unsupported tree shape, unavailable metrics, width/height
+/// overflow, or text beyond this module's deliberately narrow ASCII domain.
+pub fn place_direct_text(
+    tree: &BoxTree,
+    parent: usize,
+    max_width: u32,
+    mut advance: impl FnMut(char, u32) -> Option<u32>,
+    mut line_height: impl FnMut(u32) -> Option<u32>,
+) -> Result<DirectTextLines, LineError> {
+    if tree.truncated || tree.unsupported {
+        return Err(LineError::UnsupportedTree);
+    }
+    let node = tree.boxes.get(parent).ok_or(LineError::UnsupportedTree)?;
+    if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
+        || node.children.len() != 1
+        || node.text.is_some()
+    {
+        return Err(LineError::UnsupportedTree);
+    }
+    let child = tree
+        .boxes
+        .get(node.children[0])
+        .ok_or(LineError::UnsupportedTree)?;
+    if child.parent != Some(parent) || child.kind != BoxKind::Text {
+        return Err(LineError::UnsupportedTree);
+    }
+    let source = child.source.ok_or(LineError::UnsupportedTree)?;
+    let text = child.text.as_deref().ok_or(LineError::UnsupportedTree)?;
+    let size = child.style.font_size;
+    if size == 0 || max_width == 0 {
+        return Err(LineError::InvalidMetrics);
+    }
+    let lines = place_ascii_normal(text, max_width, |ch| advance(ch, size))?;
+    let height = line_height(size)
+        .filter(|&value| value > 0)
+        .ok_or(LineError::InvalidMetrics)?;
+    let content_height = lines
+        .count
+        .checked_mul(height)
+        .ok_or(LineError::InvalidMetrics)?;
+    Ok(DirectTextLines {
+        source,
+        lines,
+        content_height,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +238,45 @@ mod tests {
                 .map(|g| (g.character, g.x))
                 .collect::<Vec<_>>(),
             [('a', 0), (' ', 3), ('b', 6)]
+        );
+    }
+
+    #[test]
+    fn direct_text_uses_inherited_size_and_rejects_other_inline_contexts() {
+        use crate::{box_tree::BoxTree, parse_style_tree, Limits};
+        let tree = |html: &str| {
+            BoxTree::from_style(&parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT))
+        };
+        let single = tree("<html><body><p style='font-size:20px'>ab cd</p></body></html>");
+        let p = single
+            .boxes
+            .iter()
+            .position(|node| node.style.font_size == 20 && node.kind == BoxKind::Block)
+            .unwrap();
+        let laid_out = place_direct_text(
+            &single,
+            p,
+            25,
+            |_, size| Some(size / 2),
+            |size| Some(size + 4),
+        )
+        .unwrap();
+        assert_eq!(laid_out.content_height, 48);
+        assert_eq!(laid_out.lines.count, 2);
+        assert_eq!(laid_out.lines.glyphs[2].line, 1);
+        assert_eq!(
+            laid_out.source,
+            single.boxes[single.boxes[p].children[0]].source.unwrap()
+        );
+        let mixed = tree("<html><body><p>one <em>two</em></p></body></html>");
+        let p = mixed
+            .boxes
+            .iter()
+            .position(|node| node.kind == BoxKind::Block && node.children.len() > 1)
+            .unwrap();
+        assert_eq!(
+            place_direct_text(&mixed, p, 100, |_, _| Some(5), |_| Some(16)),
+            Err(LineError::UnsupportedTree)
         );
     }
 
