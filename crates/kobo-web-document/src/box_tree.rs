@@ -6,6 +6,7 @@
 //! those boxes, and calls out block-in-inline splitting as unsupported.
 
 use crate::computed_style::{BoxSizing, Computed, Direction, Display, Length, Margin};
+use crate::inline_lines::place_direct_text;
 use crate::style_tree::StyleTree;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -313,6 +314,38 @@ pub struct UsedHeightPass {
 impl UsedHeightPass {
     #[must_use]
     pub fn from_boxes(tree: &BoxTree, viewport_width: u32, viewport_height: u32) -> Self {
+        Self::calculate(tree, viewport_width, viewport_height, None, None)
+    }
+
+    /// Resolve auto block heights for the narrow direct-text case using
+    /// caller-supplied exact font advances and line heights. This is a
+    /// geometry pass only: a separate painter must use the same font and
+    /// reject any unsupported box before returning a page image.
+    #[must_use]
+    pub fn from_boxes_with_direct_text(
+        tree: &BoxTree,
+        viewport_width: u32,
+        viewport_height: u32,
+        mut advance: impl FnMut(char, u32) -> Option<u32>,
+        mut line_height: impl FnMut(u32) -> Option<u32>,
+    ) -> Self {
+        Self::calculate(
+            tree,
+            viewport_width,
+            viewport_height,
+            Some(&mut advance),
+            Some(&mut line_height),
+        )
+    }
+
+    #[allow(clippy::too_many_lines)] // Bounded bottom-up height walk and guarded direct-text case.
+    fn calculate(
+        tree: &BoxTree,
+        viewport_width: u32,
+        viewport_height: u32,
+        mut advance: Option<&mut dyn FnMut(char, u32) -> Option<u32>>,
+        mut line_height: Option<&mut dyn FnMut(u32) -> Option<u32>>,
+    ) -> Self {
         let specified = HeightPass::from_boxes(tree, viewport_height);
         let widths = WidthPass::from_boxes(tree, viewport_width);
         let mut result = Self {
@@ -326,6 +359,21 @@ impl UsedHeightPass {
         // A valid box tree is acyclic; reverse traversal puts descendants
         // before parents. Invalid trees are rejected by the paint bridge.
         for (index, node) in tree.boxes.iter().enumerate().rev() {
+            if node.kind == BoxKind::Text {
+                if advance.is_none()
+                    || line_height.is_none()
+                    || !node.parent.is_some_and(|parent| {
+                        tree.boxes.get(parent).is_some_and(|owner| {
+                            matches!(owner.kind, BoxKind::Block | BoxKind::ListItem)
+                                && owner.style.height == Length::Auto
+                                && owner.children.as_slice() == [index]
+                        })
+                    })
+                {
+                    result.unsupported = true;
+                }
+                continue;
+            }
             if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem) {
                 result.unsupported = true;
                 continue;
@@ -341,6 +389,24 @@ impl UsedHeightPass {
                 result.unsupported = true;
                 continue;
             };
+            if node.children.len() == 1
+                && tree
+                    .boxes
+                    .get(node.children[0])
+                    .is_some_and(|child| child.kind == BoxKind::Text)
+            {
+                let measured = advance
+                    .as_deref_mut()
+                    .zip(line_height.as_deref_mut())
+                    .and_then(|(advance, line_height)| {
+                        place_direct_text(tree, index, width, advance, line_height).ok()
+                    });
+                result.heights[index] = measured.map(|lines| lines.content_height);
+                if result.heights[index].is_none_or(|height| height == 0) {
+                    result.unsupported = true;
+                }
+                continue;
+            }
             let mut content = 0_i64;
             let mut previous: Option<usize> = None;
             let mut valid = true;
@@ -769,6 +835,44 @@ mod tests {
         assert_eq!(height("aside"), None);
         assert_eq!(height("div"), None);
         assert!(!pass.truncated);
+    }
+
+    #[test]
+    fn measured_text_height_does_not_turn_background_only_pass_into_text_paint() {
+        let tree = boxes(
+            "<html style='height:100px'><body><p style='font-size:20px'>ab cd</p></body></html>",
+        );
+        let measured = UsedHeightPass::from_boxes_with_direct_text(
+            &tree,
+            100,
+            100,
+            |_, size| Some(size / 2),
+            |size| Some(size + 4),
+        );
+        let paragraph = tree
+            .boxes
+            .iter()
+            .position(|box_| box_.kind == BoxKind::Block && box_.style.font_size == 20)
+            .unwrap();
+        let body = tree.boxes[paragraph].parent.unwrap();
+        assert_eq!(measured.heights[paragraph], Some(24));
+        assert_eq!(measured.heights[body], Some(24));
+        assert!(!measured.unsupported);
+        assert!(UsedHeightPass::from_boxes(&tree, 100, 100).unsupported);
+        let mixed = boxes("<html style='height:100px'><body><p>ab <em>cd</em></p></body></html>");
+        assert!(
+            UsedHeightPass::from_boxes_with_direct_text(
+                &mixed,
+                100,
+                100,
+                |_, _| Some(8),
+                |_| Some(20)
+            )
+            .unsupported
+        );
+        let unknown_font =
+            UsedHeightPass::from_boxes_with_direct_text(&tree, 100, 100, |_, _| None, |_| Some(20));
+        assert!(unknown_font.unsupported);
     }
 
     #[test]
