@@ -15,6 +15,7 @@ pub mod css_paint_bridge;
 pub mod display_list;
 mod dom;
 mod host;
+pub mod inline_lines;
 mod style_syntax;
 pub mod style_tree;
 #[cfg(test)]
