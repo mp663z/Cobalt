@@ -474,8 +474,34 @@ pub struct VerticalPass {
 
 impl VerticalPass {
     #[must_use]
-    #[allow(clippy::too_many_lines)] // Validation and placement share one bounded tree walk.
     pub fn from_boxes(tree: &BoxTree, viewport_width: u32, viewport_height: u32) -> Self {
+        let heights = UsedHeightPass::from_boxes(tree, viewport_width, viewport_height);
+        Self::calculate(tree, viewport_width, &heights)
+    }
+
+    /// Diagnostic coordinates for direct-text blocks measured with one font
+    /// provider. A separate full-page paint gate is still required: the
+    /// background-only bridge intentionally refuses text nodes.
+    #[must_use]
+    pub fn from_boxes_with_direct_text(
+        tree: &BoxTree,
+        viewport_width: u32,
+        viewport_height: u32,
+        mut advance: impl FnMut(char, u32) -> Option<u32>,
+        mut line_height: impl FnMut(u32) -> Option<u32>,
+    ) -> Self {
+        let heights = UsedHeightPass::from_boxes_with_direct_text(
+            tree,
+            viewport_width,
+            viewport_height,
+            &mut advance,
+            &mut line_height,
+        );
+        Self::calculate(tree, viewport_width, &heights)
+    }
+
+    #[allow(clippy::too_many_lines)] // Validation and placement share one bounded tree walk.
+    fn calculate(tree: &BoxTree, viewport_width: u32, heights: &UsedHeightPass) -> Self {
         let count = tree.boxes.len();
         let mut result = Self {
             content_y: vec![None; count],
@@ -489,7 +515,6 @@ impl VerticalPass {
             result.unsupported = true;
             return result;
         }
-        let heights = UsedHeightPass::from_boxes(tree, viewport_width, viewport_height);
         let widths = WidthPass::from_boxes(tree, viewport_width);
         if heights.truncated || widths.truncated {
             result.truncated = true;
@@ -509,15 +534,24 @@ impl VerticalPass {
             };
             if seen[index]
                 || node.parent != parent
-                || !matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
-                || heights.heights[index].is_none_or(|h| h == 0)
-                || widths.widths[index].is_none()
+                || !(matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
+                    || (node.kind == BoxKind::Text
+                        && parent.is_some_and(|owner| {
+                            tree.boxes[owner].children.as_slice() == [index]
+                                && tree.boxes[owner].style.height == Length::Auto
+                                && heights.heights[owner].is_some()
+                        })))
+                || (node.kind != BoxKind::Text && heights.heights[index].is_none_or(|h| h == 0))
+                || (node.kind != BoxKind::Text && widths.widths[index].is_none())
                 || node.style.box_sizing != BoxSizing::ContentBox
             {
                 result.unsupported = true;
                 break;
             }
             seen[index] = true;
+            if node.kind == BoxKind::Text {
+                continue;
+            }
             if let Some(&first) = node.children.first() {
                 let Some(child) = tree.boxes.get(first) else {
                     result.unsupported = true;
@@ -547,9 +581,16 @@ impl VerticalPass {
         let mut stack = vec![root];
         while let Some(index) = stack.pop() {
             let node = &tree.boxes[index];
+            if node.kind == BoxKind::Text {
+                continue;
+            }
             let containing_width = widths.widths[index].map_or(0, |w| w.content);
             let mut previous = None::<usize>;
             for &child in &node.children {
+                if tree.boxes[child].kind == BoxKind::Text {
+                    result.content_y[child] = result.content_y[index];
+                    continue;
+                }
                 let gap = previous.map_or(0, |prev| {
                     collapse_adjoining_margins(&[
                         resolve_vertical_margin(
@@ -873,6 +914,28 @@ mod tests {
         let unknown_font =
             UsedHeightPass::from_boxes_with_direct_text(&tree, 100, 100, |_, _| None, |_| Some(20));
         assert!(unknown_font.unsupported);
+    }
+
+    #[test]
+    fn measured_direct_text_receives_content_origin_without_background_permission() {
+        let tree = boxes("<html style='height:100px;padding-top:2px'><body style='padding-top:3px'><p style='font-size:20px;padding-top:4px'>ab cd</p></body></html>");
+        let vertical = VerticalPass::from_boxes_with_direct_text(
+            &tree,
+            100,
+            100,
+            |_, size| Some(size / 2),
+            |size| Some(size + 4),
+        );
+        let p = tree
+            .boxes
+            .iter()
+            .position(|node| node.kind == BoxKind::Block && node.style.font_size == 20)
+            .unwrap();
+        let text = tree.boxes[p].children[0];
+        assert_eq!(vertical.content_y[p], Some(9));
+        assert_eq!(vertical.content_y[text], Some(9));
+        assert!(!vertical.unsupported);
+        assert!(VerticalPass::from_boxes(&tree, 100, 100).unsupported);
     }
 
     #[test]
