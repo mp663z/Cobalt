@@ -64,6 +64,37 @@ fn validate_tree(tree: &BoxTree) -> Result<(), BridgeError> {
     Ok(())
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum PaintArea {
+    Content,
+    Padding,
+}
+
+/// Paint proven padding-box backgrounds, including integer-pixel padding but
+/// no border, radius, image, or general CSS background propagation. The
+/// entire box tree must still pass the restricted vertical and width passes.
+///
+/// # Errors
+/// Returns an error for any unsupported or invalid geometry, bounds, or allocation.
+pub fn paint_padding_rectangles(
+    tree: &BoxTree,
+    widths: &WidthPass,
+    vertical: &VerticalPass,
+    viewport_width: u32,
+    viewport_height: u32,
+    fills: &[FillSpec],
+) -> Result<DisplayList, BridgeError> {
+    paint_rectangles(
+        tree,
+        widths,
+        vertical,
+        viewport_width,
+        viewport_height,
+        fills,
+        PaintArea::Padding,
+    )
+}
+
 /// Make a new, all-or-nothing list in the order of the requested fills.
 /// No text, images, borders, padding, clearance, backgrounds, or guessed
 /// coordinates are synthesized. Only *content* rectangles are filled.
@@ -84,6 +115,27 @@ pub fn paint_content_rectangles(
     viewport_width: u32,
     viewport_height: u32,
     fills: &[FillSpec],
+) -> Result<DisplayList, BridgeError> {
+    paint_rectangles(
+        tree,
+        widths,
+        vertical,
+        viewport_width,
+        viewport_height,
+        fills,
+        PaintArea::Content,
+    )
+}
+
+#[allow(clippy::too_many_lines)] // Proven geometry validation and rectangle construction share one path.
+fn paint_rectangles(
+    tree: &BoxTree,
+    widths: &WidthPass,
+    vertical: &VerticalPass,
+    viewport_width: u32,
+    viewport_height: u32,
+    fills: &[FillSpec],
+    area: PaintArea,
 ) -> Result<DisplayList, BridgeError> {
     let count = tree.boxes.len();
     if count > MAX_BRIDGE_BOXES {
@@ -114,11 +166,12 @@ pub fn paint_content_rectangles(
     // into paint if styles carry edges this bridge has not implemented.
     if tree.boxes.iter().any(|node| {
         !matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
-            || node.style.box_sizing != BoxSizing::ContentBox
-            || node.style.padding_left != 0
-            || node.style.padding_right != 0
-            || node.style.padding_top != 0
-            || node.style.padding_bottom != 0
+            || (area == PaintArea::Content
+                && (node.style.box_sizing != BoxSizing::ContentBox
+                    || node.style.padding_left != 0
+                    || node.style.padding_right != 0
+                    || node.style.padding_top != 0
+                    || node.style.padding_bottom != 0))
     }) {
         return Err(BridgeError::Unsupported);
     }
@@ -149,6 +202,24 @@ pub fn paint_content_rectangles(
         let height = proven_heights.heights[fill.box_index].ok_or(BridgeError::InvalidGeometry)?;
         let x = widths.content_x[fill.box_index].ok_or(BridgeError::InvalidGeometry)?;
         let y = vertical.content_y[fill.box_index].ok_or(BridgeError::InvalidGeometry)?;
+        let (x, y, width, height) = if area == PaintArea::Padding {
+            (
+                x.checked_sub(i64::from(node.style.padding_left))
+                    .ok_or(BridgeError::InvalidGeometry)?,
+                y.checked_sub(i64::from(node.style.padding_top))
+                    .ok_or(BridgeError::InvalidGeometry)?,
+                width
+                    .checked_add(node.style.padding_left)
+                    .and_then(|w| w.checked_add(node.style.padding_right))
+                    .ok_or(BridgeError::InvalidGeometry)?,
+                height
+                    .checked_add(node.style.padding_top)
+                    .and_then(|h| h.checked_add(node.style.padding_bottom))
+                    .ok_or(BridgeError::InvalidGeometry)?,
+            )
+        } else {
+            (x, y, width, height)
+        };
         if width == 0 || height == 0 {
             return Err(BridgeError::InvalidGeometry);
         }

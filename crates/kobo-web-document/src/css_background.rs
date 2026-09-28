@@ -1,11 +1,11 @@
 //! Conservative CSS background-color painting on already proven content boxes.
 //!
-//! This paints content rectangles only, not borders or padding. It rejects
+//! This paints padding rectangles, not borders or rounded corners. It rejects
 //! unsupported layouts rather than returning a plausible partial page. Text,
 //! images, default margins and general block/inline layout remain unpainted.
 
 use crate::box_tree::{BoxTree, VerticalPass, WidthPass};
-use crate::css_paint_bridge::{paint_content_rectangles, BridgeError, FillSpec};
+use crate::css_paint_bridge::{paint_padding_rectangles, BridgeError, FillSpec};
 use crate::display_list::{DisplayList, Rgb};
 
 /// Convert retained background colors to explicit fills in box order.
@@ -35,7 +35,7 @@ pub fn paint_backgrounds(
             })
         })
         .collect();
-    paint_content_rectangles(
+    paint_padding_rectangles(
         tree,
         &widths,
         &vertical,
