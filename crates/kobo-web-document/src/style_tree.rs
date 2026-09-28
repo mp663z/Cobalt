@@ -235,6 +235,7 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
     (rules, unsupported)
 }
 
+#[allow(clippy::too_many_lines)] // Explicit supported-property parsing rejects all unknown CSS.
 fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
     let mut result = Vec::new();
     let mut unsupported = false;
@@ -279,6 +280,22 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None,
                 })
                 .map(|value| (Property::BoxSizing, value)),
+            "padding-top" => parse_keyword(value)
+                .or_else(|| {
+                    parse_width(value).and_then(|length| match length {
+                        Length::Px(px) => Some(Value::Padding(px)),
+                        _ => None,
+                    })
+                })
+                .map(|value| (Property::PaddingTop, value)),
+            "padding-bottom" => parse_keyword(value)
+                .or_else(|| {
+                    parse_width(value).and_then(|length| match length {
+                        Length::Px(px) => Some(Value::Padding(px)),
+                        _ => None,
+                    })
+                })
+                .map(|value| (Property::PaddingBottom, value)),
             "padding-left" => parse_keyword(value)
                 .or_else(|| {
                     parse_width(value).and_then(|length| match length {
@@ -472,6 +489,19 @@ mod tests {
         assert_eq!((div.style.padding_left, div.style.padding_right), (12, 5));
         assert_eq!(
             (child.style.padding_left, child.style.padding_right),
+            (0, 0)
+        );
+    }
+
+    #[test]
+    fn vertical_padding_is_noninherited_and_rejects_percentage() {
+        let styled = tree("<div style='padding-top:12px;padding-bottom:5px'><p style='padding-top:25%'>child</p></div>", &[]);
+        assert!(styled.unsupported);
+        let div = styled.nodes.iter().find(|n| n.tag == "div").unwrap();
+        let child = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!((div.style.padding_top, div.style.padding_bottom), (12, 5));
+        assert_eq!(
+            (child.style.padding_top, child.style.padding_bottom),
             (0, 0)
         );
     }

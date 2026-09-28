@@ -268,7 +268,17 @@ impl HeightPass {
             let node = &tree.boxes[index];
             let height = match node.kind {
                 BoxKind::Block | BoxKind::ListItem => {
-                    specified_block_height(node.style.height, containing)
+                    specified_block_height(node.style.height, containing).map(|declared| {
+                        if node.style.box_sizing == BoxSizing::BorderBox {
+                            declared.saturating_sub(
+                                node.style
+                                    .padding_top
+                                    .saturating_add(node.style.padding_bottom),
+                            )
+                        } else {
+                            declared
+                        }
+                    })
                 }
                 BoxKind::AnonymousBlock => None,
                 BoxKind::InlineBlock | BoxKind::Inline | BoxKind::Text => {
@@ -368,7 +378,7 @@ impl VerticalPass {
             result.unsupported = true;
             return result;
         }
-        result.content_y[root] = Some(0);
+        result.content_y[root] = Some(i64::from(tree.boxes[root].style.padding_top));
         let mut stack = vec![root];
         while let Some(index) = stack.pop() {
             let node = &tree.boxes[index];
@@ -389,10 +399,18 @@ impl VerticalPass {
                 });
                 let baseline = previous.map_or(result.content_y[index], |prev| {
                     result.content_y[prev].and_then(|y| {
-                        heights.heights[prev].and_then(|h| y.checked_add(i64::from(h)))
+                        heights.heights[prev].and_then(|h| {
+                            y.checked_add(i64::from(h)).and_then(|bottom| {
+                                bottom.checked_add(i64::from(tree.boxes[prev].style.padding_bottom))
+                            })
+                        })
                     })
                 });
-                result.content_y[child] = baseline.and_then(|y| y.checked_add(gap));
+                result.content_y[child] = baseline.and_then(|y| {
+                    y.checked_add(gap).and_then(|top| {
+                        top.checked_add(i64::from(tree.boxes[child].style.padding_top))
+                    })
+                });
                 previous = Some(child);
             }
             for &child in node.children.iter().rev() {
@@ -676,6 +694,50 @@ mod tests {
         assert_eq!(y("main"), Some(0));
         assert_eq!(y("section"), Some(0));
         assert_eq!(y("article"), Some(30));
+    }
+
+    #[test]
+    fn vertical_padding_moves_content_and_siblings_without_margin_collapse() {
+        let html = "<html style='height:300px;padding-top:7px'><body style='height:200px;padding-top:11px;padding-bottom:13px'><main style='height:30px;padding-top:5px;padding-bottom:3px;margin-bottom:9px'></main><section style='height:20px;padding-top:4px;margin-top:6px'></section></body></html>";
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let tree = BoxTree::from_style(&styled);
+        let pass = VerticalPass::from_boxes(&tree, 400, 600);
+        assert!(!pass.unsupported);
+        let y = |tag: &str| {
+            tree.boxes
+                .iter()
+                .enumerate()
+                .find(|(_, b)| {
+                    b.source
+                        .is_some_and(|source| styled.nodes[source].tag == tag)
+                })
+                .and_then(|(index, _)| pass.content_y[index])
+        };
+        assert_eq!(y("html"), Some(7));
+        assert_eq!(y("body"), Some(18));
+        assert_eq!(y("main"), Some(23));
+        assert_eq!(y("section"), Some(69)); // 23 + 30 + 3 + max(9, 6) + 4
+    }
+
+    #[test]
+    fn border_box_height_subtracts_vertical_padding_without_underflow() {
+        let html = "<html style='height:100px'><body style='height:50%;box-sizing:border-box;padding-top:12px;padding-bottom:13px'><main style='height:50%'></main></body></html>";
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let tree = BoxTree::from_style(&styled);
+        let pass = HeightPass::from_boxes(&tree, 100);
+        let height = |tag: &str| {
+            tree.boxes
+                .iter()
+                .enumerate()
+                .find(|(_, b)| {
+                    b.source
+                        .is_some_and(|source| styled.nodes[source].tag == tag)
+                })
+                .and_then(|(index, _)| pass.heights[index])
+        };
+        assert_eq!(height("body"), Some(25));
+        assert_eq!(height("main"), Some(12));
+        assert!(VerticalPass::from_boxes(&tree, 100, 100).unsupported); // border-box y unsupported
     }
 
     #[test]

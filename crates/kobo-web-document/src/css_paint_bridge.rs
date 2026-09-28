@@ -117,6 +117,8 @@ pub fn paint_content_rectangles(
             || node.style.box_sizing != BoxSizing::ContentBox
             || node.style.padding_left != 0
             || node.style.padding_right != 0
+            || node.style.padding_top != 0
+            || node.style.padding_bottom != 0
     }) {
         return Err(BridgeError::Unsupported);
     }
