@@ -5,7 +5,7 @@
 //! Unicode break rules. Callers must reject unsupported inline contexts.
 
 use crate::box_tree::{BoxKind, BoxTree};
-use crate::display_list::MAX_GLYPH_BYTES;
+use crate::display_list::{DisplayList, Error as DisplayError, Rect, Rgb, Source, MAX_GLYPH_BYTES};
 
 const MAX_LINES: usize = 4096;
 
@@ -186,6 +186,124 @@ pub fn place_direct_text(
     })
 }
 
+/// A measured glyph's own bitmap and offsets relative to its baseline.
+/// The provider must return masks for the same face and size used to measure
+/// advances; this function cannot verify a provider's font identity.
+pub struct GlyphBitmap {
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
+    pub coverage: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlyphPaintError {
+    InvalidMetrics,
+    InvalidBitmap,
+    OutsideLine,
+    TooManyCommands,
+    TooManyGlyphBytes,
+    Allocation,
+}
+
+/// Convert already measured direct text into a separate bounded glyph list.
+/// `line_top` is the first line's content-box y; `baseline_offset` and
+/// `line_height` come from the actual font provider. Every ink pixel must fit
+/// its line and the supplied content width. The caller combines this list
+/// with backgrounds only after the *whole page* is proven paintable.
+///
+/// # Errors
+/// Refuses missing/invalid bitmaps, overflow, out-of-line ink, and command or
+/// glyph byte budgets. It never returns a partially painted list.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_direct_glyphs(
+    text: &DirectTextLines,
+    content_x: i32,
+    line_top: i32,
+    content_width: u32,
+    size: u32,
+    line_height: u32,
+    baseline_offset: i32,
+    color: Rgb,
+    mut raster: impl FnMut(char, u32) -> Option<GlyphBitmap>,
+) -> Result<DisplayList, GlyphPaintError> {
+    if size == 0
+        || line_height == 0
+        || content_width == 0
+        || baseline_offset < 0
+        || i64::from(baseline_offset) >= i64::from(line_height)
+        || text.content_height
+            != text
+                .lines
+                .count
+                .checked_mul(line_height)
+                .ok_or(GlyphPaintError::InvalidMetrics)?
+    {
+        return Err(GlyphPaintError::InvalidMetrics);
+    }
+    if text.lines.glyphs.len() > crate::display_list::MAX_COMMANDS {
+        return Err(GlyphPaintError::TooManyCommands);
+    }
+    if text.lines.glyphs.is_empty() != (text.lines.count == 0) {
+        return Err(GlyphPaintError::InvalidMetrics);
+    }
+    let mut list = DisplayList::default();
+    for glyph in &text.lines.glyphs {
+        if glyph.line >= text.lines.count || glyph.x >= content_width {
+            return Err(GlyphPaintError::OutsideLine);
+        }
+        let bitmap = raster(glyph.character, size).ok_or(GlyphPaintError::InvalidBitmap)?;
+        let bytes = usize::try_from(bitmap.width)
+            .ok()
+            .and_then(|w| {
+                usize::try_from(bitmap.height)
+                    .ok()
+                    .and_then(|h| w.checked_mul(h))
+            })
+            .ok_or(GlyphPaintError::InvalidBitmap)?;
+        if bytes != bitmap.coverage.len() {
+            return Err(GlyphPaintError::InvalidBitmap);
+        }
+        if bytes == 0 {
+            continue; // e.g. a measured space has no ink
+        }
+        let x = i64::from(content_x) + i64::from(glyph.x) + i64::from(bitmap.left);
+        let line_y = i64::from(line_top) + i64::from(glyph.line) * i64::from(line_height);
+        let y = line_y + i64::from(baseline_offset) + i64::from(bitmap.top);
+        let right = x + i64::from(bitmap.width);
+        let bottom = y + i64::from(bitmap.height);
+        if x < i64::from(content_x)
+            || right > i64::from(content_x) + i64::from(content_width)
+            || y < line_y
+            || bottom > line_y + i64::from(line_height)
+        {
+            return Err(GlyphPaintError::OutsideLine);
+        }
+        list.glyph_run(
+            Rect {
+                x: i32::try_from(x).map_err(|_| GlyphPaintError::InvalidMetrics)?,
+                y: i32::try_from(y).map_err(|_| GlyphPaintError::InvalidMetrics)?,
+                width: bitmap.width,
+                height: bitmap.height,
+            },
+            bitmap.coverage,
+            color,
+            Source {
+                node: Some(text.source),
+                action: None,
+            },
+        )
+        .map_err(|error| match error {
+            DisplayError::TooManyCommands => GlyphPaintError::TooManyCommands,
+            DisplayError::GlyphBudget => GlyphPaintError::TooManyGlyphBytes,
+            DisplayError::Allocation => GlyphPaintError::Allocation,
+            _ => GlyphPaintError::InvalidBitmap,
+        })?;
+    }
+    Ok(list)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,6 +356,79 @@ mod tests {
                 .map(|g| (g.character, g.x))
                 .collect::<Vec<_>>(),
             [('a', 0), (' ', 3), ('b', 6)]
+        );
+    }
+
+    #[test]
+    fn paints_only_supplied_mask_with_text_source_and_no_partial_result() {
+        let text = DirectTextLines {
+            source: 7,
+            content_height: 12,
+            lines: Lines {
+                count: 1,
+                glyphs: vec![PositionedGlyph {
+                    character: 'A',
+                    x: 2,
+                    line: 0,
+                }],
+            },
+        };
+        let raster = |_, _| {
+            Some(GlyphBitmap {
+                left: 1,
+                top: -3,
+                width: 2,
+                height: 2,
+                coverage: vec![255, 128, 64, 0],
+            })
+        };
+        let list = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), raster).unwrap();
+        assert!(matches!(
+            &list.commands()[0],
+            crate::display_list::Command::GlyphRun {
+                bounds: Rect {
+                    x: 6,
+                    y: 7,
+                    width: 2,
+                    height: 2
+                },
+                source: Source {
+                    node: Some(7),
+                    action: None
+                },
+                ..
+            }
+        ));
+        let pixels = list.rasterize(20, 20, Rgb(255, 255, 255)).unwrap();
+        let at = |x: usize, y: usize| &pixels[((y * 20 + x) * 4)..((y * 20 + x) * 4 + 4)];
+        assert_eq!(at(6, 7), &[0, 0, 0, 255]);
+        assert_eq!(at(7, 7), &[127, 127, 127, 255]);
+        assert_eq!(at(5, 7), &[255, 255, 255, 255]);
+        assert_eq!(
+            paint_direct_glyphs(&text, 3, 4, 3, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(
+                GlyphBitmap {
+                    left: 1,
+                    top: -3,
+                    width: 2,
+                    height: 2,
+                    coverage: vec![255, 128, 64, 0]
+                }
+            ))
+            .err(),
+            Some(GlyphPaintError::OutsideLine)
+        );
+        assert_eq!(
+            paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(
+                GlyphBitmap {
+                    left: 1,
+                    top: -3,
+                    width: 2,
+                    height: 2,
+                    coverage: vec![255]
+                }
+            ))
+            .err(),
+            Some(GlyphPaintError::InvalidBitmap)
         );
     }
 
