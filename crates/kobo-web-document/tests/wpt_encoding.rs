@@ -43,6 +43,9 @@ fn every_high_byte_decodes_as_the_windows_1252_index_says() {
         seen += 1;
     }
     assert_eq!(seen, 128);
+    if std::env::var_os("WPT_SCORE").is_some() {
+        println!("WPT_SCORE suite=windows-1252-index passed={seen} run={seen} skipped=0");
+    }
 }
 
 #[test]

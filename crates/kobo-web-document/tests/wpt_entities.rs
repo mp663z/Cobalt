@@ -15,7 +15,7 @@ fn every_named_character_reference_reads_as_its_characters() {
     let table = std::fs::read_to_string(&path).expect("entities.tsv");
     let url = Url::parse("https://entities.example/").expect("url");
     let mut wrong = Vec::new();
-    let mut seen = 0;
+    let (mut seen, mut passed) = (0, 0);
     for line in table.lines() {
         let (name, points) = line.split_once('\t').expect("two fields");
         let expected: String = points
@@ -28,12 +28,17 @@ fn every_named_character_reference_reads_as_its_characters() {
         let document = parse_document(page.as_bytes(), &url, &Limits::DEFAULT);
         let text = document.visible_text();
         let want = format!("[{expected}]\n");
-        if text != want {
+        if text == want {
+            passed += 1;
+        } else {
             wrong.push(format!("{name}: want {want:?}, got {text:?}"));
         }
         seen += 1;
     }
     assert_eq!(seen, 2231);
+    if std::env::var_os("WPT_SCORE").is_some() {
+        println!("WPT_SCORE suite=html-named-entities passed={passed} run={seen} skipped=0");
+    }
     assert!(
         wrong.is_empty(),
         "{} wrong:\n{}",

@@ -57,7 +57,7 @@ fn wpt_url_parsing() {
     let known = expected_failures("url");
     let mut unexpected = Vec::new();
     let mut fixed = Vec::new();
-    let mut seen = 0;
+    let (mut seen, mut passed_count) = (0, 0);
     for line in wpt("url/cases.tsv").lines() {
         let fields: Vec<&str> = line.split('\t').collect();
         let [input, base, expected] = fields[..] else {
@@ -74,6 +74,9 @@ fn wpt_url_parsing() {
         };
         let actual = result.map_or_else(|_| "failure".to_owned(), |url| url.to_string());
         let passed = actual == unescape(expected);
+        if passed {
+            passed_count += 1;
+        }
         match (passed, known.contains_key(&key)) {
             (false, false) => {
                 unexpected.push(format!("{key}\n    want {expected}\n    got  {actual}"));
@@ -83,6 +86,9 @@ fn wpt_url_parsing() {
         }
     }
     assert!(seen > 400, "only {seen} cases read");
+    if std::env::var_os("WPT_SCORE").is_some() {
+        println!("WPT_SCORE suite=http-url passed={passed_count} run={seen} skipped=0");
+    }
     assert!(
         unexpected.is_empty() && fixed.is_empty(),
         "{} unexpected failures:\n{}\n{} listed failures now pass:\n{}",

@@ -170,7 +170,7 @@ fn wpt_html_tree_construction() {
         .collect();
     files.sort();
     let known = expected_failures();
-    let (mut run, mut skipped) = (0, 0);
+    let (mut run, mut skipped, mut passed) = (0, 0, 0);
     let mut unexpected = String::new();
     let mut fixed = Vec::new();
     for path in files {
@@ -188,8 +188,11 @@ fn wpt_html_tree_construction() {
             run += 1;
             let key = format!("{name}#{}", index + 1);
             let (actual, expected) = (parse(&case.data), items(&case.document));
-            let passed = actual == expected;
-            if !passed && std::env::var_os("TREE_DIFF").is_some() {
+            let case_passed = actual == expected;
+            if case_passed {
+                passed += 1;
+            }
+            if !case_passed && std::env::var_os("TREE_DIFF").is_some() {
                 eprintln!(
                     "== {key}\n{:?}\nwant:\n{}\ngot:\n{}",
                     case.data,
@@ -197,7 +200,7 @@ fn wpt_html_tree_construction() {
                     actual.join("\n")
                 );
             }
-            match (passed, known.contains(&key)) {
+            match (case_passed, known.contains(&key)) {
                 (false, false) => {
                     let _ = writeln!(unexpected, "{key}");
                 }
@@ -207,6 +210,9 @@ fn wpt_html_tree_construction() {
         }
     }
     assert!(run > 1000, "only {run} cases run ({skipped} skipped)");
+    if std::env::var_os("WPT_SCORE").is_some() {
+        println!("WPT_SCORE suite=html-tree passed={passed} run={run} skipped={skipped}");
+    }
     assert!(
         unexpected.is_empty() && fixed.is_empty(),
         "unexpected failures:\n{unexpected}listed failures now pass:\n{}",
