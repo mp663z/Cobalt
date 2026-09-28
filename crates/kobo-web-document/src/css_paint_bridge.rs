@@ -115,6 +115,8 @@ pub fn paint_content_rectangles(
     if tree.boxes.iter().any(|node| {
         !matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
             || node.style.box_sizing != BoxSizing::ContentBox
+            || node.style.padding_left != 0
+            || node.style.padding_right != 0
     }) {
         return Err(BridgeError::Unsupported);
     }

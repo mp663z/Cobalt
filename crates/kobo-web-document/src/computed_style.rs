@@ -19,6 +19,8 @@ pub enum Property {
     MarginBottom,
     Direction,
     BackgroundColor,
+    PaddingLeft,
+    PaddingRight,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,6 +43,7 @@ pub enum Value {
     Margin(Margin),
     Direction(Direction),
     BackgroundColor(Option<u32>),
+    Padding(u32),
     Inherit,
     Initial,
     Unset,
@@ -111,6 +114,8 @@ pub struct Computed {
     pub direction: Direction,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
+    pub padding_left: u32,
+    pub padding_right: u32,
 }
 
 impl Computed {
@@ -126,9 +131,12 @@ impl Computed {
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
         background_color: None,
+        padding_left: 0,
+        padding_right: 0,
     };
 
     #[must_use]
+    #[allow(clippy::too_many_lines)] // Per-property cascade over a bounded declaration list.
     pub fn cascade(parent: Option<Self>, declarations: &[Declaration]) -> Self {
         let initial = Self::INITIAL;
         let mut computed = Self {
@@ -143,6 +151,8 @@ impl Computed {
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
             background_color: initial.background_color,
+            padding_left: initial.padding_left,
+            padding_right: initial.padding_right,
         };
         for property in [
             Property::Display,
@@ -156,6 +166,8 @@ impl Computed {
             Property::MarginBottom,
             Property::Direction,
             Property::BackgroundColor,
+            Property::PaddingLeft,
+            Property::PaddingRight,
         ] {
             let chosen = declarations
                 .iter()
@@ -179,6 +191,8 @@ impl Computed {
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
                 Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
+                Property::PaddingLeft => Value::Padding(initial.padding_left),
+                Property::PaddingRight => Value::Padding(initial.padding_right),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -218,6 +232,12 @@ impl Computed {
                 Value::BackgroundColor(color) if property == Property::BackgroundColor => {
                     computed.background_color = color;
                 }
+                Value::Padding(px) if property == Property::PaddingLeft => {
+                    computed.padding_left = px;
+                }
+                Value::Padding(px) if property == Property::PaddingRight => {
+                    computed.padding_right = px;
+                }
                 _ => unreachable!("resolved property value has the wrong type"),
             }
         }
@@ -256,6 +276,8 @@ fn resolve(
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
         Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
+        Property::PaddingLeft => Value::Padding(initial.padding_left),
+        Property::PaddingRight => Value::Padding(initial.padding_right),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
@@ -271,6 +293,8 @@ fn resolve(
         Property::BackgroundColor => {
             Value::BackgroundColor(parent.unwrap_or(initial).background_color)
         }
+        Property::PaddingLeft => Value::Padding(parent.unwrap_or(initial).padding_left),
+        Property::PaddingRight => Value::Padding(parent.unwrap_or(initial).padding_right),
     };
     match value {
         Value::Inherit => inherited,
@@ -284,7 +308,9 @@ fn resolve(
             | Property::MarginRight
             | Property::MarginTop
             | Property::MarginBottom
-            | Property::BackgroundColor => initial_value,
+            | Property::BackgroundColor
+            | Property::PaddingLeft
+            | Property::PaddingRight => initial_value,
             Property::Color | Property::Direction => inherited,
         },
         Value::Revert => {
@@ -365,6 +391,8 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             background_color: None,
+            padding_left: 0,
+            padding_right: 0,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
@@ -379,7 +407,9 @@ mod tests {
                 margin_top: Margin::Px(0),
                 margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr,
-                background_color: None
+                background_color: None,
+                padding_left: 0,
+                padding_right: 0
             }
         );
     }
@@ -479,6 +509,8 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             background_color: None,
+            padding_left: 0,
+            padding_right: 0,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -502,7 +534,9 @@ mod tests {
                     margin_top: Margin::Px(0),
                     margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr,
-                    background_color: None
+                    background_color: None,
+                    padding_left: 0,
+                    padding_right: 0
                 }
             );
         }

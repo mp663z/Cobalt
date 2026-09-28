@@ -453,7 +453,7 @@ impl WidthPass {
                             used_block_width_sized(
                                 node.style.width,
                                 base,
-                                [0, 0],
+                                [node.style.padding_left, node.style.padding_right],
                                 [
                                     resolve_margin(node.style.margin_left, base),
                                     resolve_margin(node.style.margin_right, base),
@@ -467,7 +467,11 @@ impl WidthPass {
                     });
                     result.widths[index] = width;
                     let x = containing_x.and_then(|parent_x| {
-                        width.and_then(|w| parent_x.checked_add(w.margin_left))
+                        width.and_then(|w| {
+                            parent_x.checked_add(w.margin_left).and_then(|left| {
+                                left.checked_add(i64::from(node.style.padding_left))
+                            })
+                        })
                     });
                     result.content_x[index] = x;
                     (width.map(|w| w.content), x)
@@ -905,6 +909,22 @@ mod tests {
         assert!(!used.unsupported);
         assert!(!used.truncated);
         assert_eq!(used.widths.len(), tree.boxes.len());
+    }
+
+    #[test]
+    fn padding_changes_content_width_and_x_without_stealing_margin() {
+        let tree = boxes("<div style='width:100px;padding-left:10px;padding-right:20px;box-sizing:border-box'><p style='width:50%'></p></div>");
+        let widths = WidthPass::from_boxes(&tree, 200);
+        let outer = tree
+            .boxes
+            .iter()
+            .position(|b| b.style.padding_left == 10)
+            .unwrap();
+        let child = tree.boxes[outer].children[0];
+        assert_eq!(widths.widths[outer].unwrap().content, 70);
+        assert_eq!(widths.content_x[outer], Some(10));
+        assert_eq!(widths.widths[child].unwrap().content, 35);
+        assert_eq!(widths.content_x[child], Some(10));
     }
 
     #[test]

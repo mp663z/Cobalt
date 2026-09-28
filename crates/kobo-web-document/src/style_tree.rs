@@ -279,6 +279,22 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None,
                 })
                 .map(|value| (Property::BoxSizing, value)),
+            "padding-left" => parse_keyword(value)
+                .or_else(|| {
+                    parse_width(value).and_then(|length| match length {
+                        Length::Px(px) => Some(Value::Padding(px)),
+                        _ => None,
+                    })
+                })
+                .map(|value| (Property::PaddingLeft, value)),
+            "padding-right" => parse_keyword(value)
+                .or_else(|| {
+                    parse_width(value).and_then(|length| match length {
+                        Length::Px(px) => Some(Value::Padding(px)),
+                        _ => None,
+                    })
+                })
+                .map(|value| (Property::PaddingRight, value)),
             "margin-left" => parse_keyword(value)
                 .or_else(|| parse_margin(value).map(Value::Margin))
                 .map(|value| (Property::MarginLeft, value)),
@@ -445,6 +461,19 @@ mod tests {
         assert_eq!(section.style.direction, Direction::Rtl);
         assert_eq!(section.style.margin_left, Margin::Px(7));
         assert_eq!(section.style.margin_right, Margin::Px(0));
+    }
+
+    #[test]
+    fn horizontal_padding_is_noninherited_and_bounded_to_integer_px() {
+        let styled = tree("<div style='padding-left:12px;padding-right:5px'><p style='padding-left:25%'>child</p></div>", &[]);
+        assert!(styled.unsupported); // percentage padding needs containing width resolution
+        let div = styled.nodes.iter().find(|n| n.tag == "div").unwrap();
+        let child = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!((div.style.padding_left, div.style.padding_right), (12, 5));
+        assert_eq!(
+            (child.style.padding_left, child.style.padding_right),
+            (0, 0)
+        );
     }
 
     #[test]
