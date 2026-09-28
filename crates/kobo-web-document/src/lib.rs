@@ -12,6 +12,7 @@ mod convert;
 mod css;
 pub mod css_background;
 pub mod css_paint_bridge;
+pub mod css_text_page;
 pub mod display_list;
 mod dom;
 mod host;
