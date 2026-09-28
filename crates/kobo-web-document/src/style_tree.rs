@@ -256,6 +256,12 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None,
                 })
                 .map(|value| (Property::Display, value)),
+            "font-size" => parse_keyword(value)
+                .or_else(|| match parse_width(value) {
+                    Some(Length::Px(px)) => Some(Value::FontSize(px)),
+                    _ => None, // relative sizes require parent-dependent computed values
+                })
+                .map(|value| (Property::FontSize, value)),
             "background-color" => parse_keyword(value)
                 .or_else(|| match value {
                     "transparent" => Some(Value::BackgroundColor(None)),
@@ -478,6 +484,17 @@ mod tests {
         assert_eq!(section.style.direction, Direction::Rtl);
         assert_eq!(section.style.margin_left, Margin::Px(7));
         assert_eq!(section.style.margin_right, Margin::Px(0));
+    }
+
+    #[test]
+    fn font_size_is_retained_for_future_text_layout() {
+        let styled = tree("<html style='font-size:18px'><body><p style='font-size:22px'>Words</p><div style='font-size:1.5em'>Unsupported</div></body></html>", &[]);
+        let node = |tag| styled.nodes.iter().find(|n| n.tag == tag).unwrap();
+        assert_eq!(node("html").style.font_size, 18);
+        assert_eq!(node("body").style.font_size, 18);
+        assert_eq!(node("p").style.font_size, 22);
+        assert_eq!(node("div").style.font_size, 18);
+        assert!(styled.unsupported); // em is not misread as px
     }
 
     #[test]

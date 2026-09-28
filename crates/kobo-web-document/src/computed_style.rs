@@ -18,6 +18,7 @@ pub enum Property {
     MarginTop,
     MarginBottom,
     Direction,
+    FontSize,
     BackgroundColor,
     PaddingLeft,
     PaddingRight,
@@ -46,6 +47,7 @@ pub enum Value {
     Direction(Direction),
     BackgroundColor(Option<u32>),
     Padding(u32),
+    FontSize(u32),
     Inherit,
     Initial,
     Unset,
@@ -114,6 +116,8 @@ pub struct Computed {
     pub margin_top: Margin,
     pub margin_bottom: Margin,
     pub direction: Direction,
+    /// Computed CSS font-size in integer pixels. Relative sizes need an explicit parent.
+    pub font_size: u32,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
     pub padding_left: u32,
@@ -134,6 +138,7 @@ impl Computed {
         margin_top: Margin::Px(0),
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
+        font_size: 16,
         background_color: None,
         padding_left: 0,
         padding_right: 0,
@@ -156,6 +161,7 @@ impl Computed {
             margin_top: initial.margin_top,
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
+            font_size: parent.unwrap_or(initial).font_size,
             background_color: initial.background_color,
             padding_left: initial.padding_left,
             padding_right: initial.padding_right,
@@ -173,6 +179,7 @@ impl Computed {
             Property::MarginTop,
             Property::MarginBottom,
             Property::Direction,
+            Property::FontSize,
             Property::BackgroundColor,
             Property::PaddingLeft,
             Property::PaddingRight,
@@ -200,6 +207,7 @@ impl Computed {
                 Property::MarginTop => Value::Margin(initial.margin_top),
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+                Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
                 Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
                 Property::PaddingLeft => Value::Padding(initial.padding_left),
                 Property::PaddingRight => Value::Padding(initial.padding_right),
@@ -241,6 +249,7 @@ impl Computed {
                 Value::Direction(direction) if property == Property::Direction => {
                     computed.direction = direction;
                 }
+                Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
                 Value::BackgroundColor(color) if property == Property::BackgroundColor => {
                     computed.background_color = color;
                 }
@@ -291,6 +300,7 @@ fn resolve(
         Property::MarginTop => Value::Margin(initial.margin_top),
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
+        Property::FontSize => Value::FontSize(initial.font_size),
         Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
         Property::PaddingLeft => Value::Padding(initial.padding_left),
         Property::PaddingRight => Value::Padding(initial.padding_right),
@@ -308,6 +318,7 @@ fn resolve(
         Property::MarginTop => Value::Margin(parent.unwrap_or(initial).margin_top),
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+        Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
         Property::BackgroundColor => {
             Value::BackgroundColor(parent.unwrap_or(initial).background_color)
         }
@@ -333,7 +344,7 @@ fn resolve(
             | Property::PaddingRight
             | Property::PaddingTop
             | Property::PaddingBottom => initial_value,
-            Property::Color | Property::Direction => inherited,
+            Property::Color | Property::Direction | Property::FontSize => inherited,
         },
         Value::Revert => {
             // Revert crosses the *origin* boundary, even for important values.
@@ -354,7 +365,10 @@ fn resolve(
                 });
             lower.map_or_else(
                 || {
-                    if matches!(property, Property::Color | Property::Direction) {
+                    if matches!(
+                        property,
+                        Property::Color | Property::Direction | Property::FontSize
+                    ) {
                         inherited
                     } else {
                         initial_value
@@ -412,6 +426,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+            font_size: 16,
             background_color: None,
             padding_left: 0,
             padding_right: 0,
@@ -431,6 +446,7 @@ mod tests {
                 margin_top: Margin::Px(0),
                 margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr,
+                font_size: 16,
                 background_color: None,
                 padding_left: 0,
                 padding_right: 0,
@@ -438,6 +454,27 @@ mod tests {
                 padding_bottom: 0
             }
         );
+    }
+
+    #[test]
+    fn font_size_inherits_and_css_wide_keywords_keep_their_scope() {
+        let parent = Computed {
+            font_size: 24,
+            ..Computed::INITIAL
+        };
+        assert_eq!(Computed::cascade(Some(parent), &[]).font_size, 24);
+        for (value, expected) in [
+            (Value::Inherit, 24),
+            (Value::Unset, 24),
+            (Value::Initial, 16),
+            (Value::FontSize(19), 19),
+        ] {
+            let declaration = declaration(Property::FontSize, value, Origin::Author, 0);
+            assert_eq!(
+                Computed::cascade(Some(parent), &[declaration]).font_size,
+                expected
+            );
+        }
     }
 
     #[test]
@@ -534,6 +571,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+            font_size: 16,
             background_color: None,
             padding_left: 0,
             padding_right: 0,
@@ -562,6 +600,7 @@ mod tests {
                     margin_top: Margin::Px(0),
                     margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr,
+                    font_size: 16,
                     background_color: None,
                     padding_left: 0,
                     padding_right: 0,
