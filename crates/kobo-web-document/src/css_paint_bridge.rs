@@ -2,11 +2,11 @@
 //!
 //! This is not CSS background painting. `FillSpec` colors are explicit paint
 //! inputs, not the computed `color` property (which is a foreground color).
-//! Only definite-height, normal-flow content rectangles are available here.
+//! Only resolved-height, normal-flow content rectangles are available here.
 //! The caller must build the box tree from `BoxTree::from_style`, not construct
 //! an unverified tree by hand: unknown declarations set its `unsupported` flag.
 
-use crate::box_tree::{BoxKind, BoxTree, HeightPass, VerticalPass, WidthPass};
+use crate::box_tree::{BoxKind, BoxTree, UsedHeightPass, VerticalPass, WidthPass};
 use crate::computed_style::BoxSizing;
 use crate::display_list::{
     DisplayList, Error as DisplayError, Rect, Rgb, Source, MAX_COMMANDS, MAX_PIXELS,
@@ -102,7 +102,7 @@ pub fn paint_padding_rectangles(
 /// The passes are checked against the supplied viewport and tree so a stale
 /// or fabricated coordinate cannot enter the display list. An unsupported or
 /// truncated pass rejects the whole request, including an empty fill list.
-/// The selected boxes must be definite-height blocks or list items; source
+/// The selected boxes must be resolved-height blocks or list items; source
 /// indices point into the retained styled arena, not the old reader model.
 ///
 /// # Errors
@@ -177,7 +177,7 @@ fn paint_rectangles(
     }
     let proven_widths = WidthPass::from_boxes(tree, viewport_width);
     let proven_vertical = VerticalPass::from_boxes(tree, viewport_width, viewport_height);
-    let proven_heights = HeightPass::from_boxes(tree, viewport_height);
+    let proven_heights = UsedHeightPass::from_boxes(tree, viewport_width, viewport_height);
     if proven_widths.unsupported
         || proven_widths.truncated
         || proven_vertical.unsupported

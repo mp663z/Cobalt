@@ -297,7 +297,106 @@ impl HeightPass {
     }
 }
 
-/// Diagnostic vertical coordinates only for a narrow, all-definite block
+/// Used content heights for a restricted normal-flow block subtree. Explicit
+/// percentage heights resolve only against *specified definite* ancestors;
+/// computing an auto parent's height does not make its descendants' percentage
+/// heights definite. Auto height includes child border/padding boxes and
+/// collapsed sibling gaps, but only when edge margins are zero and the box
+/// cannot collapse through itself. Inline content and margin-through remain
+/// unsupported rather than assigned invented heights.
+pub struct UsedHeightPass {
+    pub heights: Vec<Option<u32>>,
+    pub unsupported: bool,
+    pub truncated: bool,
+}
+
+impl UsedHeightPass {
+    #[must_use]
+    pub fn from_boxes(tree: &BoxTree, viewport_width: u32, viewport_height: u32) -> Self {
+        let specified = HeightPass::from_boxes(tree, viewport_height);
+        let widths = WidthPass::from_boxes(tree, viewport_width);
+        let mut result = Self {
+            heights: specified.heights,
+            unsupported: specified.unsupported || widths.unsupported,
+            truncated: specified.truncated || widths.truncated,
+        };
+        if result.unsupported || result.truncated {
+            return result;
+        }
+        // A valid box tree is acyclic; reverse traversal puts descendants
+        // before parents. Invalid trees are rejected by the paint bridge.
+        for (index, node) in tree.boxes.iter().enumerate().rev() {
+            if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem) {
+                result.unsupported = true;
+                continue;
+            }
+            if result.heights[index].is_some() {
+                continue;
+            }
+            if node.style.height != Length::Auto {
+                result.unsupported = true; // indefinite percentage
+                continue;
+            }
+            let Some(width) = widths.widths[index].map(|w| w.content) else {
+                result.unsupported = true;
+                continue;
+            };
+            let mut content = 0_i64;
+            let mut previous: Option<usize> = None;
+            let mut valid = true;
+            for &child in &node.children {
+                let Some(next) = tree.boxes.get(child) else {
+                    valid = false;
+                    break;
+                };
+                if !matches!(next.kind, BoxKind::Block | BoxKind::ListItem) {
+                    valid = false;
+                    break;
+                }
+                let top = resolve_vertical_margin(next.style.margin_top, width);
+                if previous.is_none() && top != 0 {
+                    valid = false; // parent/first-child collapse not implemented
+                    break;
+                }
+                if let Some(prev) = previous {
+                    content = content.saturating_add(collapse_adjoining_margins(&[
+                        resolve_vertical_margin(tree.boxes[prev].style.margin_bottom, width),
+                        top,
+                    ]));
+                }
+                let Some(height) = result.heights[child] else {
+                    valid = false;
+                    break;
+                };
+                if height == 0 && next.style.padding_top == 0 && next.style.padding_bottom == 0 {
+                    valid = false; // empty child's margins may collapse through
+                    break;
+                }
+                content = content
+                    .saturating_add(i64::from(height))
+                    .saturating_add(i64::from(next.style.padding_top))
+                    .saturating_add(i64::from(next.style.padding_bottom));
+                previous = Some(child);
+            }
+            if let Some(last) = previous {
+                if resolve_vertical_margin(tree.boxes[last].style.margin_bottom, width) != 0 {
+                    valid = false; // last-child/parent collapse not implemented
+                }
+            } else if node.style.padding_top == 0 && node.style.padding_bottom == 0 {
+                valid = false; // margin-through empty block
+            }
+            if valid {
+                result.heights[index] = u32::try_from(content.max(0)).ok();
+            }
+            if result.heights[index].is_none() {
+                result.unsupported = true;
+            }
+        }
+        result
+    }
+}
+
+/// Diagnostic vertical coordinates only for a narrow, fully resolved block
 /// subtree. The first child's top margin must be zero so parent/child margin
 /// collapse is inert. Zero-height boxes, inline content, and additional roots
 /// are rejected rather than assigned speculative positions.
@@ -324,7 +423,7 @@ impl VerticalPass {
             result.unsupported = true;
             return result;
         }
-        let heights = HeightPass::from_boxes(tree, viewport_height);
+        let heights = UsedHeightPass::from_boxes(tree, viewport_width, viewport_height);
         let widths = WidthPass::from_boxes(tree, viewport_width);
         if heights.truncated || widths.truncated {
             result.truncated = true;
@@ -743,7 +842,6 @@ mod tests {
     #[test]
     fn vertical_pass_rejects_unknown_height_and_parent_child_collapse() {
         for html in [
-            "<html style='height:600px'><body><main style='height:20px'></main></body></html>",
             "<html style='height:600px'><body style='height:400px;margin-top:10px'></body></html>",
             "<html style='height:600px'><body style='height:400px'>text</body></html>",
             "<html style='height:600px'><body style='height:400px'><div style='height:0'></div></body></html>",
@@ -752,6 +850,39 @@ mod tests {
             let pass = VerticalPass::from_boxes(&tree, 400, 600);
             assert!(pass.unsupported, "{html}");
         }
+    }
+
+    #[test]
+    fn auto_block_height_contains_definite_children_but_not_indefinite_percent() {
+        let html = "<html style='height:600px'><body style='padding-top:7px;padding-bottom:3px'><main style='height:20px;padding-top:2px;padding-bottom:3px;margin-bottom:5px'></main><section style='height:10px;margin-top:8px'></section></body></html>";
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let tree = BoxTree::from_style(&styled);
+        let height = UsedHeightPass::from_boxes(&tree, 400, 600);
+        let vertical = VerticalPass::from_boxes(&tree, 400, 600);
+        let body = tree
+            .boxes
+            .iter()
+            .enumerate()
+            .find(|(_, b)| b.source.is_some_and(|i| styled.nodes[i].tag == "body"))
+            .unwrap()
+            .0;
+        let section = tree
+            .boxes
+            .iter()
+            .enumerate()
+            .find(|(_, b)| b.source.is_some_and(|i| styled.nodes[i].tag == "section"))
+            .unwrap()
+            .0;
+        assert_eq!(height.heights[body], Some(43)); // 20 + 2 + 3 + max(5, 8) + 10
+        assert_eq!(vertical.content_y[body], Some(7));
+        assert_eq!(vertical.content_y[section], Some(40));
+        assert!(!height.unsupported && !vertical.unsupported);
+
+        let tree = boxes(
+            "<html style='height:600px'><body><main style='height:50%'></main></body></html>",
+        );
+        assert!(UsedHeightPass::from_boxes(&tree, 400, 600).unsupported);
+        assert!(VerticalPass::from_boxes(&tree, 400, 600).unsupported);
     }
 
     #[test]

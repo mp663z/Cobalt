@@ -77,6 +77,41 @@ fn exact_order_content_boxes_and_source_ids() {
 }
 
 #[test]
+fn auto_block_background_uses_child_flow_height() {
+    let (tree, widths, vertical) = setup("<style>html{height:600px}body{padding-top:7px;padding-bottom:3px;background-color:#123456}main{height:20px;padding-top:2px;padding-bottom:3px;margin-bottom:5px}section{height:10px;margin-top:8px}</style><body><main></main><section></section></body>");
+    let body = tree
+        .boxes
+        .iter()
+        .position(|b| b.style.background_color == Some(0x12_34_56))
+        .unwrap();
+    let list = css_paint_bridge::paint_padding_rectangles(
+        &tree,
+        &widths,
+        &vertical,
+        400,
+        600,
+        &[fill(body, Rgb(18, 52, 86))],
+    )
+    .unwrap();
+    assert_eq!(
+        list.commands(),
+        [Command::Fill {
+            rect: Rect {
+                x: 0,
+                y: 0,
+                width: 400,
+                height: 53
+            },
+            color: Rgb(18, 52, 86),
+            source: Source {
+                node: tree.boxes[body].source,
+                action: None
+            },
+        }]
+    );
+}
+
+#[test]
 fn rejects_unproven_coordinates_and_selected_unknown_box() {
     let (tree, mut widths, mut vertical) =
         setup("<style>html{height:600px}body{height:300px}</style><body></body>");
