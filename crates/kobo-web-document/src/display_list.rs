@@ -156,6 +156,41 @@ impl DisplayList {
         Ok(())
     }
 
+    /// Append a complete owned paint list after existing commands. A list
+    /// with open clips cannot cross this boundary: the caller must finish
+    /// background and text painting before combining them. Capacity and
+    /// glyph budgets are checked before either list changes.
+    ///
+    /// # Errors
+    /// Refuses open clips, command/glyph limits, or failed allocation without
+    /// modifying the destination list.
+    pub fn append_list(&mut self, mut other: Self) -> Result<(), Error> {
+        if self.clip_depth != 0 || other.clip_depth != 0 {
+            return Err(Error::UnbalancedClip);
+        }
+        let command_count = self
+            .commands
+            .len()
+            .checked_add(other.commands.len())
+            .ok_or(Error::TooManyCommands)?;
+        if command_count > MAX_COMMANDS {
+            return Err(Error::TooManyCommands);
+        }
+        let bytes = self
+            .glyph_bytes
+            .checked_add(other.glyph_bytes)
+            .ok_or(Error::GlyphBudget)?;
+        if bytes > MAX_GLYPH_BYTES {
+            return Err(Error::GlyphBudget);
+        }
+        self.commands
+            .try_reserve(other.commands.len())
+            .map_err(|_| Error::Allocation)?;
+        self.commands.append(&mut other.commands);
+        self.glyph_bytes = bytes;
+        Ok(())
+    }
+
     /// Paint into an opaque, row-major RGBA surface. Returns an error rather
     /// than painting an open clip stack or allocating an unbounded surface.
     /// Only the resulting surface is allocated during rasterization.
