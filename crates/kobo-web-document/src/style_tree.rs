@@ -229,6 +229,14 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                 value
             }
             "style" => {
+                // HTML style elements with a non-CSS type do not participate
+                // in the screen cascade. The exact CSS MIME token is enough
+                // for this path; unknown or parameterized types remain inert.
+                if css::attribute(nodes, handle, "type")
+                    .is_some_and(|value| !value.trim().eq_ignore_ascii_case("text/css"))
+                {
+                    continue;
+                }
                 match stylesheet_media(css::attribute(nodes, handle, "media")) {
                     MediaFit::Screen => {}
                     MediaFit::Skip => continue,
@@ -1026,6 +1034,32 @@ mod tests {
                 .height,
             Length::Auto
         );
+    }
+
+    #[test]
+    fn typed_style_element_applies_only_css() {
+        let html = "<style type='text/plain'>p{border:1px solid red}</style><p>Text</p>";
+        let plain = tree(html, &[]);
+        assert!(!plain.unsupported);
+        let css = tree(
+            "<style type='TEXT/CSS'>p{color:green}</style><p>Text</p>",
+            &[],
+        );
+        assert!(!css.unsupported);
+        assert_eq!(
+            css.nodes
+                .iter()
+                .find(|node| node.tag == "p")
+                .unwrap()
+                .style
+                .color,
+            0x00_80_00
+        );
+        let unknown = tree(
+            "<style type='text/css; charset=utf-8'>p{border:1px solid red}</style><p>Text</p>",
+            &[],
+        );
+        assert!(!unknown.unsupported);
     }
 
     #[test]
