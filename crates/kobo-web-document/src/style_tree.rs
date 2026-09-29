@@ -750,6 +750,25 @@ mod tests {
     }
 
     #[test]
+    fn comment_only_declaration_segments_are_valid_css() {
+        let styled = tree(
+            "<style>p{/* comment */; background-color:red; /*tail*/}</style><p>Text</p>",
+            &[],
+        );
+        assert!(!styled.unsupported);
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|node| node.tag == "p")
+                .unwrap()
+                .style
+                .background_color,
+            Some(0xff_00_00)
+        );
+    }
+
+    #[test]
     fn incomplete_declaration_blocks_refuse_visual_output() {
         for html in [
             "<style>p{color:#123456;broken}</style><p>Text</p>",

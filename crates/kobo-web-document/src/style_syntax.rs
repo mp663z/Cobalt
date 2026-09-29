@@ -216,7 +216,6 @@ fn close_brace(bytes: &[u8], mut pos: usize, end: usize) -> Option<usize> {
     None
 }
 
-/// Split declaration statements on semicolons outside quoted strings and functions.
 /// Validate a complete declaration block before it becomes paint authority.
 /// The legacy splitter intentionally returns only parseable pairs, which is
 /// useful for reader visibility but unsafe for all-or-nothing CSS painting.
@@ -230,9 +229,13 @@ pub(crate) fn declarations_complete(input: &str) -> bool {
         if cursor == bytes.len() || (bytes[cursor] == b';' && quote == 0 && depth == 0) {
             let piece = input[start..cursor].trim();
             if !piece.is_empty() {
-                statements += 1;
-                if statements > 256 || split_declaration(piece).is_none() {
-                    return false;
+                // A comment-only segment is valid CSS, not a malformed
+                // declaration. The reader splitter ignores it as well.
+                if !crate::css::strip_comments(piece).trim().is_empty() {
+                    statements += 1;
+                    if statements > 256 || split_declaration(piece).is_none() {
+                        return false;
+                    }
                 }
             }
             start = cursor + 1;
@@ -273,6 +276,7 @@ pub(crate) fn declarations_complete(input: &str) -> bool {
     quote == 0 && depth == 0
 }
 
+/// Split declaration statements on semicolons outside quoted strings and functions.
 pub(crate) fn declarations(input: &str) -> Vec<(&str, &str)> {
     let mut out = Vec::new();
     let bytes = input.as_bytes();
@@ -396,6 +400,11 @@ mod tests {
     #[test]
     fn complete_declarations_reject_silent_drops() {
         assert!(declarations_complete("color:red; padding:1px 2px;"));
+        assert!(declarations_complete(
+            "/* comment */; color:red; /* tail */"
+        ));
+        assert!(declarations_complete("/* comment */"));
+        assert!(!declarations_complete("/* comment */; broken; color:red"));
         assert!(declarations_complete("content:'a;b'; color:blue"));
         assert!(!declarations_complete("color:red; broken; width:10px"));
         assert!(!declarations_complete("color:red; broken:"));
