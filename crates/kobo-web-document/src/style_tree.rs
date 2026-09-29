@@ -106,7 +106,7 @@ impl StyleTree {
             }
             if let Some(inline) = css::attribute(nodes, handle, "style") {
                 let (parsed, unknown) = properties(inline);
-                tree.unsupported |= unknown;
+                tree.unsupported |= unknown || !style_syntax::declarations_complete(inline);
                 if declarations.len() + parsed.len() > MAX_DECLARATIONS_PER_ELEMENT {
                     tree.truncated = true;
                     break;
@@ -211,7 +211,7 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
             }
             let selectors = rule.prelude.split(',').take(16);
             let (properties, unknown) = properties(rule.declarations);
-            unsupported |= unknown;
+            unsupported |= unknown || !style_syntax::declarations_complete(rule.declarations);
             for selector in selectors {
                 let Some(selector) = css::selector(selector.trim()) else {
                     unsupported = true;
@@ -539,6 +539,18 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets)
+    }
+
+    #[test]
+    fn incomplete_declaration_blocks_refuse_visual_output() {
+        for html in [
+            "<style>p{color:#123456;broken}</style><p>Text</p>",
+            "<p style='color:#123456;broken'>Text</p>",
+            "<p style='color:#123456; broken:'>Text</p>",
+        ] {
+            let styled = tree(html, &[]);
+            assert!(styled.unsupported, "{html}");
+        }
     }
 
     #[test]

@@ -217,6 +217,62 @@ fn close_brace(bytes: &[u8], mut pos: usize, end: usize) -> Option<usize> {
 }
 
 /// Split declaration statements on semicolons outside quoted strings and functions.
+/// Validate a complete declaration block before it becomes paint authority.
+/// The legacy splitter intentionally returns only parseable pairs, which is
+/// useful for reader visibility but unsafe for all-or-nothing CSS painting.
+/// Reject malformed or dropped statements and any silent 256-declaration cap.
+pub(crate) fn declarations_complete(input: &str) -> bool {
+    let mut statements = 0_usize;
+    let bytes = input.as_bytes();
+    let (mut start, mut quote, mut depth) = (0, 0_u8, 0_usize);
+    let mut cursor = 0_usize;
+    while cursor <= bytes.len() {
+        if cursor == bytes.len() || (bytes[cursor] == b';' && quote == 0 && depth == 0) {
+            let piece = input[start..cursor].trim();
+            if !piece.is_empty() {
+                statements += 1;
+                if statements > 256 || split_declaration(piece).is_none() {
+                    return false;
+                }
+            }
+            start = cursor + 1;
+        } else if bytes[cursor] == 92 {
+            if cursor + 1 >= bytes.len() {
+                return false;
+            }
+            cursor += 2;
+            continue;
+        } else if quote != 0 {
+            if bytes[cursor] == quote {
+                quote = 0;
+            }
+        } else if bytes[cursor..].starts_with(b"/*") {
+            let Some(end) = bytes[cursor + 2..]
+                .windows(2)
+                .position(|pair| pair == b"*/")
+            else {
+                return false;
+            };
+            cursor += end + 4;
+            continue;
+        } else {
+            match bytes[cursor] {
+                39 | 34 => quote = bytes[cursor],
+                b'(' | b'[' => depth += 1,
+                b')' | b']' => {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+        cursor += 1;
+    }
+    quote == 0 && depth == 0
+}
+
 pub(crate) fn declarations(input: &str) -> Vec<(&str, &str)> {
     let mut out = Vec::new();
     let bytes = input.as_bytes();
@@ -335,6 +391,17 @@ mod tests {
         assert!(scan("@import url('styles.css');p{display:block}").unsupported_at_rule);
         assert!(scan("@unknown thing; p{display:block}").unsupported_at_rule);
         assert!(scan("p @unknown thing {display:block}").unsupported_at_rule);
+    }
+
+    #[test]
+    fn complete_declarations_reject_silent_drops() {
+        assert!(declarations_complete("color:red; padding:1px 2px;"));
+        assert!(declarations_complete("content:'a;b'; color:blue"));
+        assert!(!declarations_complete("color:red; broken; width:10px"));
+        assert!(!declarations_complete("color:red; broken:"));
+        assert!(!declarations_complete("color:'unclosed"));
+        assert!(!declarations_complete("color:red; /* unclosed"));
+        assert!(!declarations_complete(&"color:red;".repeat(257)));
     }
 
     #[test]
