@@ -245,7 +245,56 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
         let value = cleaned.trim().to_ascii_lowercase();
         let important = value.ends_with("!important");
         let value = value.strip_suffix("!important").unwrap_or(&value).trim();
-        let parsed = match name.trim().to_ascii_lowercase().as_str() {
+        let name = name.trim().to_ascii_lowercase();
+        if name == "margin" {
+            if let Some(keyword) = parse_keyword(value) {
+                for property in [
+                    Property::MarginTop,
+                    Property::MarginRight,
+                    Property::MarginBottom,
+                    Property::MarginLeft,
+                ] {
+                    result.push((property, keyword, important));
+                }
+                continue;
+            }
+            // Expand the four physical sides at the declaration's position.
+            // Cascade metadata (origin, importance, specificity and source
+            // order) is added by the caller to each expanded property.
+            let sides: Vec<_> = value.split_ascii_whitespace().collect();
+            let Some(margins) = (match sides.as_slice() {
+                [top] => parse_margin(top).map(|top| [top; 4]),
+                [top, right] => parse_margin(top)
+                    .zip(parse_margin(right))
+                    .map(|(top, right)| [top, right, top, right]),
+                [top, right, bottom] => parse_margin(top)
+                    .zip(parse_margin(right))
+                    .zip(parse_margin(bottom))
+                    .map(|((top, right), bottom)| [top, right, bottom, right]),
+                [top, right, bottom, left] => parse_margin(top)
+                    .zip(parse_margin(right))
+                    .zip(parse_margin(bottom))
+                    .zip(parse_margin(left))
+                    .map(|(((top, right), bottom), left)| [top, right, bottom, left]),
+                _ => None,
+            }) else {
+                unsupported = true;
+                continue;
+            };
+            for (property, margin) in [
+                Property::MarginTop,
+                Property::MarginRight,
+                Property::MarginBottom,
+                Property::MarginLeft,
+            ]
+            .into_iter()
+            .zip(margins)
+            {
+                result.push((property, Value::Margin(margin), important));
+            }
+            continue;
+        }
+        let parsed = match name.as_str() {
             "display" => parse_keyword(value)
                 .or(match value {
                     "none" => Some(Value::Display(Display::None)),
@@ -460,6 +509,51 @@ mod tests {
         assert_eq!(styled.nodes[paragraph].style.color, 0x12_34_56);
         assert_eq!(styled.nodes[paragraph].style.display, Display::None);
         assert!(!styled.truncated);
+    }
+
+    #[test]
+    fn margin_shorthand_expands_in_cascade_order_and_refuses_unknown_values() {
+        let styled = tree("<style>p{margin:1px 2px 3px 4px;margin-left:7px}</style><p style='margin:5px 6px'>Text</p>", &[]);
+        let p = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(
+            (
+                p.style.margin_top,
+                p.style.margin_right,
+                p.style.margin_bottom,
+                p.style.margin_left
+            ),
+            (Margin::Px(5), Margin::Px(6), Margin::Px(5), Margin::Px(6))
+        );
+        assert!(!styled.unsupported);
+        let styled = tree("<p style='margin:0;margin-left:9px'>Text</p>", &[]);
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .margin_left,
+            Margin::Px(9)
+        );
+        assert!(!styled.unsupported);
+        let styled = tree(
+            "<div style='margin:7px'><p style='margin:inherit'>Text</p></div>",
+            &[],
+        );
+        let p = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(
+            [
+                p.style.margin_top,
+                p.style.margin_right,
+                p.style.margin_bottom,
+                p.style.margin_left
+            ],
+            [Margin::Px(7); 4]
+        );
+        assert!(!styled.unsupported);
+        assert!(tree("<p style='margin:1em'>Text</p>", &[]).unsupported);
+        assert!(tree("<p style='margin:1px 2px 3px 4px 5px'>Text</p>", &[]).unsupported);
     }
 
     #[test]
