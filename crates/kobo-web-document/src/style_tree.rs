@@ -209,10 +209,10 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                 unsupported = true;
                 continue;
             }
-            let selectors = rule.prelude.split(',').take(16);
+            let mut selectors = rule.prelude.split(',');
             let (properties, unknown) = properties(rule.declarations);
             unsupported |= unknown || !style_syntax::declarations_complete(rule.declarations);
-            for selector in selectors {
+            for selector in selectors.by_ref().take(16) {
                 let Some(selector) = css::selector(selector.trim()) else {
                     unsupported = true;
                     continue;
@@ -230,6 +230,9 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                     }
                 }
             }
+            // A selector group beyond our bound may match a node we would
+            // otherwise paint without its rule. Never present that as complete.
+            unsupported |= selectors.next().is_some();
         }
     }
     (rules, unsupported)
@@ -539,6 +542,44 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets)
+    }
+
+    #[test]
+    fn oversized_selector_list_refuses_partial_style() {
+        let sixteen = (0..16)
+            .map(|n| format!(".c{n}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let within = tree(
+            &format!("<style>{sixteen}{{color:#123456}}</style><p class='c15'>Text</p>"),
+            &[],
+        );
+        assert!(!within.unsupported);
+        assert_eq!(
+            within
+                .nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .color,
+            0x12_34_56
+        );
+        let beyond = tree(
+            &format!("<style>{sixteen},p{{color:#123456}}</style><p>Text</p>"),
+            &[],
+        );
+        assert!(beyond.unsupported);
+        assert_eq!(
+            beyond
+                .nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .color,
+            0
+        );
     }
 
     #[test]
