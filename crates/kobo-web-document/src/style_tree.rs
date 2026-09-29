@@ -219,7 +219,14 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                     continue;
                 };
                 linked += 1;
-                String::from_utf8_lossy(bytes).into_owned()
+                // Replacement characters can change selectors, tokens and
+                // colors. Until CSS @charset/HTTP encoding are resolved by
+                // the host, only literal UTF-8 bytes can prove full paint.
+                let Ok(value) = String::from_utf8(bytes.clone()) else {
+                    unsupported = true;
+                    continue;
+                };
+                value
             }
             "style" => {
                 match stylesheet_media(css::attribute(nodes, handle, "media")) {
@@ -1018,6 +1025,25 @@ mod tests {
         assert!(!print_only.unsupported);
         let print_link = tree("<link rel=stylesheet media=print href=/x><p>Text</p>", &[]);
         assert!(!print_link.unsupported);
+    }
+
+    #[test]
+    fn linked_stylesheet_invalid_utf8_does_not_become_lossy_css() {
+        let html = "<link rel=stylesheet href=/x><p>Text</p>";
+        let malformed = tree(html, &[b"p{color:#123456}\xff".to_vec()]);
+        assert!(malformed.unsupported);
+        let valid = tree(html, &[b"p{color:#123456}".to_vec()]);
+        assert!(!valid.unsupported);
+        assert_eq!(
+            valid
+                .nodes
+                .iter()
+                .find(|node| node.tag == "p")
+                .unwrap()
+                .style
+                .color,
+            0x12_34_56
+        );
     }
 
     #[test]
