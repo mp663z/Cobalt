@@ -18,21 +18,18 @@ pub fn paint_backgrounds(
     viewport_width: u32,
     viewport_height: u32,
 ) -> Result<DisplayList, BridgeError> {
-    // CSS backgrounds on the root paint the canvas, and the first body's
-    // background propagates when the root is transparent. This narrow
-    // padding-box painter implements neither rule. Refuse both rather than
-    // returning a plausible rectangle with incorrect viewport coverage.
+    // CSS canvas propagation: a root background covers the viewport; if
+    // transparent, the first body background propagates instead. The bridge
+    // still validates *all* box geometry before the canvas fill is returned.
     let root = *tree.roots.first().ok_or(BridgeError::Unsupported)?;
     let root_box = tree.boxes.get(root).ok_or(BridgeError::Unsupported)?;
-    if root_box.style.background_color.is_some()
-        || root_box.children.first().is_some_and(|&body| {
-            tree.boxes
-                .get(body)
-                .is_some_and(|node| node.style.background_color.is_some())
-        })
-    {
+    if tree.roots.len() != 1 || root_box.source.is_none() {
         return Err(BridgeError::Unsupported);
     }
+    let body = root_box.children.first().copied();
+    let body_color = body.and_then(|index| tree.boxes.get(index)?.style.background_color);
+    let canvas = root_box.style.background_color.or(body_color);
+    let propagated_body = root_box.style.background_color.is_none() && body_color.is_some();
     let widths = WidthPass::from_boxes(tree, viewport_width);
     let vertical = VerticalPass::from_boxes(tree, viewport_width, viewport_height);
     let fills: Vec<_> = tree
@@ -40,6 +37,9 @@ pub fn paint_backgrounds(
         .iter()
         .enumerate()
         .filter_map(|(box_index, node)| {
+            if box_index == root || (propagated_body && body == Some(box_index)) {
+                return None;
+            }
             node.style.background_color.map(|color| FillSpec {
                 box_index,
                 color: Rgb(
@@ -50,12 +50,37 @@ pub fn paint_backgrounds(
             })
         })
         .collect();
-    paint_padding_rectangles(
+    let local = paint_padding_rectangles(
         tree,
         &widths,
         &vertical,
         viewport_width,
         viewport_height,
         &fills,
+    )?;
+    let Some(color) = canvas else {
+        return Ok(local);
+    };
+    let mut list = DisplayList::default();
+    list.fill(
+        crate::display_list::Rect {
+            x: 0,
+            y: 0,
+            width: viewport_width,
+            height: viewport_height,
+        },
+        Rgb(
+            u8::try_from((color >> 16) & 255).unwrap_or(0),
+            u8::try_from((color >> 8) & 255).unwrap_or(0),
+            u8::try_from(color & 255).unwrap_or(0),
+        ),
+        crate::display_list::Source {
+            node: root_box.source,
+            action: None,
+        },
     )
+    .map_err(|_| BridgeError::Allocation)?;
+    list.append_list(local)
+        .map_err(|_| BridgeError::TooManyCommands)?;
+    Ok(list)
 }

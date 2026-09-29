@@ -21,15 +21,28 @@ fn visual_paint_refuses_legacy_decoding_and_truncated_utf8() {
 }
 
 #[test]
-fn canvas_backgrounds_are_not_mistaken_for_local_box_fills() {
+fn canvas_backgrounds_cover_viewport_before_local_boxes() {
     for html in [
-        "<html style='height:100px;background:red'><body style='height:80px'></body></html>",
-        "<html style='height:100px'><body style='height:80px;background:green'></body></html>",
+        "<html style='height:100px;background:red'><body style='height:80px'><main style='height:20px;background:blue'></main></body></html>",
+        "<html style='height:100px'><body style='height:80px;background:red'><main style='height:20px;background:blue'></main></body></html>",
     ] {
         let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
         let tree = BoxTree::from_style(&styled);
-        assert!(paint_backgrounds(&tree, 100, 100).is_err(), "{html}");
+        let list = paint_backgrounds(&tree, 100, 100).unwrap();
+        assert_eq!(list.commands().len(), 2, "{html}");
+        assert!(matches!(list.commands()[0], Command::Fill { rect: Rect { x:0, y:0, width:100, height:100 }, color: Rgb(255,0,0), .. }));
+        let pixels = list.rasterize(100, 100, Rgb(255,255,255)).unwrap();
+        assert_eq!(&pixels[0..4], &[0,0,255,255]);
+        assert_eq!(&pixels[(90*100*4)..(90*100*4+4)], &[255,0,0,255]);
     }
+    // When root has its own canvas color, the body background stays local.
+    let html = "<html style='height:100px;background:green'><body style='height:40px;background:red'></body></html>";
+    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let list = paint_backgrounds(&BoxTree::from_style(&styled), 100, 100).unwrap();
+    assert_eq!(list.commands().len(), 2);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[0..4], &[255, 0, 0, 255]);
+    assert_eq!(&pixels[90 * 100 * 4..90 * 100 * 4 + 4], &[0, 128, 0, 255]);
 }
 
 #[test]
