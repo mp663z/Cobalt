@@ -368,11 +368,11 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     "transparent" => Some(Value::BackgroundColor(None)),
                     "white" => Some(Value::BackgroundColor(Some(0xff_ff_ff))),
                     "black" => Some(Value::BackgroundColor(Some(0))),
-                    _ => hex_color(value).map(|color| Value::BackgroundColor(Some(color))),
+                    _ => opaque_color(value).map(|color| Value::BackgroundColor(Some(color))),
                 })
                 .map(|value| (Property::BackgroundColor, value)),
             "color" => parse_keyword(value)
-                .or_else(|| hex_color(value).map(Value::Color))
+                .or_else(|| opaque_color(value).map(Value::Color))
                 .map(|value| (Property::Color, value)),
             "width" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Width))
@@ -513,6 +513,48 @@ fn parse_margin(value: &str) -> Option<Margin> {
     }
 }
 
+/// Exact opaque CSS sRGB colors supported by the integer-pixel painter.
+/// Alpha, system colors, relative colors and space-separated functional
+/// syntax remain unsupported until compositing and Color 4 are implemented.
+fn opaque_color(value: &str) -> Option<u32> {
+    let named = match value {
+        "black" => Some(0x00_00_00),
+        "silver" => Some(0xc0_c0_c0),
+        "gray" | "grey" => Some(0x80_80_80),
+        "white" => Some(0xff_ff_ff),
+        "maroon" => Some(0x80_00_00),
+        "red" => Some(0xff_00_00),
+        "purple" => Some(0x80_00_80),
+        "fuchsia" => Some(0xff_00_ff),
+        "green" => Some(0x00_80_00),
+        "lime" => Some(0x00_ff_00),
+        "olive" => Some(0x80_80_00),
+        "yellow" => Some(0xff_ff_00),
+        "navy" => Some(0x00_00_80),
+        "blue" => Some(0x00_00_ff),
+        "teal" => Some(0x00_80_80),
+        "aqua" => Some(0x00_ff_ff),
+        _ => None,
+    };
+    named.or_else(|| hex_color(value)).or_else(|| {
+        let channels = value.strip_prefix("rgb(")?.strip_suffix(')')?;
+        let mut parts = channels.split(',').map(str::trim);
+        let component = |part: &str| {
+            if part.is_empty() || !part.bytes().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+            part.parse::<u8>().ok()
+        };
+        let r = component(parts.next()?)?;
+        let g = component(parts.next()?)?;
+        let b = component(parts.next()?)?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
+    })
+}
+
 fn hex_color(value: &str) -> Option<u32> {
     let digits = value.strip_prefix('#')?;
     match digits.len() {
@@ -542,6 +584,36 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets)
+    }
+
+    #[test]
+    fn exact_opaque_css_colors_share_foreground_and_background_parsing() {
+        let styled = tree(
+            "<p style='color:RED;background-color:rgb(10, 20, 255)'>Text</p>",
+            &[],
+        );
+        let p = styled.nodes.iter().find(|node| node.tag == "p").unwrap();
+        assert_eq!(p.style.color, 0xff_00_00);
+        assert_eq!(p.style.background_color, Some(0x0a_14_ff));
+        assert!(!styled.unsupported);
+        assert_eq!(opaque_color("green"), Some(0x00_80_00));
+        assert_eq!(opaque_color("lime"), Some(0x00_ff_00));
+        for value in [
+            "rgb(256,0,0)",
+            "rgb(2.5,0,0)",
+            "rgb(1,2,3,4)",
+            "rgb(1 2 3)",
+            "rgba(1,2,3,.5)",
+        ] {
+            assert_eq!(opaque_color(value), None);
+            assert!(
+                tree(
+                    &format!("<p style='background-color:{value}'>Text</p>"),
+                    &[]
+                )
+                .unsupported
+            );
+        }
     }
 
     #[test]
