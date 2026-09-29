@@ -6,6 +6,21 @@ use kobo_web_document::{
 };
 
 #[test]
+fn visual_paint_refuses_legacy_decoding_and_truncated_utf8() {
+    let prefix = b"<html style='height:100px'><body style='height:80px'><main style='height:20px;background-color:red'></main>";
+    let mut legacy = prefix.to_vec();
+    legacy.push(0xe9);
+    let styled = parse_style_tree(&legacy, &[], &Limits::DEFAULT);
+    assert!(styled.unsupported);
+    let mut partial = prefix.to_vec();
+    partial.push(0xe2);
+    let styled = parse_style_tree(&partial, &[], &Limits::DEFAULT);
+    assert!(styled.unsupported);
+    let exact = parse_style_tree(prefix, &[], &Limits::DEFAULT);
+    assert!(!exact.unsupported);
+}
+
+#[test]
 fn retained_color_paints_only_proven_content_rectangles() {
     let html = "<html style='height:100px'><body style='height:80px'><main style='width:50px;height:20px;background-color:#123456'></main></body></html>";
     let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);

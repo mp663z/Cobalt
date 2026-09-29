@@ -404,6 +404,12 @@ pub fn parse_style_tree(
     let nodes = sink.into_nodes();
     let mut tree = style_tree::StyleTree::from_dom(&nodes, sheets);
     tree.truncated |= input_truncated || dropped;
+    // Reader mode can show legacy Windows-1252 text and a cut UTF-8 tail,
+    // but the visual path cannot claim exact CSS selectors/values after an
+    // unverified decode. Keep its retained tree for diagnostics and refuse
+    // painting until character-encoding handling is explicit.
+    tree.unsupported |= warnings.contains(&Warning::NotUtf8)
+        || std::str::from_utf8(input.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(input)).is_err();
     tree
 }
 
