@@ -34,6 +34,21 @@ fn retained_color_paints_only_proven_content_rectangles() {
 }
 
 #[test]
+fn single_color_background_shorthand_paints_only_supported_rectangles() {
+    let html = "<html style='height:100px'><body style='height:80px'><main style='height:20px;background:rgb(5,6,7)'></main></body></html>";
+    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let tree = BoxTree::from_style(&styled);
+    let list = paint_backgrounds(&tree, 100, 100).unwrap();
+    assert!(matches!(
+        list.commands(),
+        [Command::Fill {
+            color: Rgb(5, 6, 7),
+            ..
+        }]
+    ));
+}
+
+#[test]
 fn opaque_named_and_integer_rgb_colors_paint_exact_channels() {
     for (css, expected) in [
         ("green", Rgb(0, 128, 0)),

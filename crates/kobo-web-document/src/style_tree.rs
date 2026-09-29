@@ -369,6 +369,16 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None, // relative sizes require parent-dependent computed values
                 })
                 .map(|value| (Property::FontSize, value)),
+            // A single opaque color (or transparent/none) is the only
+            // background shorthand this painter can account for. All image,
+            // position, size, repeat, attachment, origin and clip forms remain
+            // unsupported rather than silently dropping their paint effects.
+            "background" => parse_keyword(value)
+                .or_else(|| match value {
+                    "transparent" | "none" => Some(Value::BackgroundColor(None)),
+                    _ => opaque_color(value).map(|color| Value::BackgroundColor(Some(color))),
+                })
+                .map(|value| (Property::BackgroundColor, value)),
             "background-color" => parse_keyword(value)
                 .or_else(|| match value {
                     "transparent" => Some(Value::BackgroundColor(None)),
@@ -590,6 +600,42 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets)
+    }
+
+    #[test]
+    fn single_color_background_shorthand_cascades_and_refuses_other_components() {
+        let styled = tree("<style>p{background:#123456;background-color:lime;background:green}</style><p>Text</p>", &[]);
+        assert_eq!(
+            styled
+                .nodes
+                .iter()
+                .find(|node| node.tag == "p")
+                .unwrap()
+                .style
+                .background_color,
+            Some(0x00_80_00)
+        );
+        assert!(!styled.unsupported);
+        let cleared = tree("<p style='background:red;background:none'>Text</p>", &[]);
+        assert_eq!(
+            cleared
+                .nodes
+                .iter()
+                .find(|node| node.tag == "p")
+                .unwrap()
+                .style
+                .background_color,
+            None
+        );
+        assert!(!cleared.unsupported);
+        for value in [
+            "url(x)",
+            "red no-repeat",
+            "linear-gradient(red, blue)",
+            "red padding-box",
+        ] {
+            assert!(tree(&format!("<p style='background:{value}'>Text</p>"), &[]).unsupported);
+        }
     }
 
     #[test]
