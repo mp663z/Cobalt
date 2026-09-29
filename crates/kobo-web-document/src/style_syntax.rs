@@ -77,6 +77,12 @@ fn walk<'a>(
             continue;
         }
         let header = input[start..at].trim();
+        // A selector prelude containing an at-rule is not a selector. For
+        // example, an unterminated @import followed by a block must not be
+        // reinterpreted as a harmless unmatched element selector.
+        if header.contains('@') && !header.starts_with('@') {
+            sheet.unsupported_at_rule = true;
+        }
         let Some(close) = close_brace(bytes, at + 1, end) else {
             sheet.malformed = true;
             break;
@@ -328,6 +334,7 @@ mod tests {
         assert!(parsed.unsupported_at_rule);
         assert!(scan("@import url('styles.css');p{display:block}").unsupported_at_rule);
         assert!(scan("@unknown thing; p{display:block}").unsupported_at_rule);
+        assert!(scan("p @unknown thing {display:block}").unsupported_at_rule);
     }
 
     #[test]
