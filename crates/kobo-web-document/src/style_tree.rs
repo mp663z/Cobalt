@@ -161,6 +161,28 @@ fn ua_display(tag: &str) -> Display {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum MediaFit {
+    Screen,
+    Skip,
+    Unknown,
+}
+
+/// Only unconditional screen/all and a definite print-only sheet are known.
+/// Other media lists or queries might match the viewport, so paint refuses.
+fn stylesheet_media(value: Option<&str>) -> MediaFit {
+    match value.map(str::trim) {
+        None => MediaFit::Screen,
+        Some(value)
+            if value.eq_ignore_ascii_case("all") || value.eq_ignore_ascii_case("screen") =>
+        {
+            MediaFit::Screen
+        }
+        Some(value) if value.eq_ignore_ascii_case("print") => MediaFit::Skip,
+        _ => MediaFit::Unknown,
+    }
+}
+
 fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool) {
     let mut rules = Vec::new();
     let mut unsupported = false;
@@ -178,12 +200,16 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                     .split_whitespace()
                     .any(|part| part.eq_ignore_ascii_case("stylesheet"))
                     || css::attribute(nodes, handle, "disabled").is_some()
-                    || !matches!(
-                        css::attribute(nodes, handle, "media"),
-                        None | Some("all" | "screen")
-                    )
                 {
                     continue;
+                }
+                match stylesheet_media(css::attribute(nodes, handle, "media")) {
+                    MediaFit::Screen => {}
+                    MediaFit::Skip => continue,
+                    MediaFit::Unknown => {
+                        unsupported = true;
+                        continue;
+                    }
                 }
                 // A linked sheet that the host did not supply cannot be
                 // treated as an empty stylesheet. The two-sheet resource
@@ -195,14 +221,24 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                 linked += 1;
                 String::from_utf8_lossy(bytes).into_owned()
             }
-            "style" => nodes[handle]
-                .children
-                .iter()
-                .filter_map(|&child| match &nodes[child].data {
-                    Data::Text(text) => Some(text.as_str()),
-                    _ => None,
-                })
-                .collect(),
+            "style" => {
+                match stylesheet_media(css::attribute(nodes, handle, "media")) {
+                    MediaFit::Screen => {}
+                    MediaFit::Skip => continue,
+                    MediaFit::Unknown => {
+                        unsupported = true;
+                        continue;
+                    }
+                }
+                nodes[handle]
+                    .children
+                    .iter()
+                    .filter_map(|&child| match &nodes[child].data {
+                        Data::Text(text) => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect()
+            }
             _ => continue,
         };
         let parsed = style_syntax::scan(&body);
@@ -964,6 +1000,24 @@ mod tests {
                 .height,
             Length::Auto
         );
+    }
+
+    #[test]
+    fn stylesheet_media_refuses_unknown_queries_instead_of_dropping_rules() {
+        for html in [
+            "<style media='screen and (min-width: 1px)'>p{color:red}</style><p>Text</p>",
+            "<link rel=stylesheet media='screen, print' href=/x><p>Text</p>",
+            "<link rel=stylesheet media='(min-width: 1px)' href=/x><p>Text</p>",
+        ] {
+            assert!(tree(html, &[]).unsupported, "{html}");
+        }
+        let print_only = tree(
+            "<style media='print'>p{border:1px solid red}</style><p>Text</p>",
+            &[],
+        );
+        assert!(!print_only.unsupported);
+        let print_link = tree("<link rel=stylesheet media=print href=/x><p>Text</p>", &[]);
+        assert!(!print_link.unsupported);
     }
 
     #[test]
