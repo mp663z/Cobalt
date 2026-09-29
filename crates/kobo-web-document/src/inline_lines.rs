@@ -52,6 +52,30 @@ pub fn place_ascii_normal(
     let mut words: Vec<Vec<(char, u32)>> = Vec::new();
     let mut word = Vec::new();
     let mut letters = 0_usize;
+    // The current placer only has whitespace wrap opportunities. A word
+    // containing ASCII hyphen or break punctuation needs CSS/Unicode line
+    // breaking semantics rather than a guessed unbreakable run.
+    if text.chars().any(|ch| {
+        matches!(
+            ch,
+            '-' | '/'
+                | '\u{ad}'
+                | '!'
+                | ','
+                | '.'
+                | ':'
+                | ';'
+                | '?'
+                | '('
+                | ')'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+        )
+    }) {
+        return Err(LineError::UnsupportedText);
+    }
     for ch in text.chars() {
         if ch.is_ascii_whitespace() {
             if !word.is_empty() {
@@ -473,6 +497,12 @@ mod tests {
 
     #[test]
     fn refuses_unsupported_text_and_unproven_measurements() {
+        for text in ["one-two", "one/two", "one\u{ad}two", "one,two", "one.two"] {
+            assert_eq!(
+                place_ascii_normal(text, 40, |_| Some(5)),
+                Err(LineError::UnsupportedText)
+            );
+        }
         assert_eq!(
             place_ascii_normal("a🙂", 20, |_| Some(5)),
             Err(LineError::UnsupportedText)
