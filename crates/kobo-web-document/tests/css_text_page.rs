@@ -43,30 +43,23 @@ fn tree(html: &str) -> BoxTree {
 
 #[test]
 fn whole_single_text_page_paints_background_before_measured_glyph() {
-    let boxes = tree("<html style='height:100px'><body style='padding-top:2px;background-color:#123456'><p style='padding-left:5px;padding-top:3px;background-color:#abcdef'>ab</p></body></html>");
+    let boxes = tree("<html style='height:100px'><body style='padding-top:2px'><p style='padding-left:5px;padding-top:3px;background-color:#abcdef'>ab</p></body></html>");
     let list = paint_single_text_page(&boxes, 100, 100, &TestFace).unwrap();
-    assert_eq!(list.commands().len(), 4);
+    assert_eq!(list.commands().len(), 3);
     assert!(matches!(
         &list.commands()[0],
-        Command::Fill {
-            color: Rgb(0x12, 0x34, 0x56),
-            ..
-        }
-    ));
-    assert!(matches!(
-        &list.commands()[1],
         Command::Fill {
             color: Rgb(0xab, 0xcd, 0xef),
             ..
         }
     ));
-    assert!(matches!(&list.commands()[2], Command::GlyphRun { .. }));
+    assert!(matches!(&list.commands()[1], Command::GlyphRun { .. }));
     let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
     let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..(y * 100 + x) * 4 + 4];
     assert_eq!(at(5, 9), &[0, 0, 0, 255]);
     assert_eq!(at(6, 9), &[0xab, 0xcd, 0xef, 255]);
     assert_eq!(at(5, 4), &[0xab, 0xcd, 0xef, 255]);
-    assert_eq!(at(0, 0), &[0x12, 0x34, 0x56, 255]);
+    assert_eq!(at(0, 0), &[255, 255, 255, 255]);
 }
 
 struct Missing;
@@ -94,6 +87,7 @@ fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
         "<html style='height:100px'><body><p style='border:1px solid red'>hi</p></body></html>",
         "<html style='height:100px'><body><p>emoji🙂</p></body></html>",
         "<html style='height:100px;background-color:#123456'><body><p>hi</p></body></html>",
+        "<html style='height:100px'><body style='background-color:#123456'><p>hi</p></body></html>",
         "<html style='height:100px'><body><p style='margin-top:10px'>hi</p></body></html>",
     ] {
         assert_eq!(

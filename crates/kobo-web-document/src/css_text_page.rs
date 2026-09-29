@@ -149,11 +149,16 @@ pub fn paint_single_text_page(
     if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
         return Err(PageError::Unsupported);
     }
-    // This path cannot yet do viewport/root background propagation or
-    // parent-child margin collapse. A root fill could otherwise look like a
-    // correct full page while silently covering the wrong area.
+    // CSS propagates an HTML body's background to the viewport while its
+    // root is transparent. Neither root nor body propagation is implemented
+    // here. Refuse both instead of painting only the local content box.
+    // Parent-child margin collapse is also not implemented.
     let root = tree.roots[0];
     if tree.boxes[root].style.background_color.is_some()
+        || tree.boxes[root]
+            .children
+            .first()
+            .is_some_and(|&body| tree.boxes[body].style.background_color.is_some())
         || tree.boxes.iter().any(|node| {
             node.kind != BoxKind::Text
                 && (node.style.margin_left != crate::computed_style::Margin::Px(0)
