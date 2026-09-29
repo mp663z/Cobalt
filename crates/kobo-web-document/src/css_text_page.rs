@@ -60,6 +60,7 @@ pub fn paint_single_text_page(
         return Err(PageError::InvalidViewport);
     }
     if tree.unsupported
+        || tree.quirks
         || tree.truncated
         || tree.boxes.len() > MAX_COMMANDS
         || tree.roots.len() != 1

@@ -38,7 +38,25 @@ impl FontProvider for TestFace {
     }
 }
 fn tree(html: &str) -> BoxTree {
-    BoxTree::from_style(&parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT))
+    BoxTree::from_style(&parse_style_tree(
+        format!("<!doctype html>{html}").as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+    ))
+}
+
+#[test]
+fn single_text_paint_refuses_quirks() {
+    let boxes = BoxTree::from_style(&parse_style_tree(
+        b"<html style='height:100px'><body style='height:80px'><p style='height:20px'>ab</p></body></html>",
+        &[],
+        &Limits::DEFAULT,
+    ));
+    assert!(boxes.quirks);
+    assert_eq!(
+        paint_single_text_page(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
 }
 
 #[test]

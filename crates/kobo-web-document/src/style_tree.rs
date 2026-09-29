@@ -30,6 +30,8 @@ pub struct StyleTree {
     pub nodes: Vec<StyledNode>,
     pub truncated: bool,
     pub unsupported: bool,
+    /// The HTML parser selected full or limited quirks mode.
+    pub quirks: bool,
 }
 
 struct MatchedRule {

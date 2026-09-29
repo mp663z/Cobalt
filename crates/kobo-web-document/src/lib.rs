@@ -401,9 +401,11 @@ pub fn parse_style_tree(
     }
     let sink = parser.finish();
     let dropped = sink.dropped_text.get() || sink.dropped_attributes.get() > 0;
+    let quirks = sink.quirks_mode.get();
     let nodes = sink.into_nodes();
     let mut tree = style_tree::StyleTree::from_dom(&nodes, sheets);
     tree.truncated |= input_truncated || dropped;
+    tree.quirks = quirks != html5ever::interface::QuirksMode::NoQuirks;
     // Reader mode can show legacy Windows-1252 text and a cut UTF-8 tail,
     // but the visual path cannot claim exact CSS selectors/values after an
     // unverified decode. Keep its retained tree for diagnostics and refuse

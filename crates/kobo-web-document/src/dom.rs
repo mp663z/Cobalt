@@ -50,6 +50,7 @@ pub struct Sink {
     pub(crate) errors: Cell<usize>,
     pub(crate) dropped_attributes: Cell<usize>,
     pub(crate) dropped_text: Cell<bool>,
+    pub(crate) quirks_mode: Cell<QuirksMode>,
 }
 
 impl Sink {
@@ -65,6 +66,7 @@ impl Sink {
             errors: Cell::new(0),
             dropped_attributes: Cell::new(0),
             dropped_text: Cell::new(false),
+            quirks_mode: Cell::new(QuirksMode::Quirks),
         }
     }
 
@@ -261,7 +263,9 @@ impl TreeSink for Sink {
         x == y
     }
 
-    fn set_quirks_mode(&self, _mode: QuirksMode) {}
+    fn set_quirks_mode(&self, mode: QuirksMode) {
+        self.quirks_mode.set(mode);
+    }
 
     fn append_before_sibling(&self, sibling: &Handle, new_node: NodeOrText<Handle>) {
         let Some(parent) = self.nodes.borrow()[*sibling].parent else {

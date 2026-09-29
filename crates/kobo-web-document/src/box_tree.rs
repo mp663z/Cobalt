@@ -37,6 +37,8 @@ pub struct BoxTree {
     pub roots: Vec<usize>,
     pub truncated: bool,
     pub unsupported: bool,
+    /// Quirks is a visual paint gate, not a block geometry diagnostic gate.
+    pub quirks: bool,
 }
 
 /// CSS 2.2 §10.3.3, restricted to zero margin/padding/border, LTR,
@@ -722,6 +724,7 @@ impl BoxTree {
         let mut tree = Self {
             truncated: styled.truncated,
             unsupported: styled.unsupported,
+            quirks: styled.quirks,
             ..Self::default()
         };
         let limit = styled.nodes.len().saturating_mul(2);

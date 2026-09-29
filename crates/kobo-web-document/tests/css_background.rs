@@ -5,6 +5,31 @@ use kobo_web_document::{
     parse_style_tree, Limits,
 };
 
+fn standards_tree(html: &[u8]) -> kobo_web_document::style_tree::StyleTree {
+    let mut bytes = b"<!doctype html>".to_vec();
+    bytes.extend_from_slice(html);
+    parse_style_tree(&bytes, &[], &Limits::DEFAULT)
+}
+
+#[test]
+fn visual_paint_refuses_quirks_and_limited_quirks() {
+    for html in [
+        "<html style='height:100px;background:red'><body style='height:80px'></body></html>",
+        "<!doctype html public '-//W3C//DTD HTML 4.01 Transitional//EN'><html style='height:100px;background:red'><body style='height:80px'></body></html>",
+    ] {
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        assert!(styled.quirks, "{html}");
+        let boxes = BoxTree::from_style(&styled);
+        assert!(boxes.quirks);
+        assert!(paint_backgrounds(&boxes, 100, 100).is_err(), "{html}");
+    }
+    let styled = standards_tree(
+        b"<html style='height:100px;background:red'><body style='height:80px'></body></html>",
+    );
+    assert!(!styled.quirks);
+    assert!(paint_backgrounds(&BoxTree::from_style(&styled), 100, 100).is_ok());
+}
+
 #[test]
 fn visual_paint_refuses_legacy_decoding_and_truncated_utf8() {
     let prefix = b"<html style='height:100px'><body style='height:80px'><main style='height:20px;background-color:red'></main>";
@@ -26,7 +51,7 @@ fn canvas_backgrounds_cover_viewport_before_local_boxes() {
         "<html style='height:100px;background:red'><body style='height:80px'><main style='height:20px;background:blue'></main></body></html>",
         "<html style='height:100px'><body style='height:80px;background:red'><main style='height:20px;background:blue'></main></body></html>",
     ] {
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = standards_tree(html.as_bytes());
         let tree = BoxTree::from_style(&styled);
         let list = paint_backgrounds(&tree, 100, 100).unwrap();
         assert_eq!(list.commands().len(), 2, "{html}");
@@ -37,7 +62,7 @@ fn canvas_backgrounds_cover_viewport_before_local_boxes() {
     }
     // When root has its own canvas color, the body background stays local.
     let html = "<html style='height:100px;background:green'><body style='height:40px;background:red'></body></html>";
-    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let styled = standards_tree(html.as_bytes());
     let list = paint_backgrounds(&BoxTree::from_style(&styled), 100, 100).unwrap();
     assert_eq!(list.commands().len(), 2);
     let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
@@ -48,7 +73,7 @@ fn canvas_backgrounds_cover_viewport_before_local_boxes() {
 #[test]
 fn retained_color_paints_only_proven_content_rectangles() {
     let html = "<html style='height:100px'><body style='height:80px'><main style='width:50px;height:20px;background-color:#123456'></main></body></html>";
-    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let styled = standards_tree(html.as_bytes());
     let tree = BoxTree::from_style(&styled);
     let list = paint_backgrounds(&tree, 100, 100).unwrap();
     assert_eq!(list.commands().len(), 1);
@@ -76,7 +101,7 @@ fn retained_color_paints_only_proven_content_rectangles() {
 #[test]
 fn single_color_background_shorthand_paints_only_supported_rectangles() {
     let html = "<html style='height:100px'><body style='height:80px'><main style='height:20px;background:rgb(5,6,7)'></main></body></html>";
-    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let styled = standards_tree(html.as_bytes());
     let tree = BoxTree::from_style(&styled);
     let list = paint_backgrounds(&tree, 100, 100).unwrap();
     assert!(matches!(
@@ -96,7 +121,7 @@ fn opaque_named_and_integer_rgb_colors_paint_exact_channels() {
         ("rgb(10,20,255)", Rgb(10, 20, 255)),
     ] {
         let html = format!("<html style='height:100px'><body style='height:80px'><main style='height:20px;background-color:{css}'></main></body></html>");
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = standards_tree(html.as_bytes());
         let tree = BoxTree::from_style(&styled);
         let list = paint_backgrounds(&tree, 100, 100).unwrap();
         assert!(matches!(list.commands(), [Command::Fill { color, .. }] if *color == expected));
@@ -109,7 +134,7 @@ fn unknown_css_and_text_are_not_passed_off_as_rendered() {
         "<html style='height:100px'><body style='height:80px'><main style='height:20px;background-color:rgba(255,0,0,.5)'></main></body></html>",
         "<html style='height:100px'><body style='height:80px'><main style='height:20px;background-color:#123456'>Text</main></body></html>",
     ] {
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = standards_tree(html.as_bytes());
         let tree = BoxTree::from_style(&styled);
         assert!(paint_backgrounds(&tree, 100, 100).is_err(), "{html}");
     }
@@ -118,7 +143,7 @@ fn unknown_css_and_text_are_not_passed_off_as_rendered() {
 #[test]
 fn padded_background_covers_padding_box_and_stacks_after_bottom_padding() {
     let html = "<html style='height:100px'><body style='height:80px;padding-top:3px'><main style='width:50px;height:20px;padding-left:5px;padding-right:7px;padding-top:4px;padding-bottom:6px;background-color:#123456'></main><section style='height:10px;width:20px;margin-top:8px;background-color:#abcdef'></section></body></html>";
-    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let styled = standards_tree(html.as_bytes());
     let tree = BoxTree::from_style(&styled);
     let list = paint_backgrounds(&tree, 100, 100).unwrap();
     let rects: Vec<_> = list

@@ -153,6 +153,7 @@ fn paint_rectangles(
         return Err(BridgeError::InvalidViewport);
     }
     if tree.unsupported
+        || tree.quirks
         || tree.truncated
         || widths.unsupported
         || widths.truncated

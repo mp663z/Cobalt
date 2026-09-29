@@ -7,7 +7,11 @@ use display_list::{Command, Rect, Rgb, Source, MAX_COMMANDS};
 use kobo_web_document::{parse_style_tree, Limits};
 
 fn setup(html: &str) -> (BoxTree, WidthPass, VerticalPass) {
-    let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+    let styled = parse_style_tree(
+        format!("<!doctype html>{html}").as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+    );
     let tree = BoxTree::from_style(&styled);
     let widths = WidthPass::from_boxes(&tree, 400);
     let vertical = VerticalPass::from_boxes(&tree, 400, 600);
@@ -25,6 +29,27 @@ fn paint(
 
 fn fill(box_index: usize, color: Rgb) -> FillSpec {
     FillSpec { box_index, color }
+}
+
+#[test]
+fn content_paint_refuses_quirks_even_with_proven_geometry() {
+    let styled = parse_style_tree(
+        b"<html style='height:600px'><body style='height:300px;background:red'></body></html>",
+        &[],
+        &Limits::DEFAULT,
+    );
+    assert!(styled.quirks);
+    let tree = BoxTree::from_style(&styled);
+    assert_eq!(
+        paint(
+            &tree,
+            &WidthPass::from_boxes(&tree, 400),
+            &VerticalPass::from_boxes(&tree, 400, 600),
+            &[]
+        )
+        .err(),
+        Some(BridgeError::Unsupported)
+    );
 }
 
 #[test]
