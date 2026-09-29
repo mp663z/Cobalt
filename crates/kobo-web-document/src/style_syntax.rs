@@ -27,6 +27,9 @@ pub(crate) struct Sheet<'a> {
     pub rules: Vec<Rule<'a>>,
     pub truncated: bool,
     pub malformed: bool,
+    /// Unhandled at-rules (including semicolon at-rules) make a visual
+    /// render incomplete even when later ordinary rules remain parseable.
+    pub unsupported_at_rule: bool,
 }
 
 /// Scan a UTF-8 sheet without evaluating at-rules or splitting declarations.
@@ -65,7 +68,12 @@ fn walk<'a>(
             break;
         };
         if delimiter == b';' {
-            pos = at + 1; // An at-rule without a body, or an invalid statement.
+            if input[start..at].trim_start().starts_with('@') {
+                sheet.unsupported_at_rule = true;
+            } else {
+                sheet.malformed = true;
+            }
+            pos = at + 1;
             continue;
         }
         let header = input[start..at].trim();
@@ -74,6 +82,9 @@ fn walk<'a>(
             break;
         };
         if let Some(at_rule) = header.strip_prefix('@') {
+            // No @font-face, @keyframes or unknown block can contribute to
+            // this renderer's computed output. The scanner still skips the
+            // whole block so its children never leak as unconditional CSS.
             let split = at_rule
                 .find(|ch: char| ch.is_ascii_whitespace() || ch == '(')
                 .unwrap_or(at_rule.len());
@@ -92,6 +103,8 @@ fn walk<'a>(
                     walk(input, at + 1, close, conditions, sheet);
                     conditions.pop();
                 }
+            } else {
+                sheet.unsupported_at_rule = true;
             }
         } else if !header.is_empty() {
             if sheet.rules.len() == MAX_RULES {
@@ -312,6 +325,9 @@ mod tests {
             scan("@font-face{font-family:x}@unknown thing{.bad{display:none}}.good{display:block}");
         assert_eq!(parsed.rules.len(), 1);
         assert_eq!(parsed.rules[0].prelude, ".good");
+        assert!(parsed.unsupported_at_rule);
+        assert!(scan("@import url('styles.css');p{display:block}").unsupported_at_rule);
+        assert!(scan("@unknown thing; p{display:block}").unsupported_at_rule);
     }
 
     #[test]

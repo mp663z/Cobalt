@@ -200,7 +200,7 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
             _ => continue,
         };
         let parsed = style_syntax::scan(&body);
-        unsupported |= parsed.truncated || parsed.malformed;
+        unsupported |= parsed.truncated || parsed.malformed || parsed.unsupported_at_rule;
         for rule in parsed.rules {
             if rules.len() >= MAX_RULES {
                 return (rules, true);
@@ -539,6 +539,18 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets)
+    }
+
+    #[test]
+    fn unknown_at_rules_fail_closed_without_leaking_following_rules() {
+        for html in [
+            "<style>@import url('x.css'); p{background-color:#123456}</style><p>Text</p>",
+            "<style>@font-face{font-family:x;src:url('x.woff')} p{background-color:#123456}</style><p>Text</p>",
+        ] {
+            let styled = tree(html, &[]);
+            assert!(styled.unsupported, "{html}");
+            assert_eq!(styled.nodes.iter().find(|n| n.tag == "p").unwrap().style.background_color, Some(0x12_34_56));
+        }
     }
 
     #[test]
