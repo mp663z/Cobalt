@@ -60,6 +60,45 @@ fn assert_fits_the_panel(name: &str, (width, height, grey): &(u32, u32, Vec<u8>)
 }
 
 #[test]
+fn restricted_css_tile_retains_color_only_on_confirmed_color_path() {
+    use kobo_web_document::display_list::{DisplayList, Rect, Rgb, Source};
+    let mut list = DisplayList::default();
+    list.fill(
+        Rect {
+            x: 0,
+            y: 0,
+            width: 2,
+            height: 2,
+        },
+        Rgb(255, 0, 0),
+        Source::default(),
+    )
+    .unwrap();
+    list.fill(
+        Rect {
+            x: 1,
+            y: 0,
+            width: 1,
+            height: 2,
+        },
+        Rgb(0, 128, 0),
+        Source::default(),
+    )
+    .unwrap();
+    let color = crate::pictures::prepare_css_tile(&list, 2, 2, true).unwrap();
+    assert!(color.colour);
+    assert_eq!(color.pixels, [255, 0, 0, 0, 128, 0, 255, 0, 0, 0, 128, 0]);
+    let grey = crate::pictures::prepare_css_tile(&list, 2, 2, false).unwrap();
+    assert!(!grey.colour);
+    assert_eq!(grey.pixels.len(), 4);
+    assert_ne!(grey.pixels[0], grey.pixels[1]);
+    assert!(grey.pixels.iter().all(|&value| value % 17 == 0));
+    assert!(crate::pictures::prepare_css_tile(&list, 0, 2, true).is_none());
+    assert!(crate::pictures::prepare_css_tile(&list, 2, 0, false).is_none());
+    assert!(crate::pictures::prepare_css_tile(&list, u32::MAX, u32::MAX, true).is_none());
+}
+
+#[test]
 fn every_good_picture_decodes_at_its_true_size_and_fits_its_room() {
     for (name, width, height) in GOOD {
         let bytes = image(name);

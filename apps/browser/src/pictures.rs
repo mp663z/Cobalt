@@ -254,6 +254,57 @@ pub(crate) fn prepare(bytes: &[u8], width: u32, height: u32) -> Option<(u32, u32
         .map(|picture| (picture.width, picture.height, picture.pixels))
 }
 
+/// Convert an already complete, bounded CSS paint list to the existing
+/// panel-picture format. The caller must first prove whole-page layout and
+/// paint: this does not make the background-only preview a browser page.
+/// A confirmed colour-panel identity is required before `colour` may be true.
+/// The runtime's per-picture byte ceiling applies to both panel formats.
+// Not wired into the shipping reader until a full CSS page passes layout,
+// text, paint and viewport checks; exercised by the browser's color tests.
+#[allow(dead_code)]
+pub(crate) fn prepare_css_tile(
+    list: &kobo_web_document::display_list::DisplayList,
+    width: u32,
+    height: u32,
+    colour: bool,
+) -> Option<Prepared> {
+    let pixels = usize::try_from(width)
+        .ok()?
+        .checked_mul(usize::try_from(height).ok()?)?;
+    let byte_count = pixels.checked_mul(if colour { 3 } else { 1 })?;
+    if pixels == 0 || byte_count > kobo_sdk::MAX_PICTURE_BYTES {
+        return None;
+    }
+    let rgba = list
+        .rasterize(
+            width,
+            height,
+            kobo_web_document::display_list::Rgb(255, 255, 255),
+        )
+        .ok()?;
+    let mut rgb = Vec::new();
+    rgb.try_reserve_exact(pixels.checked_mul(3)?).ok()?;
+    for pixel in rgba.chunks_exact(4) {
+        rgb.extend_from_slice(&pixel[..3]);
+    }
+    if colour {
+        return Some(Prepared {
+            width,
+            height,
+            colour: true,
+            pixels: rgb,
+        });
+    }
+    let mut picture = kobo_image::Picture::from_rgb(width, height, rgb).ok()?;
+    picture.dither(kobo_image::PANEL_GREYS);
+    Some(Prepared {
+        width,
+        height,
+        colour: false,
+        pixels: picture.into_grey(),
+    })
+}
+
 /// Decodes and fits a picture for a panel with or without colour. A colour
 /// panel still gets grey for a picture that has no colour in it, at a
 /// third of the bytes.
