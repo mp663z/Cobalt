@@ -172,7 +172,7 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
             continue;
         };
         let body = match &*name.local {
-            "link" if linked < sheets.len() && linked < 2 => {
+            "link" => {
                 let rel = css::attribute(nodes, handle, "rel").unwrap_or("");
                 if !rel
                     .split_whitespace()
@@ -185,9 +185,15 @@ fn matched_rules(nodes: &[Node], sheets: &[Vec<u8>]) -> (Vec<MatchedRule>, bool)
                 {
                     continue;
                 }
-                let value = String::from_utf8_lossy(&sheets[linked]).into_owned();
+                // A linked sheet that the host did not supply cannot be
+                // treated as an empty stylesheet. The two-sheet resource
+                // ceiling also must not turn a later link into a silent skip.
+                let Some(bytes) = sheets.get(linked).filter(|_| linked < 2) else {
+                    unsupported = true;
+                    continue;
+                };
                 linked += 1;
-                value
+                String::from_utf8_lossy(bytes).into_owned()
             }
             "style" => nodes[handle]
                 .children
@@ -912,6 +918,22 @@ mod tests {
                 .height,
             Length::Auto
         );
+    }
+
+    #[test]
+    fn missing_or_excess_linked_sheets_refuse_a_partial_visual_page() {
+        let missing = tree(
+            "<link rel=stylesheet href=/x><p style='background-color:red'>Text</p>",
+            &[],
+        );
+        assert!(missing.unsupported);
+        let two = [b"p{color:red}".to_vec(), b"p{color:blue}".to_vec()];
+        let html = "<link rel=stylesheet href=/a><link rel=stylesheet href=/b><link rel=stylesheet href=/c><p>Text</p>";
+        let excess = tree(html, &two);
+        assert!(excess.unsupported);
+        // Non-stylesheet links are not an implicit style dependency.
+        let unrelated = tree("<link rel=author href=/person><p>Text</p>", &[]);
+        assert!(!unrelated.unsupported);
     }
 
     #[test]
