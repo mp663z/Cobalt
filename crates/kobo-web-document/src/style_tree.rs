@@ -246,6 +246,55 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
         let important = value.ends_with("!important");
         let value = value.strip_suffix("!important").unwrap_or(&value).trim();
         let name = name.trim().to_ascii_lowercase();
+        if name == "padding" {
+            if let Some(keyword) = parse_keyword(value) {
+                for property in [
+                    Property::PaddingTop,
+                    Property::PaddingRight,
+                    Property::PaddingBottom,
+                    Property::PaddingLeft,
+                ] {
+                    result.push((property, keyword, important));
+                }
+                continue;
+            }
+            let sides: Vec<_> = value.split_ascii_whitespace().collect();
+            let pixel = |value: &str| match parse_width(value) {
+                Some(Length::Px(px)) => Some(px),
+                _ => None,
+            };
+            let Some(padding) = (match sides.as_slice() {
+                [top] => pixel(top).map(|top| [top; 4]),
+                [top, right] => pixel(top)
+                    .zip(pixel(right))
+                    .map(|(top, right)| [top, right, top, right]),
+                [top, right, bottom] => pixel(top)
+                    .zip(pixel(right))
+                    .zip(pixel(bottom))
+                    .map(|((top, right), bottom)| [top, right, bottom, right]),
+                [top, right, bottom, left] => pixel(top)
+                    .zip(pixel(right))
+                    .zip(pixel(bottom))
+                    .zip(pixel(left))
+                    .map(|(((top, right), bottom), left)| [top, right, bottom, left]),
+                _ => None,
+            }) else {
+                unsupported = true;
+                continue;
+            };
+            for (property, pixels) in [
+                Property::PaddingTop,
+                Property::PaddingRight,
+                Property::PaddingBottom,
+                Property::PaddingLeft,
+            ]
+            .into_iter()
+            .zip(padding)
+            {
+                result.push((property, Value::Padding(pixels), important));
+            }
+            continue;
+        }
         if name == "margin" {
             if let Some(keyword) = parse_keyword(value) {
                 for property in [
@@ -509,6 +558,39 @@ mod tests {
         assert_eq!(styled.nodes[paragraph].style.color, 0x12_34_56);
         assert_eq!(styled.nodes[paragraph].style.display, Display::None);
         assert!(!styled.truncated);
+    }
+
+    #[test]
+    fn padding_shorthand_expands_in_cascade_order_and_rejects_percent() {
+        let styled = tree("<style>p{padding:1px 2px 3px 4px;padding-left:7px}</style><p style='padding:5px 6px'>Text</p>", &[]);
+        let p = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(
+            (
+                p.style.padding_top,
+                p.style.padding_right,
+                p.style.padding_bottom,
+                p.style.padding_left
+            ),
+            (5, 6, 5, 6)
+        );
+        assert!(!styled.unsupported);
+        let styled = tree(
+            "<div style='padding:7px'><p style='padding:inherit;padding-left:9px'>Text</p></div>",
+            &[],
+        );
+        let p = styled.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(
+            (
+                p.style.padding_top,
+                p.style.padding_right,
+                p.style.padding_bottom,
+                p.style.padding_left
+            ),
+            (7, 7, 7, 9)
+        );
+        assert!(!styled.unsupported);
+        assert!(tree("<p style='padding:10%'>Text</p>", &[]).unsupported);
+        assert!(tree("<p style='padding:1px 2px 3px 4px 5px'>Text</p>", &[]).unsupported);
     }
 
     #[test]
