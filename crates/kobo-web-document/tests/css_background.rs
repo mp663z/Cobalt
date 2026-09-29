@@ -21,6 +21,18 @@ fn visual_paint_refuses_legacy_decoding_and_truncated_utf8() {
 }
 
 #[test]
+fn canvas_backgrounds_are_not_mistaken_for_local_box_fills() {
+    for html in [
+        "<html style='height:100px;background:red'><body style='height:80px'></body></html>",
+        "<html style='height:100px'><body style='height:80px;background:green'></body></html>",
+    ] {
+        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let tree = BoxTree::from_style(&styled);
+        assert!(paint_backgrounds(&tree, 100, 100).is_err(), "{html}");
+    }
+}
+
+#[test]
 fn retained_color_paints_only_proven_content_rectangles() {
     let html = "<html style='height:100px'><body style='height:80px'><main style='width:50px;height:20px;background-color:#123456'></main></body></html>";
     let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
