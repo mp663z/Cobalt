@@ -61,40 +61,30 @@ fn assert_fits_the_panel(name: &str, (width, height, grey): &(u32, u32, Vec<u8>)
 
 #[test]
 fn restricted_css_tile_retains_color_only_on_confirmed_color_path() {
-    use kobo_web_document::display_list::{DisplayList, Rect, Rgb, Source};
-    let mut list = DisplayList::default();
-    list.fill(
-        Rect {
-            x: 0,
-            y: 0,
-            width: 2,
-            height: 2,
-        },
-        Rgb(255, 0, 0),
-        Source::default(),
-    )
-    .unwrap();
-    list.fill(
-        Rect {
-            x: 1,
-            y: 0,
-            width: 1,
-            height: 2,
-        },
-        Rgb(0, 128, 0),
-        Source::default(),
-    )
-    .unwrap();
-    let color = crate::pictures::prepare_css_tile(&list, 2, 2, true).unwrap();
+    use kobo_web_document::{
+        box_tree::BoxTree, css_background::paint_backgrounds, parse_style_tree, Limits,
+    };
+    // Real CSS values and geometry, not hand-built paint commands. Every
+    // element has definite height, both margins are zero and there is no text
+    // or root/body background to require the unsupported full-page renderer.
+    let html = b"<!doctype html><html style='height:100px;margin:0'><body style='height:100px;margin:0'><main style='width:25px;height:20px;background-color:red'></main><section style='width:25px;height:20px;background-color:green'></section></body></html>";
+    let styled = parse_style_tree(html, &[], &Limits::DEFAULT);
+    assert!(!styled.unsupported);
+    let boxes = BoxTree::from_style(&styled);
+    let list = paint_backgrounds(&boxes, 100, 100).unwrap();
+    let color = crate::pictures::prepare_css_tile(&list, 100, 100, true).unwrap();
     assert!(color.colour);
-    assert_eq!(color.pixels, [255, 0, 0, 0, 128, 0, 255, 0, 0, 0, 128, 0]);
-    let grey = crate::pictures::prepare_css_tile(&list, 2, 2, false).unwrap();
+    let at = |x: usize, y: usize| &color.pixels[(y * 100 + x) * 3..(y * 100 + x) * 3 + 3];
+    assert_eq!(at(0, 0), [255, 0, 0]);
+    assert_eq!(at(0, 20), [0, 128, 0]);
+    assert_eq!(at(25, 20), [255, 255, 255]);
+    let grey = crate::pictures::prepare_css_tile(&list, 100, 100, false).unwrap();
     assert!(!grey.colour);
-    assert_eq!(grey.pixels.len(), 4);
-    assert_ne!(grey.pixels[0], grey.pixels[1]);
+    assert_eq!(grey.pixels.len(), 10_000);
+    assert_ne!(grey.pixels[0], grey.pixels[20 * 100]);
     assert!(grey.pixels.iter().all(|&value| value % 17 == 0));
-    assert!(crate::pictures::prepare_css_tile(&list, 0, 2, true).is_none());
-    assert!(crate::pictures::prepare_css_tile(&list, 2, 0, false).is_none());
+    assert!(crate::pictures::prepare_css_tile(&list, 0, 100, true).is_none());
+    assert!(crate::pictures::prepare_css_tile(&list, 100, 0, false).is_none());
     assert!(crate::pictures::prepare_css_tile(&list, u32::MAX, u32::MAX, true).is_none());
 }
 
