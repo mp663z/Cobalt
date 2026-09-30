@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 use kobo_sdk::{DisplayMetrics, Screen, ScreenBuilder};
 use kobo_ui::{
-    Chrome, LayoutIssueKind, LayoutKind, ParagraphPresentation, PictureHandle, RichTextSpan,
-    TableRow, TextPresentation, TilePicture,
+    BandAlign, Chrome, Face, FontSize, LayoutIssueKind, LayoutKind, ParagraphPresentation,
+    PictureHandle, RichTextSpan, SlotWidth, Space, TableRow, TextPresentation, TilePicture,
 };
 use kobo_web_document::{Block, Document, Field, Form, Inline, Table, Warning};
 
@@ -213,6 +213,19 @@ pub fn page_screen_with(
     of: Option<usize>,
     reader: Option<bool>,
 ) -> ScreenBuilder {
+    page_screen_with_metrics(title, pieces, page, of, reader, &kobo_ui::CLARA_BW_METRICS)
+}
+
+/// Browser-specific presentation measured against the same panel as pagination.
+#[must_use]
+pub fn page_screen_with_metrics(
+    title: &str,
+    pieces: &[Piece],
+    page: usize,
+    of: Option<usize>,
+    reader: Option<bool>,
+    metrics: &DisplayMetrics,
+) -> ScreenBuilder {
     let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
     if let Some(reading) = reader {
         builder = builder.top_bar_action("reader", if reading { "Whole page" } else { "Reader" });
@@ -232,7 +245,7 @@ pub fn page_screen_with(
             u16::try_from(of.max(1)).unwrap_or(u16::MAX),
         );
     }
-    append(builder, pieces)
+    append_with_metrics(builder, pieces, metrics)
 }
 
 /// Pages a document for one panel, measured in [`page_screen`].
@@ -249,7 +262,8 @@ pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) 
 /// every picture must also get the full size it has on a page of its own.
 #[must_use]
 pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> bool {
-    let screen = page_screen_with(title, pieces, 998, Some(999), Some(false)).build();
+    let screen =
+        page_screen_with_metrics(title, pieces, 998, Some(999), Some(false), metrics).build();
     if !fits(&screen, metrics) {
         return false;
     }
@@ -264,12 +278,13 @@ pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> boo
         let Piece::Picture { image, .. } = piece else {
             return true;
         };
-        let alone = page_screen_with(
+        let alone = page_screen_with_metrics(
             title,
             std::slice::from_ref(piece),
             998,
             Some(999),
             Some(false),
+            metrics,
         )
         .build();
         let whole = picture_heights(&alone, metrics);
@@ -323,14 +338,32 @@ fn picture_heights(screen: &Screen, metrics: &DisplayMetrics) -> Vec<(PictureHan
 
 /// Adds a page's pieces to a screen.
 #[must_use]
-pub fn append(mut builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
+pub fn append(builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
+    append_with_metrics(builder, pieces, &kobo_ui::CLARA_BW_METRICS)
+}
+
+fn append_with_metrics(
+    builder: ScreenBuilder,
+    pieces: &[Piece],
+    metrics: &DisplayMetrics,
+) -> ScreenBuilder {
+    kobo_ui::with_reading_scale(metrics.text_scale, || {
+        append_at_reading_scale(builder, pieces, metrics)
+    })
+}
+
+fn append_at_reading_scale(
+    mut builder: ScreenBuilder,
+    pieces: &[Piece],
+    metrics: &DisplayMetrics,
+) -> ScreenBuilder {
     for piece in pieces {
         builder = match piece {
             Piece::Heading { level, text, .. } => builder.heading_at_level(*level, text),
             Piece::Prose(runs) => prose(builder, runs),
             Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
-            Piece::Preformatted(text) => builder.text(text),
-            Piece::Table { rows, .. } => builder.table(rows.clone(), Vec::new()),
+            Piece::Preformatted(text) => preformatted(builder, text),
+            Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
             Piece::Note(text) => builder.secondary(text),
             Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
             Piece::Rule => builder.divider(),
@@ -345,6 +378,83 @@ pub fn append(mut builder: ScreenBuilder, pieces: &[Piece]) -> ScreenBuilder {
         };
     }
     builder
+}
+
+// Hard-line indentation belongs to the browser's code presentation. Use the
+// protocol's paragraph indent, leaving shared soft-wrap behavior unchanged.
+fn preformatted(mut builder: ScreenBuilder, text: &str) -> ScreenBuilder {
+    let em = kobo_ui::measure_text_in("M", FontSize::Body, Face::Reading)
+        .0
+        .max(1);
+    for line in text.split('\n') {
+        let content = line.trim_start_matches(|c: char| c.is_whitespace());
+        let prefix = &line[..line.len() - content.len()];
+        let width = kobo_ui::measure_text_in(prefix, FontSize::Body, Face::Reading).0;
+        let indent = i16::try_from(width.saturating_mul(100) / em).unwrap_or(i16::MAX);
+        builder = builder.rich_text(
+            content,
+            Vec::new(),
+            ParagraphPresentation {
+                first_line_indent_em: indent,
+                ..ParagraphPresentation::default()
+            },
+        );
+    }
+    builder
+}
+
+// A bounded three-slot band centers a fitting browser table in the prose
+// measure. Wide tables retain the panel width, without altering shared UI.
+fn browser_table(
+    builder: ScreenBuilder,
+    rows: &[TableRow],
+    metrics: &DisplayMetrics,
+) -> ScreenBuilder {
+    let columns = rows
+        .iter()
+        .map(|row| row.cells.len())
+        .max()
+        .unwrap_or(0)
+        .min(kobo_ui::MAX_TABLE_COLUMNS);
+    let natural = (0..columns)
+        .map(|column| {
+            rows.iter()
+                .take(kobo_ui::MAX_TABLE_ROWS)
+                .filter_map(|row| row.cells.get(column))
+                .map(|cell| kobo_ui::measure_text_in(cell, FontSize::Body, Face::Reading).0)
+                .max()
+                .unwrap_or(0)
+        })
+        .fold(0_i32, i32::saturating_add)
+        .saturating_add(
+            metrics
+                .space(Space::Small)
+                .saturating_mul(i32::try_from(columns.saturating_sub(1)).unwrap_or(0)),
+        );
+    let gap = metrics.space(Space::Small);
+    let band_width = metrics.content_width().min(metrics.control_width());
+    let side = (band_width - metrics.readable_width()) / 2 - gap;
+    if natural > metrics.readable_width() || side <= 0 {
+        return builder.table(rows.to_vec(), Vec::new());
+    }
+    let physical = |pixels: i32| {
+        u16::try_from(pixels.saturating_mul(254) / metrics.pixels_per_inch).unwrap_or(u16::MAX)
+    };
+    let widths = [
+        physical(side),
+        physical(metrics.readable_width()),
+        physical(side),
+    ];
+    let slots = widths.into_iter().enumerate().map(|(index, width)| {
+        (SlotWidth::Fixed(width), move |slot: ScreenBuilder| {
+            if index == 1 {
+                slot.table(rows.to_vec(), Vec::new())
+            } else {
+                slot
+            }
+        })
+    });
+    builder.band(BandAlign::Top, slots)
 }
 
 fn prose(builder: ScreenBuilder, runs: &[Run]) -> ScreenBuilder {

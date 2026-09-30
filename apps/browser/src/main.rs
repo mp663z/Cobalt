@@ -16,7 +16,9 @@ use kobo_sdk::{
     StoreResult, Task, TaskError, TaskId, TaskOutcome,
 };
 use kobo_web_document::{parse_document, Document, Field, Limits, Url};
-use kobo_web_layout::{link_action, page_screen_with, picture_handle, pieces, Paginator, Piece};
+use kobo_web_layout::{
+    link_action, page_screen_with_metrics, picture_handle, pieces, Paginator, Piece,
+};
 
 mod forms;
 mod pictures;
@@ -1219,7 +1221,7 @@ impl Browser {
                     pages.len(),
                 )
             }
-            (_, Some(loaded)) => page_screen_with(
+            (_, Some(loaded)) => page_screen_with_metrics(
                 &loaded.title,
                 self.current_pieces(),
                 loaded.page,
@@ -1233,6 +1235,7 @@ impl Browser {
                 } else {
                     loaded.document.has_reader_view().then_some(false)
                 },
+                metrics,
             ),
             (_, None) => ScreenBuilder::new("browser-empty")
                 .top_bar("Browse")

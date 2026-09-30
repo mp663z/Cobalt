@@ -411,3 +411,124 @@ fn a_page_is_found_again_by_its_place_in_the_text() {
     assert_eq!(five.page_of_place(99), Some(five.pages().len() - 1));
     assert_eq!(five.place_of(0), Some(0));
 }
+
+#[test]
+fn browser_code_retains_hard_line_indents_without_changing_shared_wrapping() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+        let metrics = DisplayMetrics {
+            text_scale: scale,
+            ..kobo_ui::CLARA_BW_METRICS
+        };
+        let pieces = [Piece::Preformatted(
+            "fn turn() {\n    *page += 1;\n}".into(),
+        )];
+        let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+        let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
+        let x_for = |text: &str| {
+            layout
+                .nodes
+                .iter()
+                .find(|node| node.text_lines.iter().any(|line| line == text))
+                .unwrap()
+                .rect
+                .x
+        };
+        assert!(x_for("*page += 1;") > x_for("fn turn() {"));
+        assert_eq!(x_for("}"), x_for("fn turn() {"));
+        assert!(fits(&screen, &metrics));
+    }
+}
+
+#[test]
+fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for profile in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let metrics = DisplayMetrics {
+                text_scale: scale,
+                ..profile
+            };
+            let rows = vec![
+                TableRow {
+                    header: true,
+                    cells: vec!["Mode".into(), "Speed".into()],
+                },
+                TableRow {
+                    header: false,
+                    cells: vec!["Full".into(), "Slow".into()],
+                },
+            ];
+            let pieces = [
+                Piece::Prose(vec![Run {
+                    text: "Prose".into(),
+                    strong: false,
+                    emphasis: false,
+                    link: None,
+                }]),
+                Piece::Table {
+                    rows,
+                    links: Vec::new(),
+                },
+            ];
+            let screen =
+                page_screen_with_metrics("Tables", &pieces, 0, Some(1), None, &metrics).build();
+            let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
+            let text = layout
+                .nodes
+                .iter()
+                .find(|node| node.text_lines == ["Prose"])
+                .unwrap();
+            let table = layout
+                .nodes
+                .iter()
+                .find(|node| matches!(node.kind, LayoutKind::TableHeaderCell))
+                .unwrap();
+            assert!(
+                (table.rect.x - text.rect.x).abs() <= 2,
+                "{} {scale:?}: {} vs {}",
+                metrics.width,
+                table.rect.x,
+                text.rect.x
+            );
+            assert!(fits(&screen, &metrics));
+            let rows = vec![TableRow {
+                header: false,
+                cells: vec![
+                    "A long unbroken sentence taking more than the prose measure".repeat(3),
+                    "Second cell".into(),
+                ],
+            }];
+            let screen = page_screen_with_metrics(
+                "Wide",
+                &[Piece::Table {
+                    rows,
+                    links: Vec::new(),
+                }],
+                0,
+                Some(1),
+                None,
+                &metrics,
+            )
+            .build();
+            assert!(matches!(
+                screen.nodes.first(),
+                Some(kobo_ui::Node::Table { .. })
+            ));
+        }
+    }
+}
