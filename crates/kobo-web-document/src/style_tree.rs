@@ -308,6 +308,12 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
         let important = value.ends_with("!important");
         let value = value.strip_suffix("!important").unwrap_or(&value).trim();
         let name = name.trim().to_ascii_lowercase();
+        // Every accepted background has no image. An explicit `none` makes
+        // that invariant clear without manufacturing a color declaration or
+        // changing its cascade order. Other image values remain unsupported.
+        if name == "background-image" && value == "none" {
+            continue;
+        }
         if name == "padding" {
             if let Some(keyword) = parse_keyword(value) {
                 for property in [
@@ -1142,5 +1148,44 @@ mod tests {
                 .display,
             Display::None
         );
+    }
+}
+
+#[cfg(test)]
+mod background_image_none_tests {
+    use crate::{parse_style_tree, Limits};
+
+    #[test]
+    fn explicit_no_image_does_not_reset_background_color() {
+        for style in [
+            "background:red;background-image:none",
+            "background-image:none;background-color:red",
+        ] {
+            let html = format!("<!doctype html><p style='{style}'>ab</p>");
+            let tree = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+            assert!(!tree.unsupported);
+            assert_eq!(
+                tree.nodes
+                    .iter()
+                    .find(|n| n.tag == "p")
+                    .unwrap()
+                    .style
+                    .background_color,
+                Some(0xff_00_00)
+            );
+        }
+        for image in [
+            "url(x)",
+            "linear-gradient(red,blue)",
+            "none,url(x)",
+            "inherit",
+            "var(--image)",
+        ] {
+            let html = format!("<!doctype html><p style='background-image:{image}'>ab</p>");
+            assert!(
+                parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported,
+                "{image}"
+            );
+        }
     }
 }
