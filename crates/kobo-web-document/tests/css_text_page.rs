@@ -196,15 +196,22 @@ fn multiple_direct_text_blocks_stack_and_paint_in_document_order() {
     ));
     assert!(matches!(
         list.commands()[2],
+        Command::Fill {
+            color: Rgb(254, 220, 186),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[3],
         Command::GlyphRun {
             color: Rgb(1, 2, 3),
             ..
         }
     ));
     assert!(matches!(
-        list.commands()[4],
-        Command::Fill {
-            color: Rgb(254, 220, 186),
+        list.commands()[5],
+        Command::GlyphRun {
+            color: Rgb(4, 5, 6),
             ..
         }
     ));
@@ -222,7 +229,6 @@ fn multiple_text_blocks_refuse_unsupported_sibling_without_partial_page() {
         "<p>emoji🙂</p>",
         "<p>hi <em>there</em></p>",
         "<p style='border:1px solid red'>hi</p>",
-        "<p style='margin-top:-3px'>hi</p>",
     ] {
         let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p>ab</p>{tail}</body></html>"));
         assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
@@ -447,14 +453,58 @@ fn positive_adjoining_sibling_margins_collapse_to_the_larger_gap() {
 }
 
 #[test]
-fn parent_edge_and_negative_vertical_margins_remain_refused() {
+fn parent_edge_vertical_margins_remain_refused() {
     for html in [
         "<html style='height:100px'><body><p style='margin-top:4px'>ab</p></body></html>",
         "<html style='height:100px'><body><p style='margin-bottom:4px'>ab</p></body></html>",
-        "<html style='height:100px'><body><p>ab</p><p style='margin-top:-2px'>cd</p></body></html>",
+        "<html style='height:100px'><body><p style='margin-top:-4px'>ab</p></body></html>",
+        "<html style='height:100px'><body><p style='margin-bottom:-4px'>ab</p></body></html>",
     ] {
         assert!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).is_err());
     }
+}
+
+#[test]
+fn negative_sibling_margins_overlap_backgrounds_but_keep_text_on_top() {
+    // First block paints rows 0..10; the -6px gap pulls the second block's
+    // background up to row 4, covering the first block's lower background.
+    // CSS paints inline content above later block backgrounds, so the first
+    // block's ink at rows 4..6 stays visible inside the overlap.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='margin-bottom:-6px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let commands = list.commands();
+    let last_fill = commands
+        .iter()
+        .rposition(|command| matches!(command, Command::Fill { .. }))
+        .unwrap();
+    let first_glyph = commands
+        .iter()
+        .position(|command| matches!(command, Command::GlyphRun { .. }))
+        .unwrap();
+    assert!(last_fill < first_glyph);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 2), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 5), &[0, 0, 0]);
+    assert_eq!(at(1, 4), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 12), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 14), &[0x12, 0x34, 0x56]);
+    assert_eq!(at(0, 8), &[0, 0, 0]);
+}
+
+#[test]
+fn large_negative_sibling_margin_clips_above_the_canvas() {
+    // A -12px gap pulls the second block's background up to row -2, partly
+    // above the canvas; the rasterizer clips it and painting still succeeds.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='height:100px'><p style='background-color:#abcdef'>ab</p><p style='margin-top:-12px;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 0), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 7), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 8), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 4), &[0, 0, 0]);
 }
 
 #[test]
@@ -466,7 +516,15 @@ fn sibling_percentage_gaps_use_containing_width_not_height_or_child_width() {
         assert_eq!(&pixels[(y * 100 + 1) * 4..][..3], &[0x12, 0x34, 0x56]);
     }
     assert_eq!(&pixels[(18 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
-    for value in ["3%", "-10%", "auto"] {
+    // An exact negative percentage gap is supported: -10% of the 80px body
+    // width pulls the second block's background up 8px over the first.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='width:80px'><p style='margin-bottom:-10%;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[(2 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(11 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(12 * 100 + 1) * 4..][..3], &[0x12, 0x34, 0x56]);
+    for value in ["3%", "-3%", "auto"] {
         let boxes = tree(&format!("<html style='height:100px'><body style='width:80px'><p style='margin-bottom:{value}'>ab</p><p>cd</p></body></html>"));
         assert!(
             paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),

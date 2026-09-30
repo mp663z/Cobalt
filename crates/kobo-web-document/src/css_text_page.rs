@@ -59,11 +59,14 @@ pub fn paint_single_text_page(
 
 /// Paint zero-parent-edge-margin normal-flow blocks with exactly one
 /// direct text child. Horizontal margins use the proven width pass, including
-/// auto centering. Positive adjoining sibling margins collapse to their maximum.
-/// Percentage gaps require exact integer pixels and resolve against parent width.
-/// Multiple block siblings are allowed; mixed inline runs,
-/// images and unsupported styles still refuse the entire page. Paint follows
-/// retained preorder so each background precedes its own text and later boxes.
+/// auto centering. Adjoining sibling margins collapse: the largest positive
+/// value wins against the largest negative value, so later siblings may
+/// overlap earlier blocks. Percentage gaps require exact integer pixels and
+/// resolve against parent width. Multiple block siblings are allowed; mixed
+/// inline runs, images and unsupported styles still refuse the entire page.
+/// Paint follows CSS order for non-positioned normal flow: every block
+/// background in retained preorder first, then every text run, so overlapped
+/// earlier text still paints above a later sibling's background.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -153,8 +156,8 @@ pub fn paint_direct_text_blocks(
     // The tree is proven above: its root and first child are the retained
     // HTML root and body. Root color wins; otherwise the body's color paints
     // the canvas and its local background is suppressed. Margin collapse is
-    // still unsupported at parent edges. Positive adjoining sibling margins
-    // use the already-proven normal-flow collapse geometry.
+    // still unsupported at parent edges. Adjoining sibling margins, both
+    // positive and negative, use the already-proven normal-flow collapse.
     let root = tree.roots[0];
     let body = tree.boxes[root].children.first().copied();
     let root_color = tree.boxes[root].style.used_background_color();
@@ -168,14 +171,17 @@ pub fn paint_direct_text_blocks(
         let containing = node.parent.map_or(viewport_width, |parent| {
             widths.widths[parent].map_or(0, |width| width.content)
         });
-        let positive = |margin| match margin {
-            crate::computed_style::Margin::Px(value) => value >= 0,
+        // Negative adjoining margins are supported: the proven geometry
+        // already combines positive and negative collapses, and the
+        // two-phase paint below keeps overlap in CSS order.
+        let exact = |margin| match margin {
+            crate::computed_style::Margin::Px(_) => true,
             crate::computed_style::Margin::Percent(value) => {
-                value >= 0 && (i64::from(containing) * i64::from(value)) % 10_000 == 0
+                (i64::from(containing) * i64::from(value)) % 10_000 == 0
             }
             crate::computed_style::Margin::Auto => false,
         };
-        if !positive(node.style.margin_top) || !positive(node.style.margin_bottom) {
+        if !exact(node.style.margin_top) || !exact(node.style.margin_bottom) {
             return true;
         }
         // A final child's bottom margin may collapse out of its parent;
@@ -205,6 +211,23 @@ pub fn paint_direct_text_blocks(
         )
         .map_err(PageError::Paint)?;
     }
+    // Phase one: block backgrounds in retained preorder. A later sibling
+    // covers an earlier block's background where negative margins overlap.
+    for (index, node) in tree.boxes.iter().enumerate() {
+        if node.kind != BoxKind::Text {
+            if index == root || (propagated_body && body == Some(index)) {
+                continue;
+            }
+            if let Some(color) = node.style.used_background_color() {
+                paint_block_background(
+                    &widths, &heights, &vertical, node, index, color, &mut list,
+                )?;
+            }
+        }
+    }
+    // Phase two: every text run after all backgrounds, matching CSS painting
+    // order for non-positioned blocks, so overlapped earlier text stays
+    // visible above a later sibling's background.
     for (index, node) in tree.boxes.iter().enumerate() {
         if node.kind == BoxKind::Text {
             let parent = node.parent.ok_or(PageError::Unsupported)?;
@@ -261,44 +284,51 @@ pub fn paint_direct_text_blocks(
 
             continue;
         }
-        if index == root || (propagated_body && body == Some(index)) {
-            continue;
-        }
-        if let Some(color) = node.style.used_background_color() {
-            let width = widths.widths[index]
-                .ok_or(PageError::InvalidGeometry)?
-                .content;
-            let height = heights.heights[index].ok_or(PageError::InvalidGeometry)?;
-            let x = widths.content_x[index].ok_or(PageError::InvalidGeometry)?
-                - i64::from(node.style.padding_left);
-            let y = vertical.content_y[index].ok_or(PageError::InvalidGeometry)?
-                - i64::from(node.style.padding_top);
-            let width = width
-                .checked_add(node.style.padding_left)
-                .and_then(|n| n.checked_add(node.style.padding_right))
-                .ok_or(PageError::InvalidGeometry)?;
-            let height = height
-                .checked_add(node.style.padding_top)
-                .and_then(|n| n.checked_add(node.style.padding_bottom))
-                .ok_or(PageError::InvalidGeometry)?;
-            if width == 0 || height == 0 {
-                return Err(PageError::InvalidGeometry);
-            }
-            list.fill(
-                Rect {
-                    x: i32::try_from(x).map_err(|_| PageError::InvalidGeometry)?,
-                    y: i32::try_from(y).map_err(|_| PageError::InvalidGeometry)?,
-                    width,
-                    height,
-                },
-                rgb(color),
-                Source {
-                    node: node.source,
-                    action: None,
-                },
-            )
-            .map_err(PageError::Paint)?;
-        }
     }
     Ok(list)
+}
+
+/// Paint one block's padding-box background from the proven geometry.
+fn paint_block_background(
+    widths: &crate::box_tree::WidthPass,
+    heights: &crate::box_tree::UsedHeightPass,
+    vertical: &crate::box_tree::VerticalPass,
+    node: &crate::box_tree::CssBox,
+    index: usize,
+    color: u32,
+    list: &mut DisplayList,
+) -> Result<(), PageError> {
+    let width = widths.widths[index]
+        .ok_or(PageError::InvalidGeometry)?
+        .content;
+    let height = heights.heights[index].ok_or(PageError::InvalidGeometry)?;
+    let x = widths.content_x[index].ok_or(PageError::InvalidGeometry)?
+        - i64::from(node.style.padding_left);
+    let y = vertical.content_y[index].ok_or(PageError::InvalidGeometry)?
+        - i64::from(node.style.padding_top);
+    let width = width
+        .checked_add(node.style.padding_left)
+        .and_then(|n| n.checked_add(node.style.padding_right))
+        .ok_or(PageError::InvalidGeometry)?;
+    let height = height
+        .checked_add(node.style.padding_top)
+        .and_then(|n| n.checked_add(node.style.padding_bottom))
+        .ok_or(PageError::InvalidGeometry)?;
+    if width == 0 || height == 0 {
+        return Err(PageError::InvalidGeometry);
+    }
+    list.fill(
+        Rect {
+            x: i32::try_from(x).map_err(|_| PageError::InvalidGeometry)?,
+            y: i32::try_from(y).map_err(|_| PageError::InvalidGeometry)?,
+            width,
+            height,
+        },
+        rgb(color),
+        Source {
+            node: node.source,
+            action: None,
+        },
+    )
+    .map_err(PageError::Paint)
 }
