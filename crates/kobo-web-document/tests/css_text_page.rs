@@ -532,3 +532,82 @@ fn sibling_percentage_gaps_use_containing_width_not_height_or_child_width() {
         );
     }
 }
+
+struct OverhangFace;
+impl FontProvider for OverhangFace {
+    fn advance(&self, _: char, _: u32) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, character: char, _: u32) -> Option<GlyphBitmap> {
+        Some(if character == ' ' {
+            GlyphBitmap {
+                left: 0,
+                top: 0,
+                width: 0,
+                height: 0,
+                coverage: vec![],
+            }
+        } else {
+            GlyphBitmap {
+                left: -1,
+                top: -3,
+                width: 5,
+                height: 2,
+                coverage: vec![255; 10],
+            }
+        })
+    }
+}
+
+#[test]
+fn horizontal_ink_overflows_content_without_changing_wrapped_geometry() {
+    let boxes = tree("<html><body style='padding-left:4px'><p style='width:3px;background-color:#abcdef'>T T</p><p style='width:3px;background-color:#fedcba'>T</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 20, 40, &OverhangFace).unwrap();
+    let glyph_bounds: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some((bounds.x, bounds.y, bounds.width)),
+            _ => None,
+        })
+        .collect();
+    // Advances fit the width and create two lines. Ink overhangs both edges;
+    // it does not expand the line box or move the following block down.
+    assert_eq!(glyph_bounds, [(3, 4, 5), (3, 14, 5), (3, 24, 5)]);
+    let pixels = list.rasterize(20, 40, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 20 + x) * 4..(y * 20 + x) * 4 + 4];
+    assert_eq!(at(3, 4), [0, 0, 0, 255]);
+    assert_eq!(at(7, 4), [0, 0, 0, 255]);
+    assert_eq!(at(8, 4), [255, 255, 255, 255]);
+    assert_eq!(at(4, 20), [254, 220, 186, 255]);
+}
+
+#[test]
+fn horizontal_ink_at_viewport_edge_clips_only_when_rasterized() {
+    let boxes = tree("<html><body><p style='width:3px'>T</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 3, 20, &OverhangFace).unwrap();
+    assert!(
+        matches!(&list.commands()[0], Command::GlyphRun { bounds, .. } if bounds.x == -1 && bounds.width == 5)
+    );
+    let pixels = list.rasterize(3, 20, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[4 * 3 * 4..5 * 3 * 4], &[0, 0, 0, 255].repeat(3));
+}
+
+#[test]
+fn horizontal_overhang_does_not_permit_unbreakable_words_or_hidden_overflow() {
+    for html in [
+        "<html><body><p style='width:3px'>TT</p></body></html>",
+        "<html><body><p style='width:3px;overflow:hidden'>T</p></body></html>",
+    ] {
+        assert_eq!(
+            paint_direct_text_blocks(&tree(html), 20, 40, &OverhangFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}

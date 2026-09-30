@@ -265,8 +265,10 @@ pub enum GlyphPaintError {
 
 /// Convert already measured direct text into a separate bounded glyph list.
 /// `line_top` is the first line's content-box y; `baseline_offset` and
-/// `line_height` come from the actual font provider. Every ink pixel must fit
-/// its line and the supplied content width. The caller combines this list
+/// `line_height` come from the actual font provider. Advances must fit the
+/// content width; horizontal glyph bearings may extend outside it, as CSS
+/// visible overflow does not clip ink to the content box. Vertical ink must
+/// still fit its line. The caller combines this list
 /// with backgrounds only after the *whole page* is proven paintable.
 ///
 /// # Errors
@@ -327,13 +329,8 @@ pub fn paint_direct_glyphs(
         let x = i64::from(content_x) + i64::from(glyph.x) + i64::from(bitmap.left);
         let line_y = i64::from(line_top) + i64::from(glyph.line) * i64::from(line_height);
         let y = line_y + i64::from(baseline_offset) + i64::from(bitmap.top);
-        let right = x + i64::from(bitmap.width);
         let bottom = y + i64::from(bitmap.height);
-        if x < i64::from(content_x)
-            || right > i64::from(content_x) + i64::from(content_width)
-            || y < line_y
-            || bottom > line_y + i64::from(line_height)
-        {
+        if y < line_y || bottom > line_y + i64::from(line_height) {
             return Err(GlyphPaintError::OutsideLine);
         }
         list.glyph_run(
@@ -461,10 +458,10 @@ mod tests {
         assert_eq!(at(7, 7), &[127, 127, 127, 255]);
         assert_eq!(at(5, 7), &[255, 255, 255, 255]);
         assert_eq!(
-            paint_direct_glyphs(&text, 3, 4, 3, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(
+            paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(
                 GlyphBitmap {
                     left: 1,
-                    top: -3,
+                    top: -7,
                     width: 2,
                     height: 2,
                     coverage: vec![255, 128, 64, 0]

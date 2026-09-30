@@ -66,7 +66,9 @@ pub fn paint_single_text_page(
 /// inline runs, images and unsupported styles still refuse the entire page.
 /// Paint follows CSS order for non-positioned normal flow: every block
 /// background in retained preorder first, then every text run, so overlapped
-/// earlier text still paints above a later sibling's background.
+/// earlier text still paints above a later sibling's background. Horizontal
+/// glyph ink may overflow the content box; viewport clipping happens only
+/// during rasterization. Advances and vertical ink remain bounded.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -255,7 +257,7 @@ pub fn paint_direct_text_blocks(
                 .ok_or(PageError::Unsupported)?;
             // CSS half-leading centers the font's line box in explicit height.
             // Leading may be negative when CSS line-height is shorter than the
-            // font strut. Ink must still fit the proven line rectangle; odd
+            // font strut. Vertical ink must still fit the proven line; odd
             // leading needs fractional coordinates, so refuse rather than round.
             let leading = i64::from(line_height) - i64::from(natural);
             if leading % 2 != 0 {
