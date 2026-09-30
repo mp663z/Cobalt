@@ -68,7 +68,9 @@ pub fn paint_single_text_page(
 /// background in retained preorder first, then every text run, so overlapped
 /// earlier text still paints above a later sibling's background. Horizontal
 /// glyph ink may overflow the content box; viewport clipping happens only
-/// during rasterization. Advances and vertical ink remain bounded.
+/// during rasterization. Direct text may also overflow a positive definite
+/// block height without expanding that block or moving its next sibling.
+/// Advances and ink within each measured line remain bounded.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -244,8 +246,7 @@ pub fn paint_direct_text_blocks(
                 |size| font.line_height(size),
             )
             .map_err(|_| PageError::Unsupported)?;
-            if lines.content_height == 0
-                || heights.heights[parent].is_none_or(|height| lines.content_height > height)
+            if lines.content_height == 0 || heights.heights[parent].is_none_or(|height| height == 0)
             {
                 return Err(PageError::Unsupported);
             }

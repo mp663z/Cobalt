@@ -421,13 +421,8 @@ fn definite_text_block_height_keeps_extra_room_before_the_next_sibling() {
 }
 
 #[test]
-fn definite_text_height_refuses_content_that_would_overflow() {
-    for style in [
-        "height:9px",
-        "height:15px;width:6px",
-        "height:0px",
-        "height:50%",
-    ] {
+fn zero_and_indefinite_text_heights_remain_refused() {
+    for style in ["height:0px", "height:50%"] {
         let boxes = tree(&format!(
             "<html style='height:100px'><body><p style='{style}'>ab cd</p></body></html>"
         ));
@@ -607,6 +602,54 @@ fn horizontal_overhang_does_not_permit_unbreakable_words_or_hidden_overflow() {
     ] {
         assert_eq!(
             paint_direct_text_blocks(&tree(html), 20, 40, &OverhangFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn short_definite_height_keeps_background_and_following_sibling_in_flow() {
+    let boxes = tree("<html><body><p style='height:3px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 2), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 3), &[0xfe, 0xdc, 0xba]);
+    // Earlier text overflows its short box and stays above later backgrounds.
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 7), &[0, 0, 0]);
+    assert_eq!(at(1, 13), &[255, 255, 255]);
+}
+
+#[test]
+fn wrapped_text_overflows_definite_height_without_inflating_ancestor_height() {
+    let boxes = tree("<html><body style='background-color:#123456'><div style='width:6px;background-color:#abcdef'><p style='height:5px'>ab cd</p></div><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 14, 14, 9, 9]);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 4), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 5), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 14), &[0, 0, 0]);
+    assert_eq!(at(1, 15), &[0x12, 0x34, 0x56]);
+}
+
+#[test]
+fn definite_height_overflow_does_not_enable_unproven_clipping() {
+    for overflow in ["hidden", "scroll", "auto"] {
+        let boxes = tree(&format!(
+            "<html><body><p style='height:3px;overflow:{overflow}'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
             Some(PageError::Unsupported)
         );
     }
