@@ -308,3 +308,14 @@ fn foreground_currentcolor_reaches_glyph_pixels() {
     let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
     assert_eq!(&pixels[4 * 100 * 4..][..3], &[18, 52, 86]);
 }
+
+#[test]
+fn single_line_punctuation_paints_but_unsupported_wrap_refuses_whole_page() {
+    let boxes =
+        tree("<html style='height:100px'><body><p style='color:#123456'>Hi, ab.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert_eq!(list.commands().len(), 6);
+    let narrow =
+        tree("<html style='height:100px'><body><p style='width:10px'>Hi, ab.</p></body></html>");
+    assert!(paint_direct_text_blocks(&narrow, 100, 100, &TestFace).is_err());
+}

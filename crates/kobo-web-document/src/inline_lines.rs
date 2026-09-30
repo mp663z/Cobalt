@@ -55,8 +55,9 @@ pub fn place_ascii_normal(
     let mut letters = 0_usize;
     // The current placer only has whitespace wrap opportunities. A word
     // containing ASCII hyphen or break punctuation needs CSS/Unicode line
-    // breaking semantics rather than a guessed unbreakable run.
-    if text.chars().any(|ch| {
+    // breaking semantics when it wraps. An entirely fitting single line has
+    // no break decision and can retain its punctuation.
+    let needs_break_rules = text.chars().any(|ch| {
         matches!(
             ch,
             '-' | '/'
@@ -74,9 +75,7 @@ pub fn place_ascii_normal(
                 | '{'
                 | '}'
         )
-    }) {
-        return Err(LineError::UnsupportedText);
-    }
+    });
     for ch in text.chars() {
         if ch.is_ascii_whitespace() {
             if !word.is_empty() {
@@ -106,6 +105,9 @@ pub fn place_ascii_normal(
     } else {
         0
     };
+    if needs_break_rules && !fits_single_line(&words, space, max_width) {
+        return Err(LineError::UnsupportedText);
+    }
     let mut glyphs = Vec::new();
     let mut x = 0_u32;
     let mut line = 0_u32;
@@ -146,6 +148,25 @@ pub fn place_ascii_normal(
         count: if glyphs.is_empty() { 0 } else { line + 1 },
         glyphs,
     })
+}
+
+fn fits_single_line(words: &[Vec<(char, u32)>], space: u32, max_width: u32) -> bool {
+    let mut full_width = 0_u32;
+    for (index, word) in words.iter().enumerate() {
+        if index > 0 {
+            let Some(next) = full_width.checked_add(space) else {
+                return false;
+            };
+            full_width = next;
+        }
+        for &(_, width) in word {
+            let Some(next) = full_width.checked_add(width) else {
+                return false;
+            };
+            full_width = next;
+        }
+    }
+    full_width <= max_width
 }
 
 /// Measured lines for one directly contained text node. Multiple inline
@@ -507,7 +528,7 @@ mod tests {
     fn refuses_unsupported_text_and_unproven_measurements() {
         for text in ["one-two", "one/two", "one\u{ad}two", "one,two", "one.two"] {
             assert_eq!(
-                place_ascii_normal(text, 40, |_| Some(5)),
+                place_ascii_normal(text, 10, |_| Some(5)),
                 Err(LineError::UnsupportedText)
             );
         }
@@ -536,5 +557,40 @@ mod tests {
             Err(LineError::InvalidMetrics)
         );
         assert_eq!(place_ascii_normal("   ", 20, |_| None).unwrap().count, 0);
+    }
+}
+
+#[cfg(test)]
+mod punctuation_tests {
+    use super::*;
+
+    #[test]
+    fn punctuation_that_fits_needs_no_line_break_guess() {
+        for text in ["a-b", "a/b", "a,b", "a.b", "(ab)!", "[ab]?"] {
+            let lines = place_ascii_normal(text, 100, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 1);
+            assert_eq!(
+                lines.glyphs.iter().map(|g| g.character).collect::<String>(),
+                text
+            );
+            assert_eq!(
+                place_ascii_normal(text, 3, |_| Some(3)),
+                Err(LineError::UnsupportedText)
+            );
+        }
+        let lines = place_ascii_normal("  a,b \t c.d  ", 21, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 1);
+        assert_eq!(
+            lines.glyphs.iter().map(|g| g.character).collect::<String>(),
+            "a,b c.d"
+        );
+        assert_eq!(
+            place_ascii_normal("a,b c.d", 20, |_| Some(3)),
+            Err(LineError::UnsupportedText)
+        );
+        assert_eq!(
+            place_ascii_normal("a\u{ad}b", 100, |_| Some(3)),
+            Err(LineError::UnsupportedText)
+        );
     }
 }
