@@ -57,8 +57,9 @@ pub fn paint_single_text_page(
     paint_direct_text_blocks(tree, viewport_width, viewport_height, font)
 }
 
-/// Paint zero-margin normal-flow blocks whose inline content is exactly one
-/// direct text child. Multiple block siblings are allowed; mixed inline runs,
+/// Paint zero-vertical-margin normal-flow blocks with exactly one
+/// direct text child. Horizontal margins use the proven width pass, including
+/// auto centering. Multiple block siblings are allowed; mixed inline runs,
 /// images and unsupported styles still refuse the entire page. Paint follows
 /// retained preorder so each background precedes its own text and later boxes.
 ///
@@ -162,9 +163,7 @@ pub fn paint_direct_text_blocks(
     let propagated_body = root_color.is_none() && body_color.is_some();
     if tree.boxes.iter().any(|node| {
         node.kind != BoxKind::Text
-            && (node.style.margin_left != crate::computed_style::Margin::Px(0)
-                || node.style.margin_right != crate::computed_style::Margin::Px(0)
-                || node.style.margin_top != crate::computed_style::Margin::Px(0)
+            && (node.style.margin_top != crate::computed_style::Margin::Px(0)
                 || node.style.margin_bottom != crate::computed_style::Margin::Px(0))
     }) {
         return Err(PageError::Unsupported);

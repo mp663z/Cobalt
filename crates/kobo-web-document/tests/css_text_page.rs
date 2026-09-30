@@ -252,3 +252,23 @@ fn block_indentation_and_trailing_newline_do_not_create_inline_boxes() {
     let pre = tree("<html style='height:100px'><body style='white-space:pre'><p>ab</p>\n<p>cd</p></body></html>");
     assert!(paint_direct_text_blocks(&pre, 100, 100, &TestFace).is_err());
 }
+
+#[test]
+fn horizontal_margins_position_background_and_text_together() {
+    for (style, x, width) in [
+        ("width:20px;margin-left:auto;margin-right:auto", 40, 20),
+        ("width:20px;margin-left:7px", 7, 20),
+        ("margin-left:10px;margin-right:15px", 10, 75),
+        ("width:20px;margin-left:10%", 10, 20),
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p style='{style};background-color:#abcdef;color:#010203'>ab</p></body></html>"));
+        let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+        assert!(
+            matches!(list.commands()[1], Command::Fill { rect, .. } if rect.x == x && rect.width == width)
+        );
+        assert!(matches!(list.commands()[2], Command::GlyphRun { bounds, .. } if bounds.x == x));
+        let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+        let offset = (4 * 100 + usize::try_from(x).unwrap()) * 4;
+        assert_eq!(&pixels[offset..][..3], &[1, 2, 3]);
+    }
+}
