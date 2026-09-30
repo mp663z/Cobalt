@@ -431,6 +431,15 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                         (px > 0).then_some(Value::LineHeight(Some(px)))
                     } else if let Some(Length::Percent(percent)) = parse_width(value) {
                         (percent > 0).then_some(Value::LineHeightPercent(percent))
+                    } else if let Some(number) = value.strip_suffix("em") {
+                        // An em length computes at this element's font size,
+                        // unlike an inherited unitless multiplier.
+                        match parse_width(&format!("{number}%")) {
+                            Some(Length::Percent(number)) if number > 0 => {
+                                number.checked_mul(100).map(Value::LineHeightPercent)
+                            }
+                            _ => None,
+                        }
                     } else if value.bytes().all(|c| c.is_ascii_digit() || c == b'.') {
                         match parse_width(&format!("{value}%")) {
                             Some(Length::Percent(number)) if number > 0 => {
@@ -1318,7 +1327,7 @@ mod pixel_line_height_tests {
                 .line_height,
             None
         );
-        for value in ["1em", "0", "-2px", "10.5px"] {
+        for value in ["0", "-2px", "10.5px"] {
             let html = format!("<!doctype html><p style='line-height:{value}'>ab</p>");
             assert!(parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported);
         }
@@ -1364,6 +1373,27 @@ mod percentage_line_height_tests {
             assert!(
                 parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported,
                 "{style}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod em_line_height_tests {
+    use crate::{parse_style_tree, Limits};
+    #[test]
+    fn em_line_height_computes_to_length_before_inheritance() {
+        let tree = parse_style_tree(b"<!doctype html><section style='font-size:20px;line-height:1.5em'><p style='font-size:12px'>ab</p><div style='font-size:16px;line-height:1.25em'>cd</div></section>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        let node = |tag: &str| tree.nodes.iter().find(|n| n.tag == tag).unwrap();
+        assert_eq!(node("section").style.line_height, Some(30));
+        assert_eq!(node("p").style.used_line_height(10), Some(30));
+        assert_eq!(node("div").style.used_line_height(10), Some(20));
+        for value in ["0em", "-1em", "1.234em", "1rem", "1ex", "42949672em"] {
+            let html = format!("<!doctype html><p style='line-height:{value}'>ab</p>");
+            assert!(
+                parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported,
+                "{value}"
             );
         }
     }

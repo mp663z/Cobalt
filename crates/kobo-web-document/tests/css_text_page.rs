@@ -357,3 +357,16 @@ fn percent_line_height_inherits_as_length_not_multiplier() {
         assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
     }
 }
+
+#[test]
+fn em_and_percent_line_height_produce_same_complete_raster() {
+    let page = |height: &str| {
+        tree(&format!("<html style='height:100px'><body style='font-size:20px;line-height:{height}'><p style='font-size:12px'>ab</p><p style='font-size:16px'>cd</p></body></html>"))
+    };
+    let em = paint_direct_text_blocks(&page("1.5em"), 100, 100, &TestFace).unwrap();
+    let percent = paint_direct_text_blocks(&page("150%"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        em.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
