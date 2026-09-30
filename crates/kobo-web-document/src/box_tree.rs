@@ -716,6 +716,44 @@ impl WidthPass {
     }
 }
 
+// Retain the styled DOM; omit only block indentation proven to have no ink.
+fn collapsed_block_indentation(styled: &StyleTree) -> Vec<bool> {
+    // In normal white-space, a block-only parent's indentation does not
+    // generate anonymous line boxes. Keep the styled DOM unchanged and
+    // omit only runs proven to contain CSS whitespace and no inline ink.
+    // Unknown white-space declarations already mark the tree unsupported.
+    let mut collapsed = vec![false; styled.nodes.len()];
+    for owner in &styled.nodes {
+        if !matches!(owner.style.display, Display::Block | Display::ListItem) {
+            continue;
+        }
+        let mut has_block = false;
+        let mut only_indentation = true;
+        for &child in &owner.children {
+            let node = &styled.nodes[child];
+            if node.text.is_none() && node.style.display == Display::None {
+                continue;
+            }
+            if node.text.is_none()
+                && matches!(node.style.display, Display::Block | Display::ListItem)
+            {
+                has_block = true;
+            } else if !node.text.as_deref().is_some_and(|text| {
+                text.chars()
+                    .all(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r'))
+            }) {
+                only_indentation = false;
+            }
+        }
+        if has_block && only_indentation {
+            for &child in &owner.children {
+                collapsed[child] = styled.nodes[child].text.is_some();
+            }
+        }
+    }
+    collapsed
+}
+
 impl BoxTree {
     /// Check the retained preorder arena before any diagnostic pass indexes it.
     /// Paint paths accept one connected tree, with bounded edges and sources.
@@ -764,6 +802,7 @@ impl BoxTree {
             ..Self::default()
         };
         let limit = styled.nodes.len().saturating_mul(2);
+        let collapsed = collapsed_block_indentation(styled);
         let mut stack: Vec<_> = styled
             .nodes
             .iter()
@@ -773,6 +812,9 @@ impl BoxTree {
             .rev()
             .collect();
         while let Some((source, parent)) = stack.pop() {
+            if collapsed[source] {
+                continue;
+            }
             let node = &styled.nodes[source];
             let kind = if node.text.is_some() {
                 Some(BoxKind::Text)

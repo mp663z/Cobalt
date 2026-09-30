@@ -228,3 +228,27 @@ fn multiple_text_blocks_refuse_unsupported_sibling_without_partial_page() {
         assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
     }
 }
+
+#[test]
+fn block_indentation_and_trailing_newline_do_not_create_inline_boxes() {
+    let compact = tree("<html style='height:100px;background-color:#123456'><body><p>ab</p><p>cd</p></body></html>");
+    let spaced = tree("<html style='height:100px;background-color:#123456'>\n<body> \t<p>ab</p>\r\n<p>cd</p>\n</body></html>\n");
+    let first = paint_direct_text_blocks(&compact, 100, 100, &TestFace).unwrap();
+    let second = paint_direct_text_blocks(&spaced, 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        first.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        second.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+    assert_eq!(compact.boxes.len(), spaced.boxes.len());
+    for ink in ["&nbsp;", "words", "<em>inline</em>", "&#12;"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p>ab</p>{ink}<p>cd</p></body></html>"
+        ));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{ink}"
+        );
+    }
+    let pre = tree("<html style='height:100px'><body style='white-space:pre'><p>ab</p>\n<p>cd</p></body></html>");
+    assert!(paint_direct_text_blocks(&pre, 100, 100, &TestFace).is_err());
+}
