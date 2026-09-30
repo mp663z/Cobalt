@@ -104,8 +104,7 @@ fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
         "<html style='height:100px'><body><p>hi <em>there</em></p></body></html>",
         "<html style='height:100px'><body><p style='border:1px solid red'>hi</p></body></html>",
         "<html style='height:100px'><body><p>emoji🙂</p></body></html>",
-        "<html style='height:100px;background-color:#123456'><body><p>hi</p></body></html>",
-        "<html style='height:100px'><body style='background-color:#123456'><p>hi</p></body></html>",
+        "<html style='height:100px;background-color:#123456'><body><p style='border:1px solid red'>hi</p></body></html>",
         "<html style='height:100px'><body><p style='margin-top:10px'>hi</p></body></html>",
     ] {
         assert_eq!(
@@ -116,7 +115,9 @@ fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
     }
     assert_eq!(
         paint_single_text_page(
-            &tree("<html style='height:100px'><body><p>hi</p></body></html>"),
+            &tree(
+                "<html style='height:100px;background-color:#123456'><body><p>hi</p></body></html>"
+            ),
             100,
             100,
             &Missing
@@ -124,4 +125,34 @@ fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
         .err(),
         Some(PageError::Unsupported)
     );
+}
+
+#[test]
+fn direct_text_canvas_background_propagation_and_paint_order() {
+    for (root_style, body_style, canvas, body_fill) in [
+        ("background-color:#123456", "", Rgb(18, 52, 86), false),
+        ("", "background-color:#abcdef", Rgb(171, 205, 239), false),
+        (
+            "background-color:#123456",
+            "background-color:#abcdef",
+            Rgb(18, 52, 86),
+            true,
+        ),
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;{root_style}'><body style='{body_style}'><p style='background-color:#fedcba;color:#010203'>ab</p></body></html>"));
+        let list = paint_single_text_page(&boxes, 100, 100, &TestFace).unwrap();
+        assert!(
+            matches!(list.commands()[0], Command::Fill { color, rect, .. }
+            if color == canvas && rect.width == 100 && rect.height == 100)
+        );
+        assert_eq!(list.commands().len(), if body_fill { 5 } else { 4 });
+        let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+        assert_eq!(
+            &pixels[(99 * 100 + 99) * 4..][..3],
+            &[canvas.0, canvas.1, canvas.2]
+        );
+        assert_eq!(&pixels[0..3], &[254, 220, 186]);
+        // TestFace glyph begins four pixels below the content origin.
+        assert_eq!(&pixels[(4 * 100) * 4..][..3], &[1, 2, 3]);
+    }
 }

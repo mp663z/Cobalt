@@ -4,7 +4,8 @@
 //! requires one actual font provider for advances, line metrics and coverage;
 //! it refuses all other inline shapes and unsupported CSS rather than painting
 //! a convincing but incomplete page. It does not apply browser UA margins,
-//! background propagation, borders, images or general CSS text shaping.
+//! borders, images or general CSS text shaping. Root/body solid backgrounds
+//! propagate to the canvas only after the whole restricted page is proven.
 
 use crate::box_tree::{BoxKind, BoxTree, UsedHeightPass, VerticalPass, WidthPass};
 use crate::computed_style::BoxSizing;
@@ -150,29 +151,44 @@ pub fn paint_single_text_page(
     if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
         return Err(PageError::Unsupported);
     }
-    // CSS propagates an HTML body's background to the viewport while its
-    // root is transparent. Neither root nor body propagation is implemented
-    // here. Refuse both instead of painting only the local content box.
-    // Parent-child margin collapse is also not implemented.
+    // The chain is proven above: its root and first child are the retained
+    // HTML root and body. Root color wins; otherwise the body's color paints
+    // the canvas and its local background is suppressed. Margin collapse is
+    // still unsupported.
     let root = tree.roots[0];
-    if tree.boxes[root].style.background_color.is_some()
-        || tree.boxes[root]
-            .children
-            .first()
-            .is_some_and(|&body| tree.boxes[body].style.background_color.is_some())
-        || tree.boxes.iter().any(|node| {
-            node.kind != BoxKind::Text
-                && (node.style.margin_left != crate::computed_style::Margin::Px(0)
-                    || node.style.margin_right != crate::computed_style::Margin::Px(0)
-                    || node.style.margin_top != crate::computed_style::Margin::Px(0)
-                    || node.style.margin_bottom != crate::computed_style::Margin::Px(0))
-        })
-    {
+    let body = tree.boxes[root].children.first().copied();
+    let root_color = tree.boxes[root].style.background_color;
+    let body_color = body.and_then(|index| tree.boxes[index].style.background_color);
+    let canvas = root_color.or(body_color);
+    let propagated_body = root_color.is_none() && body_color.is_some();
+    if tree.boxes.iter().any(|node| {
+        node.kind != BoxKind::Text
+            && (node.style.margin_left != crate::computed_style::Margin::Px(0)
+                || node.style.margin_right != crate::computed_style::Margin::Px(0)
+                || node.style.margin_top != crate::computed_style::Margin::Px(0)
+                || node.style.margin_bottom != crate::computed_style::Margin::Px(0))
+    }) {
         return Err(PageError::Unsupported);
     }
     let mut list = DisplayList::default();
+    if let Some(color) = canvas {
+        list.fill(
+            Rect {
+                x: 0,
+                y: 0,
+                width: viewport_width,
+                height: viewport_height,
+            },
+            rgb(color),
+            Source {
+                node: tree.boxes[root].source,
+                action: None,
+            },
+        )
+        .map_err(PageError::Paint)?;
+    }
     for (index, node) in tree.boxes.iter().enumerate() {
-        if node.kind == BoxKind::Text {
+        if node.kind == BoxKind::Text || index == root || (propagated_body && body == Some(index)) {
             continue;
         }
         if let Some(color) = node.style.background_color {
