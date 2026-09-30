@@ -53,6 +53,8 @@ pub enum Value {
     LineHeight(Option<u32>),
     /// Unitless number in hundredths, inherited before multiplying font size.
     LineHeightNumber(u32),
+    /// Percentage of this element's font size, computed before inheritance.
+    LineHeightPercent(u32),
     Inherit,
     Initial,
     Unset,
@@ -297,6 +299,17 @@ impl Computed {
                     computed.direction = direction;
                 }
                 Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
+                Value::LineHeightPercent(percent) if property == Property::LineHeight => {
+                    let product = computed.font_size.checked_mul(percent);
+                    // Zero signals unrepresentable subpixel geometry to the style
+                    // tree and used-height gate, never a fallback to normal.
+                    computed.line_height = Some(
+                        product
+                            .filter(|p| p % 10_000 == 0)
+                            .map_or(0, |p| p / 10_000),
+                    );
+                    computed.line_height_number = None;
+                }
                 Value::LineHeightNumber(number) if property == Property::LineHeight => {
                     computed.line_height = None;
                     computed.line_height_number = Some(number);

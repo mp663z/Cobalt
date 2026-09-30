@@ -347,3 +347,13 @@ fn unitless_line_height_paints_and_refuses_fractional_used_values() {
     let boxes = tree("<html style='height:100px'><body><p style='font-size:13px;line-height:1.5'>ab</p></body></html>");
     assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
 }
+
+#[test]
+fn percent_line_height_inherits_as_length_not_multiplier() {
+    let boxes = tree("<html style='height:100px'><body style='font-size:20px;line-height:150%'><p style='font-size:12px'>ab</p><p style='font-size:16px'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [14, 44] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+}
