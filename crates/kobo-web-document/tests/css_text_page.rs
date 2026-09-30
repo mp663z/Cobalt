@@ -398,9 +398,8 @@ fn shorter_even_line_height_uses_negative_half_leading_when_ink_fits() {
     for y in [3, 11, 19] {
         assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
     }
-    // Odd half-leading and too-short boxes remain honest refusals, even
-    // though CSS in a general browser allows glyph overflow outside lines.
-    for value in ["9px", "2px"] {
+    // Fractional half-leading and zero line heights still refuse.
+    for value in ["9px", "0px"] {
         let boxes = tree(&format!(
             "<html style='height:100px'><body><p style='line-height:{value}'>ab</p></body></html>"
         ));
@@ -650,6 +649,89 @@ fn definite_height_overflow_does_not_enable_unproven_clipping() {
         ));
         assert_eq!(
             paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn short_line_height_keeps_measured_lines_while_ink_overflows() {
+    let boxes = tree("<html><body style='padding-top:4px;line-height:2px'><p style='width:6px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 6, 6, 8, 8]);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 7), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 8), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 9), &[0, 0, 0]);
+}
+
+struct TallInkFace;
+impl FontProvider for TallInkFace {
+    fn advance(&self, _: char, _: u32) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32) -> Option<i32> {
+        Some(1)
+    }
+    fn raster(&self, _: char, _: u32) -> Option<GlyphBitmap> {
+        Some(GlyphBitmap {
+            left: 0,
+            top: -2,
+            width: 1,
+            height: 8,
+            coverage: vec![255; 8],
+        })
+    }
+}
+
+#[test]
+fn negative_adjusted_baseline_and_top_ink_clip_at_viewport_not_line() {
+    let boxes = tree("<html><body><p style='line-height:2px'>a</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 10, 20, &TallInkFace).unwrap();
+    assert!(
+        matches!(&list.commands()[0], Command::GlyphRun { bounds, .. } if bounds.y == -5 && bounds.height == 8)
+    );
+    let pixels = list.rasterize(10, 20, Rgb(255, 255, 255)).unwrap();
+    for y in 0..3 {
+        assert_eq!(&pixels[y * 10 * 4..][..3], &[0, 0, 0]);
+    }
+    assert_eq!(&pixels[3 * 10 * 4..][..3], &[255, 255, 255]);
+}
+
+struct InvalidBaselineFace(i32);
+impl FontProvider for InvalidBaselineFace {
+    fn advance(&self, _: char, _: u32) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32) -> Option<i32> {
+        Some(self.0)
+    }
+    fn raster(&self, ch: char, size: u32) -> Option<GlyphBitmap> {
+        TestFace.raster(ch, size)
+    }
+}
+
+#[test]
+fn invalid_natural_baselines_still_refuse_before_adjustment() {
+    let boxes = tree("<html><body><p style='line-height:2px'>ab</p></body></html>");
+    for baseline in [-1, 10, i32::MAX] {
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &InvalidBaselineFace(baseline)).err(),
             Some(PageError::Unsupported)
         );
     }

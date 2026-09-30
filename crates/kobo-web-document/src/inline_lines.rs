@@ -267,12 +267,13 @@ pub enum GlyphPaintError {
 /// `line_top` is the first line's content-box y; `baseline_offset` and
 /// `line_height` come from the actual font provider. Advances must fit the
 /// content width; horizontal glyph bearings may extend outside it, as CSS
-/// visible overflow does not clip ink to the content box. Vertical ink must
-/// still fit its line. The caller combines this list
+/// visible overflow does not clip ink to the content box or line box. The
+/// baseline may lie outside a short CSS line after negative half-leading.
+/// The caller validates the natural font baseline and combines this list
 /// with backgrounds only after the *whole page* is proven paintable.
 ///
 /// # Errors
-/// Refuses missing/invalid bitmaps, overflow, out-of-line ink, and command or
+/// Refuses missing/invalid bitmaps, coordinate overflow, invalid placement, and command or
 /// glyph byte budgets. It never returns a partially painted list.
 #[allow(clippy::too_many_arguments)]
 pub fn paint_direct_glyphs(
@@ -289,8 +290,6 @@ pub fn paint_direct_glyphs(
     if size == 0
         || line_height == 0
         || content_width == 0
-        || baseline_offset < 0
-        || i64::from(baseline_offset) >= i64::from(line_height)
         || text.content_height
             != text
                 .lines
@@ -329,10 +328,6 @@ pub fn paint_direct_glyphs(
         let x = i64::from(content_x) + i64::from(glyph.x) + i64::from(bitmap.left);
         let line_y = i64::from(line_top) + i64::from(glyph.line) * i64::from(line_height);
         let y = line_y + i64::from(baseline_offset) + i64::from(bitmap.top);
-        let bottom = y + i64::from(bitmap.height);
-        if y < line_y || bottom > line_y + i64::from(line_height) {
-            return Err(GlyphPaintError::OutsideLine);
-        }
         list.glyph_run(
             Rect {
                 x: i32::try_from(x).map_err(|_| GlyphPaintError::InvalidMetrics)?,
@@ -457,18 +452,18 @@ mod tests {
         assert_eq!(at(6, 7), &[0, 0, 0, 255]);
         assert_eq!(at(7, 7), &[127, 127, 127, 255]);
         assert_eq!(at(5, 7), &[255, 255, 255, 255]);
-        assert_eq!(
-            paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(
-                GlyphBitmap {
-                    left: 1,
-                    top: -7,
-                    width: 2,
-                    height: 2,
-                    coverage: vec![255, 128, 64, 0]
-                }
-            ))
-            .err(),
-            Some(GlyphPaintError::OutsideLine)
+        let overflow = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _| {
+            Some(GlyphBitmap {
+                left: 1,
+                top: -7,
+                width: 2,
+                height: 2,
+                coverage: vec![255, 128, 64, 0],
+            })
+        })
+        .unwrap();
+        assert!(
+            matches!(&overflow.commands()[0], crate::display_list::Command::GlyphRun { bounds, .. } if bounds.y == 3)
         );
         assert_eq!(
             paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _| Some(

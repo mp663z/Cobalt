@@ -70,7 +70,8 @@ pub fn paint_single_text_page(
 /// glyph ink may overflow the content box; viewport clipping happens only
 /// during rasterization. Direct text may also overflow a positive definite
 /// block height without expanding that block or moving its next sibling.
-/// Advances and ink within each measured line remain bounded.
+/// Ink may overflow the line box after exact half-leading; advances and
+/// line placement remain bounded.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -258,7 +259,7 @@ pub fn paint_direct_text_blocks(
                 .ok_or(PageError::Unsupported)?;
             // CSS half-leading centers the font's line box in explicit height.
             // Leading may be negative when CSS line-height is shorter than the
-            // font strut. Vertical ink must still fit the proven line; odd
+            // font strut. Ink can extend outside the CSS line box; odd
             // leading needs fractional coordinates, so refuse rather than round.
             let leading = i64::from(line_height) - i64::from(natural);
             if leading % 2 != 0 {
@@ -266,6 +267,7 @@ pub fn paint_direct_text_blocks(
             }
             let baseline = font
                 .baseline_offset(size)
+                .filter(|&offset| offset >= 0 && i64::from(offset) < i64::from(natural))
                 .ok_or(PageError::Unsupported)?
                 .checked_add(i32::try_from(leading / 2).map_err(|_| PageError::InvalidGeometry)?)
                 .ok_or(PageError::InvalidGeometry)?;
