@@ -225,10 +225,10 @@ pub fn place_direct_text(
         return Err(LineError::InvalidMetrics);
     }
     let lines = place_ascii_normal(text, max_width, |ch| advance(ch, size))?;
+    let natural = line_height(size).ok_or(LineError::InvalidMetrics)?;
     let height = child
         .style
-        .line_height
-        .or_else(|| line_height(size))
+        .used_line_height(natural)
         .filter(|&value| value > 0)
         .ok_or(LineError::InvalidMetrics)?;
     let content_height = lines

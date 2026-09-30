@@ -51,6 +51,8 @@ pub enum Value {
     Padding(u32),
     FontSize(u32),
     LineHeight(Option<u32>),
+    /// Unitless number in hundredths, inherited before multiplying font size.
+    LineHeightNumber(u32),
     Inherit,
     Initial,
     Unset,
@@ -123,6 +125,7 @@ pub struct Computed {
     pub font_size: u32,
     /// Normal uses font metrics; explicit pixel line-height is inherited.
     pub line_height: Option<u32>,
+    pub line_height_number: Option<u32>,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
     /// Keep the computed keyword until this element's used color is known.
@@ -147,6 +150,7 @@ impl Computed {
         direction: Direction::Ltr,
         font_size: 16,
         line_height: None,
+        line_height_number: None,
         background_color: None,
         background_current_color: false,
         padding_left: 0,
@@ -154,6 +158,25 @@ impl Computed {
         padding_top: 0,
         padding_bottom: 0,
     };
+
+    fn computed_line_height(self) -> Value {
+        self.line_height_number
+            .map_or(Value::LineHeight(self.line_height), Value::LineHeightNumber)
+    }
+
+    /// Exact used line-height. Fractional results need subpixel geometry.
+    #[must_use]
+    pub fn used_line_height(self, natural: u32) -> Option<u32> {
+        if let Some(number) = self.line_height_number {
+            let product = self.font_size.checked_mul(number)?;
+            if product % 100 != 0 {
+                return None;
+            }
+            Some(product / 100)
+        } else {
+            Some(self.line_height.unwrap_or(natural))
+        }
+    }
 
     /// Resolve computed currentColor for painting on this element only.
     #[must_use]
@@ -182,6 +205,7 @@ impl Computed {
             direction: parent.unwrap_or(initial).direction,
             font_size: parent.unwrap_or(initial).font_size,
             line_height: parent.unwrap_or(initial).line_height,
+            line_height_number: parent.unwrap_or(initial).line_height_number,
             background_color: initial.background_color,
             background_current_color: false,
             padding_left: initial.padding_left,
@@ -230,7 +254,7 @@ impl Computed {
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
                 Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
-                Property::LineHeight => Value::LineHeight(parent.unwrap_or(initial).line_height),
+                Property::LineHeight => parent.unwrap_or(initial).computed_line_height(),
                 Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
                 Property::PaddingLeft => Value::Padding(initial.padding_left),
                 Property::PaddingRight => Value::Padding(initial.padding_right),
@@ -273,8 +297,13 @@ impl Computed {
                     computed.direction = direction;
                 }
                 Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
+                Value::LineHeightNumber(number) if property == Property::LineHeight => {
+                    computed.line_height = None;
+                    computed.line_height_number = Some(number);
+                }
                 Value::LineHeight(px) if property == Property::LineHeight => {
                     computed.line_height = px;
+                    computed.line_height_number = None;
                 }
                 Value::BackgroundCurrentColor if property == Property::BackgroundColor => {
                     computed.background_color = None;
@@ -352,7 +381,7 @@ fn resolve(
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
-        Property::LineHeight => Value::LineHeight(parent.unwrap_or(initial).line_height),
+        Property::LineHeight => parent.unwrap_or(initial).computed_line_height(),
         Property::BackgroundColor => {
             if parent.unwrap_or(initial).background_current_color {
                 Value::BackgroundCurrentColor
@@ -471,6 +500,7 @@ mod tests {
             direction: Direction::Ltr,
             font_size: 16,
             line_height: None,
+            line_height_number: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -493,6 +523,7 @@ mod tests {
                 direction: Direction::Ltr,
                 font_size: 16,
                 line_height: None,
+                line_height_number: None,
                 background_color: None,
                 background_current_color: false,
                 padding_left: 0,
@@ -620,6 +651,7 @@ mod tests {
             direction: Direction::Ltr,
             font_size: 16,
             line_height: None,
+            line_height_number: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -651,6 +683,7 @@ mod tests {
                     direction: Direction::Ltr,
                     font_size: 16,
                     line_height: None,
+                    line_height_number: None,
                     background_color: None,
                     background_current_color: false,
                     padding_left: 0,

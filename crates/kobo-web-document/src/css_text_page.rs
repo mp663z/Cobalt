@@ -203,12 +203,11 @@ pub fn paint_direct_text_blocks(
                 return Err(PageError::Unsupported);
             }
             let size = tree.boxes[index].style.font_size;
+            let natural = font.line_height(size).ok_or(PageError::Unsupported)?;
             let line_height = node
                 .style
-                .line_height
-                .or_else(|| font.line_height(size))
+                .used_line_height(natural)
                 .ok_or(PageError::Unsupported)?;
-            let natural = font.line_height(size).ok_or(PageError::Unsupported)?;
             // CSS half-leading centers the font's line box in explicit height.
             // Odd leading needs fractional coordinates, so refuse rather than round.
             let leading = i64::from(line_height) - i64::from(natural);
