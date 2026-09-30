@@ -1,4 +1,4 @@
-//! All-or-nothing paint for a single direct-text block under block ancestors.
+//! All-or-nothing paint for direct-text blocks in restricted normal flow.
 //!
 //! This path is deliberately separate from the background-only preview. It
 //! requires one actual font provider for advances, line metrics and coverage;
@@ -45,8 +45,27 @@ fn rgb(color: u32) -> Rgb {
 /// # Errors
 /// Returns an error on unsupported CSS/tree, invalid geometry or font data,
 /// resource limits, or a failed paint operation.
-#[allow(clippy::too_many_lines)]
 pub fn paint_single_text_page(
+    tree: &BoxTree,
+    viewport_width: u32,
+    viewport_height: u32,
+    font: &impl FontProvider,
+) -> Result<DisplayList, PageError> {
+    if tree.boxes.iter().any(|node| node.children.len() > 1) {
+        return Err(PageError::Unsupported);
+    }
+    paint_direct_text_blocks(tree, viewport_width, viewport_height, font)
+}
+
+/// Paint zero-margin normal-flow blocks whose inline content is exactly one
+/// direct text child. Multiple block siblings are allowed; mixed inline runs,
+/// images and unsupported styles still refuse the entire page. Paint follows
+/// retained preorder so each background precedes its own text and later boxes.
+///
+/// # Errors
+/// Returns an error on unsupported trees, invalid metrics or paint limits.
+#[allow(clippy::too_many_lines)]
+pub fn paint_direct_text_blocks(
     tree: &BoxTree,
     viewport_width: u32,
     viewport_height: u32,
@@ -68,12 +87,6 @@ pub fn paint_single_text_page(
         || tree.roots[0] >= tree.boxes.len()
         || !tree.paint_structure_valid(MAX_COMMANDS)
     {
-        return Err(PageError::Unsupported);
-    }
-    // A sibling or nested text block needs per-box paint ordering; this
-    // restricted bridge only paints one direct text node at the end of an
-    // ancestor chain. Reject any branching before building a list.
-    if tree.boxes.iter().any(|node| node.children.len() > 1) {
         return Err(PageError::Unsupported);
     }
     let widths = WidthPass::from_boxes(tree, viewport_width);
@@ -100,7 +113,7 @@ pub fn paint_single_text_page(
     {
         return Err(PageError::Unsupported);
     }
-    let mut text_index = None;
+    let mut text_count = 0;
     let mut seen = vec![false; tree.boxes.len()];
     let mut stack = vec![(tree.roots[0], None)];
     while let Some((index, parent)) = stack.pop() {
@@ -114,8 +127,8 @@ pub fn paint_single_text_page(
         }
         seen[index] = true;
         if node.kind == BoxKind::Text {
-            if text_index.replace(index).is_some()
-                || node.text.is_none()
+            text_count += 1;
+            if node.text.is_none()
                 || !node.children.is_empty()
                 || !parent.is_some_and(|p| {
                     tree.boxes[p].children.as_slice() == [index]
@@ -134,25 +147,10 @@ pub fn paint_single_text_page(
     if seen.iter().any(|&visited| !visited) {
         return Err(PageError::Unsupported);
     }
-    let text_index = text_index.ok_or(PageError::Unsupported)?;
-    let parent = tree.boxes[text_index]
-        .parent
-        .ok_or(PageError::Unsupported)?;
-    let width = widths.widths[parent]
-        .ok_or(PageError::InvalidGeometry)?
-        .content;
-    let lines = place_direct_text(
-        tree,
-        parent,
-        width,
-        |character, size| font.advance(character, size),
-        |size| font.line_height(size),
-    )
-    .map_err(|_| PageError::Unsupported)?;
-    if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
+    if text_count == 0 {
         return Err(PageError::Unsupported);
     }
-    // The chain is proven above: its root and first child are the retained
+    // The tree is proven above: its root and first child are the retained
     // HTML root and body. Root color wins; otherwise the body's color paints
     // the canvas and its local background is suppressed. Margin collapse is
     // still unsupported.
@@ -189,7 +187,44 @@ pub fn paint_single_text_page(
         .map_err(PageError::Paint)?;
     }
     for (index, node) in tree.boxes.iter().enumerate() {
-        if node.kind == BoxKind::Text || index == root || (propagated_body && body == Some(index)) {
+        if node.kind == BoxKind::Text {
+            let parent = node.parent.ok_or(PageError::Unsupported)?;
+            let width = widths.widths[parent]
+                .ok_or(PageError::InvalidGeometry)?
+                .content;
+            let lines = place_direct_text(
+                tree,
+                parent,
+                width,
+                |character, size| font.advance(character, size),
+                |size| font.line_height(size),
+            )
+            .map_err(|_| PageError::Unsupported)?;
+            if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
+                return Err(PageError::Unsupported);
+            }
+            let size = tree.boxes[index].style.font_size;
+            let line_height = font.line_height(size).ok_or(PageError::Unsupported)?;
+            let baseline = font.baseline_offset(size).ok_or(PageError::Unsupported)?;
+            let glyphs = paint_direct_glyphs(
+                &lines,
+                i32::try_from(widths.content_x[parent].ok_or(PageError::InvalidGeometry)?)
+                    .map_err(|_| PageError::InvalidGeometry)?,
+                i32::try_from(vertical.content_y[index].ok_or(PageError::InvalidGeometry)?)
+                    .map_err(|_| PageError::InvalidGeometry)?,
+                width,
+                size,
+                line_height,
+                baseline,
+                rgb(tree.boxes[index].style.color),
+                |character, size| font.raster(character, size),
+            )
+            .map_err(|_| PageError::Unsupported)?;
+            list.append_list(glyphs).map_err(PageError::Paint)?;
+
+            continue;
+        }
+        if index == root || (propagated_body && body == Some(index)) {
             continue;
         }
         if let Some(color) = node.style.background_color {
@@ -228,23 +263,5 @@ pub fn paint_single_text_page(
             .map_err(PageError::Paint)?;
         }
     }
-    let size = tree.boxes[text_index].style.font_size;
-    let line_height = font.line_height(size).ok_or(PageError::Unsupported)?;
-    let baseline = font.baseline_offset(size).ok_or(PageError::Unsupported)?;
-    let glyphs = paint_direct_glyphs(
-        &lines,
-        i32::try_from(widths.content_x[parent].ok_or(PageError::InvalidGeometry)?)
-            .map_err(|_| PageError::InvalidGeometry)?,
-        i32::try_from(vertical.content_y[text_index].ok_or(PageError::InvalidGeometry)?)
-            .map_err(|_| PageError::InvalidGeometry)?,
-        width,
-        size,
-        line_height,
-        baseline,
-        rgb(tree.boxes[text_index].style.color),
-        |character, size| font.raster(character, size),
-    )
-    .map_err(|_| PageError::Unsupported)?;
-    list.append_list(glyphs).map_err(PageError::Paint)?;
     Ok(list)
 }

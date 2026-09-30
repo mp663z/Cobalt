@@ -1,6 +1,6 @@
 use kobo_web_document::{
     box_tree::BoxTree,
-    css_text_page::{paint_single_text_page, FontProvider, PageError},
+    css_text_page::{paint_direct_text_blocks, paint_single_text_page, FontProvider, PageError},
     display_list::{Command, Rgb},
     inline_lines::GlyphBitmap,
     parse_style_tree, Limits,
@@ -173,9 +173,58 @@ fn malformed_arena_is_refused_before_geometry_passes() {
             5 => boxes.boxes[0].source = None,
             _ => boxes.roots[0] = usize::MAX,
         }
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
         assert!(
             paint_single_text_page(&boxes, 100, 100, &TestFace).is_err(),
             "defect {defect}"
         );
+    }
+}
+
+#[test]
+fn multiple_direct_text_blocks_stack_and_paint_in_document_order() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='background-color:#abcdef;color:#010203'>ab</p><section style='padding-top:2px'><p style='background-color:#fedcba;color:#040506'>cd</p></section></body></html>");
+    assert!(paint_single_text_page(&boxes, 100, 100, &TestFace).is_err());
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert_eq!(list.commands().len(), 7);
+    assert!(matches!(
+        list.commands()[1],
+        Command::Fill {
+            color: Rgb(171, 205, 239),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[2],
+        Command::GlyphRun {
+            color: Rgb(1, 2, 3),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[4],
+        Command::Fill {
+            color: Rgb(254, 220, 186),
+            ..
+        }
+    ));
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |y: usize| &pixels[y * 100 * 4..][..3];
+    assert_eq!(at(4), &[1, 2, 3]);
+    assert_eq!(at(10), &[18, 52, 86]);
+    assert_eq!(at(12), &[254, 220, 186]);
+    assert_eq!(at(16), &[4, 5, 6]);
+}
+
+#[test]
+fn multiple_text_blocks_refuse_unsupported_sibling_without_partial_page() {
+    for tail in [
+        "<p>emoji🙂</p>",
+        "<p>hi <em>there</em></p>",
+        "<p style='border:1px solid red'>hi</p>",
+        "<p style='margin-top:3px'>hi</p>",
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p>ab</p>{tail}</body></html>"));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
     }
 }

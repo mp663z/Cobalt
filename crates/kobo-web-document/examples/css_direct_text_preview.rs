@@ -4,7 +4,7 @@
 use fontdue::{Font, FontSettings};
 use kobo_web_document::{
     box_tree::BoxTree,
-    css_text_page::{paint_single_text_page, FontProvider},
+    css_text_page::{paint_direct_text_blocks, paint_single_text_page, FontProvider},
     display_list::Rgb,
     inline_lines::GlyphBitmap,
     parse_style_tree, Limits,
@@ -71,6 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width: u32 = args.next().ok_or("missing width")?.parse()?;
     let height: u32 = args.next().ok_or("missing height")?.parse()?;
     let font_path = args.next().ok_or("missing font file")?;
+    let blocks = match args.next().as_deref() {
+        None => false,
+        Some("--blocks") => true,
+        Some(_) => return Err("expected optional --blocks".into()),
+    };
     if args.next().is_some() {
         return Err("unexpected extra argument".into());
     }
@@ -81,8 +86,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let html = fs::read(html_path)?;
     let styled = parse_style_tree(&html, &[], &Limits::DEFAULT);
     let tree = BoxTree::from_style(&styled);
-    let list = paint_single_text_page(&tree, width, height, &face)
-        .map_err(|error| format!("unsupported direct-text geometry/font: {error:?}"))?;
+    let list = if blocks {
+        paint_direct_text_blocks(&tree, width, height, &face)
+    } else {
+        paint_single_text_page(&tree, width, height, &face)
+    }
+    .map_err(|error| format!("unsupported direct-text geometry/font: {error:?}"))?;
     let rgba = list
         .rasterize(width, height, Rgb(255, 255, 255))
         .map_err(|error| format!("raster error: {error:?}"))?;
