@@ -383,3 +383,21 @@ fn percentage_font_size_and_explicit_pixels_paint_the_same_page() {
         pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
     );
 }
+
+#[test]
+fn shorter_even_line_height_uses_negative_half_leading_when_ink_fits() {
+    let boxes = tree("<html style='height:100px'><body style='line-height:8px'><p style='width:6px'>ab cd</p><p>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [3, 11, 19] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+    // Odd half-leading and too-short boxes remain honest refusals, even
+    // though CSS in a general browser allows glyph overflow outside lines.
+    for value in ["9px", "2px"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='line-height:{value}'>ab</p></body></html>"
+        ));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+    }
+}

@@ -209,9 +209,11 @@ pub fn paint_direct_text_blocks(
                 .used_line_height(natural)
                 .ok_or(PageError::Unsupported)?;
             // CSS half-leading centers the font's line box in explicit height.
-            // Odd leading needs fractional coordinates, so refuse rather than round.
+            // Leading may be negative when CSS line-height is shorter than the
+            // font strut. Ink must still fit the proven line rectangle; odd
+            // leading needs fractional coordinates, so refuse rather than round.
             let leading = i64::from(line_height) - i64::from(natural);
-            if leading < 0 || leading % 2 != 0 {
+            if leading % 2 != 0 {
                 return Err(PageError::Unsupported);
             }
             let baseline = font
