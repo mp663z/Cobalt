@@ -46,6 +46,7 @@ pub enum Value {
     Margin(Margin),
     Direction(Direction),
     BackgroundColor(Option<u32>),
+    BackgroundCurrentColor,
     Padding(u32),
     FontSize(u32),
     Inherit,
@@ -120,6 +121,8 @@ pub struct Computed {
     pub font_size: u32,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
+    /// Keep the computed keyword until this element's used color is known.
+    pub background_current_color: bool,
     pub padding_left: u32,
     pub padding_right: u32,
     pub padding_top: u32,
@@ -140,11 +143,22 @@ impl Computed {
         direction: Direction::Ltr,
         font_size: 16,
         background_color: None,
+        background_current_color: false,
         padding_left: 0,
         padding_right: 0,
         padding_top: 0,
         padding_bottom: 0,
     };
+
+    /// Resolve computed currentColor for painting on this element only.
+    #[must_use]
+    pub fn used_background_color(self) -> Option<u32> {
+        if self.background_current_color {
+            Some(self.color)
+        } else {
+            self.background_color
+        }
+    }
 
     #[must_use]
     #[allow(clippy::too_many_lines)] // Per-property cascade over a bounded declaration list.
@@ -163,6 +177,7 @@ impl Computed {
             direction: parent.unwrap_or(initial).direction,
             font_size: parent.unwrap_or(initial).font_size,
             background_color: initial.background_color,
+            background_current_color: false,
             padding_left: initial.padding_left,
             padding_right: initial.padding_right,
             padding_top: initial.padding_top,
@@ -250,8 +265,13 @@ impl Computed {
                     computed.direction = direction;
                 }
                 Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
+                Value::BackgroundCurrentColor if property == Property::BackgroundColor => {
+                    computed.background_color = None;
+                    computed.background_current_color = true;
+                }
                 Value::BackgroundColor(color) if property == Property::BackgroundColor => {
                     computed.background_color = color;
+                    computed.background_current_color = false;
                 }
                 Value::Padding(px) if property == Property::PaddingLeft => {
                     computed.padding_left = px;
@@ -320,7 +340,11 @@ fn resolve(
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
         Property::BackgroundColor => {
-            Value::BackgroundColor(parent.unwrap_or(initial).background_color)
+            if parent.unwrap_or(initial).background_current_color {
+                Value::BackgroundCurrentColor
+            } else {
+                Value::BackgroundColor(parent.unwrap_or(initial).background_color)
+            }
         }
         Property::PaddingLeft => Value::Padding(parent.unwrap_or(initial).padding_left),
         Property::PaddingRight => Value::Padding(parent.unwrap_or(initial).padding_right),
@@ -428,6 +452,7 @@ mod tests {
             direction: Direction::Ltr,
             font_size: 16,
             background_color: None,
+            background_current_color: false,
             padding_left: 0,
             padding_right: 0,
             padding_top: 0,
@@ -448,6 +473,7 @@ mod tests {
                 direction: Direction::Ltr,
                 font_size: 16,
                 background_color: None,
+                background_current_color: false,
                 padding_left: 0,
                 padding_right: 0,
                 padding_top: 0,
@@ -573,6 +599,7 @@ mod tests {
             direction: Direction::Ltr,
             font_size: 16,
             background_color: None,
+            background_current_color: false,
             padding_left: 0,
             padding_right: 0,
             padding_top: 0,
@@ -602,6 +629,7 @@ mod tests {
                     direction: Direction::Ltr,
                     font_size: 16,
                     background_color: None,
+                    background_current_color: false,
                     padding_left: 0,
                     padding_right: 0,
                     padding_top: 0,

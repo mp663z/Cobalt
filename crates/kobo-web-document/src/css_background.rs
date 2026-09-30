@@ -39,9 +39,9 @@ pub fn paint_backgrounds(
         return Err(BridgeError::Unsupported);
     }
     let body = root_box.children.first().copied();
-    let body_color = body.and_then(|index| tree.boxes.get(index)?.style.background_color);
-    let canvas = root_box.style.background_color.or(body_color);
-    let propagated_body = root_box.style.background_color.is_none() && body_color.is_some();
+    let body_color = body.and_then(|index| tree.boxes.get(index)?.style.used_background_color());
+    let canvas = root_box.style.used_background_color().or(body_color);
+    let propagated_body = root_box.style.used_background_color().is_none() && body_color.is_some();
     let widths = WidthPass::from_boxes(tree, viewport_width);
     let vertical = VerticalPass::from_boxes(tree, viewport_width, viewport_height);
     let fills: Vec<_> = tree
@@ -52,7 +52,7 @@ pub fn paint_backgrounds(
             if box_index == root || (propagated_body && body == Some(box_index)) {
                 return None;
             }
-            node.style.background_color.map(|color| FillSpec {
+            node.style.used_background_color().map(|color| FillSpec {
                 box_index,
                 color: Rgb(
                     u8::try_from((color >> 16) & 0xff).unwrap_or(0),

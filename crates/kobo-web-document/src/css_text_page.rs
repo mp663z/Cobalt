@@ -157,8 +157,8 @@ pub fn paint_direct_text_blocks(
     // still unsupported.
     let root = tree.roots[0];
     let body = tree.boxes[root].children.first().copied();
-    let root_color = tree.boxes[root].style.background_color;
-    let body_color = body.and_then(|index| tree.boxes[index].style.background_color);
+    let root_color = tree.boxes[root].style.used_background_color();
+    let body_color = body.and_then(|index| tree.boxes[index].style.used_background_color());
     let canvas = root_color.or(body_color);
     let propagated_body = root_color.is_none() && body_color.is_some();
     if tree.boxes.iter().any(|node| {
@@ -226,7 +226,7 @@ pub fn paint_direct_text_blocks(
         if index == root || (propagated_body && body == Some(index)) {
             continue;
         }
-        if let Some(color) = node.style.background_color {
+        if let Some(color) = node.style.used_background_color() {
             let width = widths.widths[index]
                 .ok_or(PageError::InvalidGeometry)?
                 .content;

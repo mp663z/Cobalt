@@ -435,12 +435,14 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
             "background" => parse_keyword(value)
                 .or_else(|| match value {
                     "transparent" | "none" => Some(Value::BackgroundColor(None)),
+                    "currentcolor" => Some(Value::BackgroundCurrentColor),
                     _ => opaque_color(value).map(|color| Value::BackgroundColor(Some(color))),
                 })
                 .map(|value| (Property::BackgroundColor, value)),
             "background-color" => parse_keyword(value)
                 .or_else(|| match value {
                     "transparent" => Some(Value::BackgroundColor(None)),
+                    "currentcolor" => Some(Value::BackgroundCurrentColor),
                     "white" => Some(Value::BackgroundColor(Some(0xff_ff_ff))),
                     "black" => Some(Value::BackgroundColor(Some(0))),
                     _ => opaque_color(value).map(|color| Value::BackgroundColor(Some(color))),
@@ -1187,5 +1189,34 @@ mod background_image_none_tests {
                 "{image}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod currentcolor_tests {
+    use crate::{parse_style_tree, Limits};
+
+    #[test]
+    fn currentcolor_inherits_as_keyword_and_uses_own_foreground() {
+        let tree = parse_style_tree(b"<!doctype html><section style='color:red;background:currentcolor'><p style='color:blue;background:inherit'>ab</p><div style='color:green;background:currentcolor'>cd</div><article style='color:white;background:unset'>ef</article></section>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        let node = |tag: &str| tree.nodes.iter().find(|n| n.tag == tag).unwrap();
+        assert_eq!(
+            node("section").style.used_background_color(),
+            Some(0xff_00_00)
+        );
+        assert!(node("p").style.background_current_color);
+        assert_eq!(node("p").style.used_background_color(), Some(0x00_00_ff));
+        assert_eq!(node("div").style.used_background_color(), Some(0x00_80_00));
+        assert_eq!(node("article").style.used_background_color(), None);
+    }
+
+    #[test]
+    fn currentcolor_follows_cascade_and_not_declaration_order() {
+        let tree = parse_style_tree(b"<!doctype html><style>p{color:blue !important;background:currentColor}</style><p style='color:green'>ab</p><div style='background-color:currentcolor;color:#123456'>cd</div>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        let node = |tag: &str| tree.nodes.iter().find(|n| n.tag == tag).unwrap();
+        assert_eq!(node("p").style.used_background_color(), Some(0x00_00_ff));
+        assert_eq!(node("div").style.used_background_color(), Some(0x12_34_56));
     }
 }

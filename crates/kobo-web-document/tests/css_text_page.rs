@@ -291,3 +291,12 @@ fn direction_and_visible_list_markers_are_not_silently_omitted() {
     let boxes = tree("<html style='height:100px;direction:rtl'><body><p style='direction:ltr'>ab</p></body></html>");
     assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_ok());
 }
+
+#[test]
+fn currentcolor_reaches_canvas_and_local_background_pixels() {
+    let boxes = tree("<html style='height:100px;background:currentcolor;color:#123456'><body><p style='color:#abcdef;background:currentcolor'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[0..3], &[171, 205, 239]);
+    assert_eq!(&pixels[99 * 100 * 4..][..3], &[18, 52, 86]);
+}
