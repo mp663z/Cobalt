@@ -717,6 +717,42 @@ impl WidthPass {
 }
 
 impl BoxTree {
+    /// Check the retained preorder arena before any diagnostic pass indexes it.
+    /// Paint paths accept one connected tree, with bounded edges and sources.
+    pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+        let count = self.boxes.len();
+        if count == 0 || count > limit || self.roots.len() != 1 || self.roots[0] >= count {
+            return false;
+        }
+        let mut edges = 0_usize;
+        for (index, node) in self.boxes.iter().enumerate() {
+            edges = edges.saturating_add(node.children.len());
+            if edges > limit
+                || node.source.is_none()
+                || node.parent.is_some_and(|parent| parent >= index)
+                || node
+                    .children
+                    .iter()
+                    .any(|&child| child <= index || child >= count)
+            {
+                return false;
+            }
+        }
+        let mut seen = vec![false; count];
+        let mut stack = vec![(self.roots[0], None)];
+        while let Some((index, parent)) = stack.pop() {
+            let node = &self.boxes[index];
+            if seen[index] || node.parent != parent {
+                return false;
+            }
+            seen[index] = true;
+            for &child in &node.children {
+                stack.push((child, Some(index)));
+            }
+        }
+        seen.into_iter().all(|visited| visited)
+    }
+
     /// Convert a bounded styled DOM into boxes without painting or flattening
     /// mixed text. At most two boxes per styled node are allocated.
     #[must_use]

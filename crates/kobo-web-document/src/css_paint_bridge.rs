@@ -34,34 +34,11 @@ pub enum BridgeError {
 }
 
 fn validate_tree(tree: &BoxTree) -> Result<(), BridgeError> {
-    let count = tree.boxes.len();
-    // Check indices before recomputing either pass: WidthPass assumes a sound
-    // tree and indexes children directly. VerticalPass checks shape later.
-    if tree
-        .boxes
-        .iter()
-        .map(|node| node.children.len())
-        .sum::<usize>()
-        > MAX_BRIDGE_BOXES
-    {
-        return Err(BridgeError::TooManyBoxes);
+    if tree.paint_structure_valid(MAX_BRIDGE_BOXES) {
+        Ok(())
+    } else {
+        Err(BridgeError::Unsupported)
     }
-    if tree.roots.len() != 1
-        || tree.roots[0] >= count
-        || tree.boxes.iter().enumerate().any(|(index, node)| {
-            node.source.is_none()
-                || node
-                    .parent
-                    .is_some_and(|parent| parent >= count || parent == index)
-                || node
-                    .children
-                    .iter()
-                    .any(|&child| child >= count || child == index)
-        })
-    {
-        return Err(BridgeError::Unsupported);
-    }
-    Ok(())
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

@@ -177,3 +177,28 @@ fn padded_background_covers_padding_box_and_stacks_after_bottom_padding() {
     assert_eq!(at(62, 32), &[255, 255, 255, 255]);
     assert_eq!(at(0, 41), &[0xab, 0xcd, 0xef, 255]);
 }
+
+#[test]
+fn malformed_arena_is_refused_before_geometry_passes() {
+    for defect in 0..7 {
+        let mut boxes = BoxTree::from_style(&standards_tree(
+            b"<html style='height:100px'><body style='height:80px;background:red'></body></html>",
+        ));
+        match defect {
+            0 => boxes.boxes[0].children = vec![usize::MAX],
+            1 => boxes.boxes[1].parent = Some(usize::MAX),
+            2 => boxes.boxes[1].children.push(0),
+            3 => {
+                let child = boxes.boxes[0].children[0];
+                boxes.boxes[0].children.push(child);
+            }
+            4 => boxes.boxes[0].children.clear(),
+            5 => boxes.boxes[0].source = None,
+            _ => boxes.roots[0] = usize::MAX,
+        }
+        assert!(
+            paint_backgrounds(&boxes, 100, 100).is_err(),
+            "defect {defect}"
+        );
+    }
+}

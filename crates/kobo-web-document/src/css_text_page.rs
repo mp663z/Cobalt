@@ -66,6 +66,7 @@ pub fn paint_single_text_page(
         || tree.boxes.len() > MAX_COMMANDS
         || tree.roots.len() != 1
         || tree.roots[0] >= tree.boxes.len()
+        || !tree.paint_structure_valid(MAX_COMMANDS)
     {
         return Err(PageError::Unsupported);
     }

@@ -156,3 +156,26 @@ fn direct_text_canvas_background_propagation_and_paint_order() {
         assert_eq!(&pixels[(4 * 100) * 4..][..3], &[1, 2, 3]);
     }
 }
+
+#[test]
+fn malformed_arena_is_refused_before_geometry_passes() {
+    for defect in 0..7 {
+        let mut boxes = tree("<html style='height:100px'><body><p>hi</p></body></html>");
+        match defect {
+            0 => boxes.boxes[0].children = vec![usize::MAX],
+            1 => boxes.boxes[1].parent = Some(usize::MAX),
+            2 => boxes.boxes[1].children.push(0),
+            3 => {
+                let child = boxes.boxes[0].children[0];
+                boxes.boxes[0].children.push(child);
+            }
+            4 => boxes.boxes[0].children.clear(),
+            5 => boxes.boxes[0].source = None,
+            _ => boxes.roots[0] = usize::MAX,
+        }
+        assert!(
+            paint_single_text_page(&boxes, 100, 100, &TestFace).is_err(),
+            "defect {defect}"
+        );
+    }
+}

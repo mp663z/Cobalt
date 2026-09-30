@@ -18,6 +18,11 @@ pub fn paint_backgrounds(
     viewport_width: u32,
     viewport_height: u32,
 ) -> Result<DisplayList, BridgeError> {
+    // Reject malformed or disconnected arenas before the geometry passes,
+    // which intentionally assume indices from BoxTree::from_style.
+    if !tree.paint_structure_valid(crate::display_list::MAX_COMMANDS) {
+        return Err(BridgeError::Unsupported);
+    }
     // CSS canvas propagation: a root background covers the viewport; if
     // transparent, the first body background propagates instead. The bridge
     // still validates *all* box geometry before the canvas fill is returned.
