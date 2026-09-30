@@ -203,8 +203,23 @@ pub fn paint_direct_text_blocks(
                 return Err(PageError::Unsupported);
             }
             let size = tree.boxes[index].style.font_size;
-            let line_height = font.line_height(size).ok_or(PageError::Unsupported)?;
-            let baseline = font.baseline_offset(size).ok_or(PageError::Unsupported)?;
+            let line_height = node
+                .style
+                .line_height
+                .or_else(|| font.line_height(size))
+                .ok_or(PageError::Unsupported)?;
+            let natural = font.line_height(size).ok_or(PageError::Unsupported)?;
+            // CSS half-leading centers the font's line box in explicit height.
+            // Odd leading needs fractional coordinates, so refuse rather than round.
+            let leading = i64::from(line_height) - i64::from(natural);
+            if leading < 0 || leading % 2 != 0 {
+                return Err(PageError::Unsupported);
+            }
+            let baseline = font
+                .baseline_offset(size)
+                .ok_or(PageError::Unsupported)?
+                .checked_add(i32::try_from(leading / 2).map_err(|_| PageError::InvalidGeometry)?)
+                .ok_or(PageError::InvalidGeometry)?;
             let glyphs = paint_direct_glyphs(
                 &lines,
                 i32::try_from(widths.content_x[parent].ok_or(PageError::InvalidGeometry)?)

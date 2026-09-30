@@ -19,6 +19,7 @@ pub enum Property {
     MarginBottom,
     Direction,
     FontSize,
+    LineHeight,
     BackgroundColor,
     PaddingLeft,
     PaddingRight,
@@ -49,6 +50,7 @@ pub enum Value {
     BackgroundCurrentColor,
     Padding(u32),
     FontSize(u32),
+    LineHeight(Option<u32>),
     Inherit,
     Initial,
     Unset,
@@ -119,6 +121,8 @@ pub struct Computed {
     pub direction: Direction,
     /// Computed CSS font-size in integer pixels. Relative sizes need an explicit parent.
     pub font_size: u32,
+    /// Normal uses font metrics; explicit pixel line-height is inherited.
+    pub line_height: Option<u32>,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
     /// Keep the computed keyword until this element's used color is known.
@@ -142,6 +146,7 @@ impl Computed {
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
         font_size: 16,
+        line_height: None,
         background_color: None,
         background_current_color: false,
         padding_left: 0,
@@ -176,6 +181,7 @@ impl Computed {
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
             font_size: parent.unwrap_or(initial).font_size,
+            line_height: parent.unwrap_or(initial).line_height,
             background_color: initial.background_color,
             background_current_color: false,
             padding_left: initial.padding_left,
@@ -195,6 +201,7 @@ impl Computed {
             Property::MarginBottom,
             Property::Direction,
             Property::FontSize,
+            Property::LineHeight,
             Property::BackgroundColor,
             Property::PaddingLeft,
             Property::PaddingRight,
@@ -223,6 +230,7 @@ impl Computed {
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
                 Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
+                Property::LineHeight => Value::LineHeight(parent.unwrap_or(initial).line_height),
                 Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
                 Property::PaddingLeft => Value::Padding(initial.padding_left),
                 Property::PaddingRight => Value::Padding(initial.padding_right),
@@ -265,6 +273,9 @@ impl Computed {
                     computed.direction = direction;
                 }
                 Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
+                Value::LineHeight(px) if property == Property::LineHeight => {
+                    computed.line_height = px;
+                }
                 Value::BackgroundCurrentColor if property == Property::BackgroundColor => {
                     computed.background_color = None;
                     computed.background_current_color = true;
@@ -301,6 +312,7 @@ fn precedence(origin: Origin, important: bool) -> u8 {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Explicit per-property initial/inherited values and origin rollback.
 fn resolve(
     value: Value,
     property: Property,
@@ -321,6 +333,7 @@ fn resolve(
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
         Property::FontSize => Value::FontSize(initial.font_size),
+        Property::LineHeight => Value::LineHeight(initial.line_height),
         Property::BackgroundColor => Value::BackgroundColor(initial.background_color),
         Property::PaddingLeft => Value::Padding(initial.padding_left),
         Property::PaddingRight => Value::Padding(initial.padding_right),
@@ -339,6 +352,7 @@ fn resolve(
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
+        Property::LineHeight => Value::LineHeight(parent.unwrap_or(initial).line_height),
         Property::BackgroundColor => {
             if parent.unwrap_or(initial).background_current_color {
                 Value::BackgroundCurrentColor
@@ -368,7 +382,9 @@ fn resolve(
             | Property::PaddingRight
             | Property::PaddingTop
             | Property::PaddingBottom => initial_value,
-            Property::Color | Property::Direction | Property::FontSize => inherited,
+            Property::Color | Property::Direction | Property::FontSize | Property::LineHeight => {
+                inherited
+            }
         },
         Value::Revert => {
             // Revert crosses the *origin* boundary, even for important values.
@@ -391,7 +407,10 @@ fn resolve(
                 || {
                     if matches!(
                         property,
-                        Property::Color | Property::Direction | Property::FontSize
+                        Property::Color
+                            | Property::Direction
+                            | Property::FontSize
+                            | Property::LineHeight
                     ) {
                         inherited
                     } else {
@@ -451,6 +470,7 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             font_size: 16,
+            line_height: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -472,6 +492,7 @@ mod tests {
                 margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr,
                 font_size: 16,
+                line_height: None,
                 background_color: None,
                 background_current_color: false,
                 padding_left: 0,
@@ -598,6 +619,7 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             font_size: 16,
+            line_height: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -628,6 +650,7 @@ mod tests {
                     margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr,
                     font_size: 16,
+                    line_height: None,
                     background_color: None,
                     background_current_color: false,
                     padding_left: 0,

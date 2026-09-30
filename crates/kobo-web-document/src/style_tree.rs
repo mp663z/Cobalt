@@ -422,6 +422,18 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => None,
                 })
                 .map(|value| (Property::Display, value)),
+            "line-height" => parse_keyword(value)
+                .or_else(|| {
+                    if value == "normal" {
+                        Some(Value::LineHeight(None))
+                    } else {
+                        match parse_width(value) {
+                            Some(Length::Px(px)) if px > 0 => Some(Value::LineHeight(Some(px))),
+                            _ => None, // unitless/relative/zero line-height needs more used-value support
+                        }
+                    }
+                })
+                .map(|value| (Property::LineHeight, value)),
             "font-size" => parse_keyword(value)
                 .or_else(|| match parse_width(value) {
                     Some(Length::Px(px)) => Some(Value::FontSize(px)),
@@ -1269,5 +1281,37 @@ mod foreground_currentcolor_tests {
                 .color,
             0x00_00_ff
         );
+    }
+}
+
+#[cfg(test)]
+mod pixel_line_height_tests {
+    use crate::{parse_style_tree, Limits};
+    #[test]
+    fn pixel_line_height_inherits_and_normal_resets() {
+        let tree = parse_style_tree(b"<!doctype html><section style='line-height:24px'><p style='font-size:12px'>ab</p><div style='line-height:normal'>cd</div></section>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .line_height,
+            Some(24)
+        );
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .line_height,
+            None
+        );
+        for value in ["1.5", "120%", "1em", "0", "-2px", "10.5px"] {
+            let html = format!("<!doctype html><p style='line-height:{value}'>ab</p>");
+            assert!(parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported);
+        }
     }
 }

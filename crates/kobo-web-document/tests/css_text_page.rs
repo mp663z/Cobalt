@@ -319,3 +319,19 @@ fn single_line_punctuation_paints_but_unsupported_wrap_refuses_whole_page() {
         tree("<html style='height:100px'><body><p style='width:10px'>Hi, ab.</p></body></html>");
     assert!(paint_direct_text_blocks(&narrow, 100, 100, &TestFace).is_err());
 }
+
+#[test]
+fn explicit_pixel_line_height_sets_geometry_and_half_leading() {
+    let boxes = tree("<html style='height:100px'><body style='line-height:14px'><p style='width:6px'>ab cd</p><p>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [6, 20, 34] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+    for value in ["9px", "11px"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='line-height:{value}'>ab</p></body></html>"
+        ));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+    }
+}
