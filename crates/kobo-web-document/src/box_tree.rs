@@ -367,7 +367,6 @@ impl UsedHeightPass {
                     || !node.parent.is_some_and(|parent| {
                         tree.boxes.get(parent).is_some_and(|owner| {
                             matches!(owner.kind, BoxKind::Block | BoxKind::ListItem)
-                                && owner.style.height == Length::Auto
                                 && owner.children.as_slice() == [index]
                         })
                     })
@@ -540,7 +539,6 @@ impl VerticalPass {
                     || (node.kind == BoxKind::Text
                         && parent.is_some_and(|owner| {
                             tree.boxes[owner].children.as_slice() == [index]
-                                && tree.boxes[owner].style.height == Length::Auto
                                 && heights.heights[owner].is_some()
                         })))
                 || (node.kind != BoxKind::Text && heights.heights[index].is_none_or(|h| h == 0))

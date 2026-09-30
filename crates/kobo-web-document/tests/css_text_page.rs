@@ -401,3 +401,33 @@ fn shorter_even_line_height_uses_negative_half_leading_when_ink_fits() {
         assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
     }
 }
+
+#[test]
+fn definite_text_block_height_keeps_extra_room_before_the_next_sibling() {
+    let boxes = tree("<html style='height:100px'><body><p style='height:30px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 29), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 30), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 34), &[0, 0, 0]);
+}
+
+#[test]
+fn definite_text_height_refuses_content_that_would_overflow() {
+    for style in [
+        "height:9px",
+        "height:15px;width:6px",
+        "height:0px",
+        "height:50%",
+    ] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='{style}'>ab cd</p></body></html>"
+        ));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{style}"
+        );
+    }
+}

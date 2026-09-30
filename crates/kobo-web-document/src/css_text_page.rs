@@ -131,10 +131,7 @@ pub fn paint_direct_text_blocks(
             text_count += 1;
             if node.text.is_none()
                 || !node.children.is_empty()
-                || !parent.is_some_and(|p| {
-                    tree.boxes[p].children.as_slice() == [index]
-                        && tree.boxes[p].style.height == crate::computed_style::Length::Auto
-                })
+                || parent.is_none_or(|p| tree.boxes[p].children.as_slice() != [index])
             {
                 return Err(PageError::Unsupported);
             }
@@ -199,7 +196,9 @@ pub fn paint_direct_text_blocks(
                 |size| font.line_height(size),
             )
             .map_err(|_| PageError::Unsupported)?;
-            if lines.content_height == 0 || heights.heights[parent] != Some(lines.content_height) {
+            if lines.content_height == 0
+                || heights.heights[parent].is_none_or(|height| lines.content_height > height)
+            {
                 return Err(PageError::Unsupported);
             }
             let size = tree.boxes[index].style.font_size;
