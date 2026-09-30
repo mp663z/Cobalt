@@ -456,3 +456,21 @@ fn parent_edge_and_negative_vertical_margins_remain_refused() {
         assert!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).is_err());
     }
 }
+
+#[test]
+fn sibling_percentage_gaps_use_containing_width_not_height_or_child_width() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='width:80px'><p style='width:20px;margin-bottom:10%;background-color:#abcdef'>ab</p><p style='margin-top:5%;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in 10..18 {
+        assert_eq!(&pixels[(y * 100 + 1) * 4..][..3], &[0x12, 0x34, 0x56]);
+    }
+    assert_eq!(&pixels[(18 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    for value in ["3%", "-10%", "auto"] {
+        let boxes = tree(&format!("<html style='height:100px'><body style='width:80px'><p style='margin-bottom:{value}'>ab</p><p>cd</p></body></html>"));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{value}"
+        );
+    }
+}

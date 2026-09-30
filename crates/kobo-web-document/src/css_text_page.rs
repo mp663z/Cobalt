@@ -60,6 +60,7 @@ pub fn paint_single_text_page(
 /// Paint zero-parent-edge-margin normal-flow blocks with exactly one
 /// direct text child. Horizontal margins use the proven width pass, including
 /// auto centering. Positive adjoining sibling margins collapse to their maximum.
+/// Percentage gaps require exact integer pixels and resolve against parent width.
 /// Multiple block siblings are allowed; mixed inline runs,
 /// images and unsupported styles still refuse the entire page. Paint follows
 /// retained preorder so each background precedes its own text and later boxes.
@@ -164,8 +165,16 @@ pub fn paint_direct_text_blocks(
         if node.kind == BoxKind::Text {
             return false;
         }
-        let positive =
-            |margin| matches!(margin, crate::computed_style::Margin::Px(value) if value >= 0);
+        let containing = node.parent.map_or(viewport_width, |parent| {
+            widths.widths[parent].map_or(0, |width| width.content)
+        });
+        let positive = |margin| match margin {
+            crate::computed_style::Margin::Px(value) => value >= 0,
+            crate::computed_style::Margin::Percent(value) => {
+                value >= 0 && (i64::from(containing) * i64::from(value)) % 10_000 == 0
+            }
+            crate::computed_style::Margin::Auto => false,
+        };
         if !positive(node.style.margin_top) || !positive(node.style.margin_bottom) {
             return true;
         }
