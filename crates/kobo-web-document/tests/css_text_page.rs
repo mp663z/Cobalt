@@ -300,3 +300,11 @@ fn currentcolor_reaches_canvas_and_local_background_pixels() {
     assert_eq!(&pixels[0..3], &[171, 205, 239]);
     assert_eq!(&pixels[99 * 100 * 4..][..3], &[18, 52, 86]);
 }
+
+#[test]
+fn foreground_currentcolor_reaches_glyph_pixels() {
+    let boxes = tree("<html style='height:100px;color:#123456'><body><p style='color:red;color:currentcolor;background:white'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[4 * 100 * 4..][..3], &[18, 52, 86]);
+}

@@ -448,7 +448,10 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     _ => opaque_color(value).map(|color| Value::BackgroundColor(Some(color))),
                 })
                 .map(|value| (Property::BackgroundColor, value)),
+            // On `color` itself currentColor resolves to the inherited color.
+            // On background it remains a keyword until this element paints.
             "color" => parse_keyword(value)
+                .or_else(|| (value == "currentcolor").then_some(Value::Inherit))
                 .or_else(|| opaque_color(value).map(Value::Color))
                 .map(|value| (Property::Color, value)),
             "width" => parse_keyword(value)
@@ -1218,5 +1221,53 @@ mod currentcolor_tests {
         let node = |tag: &str| tree.nodes.iter().find(|n| n.tag == tag).unwrap();
         assert_eq!(node("p").style.used_background_color(), Some(0x00_00_ff));
         assert_eq!(node("div").style.used_background_color(), Some(0x12_34_56));
+    }
+}
+
+#[cfg(test)]
+mod foreground_currentcolor_tests {
+    use crate::{parse_style_tree, Limits};
+
+    #[test]
+    fn foreground_currentcolor_uses_parent_not_earlier_declaration() {
+        let tree = parse_style_tree(b"<!doctype html><section style='color:red'><p style='color:blue;color:currentcolor;background:currentcolor'>ab</p><div style='color:currentcolor'>cd</div></section>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        for tag in ["p", "div"] {
+            let node = tree.nodes.iter().find(|n| n.tag == tag).unwrap();
+            assert_eq!(node.style.color, 0xff_00_00);
+        }
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .used_background_color(),
+            Some(0xff_00_00)
+        );
+    }
+
+    #[test]
+    fn foreground_currentcolor_obeys_important_and_root_initial_color() {
+        let tree = parse_style_tree(b"<!doctype html><html style='color:currentcolor'><style>p{color:blue !important}</style><body style='color:red'><p style='color:currentcolor'>ab</p></body></html>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|n| n.tag == "html")
+                .unwrap()
+                .style
+                .color,
+            0
+        );
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .color,
+            0x00_00_ff
+        );
     }
 }
