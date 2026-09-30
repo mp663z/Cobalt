@@ -370,3 +370,16 @@ fn em_and_percent_line_height_produce_same_complete_raster() {
         percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
     );
 }
+
+#[test]
+fn percentage_font_size_and_explicit_pixels_paint_the_same_page() {
+    let page = |size: &str| {
+        tree(&format!("<html style='height:100px'><body style='font-size:20px'><p style='font-size:{size};line-height:120%'>ab</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("150%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("30px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}

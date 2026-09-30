@@ -133,7 +133,7 @@ impl StyleTree {
                 source_order: 0,
             });
             let style = Computed::cascade(Some(inherited), &declarations);
-            tree.unsupported |= style.line_height == Some(0);
+            tree.unsupported |= style.line_height == Some(0) || style.font_size == 0;
             let index = tree.nodes.len();
             tree.nodes.push(StyledNode {
                 parent,
@@ -454,8 +454,11 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                 .map(|value| (Property::LineHeight, value)),
             "font-size" => parse_keyword(value)
                 .or_else(|| match parse_width(value) {
-                    Some(Length::Px(px)) => Some(Value::FontSize(px)),
-                    _ => None, // relative sizes require parent-dependent computed values
+                    Some(Length::Px(px)) if px > 0 => Some(Value::FontSize(px)),
+                    Some(Length::Percent(percent)) if percent > 0 => {
+                        Some(Value::FontSizePercent(percent))
+                    }
+                    _ => None, // zero/subpixel/other relative forms remain unsupported
                 })
                 .map(|value| (Property::FontSize, value)),
             // A single opaque color (or transparent/none) is the only
@@ -1394,6 +1397,34 @@ mod em_line_height_tests {
             assert!(
                 parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported,
                 "{value}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod percentage_font_size_tests {
+    use crate::{parse_style_tree, Limits};
+    #[test]
+    fn percentage_font_size_resolves_parent_then_inherits_length() {
+        let tree = parse_style_tree(b"<!doctype html><section style='font-size:20px'><p style='font-size:150%;line-height:120%'>ab<span style='font-size:80%'>cd</span></p><div style='font-size:125%'>ef</div></section>", &[], &Limits::DEFAULT);
+        assert!(!tree.unsupported);
+        let node = |tag: &str| tree.nodes.iter().find(|n| n.tag == tag).unwrap();
+        assert_eq!(node("p").style.font_size, 30);
+        assert_eq!(node("p").style.line_height, Some(36));
+        assert_eq!(node("span").style.font_size, 24);
+        assert_eq!(node("span").style.line_height, Some(36));
+        assert_eq!(node("div").style.font_size, 25);
+        for style in [
+            "font-size:0",
+            "font-size:0%",
+            "font-size:33%",
+            "font-size:4294967295%",
+        ] {
+            let html = format!("<!doctype html><p style='{style}'>ab</p>");
+            assert!(
+                parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT).unsupported,
+                "{style}"
             );
         }
     }

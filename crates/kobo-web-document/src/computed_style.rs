@@ -50,6 +50,7 @@ pub enum Value {
     BackgroundCurrentColor,
     Padding(u32),
     FontSize(u32),
+    FontSizePercent(u32),
     LineHeight(Option<u32>),
     /// Unitless number in hundredths, inherited before multiplying font size.
     LineHeightNumber(u32),
@@ -299,6 +300,12 @@ impl Computed {
                     computed.direction = direction;
                 }
                 Value::FontSize(px) if property == Property::FontSize => computed.font_size = px,
+                Value::FontSizePercent(percent) if property == Property::FontSize => {
+                    let product = parent.unwrap_or(initial).font_size.checked_mul(percent);
+                    computed.font_size = product
+                        .filter(|p| p % 10_000 == 0)
+                        .map_or(0, |p| p / 10_000);
+                }
                 Value::LineHeightPercent(percent) if property == Property::LineHeight => {
                     let product = computed.font_size.checked_mul(percent);
                     // Zero signals unrepresentable subpixel geometry to the style
