@@ -1436,3 +1436,48 @@ fn library_page_turn_and_selection_only_touch_visible_rows() {
     runner.action(action_id("place-0"));
     assert_eq!(runner.app().pending.as_ref().unwrap().url, expected);
 }
+
+#[test]
+fn links_are_reachable_through_navigate_on_every_profile_and_text_size() {
+    for profile in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let metrics = DisplayMetrics {
+                text_scale: scale,
+                ..profile
+            };
+            let mut runner = runner(scale);
+            let reachable = |browser: &Browser, action: &str| {
+                browser
+                    .screen(&metrics)
+                    .build()
+                    .layout_with(&metrics, &Chrome::measuring(true))
+                    .rect_of_action(action_id(action))
+                    .is_some()
+            };
+            assert!(reachable(runner.app(), "navigate"));
+            assert!(!reachable(runner.app(), "links"));
+            runner.action(action_id("navigate"));
+            assert!(reachable(runner.app(), "links"));
+            runner.action(action_id("links"));
+            assert_eq!(runner.app().view, View::Links(0));
+            assert!(reachable(runner.app(), "return"));
+            runner.action(action_id("return"));
+            assert_eq!(runner.app().view, View::Page);
+            assert!(reachable(runner.app(), "navigate"));
+        }
+    }
+}

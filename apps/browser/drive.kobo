@@ -11,8 +11,9 @@ tap-at 1000,800
 expect 2 of
 clean
 shot browser-article-page-2
+tap-id navigate
 tap-id links
-expect in the document
+expect links on this page
 clean
 shot browser-links-article
 tap-id return
@@ -29,6 +30,7 @@ shot browser-fragment
 tap-id back
 tap-id link-2
 expect A page of many links
+tap-id navigate
 tap-id links
 expect on this page
 clean
