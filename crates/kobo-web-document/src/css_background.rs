@@ -20,7 +20,14 @@ pub fn paint_backgrounds(
 ) -> Result<DisplayList, BridgeError> {
     // Reject malformed or disconnected arenas before the geometry passes,
     // which intentionally assume indices from BoxTree::from_style.
-    if !tree.paint_structure_valid(crate::display_list::MAX_COMMANDS) {
+    // List-item markers are visible content, even when the item is empty.
+    // A rectangle-only painter must not silently omit them.
+    if !tree.paint_structure_valid(crate::display_list::MAX_COMMANDS)
+        || tree
+            .boxes
+            .iter()
+            .any(|node| node.kind == crate::box_tree::BoxKind::ListItem)
+    {
         return Err(BridgeError::Unsupported);
     }
     // CSS canvas propagation: a root background covers the viewport; if

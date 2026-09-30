@@ -5,6 +5,7 @@
 //! Unicode break rules. Callers must reject unsupported inline contexts.
 
 use crate::box_tree::{BoxKind, BoxTree};
+use crate::computed_style::Direction;
 use crate::display_list::{DisplayList, Error as DisplayError, Rect, Rgb, Source, MAX_GLYPH_BYTES};
 
 const MAX_LINES: usize = 4096;
@@ -158,7 +159,8 @@ pub struct DirectTextLines {
 }
 
 /// Measure a single direct text child with an external, exact font provider.
-/// The parent must be a normal-flow block whose only child is one text box.
+/// The parent must be an LTR normal-flow block with one text child. List
+/// markers and RTL line alignment are unsupported, including ASCII RTL.
 /// Font size comes from the text node's inherited computed style. This result
 /// is geometry, not a glyph raster or a license to paint a partial document.
 ///
@@ -176,7 +178,10 @@ pub fn place_direct_text(
         return Err(LineError::UnsupportedTree);
     }
     let node = tree.boxes.get(parent).ok_or(LineError::UnsupportedTree)?;
-    if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem)
+    // This placer only emits left-origin LTR glyphs and no list marker.
+    // Direction also controls the initial inline alignment, even for ASCII.
+    if node.kind != BoxKind::Block
+        || node.style.direction != Direction::Ltr
         || node.children.len() != 1
         || node.text.is_some()
     {
@@ -186,7 +191,10 @@ pub fn place_direct_text(
         .boxes
         .get(node.children[0])
         .ok_or(LineError::UnsupportedTree)?;
-    if child.parent != Some(parent) || child.kind != BoxKind::Text {
+    if child.parent != Some(parent)
+        || child.kind != BoxKind::Text
+        || child.style.direction != Direction::Ltr
+    {
         return Err(LineError::UnsupportedTree);
     }
     let source = child.source.ok_or(LineError::UnsupportedTree)?;

@@ -272,3 +272,22 @@ fn horizontal_margins_position_background_and_text_together() {
         assert_eq!(&pixels[offset..][..3], &[1, 2, 3]);
     }
 }
+
+#[test]
+fn direction_and_visible_list_markers_are_not_silently_omitted() {
+    for html in [
+        "<html style='height:100px'><body><p style='direction:rtl'>ab</p></body></html>",
+        "<html style='height:100px;direction:rtl'><body><p>ab</p></body></html>",
+        "<html style='height:100px'><body><ul><li>ab</li></ul></body></html>",
+        "<html style='height:100px'><body><p>ab</p><li style='height:10px'></li></body></html>",
+    ] {
+        let boxes = tree(html);
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{html}"
+        );
+    }
+    // A child explicitly resetting to LTR has left-origin line placement.
+    let boxes = tree("<html style='height:100px;direction:rtl'><body><p style='direction:ltr'>ab</p></body></html>");
+    assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_ok());
+}

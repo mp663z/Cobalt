@@ -138,7 +138,7 @@ pub fn paint_direct_text_blocks(
             {
                 return Err(PageError::Unsupported);
             }
-        } else if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem) || node.text.is_some() {
+        } else if node.kind != BoxKind::Block || node.text.is_some() {
             return Err(PageError::Unsupported);
         }
         for &child in node.children.iter().rev() {

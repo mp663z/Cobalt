@@ -202,3 +202,9 @@ fn malformed_arena_is_refused_before_geometry_passes() {
         );
     }
 }
+
+#[test]
+fn empty_list_item_still_requires_marker_paint() {
+    let tree = BoxTree::from_style(&standards_tree(b"<html style='height:100px'><body style='height:80px'><ul style='height:40px'><li style='height:20px;background:red'></li></ul></body></html>"));
+    assert!(paint_backgrounds(&tree, 100, 100).is_err());
+}
