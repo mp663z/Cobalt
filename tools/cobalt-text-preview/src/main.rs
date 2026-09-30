@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     let html_path = args
         .next()
-        .ok_or("usage: css_direct_text_preview input.html output.ppm width height font.ttf")?;
+        .ok_or("usage: cobalt-text-preview input.html output.ppm width height font.ttf")?;
     let output_path = args.next().ok_or("missing output path")?;
     let width: u32 = args.next().ok_or("missing width")?.parse()?;
     let height: u32 = args.next().ok_or("missing height")?.parse()?;

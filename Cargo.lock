@@ -1733,7 +1733,6 @@ dependencies = [
 name = "kobo-web-document"
 version = "0.1.0"
 dependencies = [
- "fontdue",
  "html5ever",
 ]
 

@@ -1240,3 +1240,19 @@ test("both catalog gates share package-root exclusions without hiding nested sou
   assert.deepEqual(storeImpactOfChangedPaths([...hostOnly, ...source], packages, registered).storeChanges, expected);
   assert.deepEqual(storeCatalogChanges([...hostOnly, ...source], storeWatchDirectories(packages, registered)), expected);
 });
+
+test("browser host fonts are isolated from device release dependencies", () => {
+  const metadata = manifestPath => JSON.parse(execFileSync("cargo", [
+    "metadata", "--locked", "--format-version", "1",
+    ...(manifestPath ? ["--manifest-path", manifestPath] : [])
+  ], { encoding: "utf8", maxBuffer: COMMAND_MAX_BUFFER }));
+  const workspace = metadata();
+  assert.ok(!workspace.workspace_members.some(member => member.includes("cobalt-text-preview")));
+  const document = workspace.packages.find(package_ => package_.name === "kobo-web-document");
+  assert.ok(document);
+  assert.ok(!document.dependencies.some(dependency => dependency.name === "fontdue"));
+  const preview = metadata("tools/cobalt-text-preview/Cargo.toml");
+  assert.equal(preview.workspace_members.length, 1);
+  assert.ok(preview.workspace_members[0].includes("cobalt-text-preview"));
+  assert.ok(preview.packages.some(package_ => package_.name === "fontdue"));
+});
