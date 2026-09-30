@@ -244,3 +244,26 @@ fn a_colour_panel_gets_colour_for_colour_pictures_and_grey_for_grey_ones() {
     let plain = prepare_for(&image("baseline.jpg"), ROOM.0, ROOM.1, false).expect("shown");
     assert!(!plain.colour, "a grey panel never gets colour");
 }
+
+#[test]
+fn unsupported_response_formats_are_refused_on_grey_and_colour_paths() {
+    for name in ["not-supported.gif", "not-supported.webp"] {
+        let bytes = image(name);
+        for colour in [false, true] {
+            assert!(
+                prepare_for(&bytes, ROOM.0, ROOM.1, colour).is_none(),
+                "{name}, colour={colour}"
+            );
+        }
+    }
+    // Supported formats still reach the decoder on both paths.
+    for name in ["baseline.jpg", "palette.png"] {
+        let bytes = image(name);
+        for colour in [false, true] {
+            assert!(
+                prepare_for(&bytes, ROOM.0, ROOM.1, colour).is_some(),
+                "{name}, colour={colour}"
+            );
+        }
+    }
+}

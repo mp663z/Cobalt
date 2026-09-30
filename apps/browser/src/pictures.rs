@@ -309,6 +309,12 @@ pub(crate) fn prepare_css_tile(
 /// panel still gets grey for a picture that has no colour in it, at a
 /// third of the bytes.
 pub(crate) fn prepare_for(bytes: &[u8], width: u32, height: u32, colour: bool) -> Option<Prepared> {
+    // Cargo unifies image codec features with host tools in workspace builds.
+    // Browser format policy must depend on returned bytes, not compile flags
+    // or a URL extension: a .jpg address can still serve a GIF or WebP.
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") && !bytes.starts_with(b"\xff\xd8\xff") {
+        return None;
+    }
     let decoded = if colour {
         kobo_image::decode_colour(bytes)
     } else {
