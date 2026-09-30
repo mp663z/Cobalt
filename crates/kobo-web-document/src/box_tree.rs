@@ -557,10 +557,11 @@ impl VerticalPass {
                     result.unsupported = true;
                     break;
                 };
-                if resolve_vertical_margin(
-                    child.style.margin_top,
-                    widths.widths[index].map_or(0, |w| w.content),
-                ) != 0
+                if child.kind != BoxKind::Text
+                    && resolve_vertical_margin(
+                        child.style.margin_top,
+                        widths.widths[index].map_or(0, |w| w.content),
+                    ) != 0
                 {
                     result.unsupported = true;
                     break;

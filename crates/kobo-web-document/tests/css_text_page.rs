@@ -222,7 +222,7 @@ fn multiple_text_blocks_refuse_unsupported_sibling_without_partial_page() {
         "<p>emoji🙂</p>",
         "<p>hi <em>there</em></p>",
         "<p style='border:1px solid red'>hi</p>",
-        "<p style='margin-top:3px'>hi</p>",
+        "<p style='margin-top:-3px'>hi</p>",
     ] {
         let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p>ab</p>{tail}</body></html>"));
         assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
@@ -429,5 +429,30 @@ fn definite_text_height_refuses_content_that_would_overflow() {
             paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
             "{style}"
         );
+    }
+}
+
+#[test]
+fn positive_adjoining_sibling_margins_collapse_to_the_larger_gap() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='margin-bottom:7px;background-color:#abcdef'>ab</p><p style='margin-top:4px;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |y: usize| &pixels[(y * 100 + 1) * 4..][..3];
+    assert_eq!(at(9), &[0xab, 0xcd, 0xef]);
+    for y in 10..17 {
+        assert_eq!(at(y), &[0x12, 0x34, 0x56]);
+    }
+    assert_eq!(at(17), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(21 * 100) * 4..][..3], &[0, 0, 0]);
+}
+
+#[test]
+fn parent_edge_and_negative_vertical_margins_remain_refused() {
+    for html in [
+        "<html style='height:100px'><body><p style='margin-top:4px'>ab</p></body></html>",
+        "<html style='height:100px'><body><p style='margin-bottom:4px'>ab</p></body></html>",
+        "<html style='height:100px'><body><p>ab</p><p style='margin-top:-2px'>cd</p></body></html>",
+    ] {
+        assert!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).is_err());
     }
 }

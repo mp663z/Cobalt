@@ -57,9 +57,10 @@ pub fn paint_single_text_page(
     paint_direct_text_blocks(tree, viewport_width, viewport_height, font)
 }
 
-/// Paint zero-vertical-margin normal-flow blocks with exactly one
+/// Paint zero-parent-edge-margin normal-flow blocks with exactly one
 /// direct text child. Horizontal margins use the proven width pass, including
-/// auto centering. Multiple block siblings are allowed; mixed inline runs,
+/// auto centering. Positive adjoining sibling margins collapse to their maximum.
+/// Multiple block siblings are allowed; mixed inline runs,
 /// images and unsupported styles still refuse the entire page. Paint follows
 /// retained preorder so each background precedes its own text and later boxes.
 ///
@@ -151,7 +152,8 @@ pub fn paint_direct_text_blocks(
     // The tree is proven above: its root and first child are the retained
     // HTML root and body. Root color wins; otherwise the body's color paints
     // the canvas and its local background is suppressed. Margin collapse is
-    // still unsupported.
+    // still unsupported at parent edges. Positive adjoining sibling margins
+    // use the already-proven normal-flow collapse geometry.
     let root = tree.roots[0];
     let body = tree.boxes[root].children.first().copied();
     let root_color = tree.boxes[root].style.used_background_color();
@@ -159,10 +161,22 @@ pub fn paint_direct_text_blocks(
     let canvas = root_color.or(body_color);
     let propagated_body = root_color.is_none() && body_color.is_some();
     if tree.boxes.iter().any(|node| {
-        node.kind != BoxKind::Text
-            && (node.style.margin_top != crate::computed_style::Margin::Px(0)
-                || node.style.margin_bottom != crate::computed_style::Margin::Px(0))
-    }) {
+        if node.kind == BoxKind::Text {
+            return false;
+        }
+        let positive =
+            |margin| matches!(margin, crate::computed_style::Margin::Px(value) if value >= 0);
+        if !positive(node.style.margin_top) || !positive(node.style.margin_bottom) {
+            return true;
+        }
+        // A final child's bottom margin may collapse out of its parent;
+        // that geometry is not part of this restricted paint proof yet.
+        node.children.last().is_some_and(|&child| {
+            tree.boxes[child].kind != BoxKind::Text
+                && tree.boxes[child].style.margin_bottom != crate::computed_style::Margin::Px(0)
+        })
+    }) || tree.boxes[root].style.margin_bottom != crate::computed_style::Margin::Px(0)
+    {
         return Err(PageError::Unsupported);
     }
     let mut list = DisplayList::default();
