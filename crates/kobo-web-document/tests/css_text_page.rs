@@ -891,3 +891,40 @@ fn nonbreaking_html_entity_preserves_word_group_during_page_wrap() {
         Some(PageError::Unsupported)
     );
 }
+
+#[test]
+fn fractional_percentage_width_refuses_before_rounding_text_geometry() {
+    for html in [
+        "<html><body><p style='width:33.33%;background-color:#abcdef'>ab cd</p></body></html>",
+        "<html><body style='width:99px'><p style='width:50%;background-color:#abcdef'>ab cd</p></body></html>",
+        "<html><body><p style='box-sizing:border-box;width:33.33%;padding:2px'>ab cd</p></body></html>",
+    ] {
+        assert_eq!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).err(), Some(PageError::Unsupported));
+    }
+}
+
+#[test]
+fn exact_nested_percentage_width_matches_equivalent_pixels() {
+    let page = |width: &str| {
+        tree(&format!("<html><body style='width:60px'><p style='width:{width};padding:2px;background-color:#abcdef'>ab cd ef gh ij</p><p>Next.</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("50%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("30px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn exact_border_box_percentage_width_subtracts_padding_after_resolution() {
+    let page = |width: &str| {
+        tree(&format!("<html><body style='width:40px'><p style='box-sizing:border-box;width:{width};padding:2px;background-color:#abcdef'>ab cd ef</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("25%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("10px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}

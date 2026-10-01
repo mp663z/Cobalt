@@ -74,6 +74,8 @@ pub fn paint_single_text_page(
 /// Ink may overflow the line box after exact half-leading; advances and
 /// line placement remain bounded. Border-box sizing uses the existing width
 /// and definite-height passes to subtract padding before text placement.
+/// Percentage widths must resolve to exact integer pixels; diagnostic
+/// flooring is not enough to prove wrapping or painted geometry.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -124,6 +126,20 @@ pub fn paint_direct_text_blocks(
         || vertical.unsupported
         || vertical.truncated
     {
+        return Err(PageError::Unsupported);
+    }
+    // WidthPass is diagnostic and floors percentage widths. Integer paint
+    // must not silently change wrapping or background geometry by rounding.
+    if tree.boxes.iter().any(|node| {
+        if node.kind == BoxKind::Text {
+            return false;
+        }
+        let containing = node.parent.map_or(viewport_width, |parent| {
+            widths.widths[parent].map_or(0, |width| width.content)
+        });
+        matches!(node.style.width, crate::computed_style::Length::Percent(value)
+            if (u64::from(containing) * u64::from(value)) % 10_000 != 0)
+    }) {
         return Err(PageError::Unsupported);
     }
     let mut text_count = 0;
