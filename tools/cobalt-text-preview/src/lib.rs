@@ -145,6 +145,65 @@ impl PanelFrame {
     }
 }
 
+/// Prepare a complete restricted HTML page without queueing any SDK commands.
+/// External sheets must already be fetched and scoped by the caller. This seam
+/// does not fetch, paginate, register hit targets or change a shipping screen.
+/// # Errors
+/// Refuses oversized input/sheets, unsupported page geometry, or raster limits.
+pub fn prepare_page(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+) -> Result<PanelFrame, &'static str> {
+    let limits = kobo_web_document::Limits::DEFAULT;
+    if html.len() > limits.max_input_bytes || sheets.len() > 2 {
+        return Err("input budget");
+    }
+    let sheet_bytes = sheets
+        .iter()
+        .try_fold(0_usize, |total, sheet| total.checked_add(sheet.len()));
+    if sheet_bytes.is_none_or(|n| n > limits.max_input_bytes) {
+        return Err("sheet budget");
+    }
+    let styled = kobo_web_document::parse_style_tree(html, sheets, &limits);
+    let tree = kobo_web_document::box_tree::BoxTree::from_style(&styled);
+    let list =
+        kobo_web_document::css_text_page::paint_direct_text_blocks(&tree, width, height, font)
+            .map_err(|_| "unsupported complete page")?;
+    let rgba = list
+        .rasterize(
+            width,
+            height,
+            kobo_web_document::display_list::Rgb(255, 255, 255),
+        )
+        .map_err(|_| "invalid complete raster")?;
+    PanelFrame::from_rgba(width, height, &rgba, colour)
+}
+
+/// All-or-nothing prepare and queue, using one caller-reserved handle.
+/// On refusal there is no partial picture command; the caller retains its
+/// semantic reader fallback. Successful queueing does not show a screen.
+/// # Errors
+/// Propagates preparation refusal or SDK picture rejection.
+#[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+pub fn queue_page(
+    context: &mut kobo_sdk::Context,
+    handle: kobo_sdk::PictureHandle,
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+) -> Result<kobo_sdk::TilePicture, &'static str> {
+    prepare_page(html, sheets, width, height, font, colour)?
+        .put(context, handle)
+        .ok_or("SDK picture rejected")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +266,93 @@ mod tests {
                 .is_some());
             assert_eq!(context.commands().len(), 1);
         }
+    }
+    #[test]
+    fn complete_page_queue_refuses_without_partial_commands() {
+        let face = LocalFace::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+        .unwrap();
+        let mut context = kobo_sdk::AppRunner::new(EmptyApp).context();
+        for html in [
+            b"<!doctype html><p style='display:flex'>ab</p>".as_slice(),
+            b"<!doctype html><p>ab <em>cd</em></p>".as_slice(),
+        ] {
+            assert!(queue_page(
+                &mut context,
+                kobo_sdk::PictureHandle(700),
+                html,
+                &[],
+                200,
+                80,
+                &face,
+                None
+            )
+            .is_err());
+            assert!(context.commands().is_empty());
+        }
+        assert!(queue_page(
+            &mut context,
+            kobo_sdk::PictureHandle(700),
+            b"<!doctype html><p>Hello</p>",
+            &[],
+            200,
+            80,
+            &face,
+            None
+        )
+        .is_ok());
+        assert!(matches!(
+            &context.commands()[0],
+            kobo_sdk::Command::PutPicture {
+                format: kobo_sdk::PictureFormat::Grey,
+                ..
+            }
+        ));
+        context.drop_picture(kobo_sdk::PictureHandle(700));
+        assert!(
+            matches!(&context.commands()[1], kobo_sdk::Command::DropPicture(handle) if handle.0==700)
+        );
+    }
+    #[test]
+    fn complete_page_preserves_scoped_styles_and_rejects_input_truncation() {
+        let face = LocalFace::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+        .unwrap();
+        let html = b"<!doctype html><html><head><link rel=stylesheet href=page.css></head><body><p>Hello</p></body></html>";
+        let frame = prepare_page(
+            html,
+            &[b"html { background-color: #123456 }".to_vec()],
+            200,
+            80,
+            &face,
+            Some(true),
+        )
+        .unwrap();
+        assert_eq!(&frame.pixels[..3], &[18, 52, 86]);
+        assert!(prepare_page(
+            &vec![b' '; kobo_web_document::Limits::DEFAULT.max_input_bytes + 1],
+            &[],
+            200,
+            80,
+            &face,
+            None
+        )
+        .is_err());
+        assert!(prepare_page(html, &vec![vec![]; 3], 200, 80, &face, None).is_err());
+        assert!(prepare_page(
+            html,
+            &[vec![
+                b' ';
+                kobo_web_document::Limits::DEFAULT.max_input_bytes + 1
+            ]],
+            200,
+            80,
+            &face,
+            None
+        )
+        .is_err());
     }
     #[test]
     fn invalid_surfaces_and_fonts_refuse_without_a_picture() {

@@ -42,3 +42,13 @@ Before enabling a shipping patch, the review must cover:
 No shipping patch is applied by this tool. The existing browser remains the
 semantic reader. The exact app patch and any required version change must be
 reviewed before enabling it.
+
+`prepare_page` bounds markup and already-fetched stylesheet bytes before
+building the complete style/box tree and preparing a panel frame. It follows
+the parser's two-linked-sheet limit and DOM link ordering, not an arbitrary
+list of styles to inject. `queue_page` prepares before queueing, so unsupported
+markup produces no partial picture command and leaves semantic fallback to
+the future app caller. A reserved picture handle is caller-owned and must be
+dropped on replacement. The `--blocks` host preview now runs this preparation
+path. Tests cover whole-page refusal, linked styles, input budgets, unknown
+identity and the matching SDK drop command; no app screen is enabled.
