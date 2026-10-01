@@ -84,3 +84,11 @@ bounded-display-pixel budget. The font source cap is the parser's 2 MiB limit.
 A successful target check is not a linked app, full SDK ARM qualification or
 physical-device evidence. Full SDK checking still needs working musl C tools
 for ring/SQLite. No app depends on this tool or enables a new screen.
+
+`LocalFace::bundled_reader_face` explicitly selects the existing unmodified
+Atkinson regular bytes, with its SIL OFL notice available through
+`bundled_license`. It is an experimental fallback source, not device-font
+discovery or support for CSS font-family substitution. Core tests check
+advances, baseline/height and coverage at 12/16/20/24/32/48px, NBSP metrics,
+missing glyph refusal and size limits. A shipping package must carry the
+font notice and still requires review before this fallback is enabled.

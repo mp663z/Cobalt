@@ -54,6 +54,23 @@ impl FontProvider for LocalFace {
 }
 
 impl LocalFace {
+    /// Explicit experimental fallback using the same unmodified bundled
+    /// Atkinson regular face as Cobalt's reader. This does not discover or
+    /// substitute the user's device font and makes no CSS font-family claim.
+    /// # Errors
+    /// Returns font validation failure rather than a fabricated metric.
+    pub fn bundled_reader_face() -> Result<Self, &'static str> {
+        Self::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+    }
+
+    /// License notice for the unmodified bundled fallback face.
+    #[must_use]
+    pub const fn bundled_license() -> &'static str {
+        include_str!("../../../crates/kobo-text/fonts/LICENSE-AtkinsonHyperlegible.txt")
+    }
+
     /// Load one explicit TrueType/OpenType face with a bounded source buffer.
     /// # Errors
     /// Rejects empty, oversized or malformed fonts.
@@ -519,6 +536,28 @@ mod tests {
 #[cfg(test)]
 mod core_tests {
     use super::*;
+    #[test]
+    fn explicit_bundled_source_has_notice_and_consistent_size_metrics() {
+        let face = LocalFace::bundled_reader_face().unwrap();
+        assert!(LocalFace::bundled_license().contains("SIL OPEN FONT LICENSE"));
+        for size in [12, 16, 20, 24, 32, 48] {
+            let natural = face.line_height(size).unwrap();
+            let baseline = face.baseline_offset(size).unwrap();
+            assert!(baseline >= 0 && u32::try_from(baseline).unwrap() < natural);
+            for ch in ['A', 'T', 'g', ' ', '\u{a0}'] {
+                assert!(face.advance(ch, size).unwrap() > 0);
+                let glyph = face.raster(ch, size).unwrap();
+                assert_eq!(
+                    glyph.coverage.len(),
+                    usize::try_from(glyph.width * glyph.height).unwrap()
+                );
+            }
+        }
+        assert_eq!(face.advance('A', 0), None);
+        assert_eq!(face.advance('A', 257), None);
+        assert_eq!(face.advance('\u{10ffff}', 16), None);
+        assert!(face.raster('\u{10ffff}', 16).is_none());
+    }
     #[test]
     fn pure_core_prepares_device_face_without_sdk_dependencies() {
         let face = LocalFace::from_bytes(include_bytes!(
