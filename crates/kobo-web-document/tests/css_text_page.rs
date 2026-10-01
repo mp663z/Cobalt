@@ -316,14 +316,25 @@ fn foreground_currentcolor_reaches_glyph_pixels() {
 }
 
 #[test]
-fn single_line_punctuation_paints_but_unsupported_wrap_refuses_whole_page() {
+fn terminal_sentence_punctuation_wraps_but_internal_punctuation_refuses() {
     let boxes =
         tree("<html style='height:100px'><body><p style='color:#123456'>Hi, ab.</p></body></html>");
     let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
     assert_eq!(list.commands().len(), 6);
     let narrow =
         tree("<html style='height:100px'><body><p style='width:10px'>Hi, ab.</p></body></html>");
-    assert!(paint_direct_text_blocks(&narrow, 100, 100, &TestFace).is_err());
+    let wrapped = paint_direct_text_blocks(&narrow, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = wrapped
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 4, 14, 14, 14]);
+    let unsupported = tree("<html><body><p style='width:10px'>Hi, a.b</p></body></html>");
+    assert!(paint_direct_text_blocks(&unsupported, 100, 100, &TestFace).is_err());
 }
 
 #[test]
@@ -780,4 +791,17 @@ fn zero_height_without_vertical_padding_still_refuses_through_collapse() {
             Some(PageError::Unsupported)
         );
     }
+}
+
+#[test]
+fn wrapped_sentence_marks_keep_next_sibling_after_measured_lines() {
+    let boxes = tree("<html><body><p style='width:9px;background-color:#abcdef'>ab. cd!</p><p style='background-color:#fedcba'>ef?</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(6, 4), &[0, 0, 0]);
+    assert_eq!(at(6, 14), &[0, 0, 0]);
+    assert_eq!(at(1, 19), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 20), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(6, 24), &[0, 0, 0]);
 }

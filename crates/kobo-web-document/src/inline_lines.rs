@@ -56,7 +56,9 @@ pub fn place_ascii_normal(
     // The current placer only has whitespace wrap opportunities. A word
     // containing ASCII hyphen or break punctuation needs CSS/Unicode line
     // breaking semantics when it wraps. An entirely fitting single line has
-    // no break decision and can retain its punctuation.
+    // no break decision and can retain its punctuation. A narrow exception
+    // allows alphanumeric words with one terminal sentence mark: those
+    // marks stay with the word and the next whitespace is the break.
     let needs_break_rules = text.chars().any(|ch| {
         matches!(
             ch,
@@ -105,7 +107,10 @@ pub fn place_ascii_normal(
     } else {
         0
     };
-    if needs_break_rules && !fits_single_line(&words, space, max_width) {
+    if needs_break_rules
+        && !words.iter().all(|word| sentence_word(word))
+        && !fits_single_line(&words, space, max_width)
+    {
         return Err(LineError::UnsupportedText);
     }
     let mut glyphs = Vec::new();
@@ -148,6 +153,20 @@ pub fn place_ascii_normal(
         count: if glyphs.is_empty() { 0 } else { line + 1 },
         glyphs,
     })
+}
+
+// Deliberately excludes internal punctuation, parentheses, quotes, runs of
+// punctuation, hyphens and slashes, whose break opportunities need more rules.
+fn sentence_word(word: &[(char, u32)]) -> bool {
+    let Some(&(last, _)) = word.last() else {
+        return false;
+    };
+    let stem = if matches!(last, '.' | ',' | '!' | '?' | ':' | ';') {
+        &word[..word.len() - 1]
+    } else {
+        word
+    };
+    !stem.is_empty() && stem.iter().all(|&(ch, _)| ch.is_ascii_alphanumeric())
 }
 
 fn fits_single_line(words: &[Vec<(char, u32)>], space: u32, max_width: u32) -> bool {
@@ -587,5 +606,45 @@ mod punctuation_tests {
             place_ascii_normal("a\u{ad}b", 100, |_| Some(3)),
             Err(LineError::UnsupportedText)
         );
+    }
+}
+
+#[cfg(test)]
+mod sentence_wrap_tests {
+    use super::*;
+    #[test]
+    fn terminal_marks_stay_with_words_at_whitespace_wraps() {
+        for mark in ['.', ',', '!', '?', ':', ';'] {
+            let text = format!("  ab{mark}  cd{mark} ");
+            let lines = place_ascii_normal(&text, 9, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2);
+            assert_eq!(lines.glyphs[2].character, mark);
+            assert_eq!(lines.glyphs[2].line, 0);
+            assert_eq!(lines.glyphs[3].x, 0);
+            assert_eq!(lines.glyphs[3].line, 1);
+            assert_eq!(lines.glyphs[5].line, 1);
+        }
+    }
+    #[test]
+    fn exact_single_line_preserves_collapsed_space() {
+        let lines = place_ascii_normal("ab. cd!", 21, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 1);
+        assert_eq!(lines.glyphs[3].character, ' ');
+        assert_eq!(
+            place_ascii_normal("abcd.", 9, |_| Some(3)),
+            Err(LineError::UnbreakableWord)
+        );
+    }
+    #[test]
+    fn broader_punctuation_wraps_still_refuse() {
+        for text in [
+            "a-b cd.", "a/b cd.", "a.b cd.", "a,b cd.", "(ab) cd.", "ab!! cd.", ". ab.", "ab. 'cd'",
+        ] {
+            assert_eq!(
+                place_ascii_normal(text, 9, |_| Some(3)),
+                Err(LineError::UnsupportedText),
+                "{text}"
+            );
+        }
     }
 }
