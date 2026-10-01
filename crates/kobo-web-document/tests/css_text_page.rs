@@ -1002,3 +1002,21 @@ fn overconstrained_auto_margins_use_zero_not_fractional_centering() {
         matches!(list.commands()[0], Command::Fill { rect, .. } if rect.x == 0 && rect.width == 101)
     );
 }
+
+#[test]
+fn paired_single_word_brackets_wrap_without_detaching_marks() {
+    let boxes = tree("<html><body><p style='width:18px;background-color:#abcdef'>(ab)! [cd] {ef}</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(&glyph_y[..5], &[4; 5]);
+    assert_eq!(&glyph_y[5..9], &[14; 4]);
+    assert_eq!(&glyph_y[9..13], &[24; 4]);
+    assert_eq!(glyph_y[13], 34);
+}

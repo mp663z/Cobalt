@@ -159,7 +159,7 @@ fn needs_extra_break_rules(ch: char) -> bool {
     )
 }
 
-// Deliberately excludes other internal punctuation, parentheses, surrounding
+// Deliberately excludes other internal punctuation, unmatched brackets, surrounding
 // quotes, runs of punctuation, hyphens and slashes. One ASCII apostrophe
 // between alphabetic stems stays inside a contraction or possessive.
 fn sentence_word(word: &[(char, u32)]) -> bool {
@@ -174,6 +174,14 @@ fn sentence_piece(word: &[(char, u32)]) -> bool {
         &word[..word.len() - 1]
     } else {
         word
+    };
+    let stem = match (stem.first(), stem.last()) {
+        (Some(&(open, _)), Some(&(close, _)))
+            if matches!((open, close), ('(', ')') | ('[', ']') | ('{', '}')) =>
+        {
+            &stem[1..stem.len() - 1]
+        }
+        _ => stem,
     };
     if !stem.is_empty() && stem.iter().all(|&(ch, _)| ch.is_ascii_alphanumeric()) {
         return true;
@@ -607,7 +615,11 @@ mod punctuation_tests {
             );
             assert_eq!(
                 place_ascii_normal(text, 3, |_| Some(3)),
-                Err(LineError::UnsupportedText)
+                Err(if text.starts_with('(') || text.starts_with('[') {
+                    LineError::UnbreakableWord
+                } else {
+                    LineError::UnsupportedText
+                })
             );
         }
         let lines = place_ascii_normal("  a,b \t c.d  ", 21, |_| Some(3)).unwrap();
@@ -656,7 +668,7 @@ mod sentence_wrap_tests {
     #[test]
     fn broader_punctuation_wraps_still_refuse() {
         for text in [
-            "a-b cd.", "a/b cd.", "a.b cd.", "a,b cd.", "(ab) cd.", "ab!! cd.", ". ab.", "ab. 'cd'",
+            "a-b cd.", "a/b cd.", "a.b cd.", "a,b cd.", "(ab cd.", "ab!! cd.", ". ab.", "ab. 'cd'",
         ] {
             assert_eq!(
                 place_ascii_normal(text, 9, |_| Some(3)),
@@ -735,6 +747,51 @@ mod nonbreaking_space_tests {
         assert_eq!(
             place_ascii_normal("a\u{a0}b", 30, |ch| (ch != '\u{a0}').then_some(3)),
             Err(LineError::InvalidMetrics)
+        );
+    }
+}
+
+#[cfg(test)]
+mod bracket_word_tests {
+    use super::*;
+    #[test]
+    fn single_paired_brackets_stay_on_their_word_line() {
+        for text in [
+            "(ab) cd.",
+            "[ab] cd.",
+            "{ab} cd.",
+            "(ab)! cd.",
+            "[I'm] here.",
+        ] {
+            let lines = place_ascii_normal(text, 18, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2, "{text}");
+            let close = lines
+                .glyphs
+                .iter()
+                .find(|g| matches!(g.character, ')' | ']' | '}'))
+                .unwrap();
+            assert_eq!(close.line, 0);
+        }
+    }
+    #[test]
+    fn unmatched_nested_and_multiword_brackets_still_refuse() {
+        for text in [
+            "(ab cd.",
+            "ab) cd.",
+            "[ab) cd.",
+            "((ab)) cd.",
+            "(ab cd) ef.",
+            "() abc.",
+        ] {
+            assert_eq!(
+                place_ascii_normal(text, 18, |_| Some(3)),
+                Err(LineError::UnsupportedText),
+                "{text}"
+            );
+        }
+        assert_eq!(
+            place_ascii_normal("(abcd)", 12, |_| Some(3)),
+            Err(LineError::UnbreakableWord)
         );
     }
 }
