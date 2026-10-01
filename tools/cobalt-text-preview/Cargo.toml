@@ -9,9 +9,14 @@ publish = false
 # Host-only fonts must not change the device workspace's release lock graph.
 [workspace]
 
+[features]
+default = ["sdk-handoff"]
+sdk-handoff = ["dep:kobo-sdk"]
+
 [dependencies]
 fontdue = "=0.9.3"
-kobo-sdk = { path = "../../crates/kobo-sdk", default-features = false }
+kobo-sdk = { path = "../../crates/kobo-sdk", default-features = false, optional = true }
+kobo-ui = { path = "../../crates/kobo-ui" }
 kobo-web-document = { path = "../../crates/kobo-web-document" }
 
 [lints.rust]

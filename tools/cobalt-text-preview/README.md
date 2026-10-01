@@ -67,3 +67,20 @@ alternates handles, keeps old ownership when SDK validation refuses a frame,
 and clears idempotently. Navigation, semantic fallback and exit must explicitly
 clear the slot. This does not reserve globally safe handles or display UI;
 those remain part of the exact app patch review.
+
+## ARM core check
+
+The default `sdk-handoff` feature retains SDK queue/lifecycle tests. Disable it
+for a Rust-only font/frame core check without the SDK's C-backed dependencies:
+
+```
+cargo check --locked --no-default-features --lib \
+  --manifest-path tools/cobalt-text-preview/Cargo.toml \
+  --target armv7-unknown-linux-musleabihf
+```
+
+The core uses the existing UI PictureFormat and a conservative three-bytes-per
+bounded-display-pixel budget. The font source cap is the parser's 2 MiB limit.
+A successful target check is not a linked app, full SDK ARM qualification or
+physical-device evidence. Full SDK checking still needs working musl C tools
+for ring/SQLite. No app depends on this tool or enables a new screen.

@@ -58,7 +58,7 @@ impl LocalFace {
     /// # Errors
     /// Rejects empty, oversized or malformed fonts.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
-        if bytes.is_empty() || bytes.len() > kobo_sdk::MAX_FONT_BYTES {
+        if bytes.is_empty() || bytes.len() > kobo_web_document::Limits::DEFAULT.max_input_bytes {
             return Err("invalid font byte budget");
         }
         Font::from_bytes(bytes, FontSettings::default())
@@ -71,7 +71,7 @@ impl LocalFace {
 pub struct PanelFrame {
     pub width: u32,
     pub height: u32,
-    pub format: kobo_sdk::PictureFormat,
+    pub format: kobo_ui::PictureFormat,
     pub pixels: Vec<u8>,
 }
 impl PanelFrame {
@@ -96,13 +96,13 @@ impl PanelFrame {
             return Err("invalid surface");
         }
         let format = if colour == Some(true) {
-            kobo_sdk::PictureFormat::Rgb
+            kobo_ui::PictureFormat::Rgb
         } else {
-            kobo_sdk::PictureFormat::Grey
+            kobo_ui::PictureFormat::Grey
         };
         let bytes = format
             .byte_len(width, height)
-            .filter(|&n| n <= kobo_sdk::MAX_PICTURE_BYTES)
+            .filter(|&n| n <= 3 * kobo_web_document::display_list::MAX_PIXELS)
             .ok_or("picture budget")?;
         let mut pixels = Vec::new();
         pixels.try_reserve_exact(bytes).map_err(|_| "allocation")?;
@@ -110,7 +110,7 @@ impl PanelFrame {
             if pixel[3] != 255 {
                 return Err("nonopaque raster");
             }
-            if format == kobo_sdk::PictureFormat::Rgb {
+            if format == kobo_ui::PictureFormat::Rgb {
                 pixels.extend_from_slice(&pixel[..3]);
             } else {
                 // Same integer Rec.709 luminance weights as image's luma conversion.
@@ -129,16 +129,17 @@ impl PanelFrame {
         })
     }
     /// Queue on the existing SDK picture path. No screen is changed or shown.
+    #[cfg(feature = "sdk-handoff")]
     pub fn put(
         self,
         context: &mut kobo_sdk::Context,
         handle: kobo_sdk::PictureHandle,
     ) -> Option<kobo_sdk::TilePicture> {
         match self.format {
-            kobo_sdk::PictureFormat::Rgb => {
+            kobo_ui::PictureFormat::Rgb => {
                 context.put_colour_picture(handle, self.width, self.height, self.pixels)
             }
-            kobo_sdk::PictureFormat::Grey => {
+            kobo_ui::PictureFormat::Grey => {
                 context.put_picture(handle, self.width, self.height, self.pixels)
             }
         }
@@ -227,6 +228,7 @@ pub fn prepare_page(
 /// # Errors
 /// Propagates preparation refusal or SDK picture rejection.
 #[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+#[cfg(feature = "sdk-handoff")]
 pub fn queue_page(
     context: &mut kobo_sdk::Context,
     handle: kobo_sdk::PictureHandle,
@@ -245,10 +247,12 @@ pub fn queue_page(
 /// Experimental owner of two caller-reserved picture handles. Preparing a
 /// replacement happens separately; queue the new frame before releasing the
 /// old one. The future app caller must clear on semantic fallback/navigation.
+#[cfg(feature = "sdk-handoff")]
 pub struct PictureSlot {
     handles: [kobo_sdk::PictureHandle; 2],
     active: Option<usize>,
 }
+#[cfg(feature = "sdk-handoff")]
 impl PictureSlot {
     /// # Errors
     /// Handles must differ so replacing a page cannot release its new image.
@@ -287,7 +291,7 @@ impl PictureSlot {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sdk-handoff"))]
 mod tests {
     use super::*;
     struct EmptyApp;
@@ -301,15 +305,11 @@ mod tests {
         for (identity, format, expected) in [
             (
                 Some(true),
-                kobo_sdk::PictureFormat::Rgb,
+                kobo_ui::PictureFormat::Rgb,
                 vec![255, 0, 0, 0, 255, 0, 0, 0, 255],
             ),
-            (None, kobo_sdk::PictureFormat::Grey, vec![54, 182, 18]),
-            (
-                Some(false),
-                kobo_sdk::PictureFormat::Grey,
-                vec![54, 182, 18],
-            ),
+            (None, kobo_ui::PictureFormat::Grey, vec![54, 182, 18]),
+            (Some(false), kobo_ui::PictureFormat::Grey, vec![54, 182, 18]),
         ] {
             let frame = PanelFrame::from_rgba(3, 1, &rgba, identity).unwrap();
             let mut context = kobo_sdk::AppRunner::new(EmptyApp).context();
@@ -388,7 +388,7 @@ mod tests {
         assert!(matches!(
             &context.commands()[0],
             kobo_sdk::Command::PutPicture {
-                format: kobo_sdk::PictureFormat::Grey,
+                format: kobo_ui::PictureFormat::Grey,
                 ..
             }
         ));
@@ -493,7 +493,7 @@ mod tests {
         let invalid = PanelFrame {
             width: 1,
             height: 1,
-            format: kobo_sdk::PictureFormat::Rgb,
+            format: kobo_ui::PictureFormat::Rgb,
             pixels: vec![0],
         };
         assert!(slot.replace(&mut context, invalid).is_err());
@@ -513,5 +513,23 @@ mod tests {
         ] {
             assert!(PanelFrame::from_rgba(w, h, &bytes, Some(true)).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod core_tests {
+    use super::*;
+    #[test]
+    fn pure_core_prepares_device_face_without_sdk_dependencies() {
+        let face = LocalFace::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+        .unwrap();
+        let html = b"<!doctype html><html style='background-color:#123456'><body><p>Hello</p></body></html>";
+        let rgb = prepare_page(html, &[], 200, 80, &face, Some(true)).unwrap();
+        let grey = prepare_page(html, &[], 200, 80, &face, None).unwrap();
+        assert_eq!(&rgb.pixels[..3], &[18, 52, 86]);
+        assert_eq!(grey.format, kobo_ui::PictureFormat::Grey);
+        assert_eq!(grey.pixels[0], 47);
     }
 }
