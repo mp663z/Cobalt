@@ -59,25 +59,7 @@ pub fn place_ascii_normal(
     // no break decision and can retain its punctuation. A narrow exception
     // allows alphanumeric words with one terminal sentence mark: those
     // marks stay with the word and the next whitespace is the break.
-    let needs_break_rules = text.chars().any(|ch| {
-        matches!(
-            ch,
-            '-' | '/'
-                | '\u{ad}'
-                | '!'
-                | ','
-                | '.'
-                | ':'
-                | ';'
-                | '?'
-                | '('
-                | ')'
-                | '['
-                | ']'
-                | '{'
-                | '}'
-        )
-    });
+    let needs_break_rules = text.chars().any(needs_extra_break_rules);
     for ch in text.chars() {
         if ch.is_ascii_whitespace() {
             if !word.is_empty() {
@@ -155,8 +137,30 @@ pub fn place_ascii_normal(
     })
 }
 
-// Deliberately excludes internal punctuation, parentheses, quotes, runs of
-// punctuation, hyphens and slashes, whose break opportunities need more rules.
+fn needs_extra_break_rules(ch: char) -> bool {
+    matches!(
+        ch,
+        '\'' | '-'
+            | '/'
+            | '\u{ad}'
+            | '!'
+            | ','
+            | '.'
+            | ':'
+            | ';'
+            | '?'
+            | '('
+            | ')'
+            | '['
+            | ']'
+            | '{'
+            | '}'
+    )
+}
+
+// Deliberately excludes other internal punctuation, parentheses, surrounding
+// quotes, runs of punctuation, hyphens and slashes. One ASCII apostrophe
+// between alphabetic stems stays inside a contraction or possessive.
 fn sentence_word(word: &[(char, u32)]) -> bool {
     let Some(&(last, _)) = word.last() else {
         return false;
@@ -166,7 +170,16 @@ fn sentence_word(word: &[(char, u32)]) -> bool {
     } else {
         word
     };
-    !stem.is_empty() && stem.iter().all(|&(ch, _)| ch.is_ascii_alphanumeric())
+    if !stem.is_empty() && stem.iter().all(|&(ch, _)| ch.is_ascii_alphanumeric()) {
+        return true;
+    }
+    let mut pieces = stem.split(|&(ch, _)| ch == '\'');
+    let alphabetic = |part: &[(char, u32)]| {
+        !part.is_empty() && part.iter().all(|&(ch, _)| ch.is_ascii_alphabetic())
+    };
+    pieces.next().is_some_and(alphabetic)
+        && pieces.next().is_some_and(alphabetic)
+        && pieces.next().is_none()
 }
 
 fn fits_single_line(words: &[Vec<(char, u32)>], space: u32, max_width: u32) -> bool {
@@ -642,6 +655,43 @@ mod sentence_wrap_tests {
         ] {
             assert_eq!(
                 place_ascii_normal(text, 9, |_| Some(3)),
+                Err(LineError::UnsupportedText),
+                "{text}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod apostrophe_wrap_tests {
+    use super::*;
+    #[test]
+    fn internal_ascii_apostrophes_stay_in_sentence_words() {
+        for text in ["don't stop.", "Alice's book!", "I'm here,", "isn't it?"] {
+            let lines = place_ascii_normal(text, 21, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2, "{text}");
+            let apostrophe = lines
+                .glyphs
+                .iter()
+                .position(|g| g.character == '\'')
+                .unwrap();
+            assert_eq!(
+                lines.glyphs[apostrophe - 1].line,
+                lines.glyphs[apostrophe].line
+            );
+            assert_eq!(
+                lines.glyphs[apostrophe + 1].line,
+                lines.glyphs[apostrophe].line
+            );
+        }
+    }
+    #[test]
+    fn ambiguous_quotes_and_multiple_apostrophes_still_refuse() {
+        for text in [
+            "'ab' cd.", "ab' cd.", "'ab cd.", "a'b'c d.", "a'b'c d", "1'2 cd.", "a'1 cd.",
+        ] {
+            assert_eq!(
+                place_ascii_normal(text, 12, |_| Some(3)),
                 Err(LineError::UnsupportedText),
                 "{text}"
             );

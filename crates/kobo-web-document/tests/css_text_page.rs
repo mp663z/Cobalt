@@ -805,3 +805,16 @@ fn wrapped_sentence_marks_keep_next_sibling_after_measured_lines() {
     assert_eq!(at(1, 20), &[0xfe, 0xdc, 0xba]);
     assert_eq!(at(6, 24), &[0, 0, 0]);
 }
+
+#[test]
+fn contractions_and_possessives_wrap_with_terminal_punctuation() {
+    let boxes = tree("<html><body><p style='width:21px;background-color:#abcdef'>Alice's book. Don't stop!</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(15, 4), &[0, 0, 0]);
+    assert_eq!(at(9, 24), &[0, 0, 0]);
+    assert_eq!(at(1, 39), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 40), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 44), &[0, 0, 0]);
+}
