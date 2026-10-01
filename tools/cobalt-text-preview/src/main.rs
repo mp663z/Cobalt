@@ -41,6 +41,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut output = fs::File::create(output_path)?;
     write!(output, "P6\n{width} {height}\n255\n")?;
-    output.write_all(&frame.pixels)?;
+    output.write_all(frame.pixels())?;
     Ok(())
 }

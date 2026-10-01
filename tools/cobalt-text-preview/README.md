@@ -92,3 +92,9 @@ discovery or support for CSS font-family substitution. Core tests check
 advances, baseline/height and coverage at 12/16/20/24/32/48px, NBSP metrics,
 missing glyph refusal and size limits. A shipping package must carry the
 font notice and still requires review before this fallback is enabled.
+
+PanelFrame fields are private: external callers can inspect dimensions,
+format and bytes but cannot mutate a validated frame into a different format
+or size before queueing. Preparation checks zero, overflow and pixel room
+budgets before parsing markup or requesting font metrics. This is a memory
+and correctness guard, not a change to the app's screen dimensions.

@@ -86,12 +86,25 @@ impl LocalFace {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct PanelFrame {
-    pub width: u32,
-    pub height: u32,
-    pub format: kobo_ui::PictureFormat,
-    pub pixels: Vec<u8>,
+    width: u32,
+    height: u32,
+    format: kobo_ui::PictureFormat,
+    pixels: Vec<u8>,
 }
 impl PanelFrame {
+    #[must_use]
+    pub const fn dimensions(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+    #[must_use]
+    pub const fn format(&self) -> kobo_ui::PictureFormat {
+        self.format
+    }
+    #[must_use]
+    pub fn pixels(&self) -> &[u8] {
+        &self.pixels
+    }
+
     /// Convert an opaque display-list raster for an explicitly confirmed panel.
     /// Unknown identity uses grey; RGB requires `Some(true)`.
     /// # Errors
@@ -176,6 +189,16 @@ pub fn prepare_page(
     font: &impl FontProvider,
     colour: Option<bool>,
 ) -> Result<PanelFrame, &'static str> {
+    // Reject invalid room before parsing markup or asking a font provider.
+    let pixels = usize::try_from(width)
+        .ok()
+        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)));
+    if width == 0
+        || height == 0
+        || pixels.is_none_or(|n| n > kobo_web_document::display_list::MAX_PIXELS)
+    {
+        return Err("invalid room budget");
+    }
     let limits = kobo_web_document::Limits::DEFAULT;
     if html.len() > limits.max_input_bytes || sheets.len() > 2 {
         return Err("input budget");
@@ -557,6 +580,34 @@ mod core_tests {
         assert_eq!(face.advance('A', 257), None);
         assert_eq!(face.advance('\u{10ffff}', 16), None);
         assert!(face.raster('\u{10ffff}', 16).is_none());
+    }
+    struct UnusedFont;
+    impl FontProvider for UnusedFont {
+        fn advance(&self, _: char, _: u32) -> Option<u32> {
+            panic!("invalid room asked font")
+        }
+        fn line_height(&self, _: u32) -> Option<u32> {
+            panic!("invalid room asked font")
+        }
+        fn baseline_offset(&self, _: u32) -> Option<i32> {
+            panic!("invalid room asked font")
+        }
+        fn raster(&self, _: char, _: u32) -> Option<GlyphBitmap> {
+            panic!("invalid room asked font")
+        }
+    }
+    #[test]
+    fn room_budget_refuses_before_font_and_frame_accessors_preserve_validation() {
+        for (w, h) in [(0, 80), (200, 0), (u32::MAX, u32::MAX), (1025, 1024)] {
+            assert_eq!(
+                prepare_page(b"<!doctype html><p>Hello</p>", &[], w, h, &UnusedFont, None),
+                Err("invalid room budget")
+            );
+        }
+        let frame = PanelFrame::from_rgba(1, 1, &[1, 2, 3, 255], Some(true)).unwrap();
+        assert_eq!(frame.dimensions(), (1, 1));
+        assert_eq!(frame.format(), kobo_ui::PictureFormat::Rgb);
+        assert_eq!(frame.pixels(), &[1, 2, 3]);
     }
     #[test]
     fn pure_core_prepares_device_face_without_sdk_dependencies() {
