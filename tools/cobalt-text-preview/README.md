@@ -60,3 +60,10 @@ This is deliberately conservative: even hidden interactive tags or harmless
 ink overhang at the viewport edge can trigger semantic fallback. Primitive
 raster clipping remains unchanged; it is not permission to drop page content
 when queueing a browser picture.
+
+`PictureSlot` tests ownership with two distinct caller-reserved handles.
+It queues the prepared replacement before dropping the previous page,
+alternates handles, keeps old ownership when SDK validation refuses a frame,
+and clears idempotently. Navigation, semantic fallback and exit must explicitly
+clear the slot. This does not reserve globally safe handles or display UI;
+those remain part of the exact app patch review.

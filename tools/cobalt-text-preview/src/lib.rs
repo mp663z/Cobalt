@@ -242,6 +242,51 @@ pub fn queue_page(
         .ok_or("SDK picture rejected")
 }
 
+/// Experimental owner of two caller-reserved picture handles. Preparing a
+/// replacement happens separately; queue the new frame before releasing the
+/// old one. The future app caller must clear on semantic fallback/navigation.
+pub struct PictureSlot {
+    handles: [kobo_sdk::PictureHandle; 2],
+    active: Option<usize>,
+}
+impl PictureSlot {
+    /// # Errors
+    /// Handles must differ so replacing a page cannot release its new image.
+    pub fn new(handles: [kobo_sdk::PictureHandle; 2]) -> Result<Self, &'static str> {
+        if handles[0] == handles[1] {
+            return Err("distinct picture handles required");
+        }
+        Ok(Self {
+            handles,
+            active: None,
+        })
+    }
+    /// Queue one prepared frame, then release the previous page. On SDK
+    /// rejection the old slot remains owned and no drop command is issued.
+    /// # Errors
+    /// Returns SDK picture rejection without changing slot ownership.
+    pub fn replace(
+        &mut self,
+        context: &mut kobo_sdk::Context,
+        frame: PanelFrame,
+    ) -> Result<kobo_sdk::TilePicture, &'static str> {
+        let next = self.active.map_or(0, |old| 1 - old);
+        let picture = frame
+            .put(context, self.handles[next])
+            .ok_or("SDK picture rejected")?;
+        if let Some(old) = self.active.replace(next) {
+            context.drop_picture(self.handles[old]);
+        }
+        Ok(picture)
+    }
+    /// Idempotent release on navigation, fallback or exit. Does not show UI.
+    pub fn clear(&mut self, context: &mut kobo_sdk::Context) {
+        if let Some(old) = self.active.take() {
+            context.drop_picture(self.handles[old]);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -410,6 +455,51 @@ mod tests {
             assert!(queue_page(&mut context,kobo_sdk::PictureHandle(700),html.as_bytes(),&[],200,80,&face,None).is_err(), "{html}");
             assert!(context.commands().is_empty());
         }
+    }
+    #[test]
+    fn slot_replacement_queues_new_before_dropping_old_and_clear_is_idempotent() {
+        let mut slot =
+            PictureSlot::new([kobo_sdk::PictureHandle(700), kobo_sdk::PictureHandle(701)]).unwrap();
+        let mut context = kobo_sdk::AppRunner::new(EmptyApp).context();
+        let frame = || PanelFrame::from_rgba(1, 1, &[1, 2, 3, 255], None).unwrap();
+        slot.replace(&mut context, frame()).unwrap();
+        slot.replace(&mut context, frame()).unwrap();
+        slot.replace(&mut context, frame()).unwrap();
+        slot.clear(&mut context);
+        slot.clear(&mut context);
+        let commands = context.commands();
+        assert_eq!(commands.len(), 6);
+        for (i, h) in [(0, 700), (1, 701), (3, 700)] {
+            assert!(
+                matches!(&commands[i], kobo_sdk::Command::PutPicture { handle, .. } if handle.0==h)
+            );
+        }
+        for (i, h) in [(2, 700), (4, 701), (5, 700)] {
+            assert!(matches!(&commands[i], kobo_sdk::Command::DropPicture(handle) if handle.0==h));
+        }
+    }
+    #[test]
+    fn slot_rejection_keeps_old_ownership_until_explicit_fallback_clear() {
+        assert!(PictureSlot::new([kobo_sdk::PictureHandle(700); 2]).is_err());
+        let mut slot =
+            PictureSlot::new([kobo_sdk::PictureHandle(700), kobo_sdk::PictureHandle(701)]).unwrap();
+        let mut context = kobo_sdk::AppRunner::new(EmptyApp).context();
+        slot.replace(
+            &mut context,
+            PanelFrame::from_rgba(1, 1, &[1, 2, 3, 255], None).unwrap(),
+        )
+        .unwrap();
+        let _ = context.take_commands();
+        let invalid = PanelFrame {
+            width: 1,
+            height: 1,
+            format: kobo_sdk::PictureFormat::Rgb,
+            pixels: vec![0],
+        };
+        assert!(slot.replace(&mut context, invalid).is_err());
+        assert!(context.commands().is_empty());
+        slot.clear(&mut context);
+        assert!(matches!(&context.commands()[0], kobo_sdk::Command::DropPicture(h) if h.0==700));
     }
     #[test]
     fn invalid_surfaces_and_fonts_refuse_without_a_picture() {
