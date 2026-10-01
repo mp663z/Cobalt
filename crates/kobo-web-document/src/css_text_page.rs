@@ -8,7 +8,6 @@
 //! propagate to the canvas only after the whole restricted page is proven.
 
 use crate::box_tree::{BoxKind, BoxTree, UsedHeightPass, VerticalPass, WidthPass};
-use crate::computed_style::BoxSizing;
 use crate::display_list::{
     DisplayList, Error as DisplayError, Rect, Rgb, Source, MAX_COMMANDS, MAX_PIXELS,
 };
@@ -73,7 +72,8 @@ pub fn paint_single_text_page(
 /// Zero content height is also allowed with vertical padding, which prevents
 /// through-collapse and provides a nonempty padding-box background.
 /// Ink may overflow the line box after exact half-leading; advances and
-/// line placement remain bounded.
+/// line placement remain bounded. Border-box sizing uses the existing width
+/// and definite-height passes to subtract padding before text placement.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -131,11 +131,7 @@ pub fn paint_direct_text_blocks(
     let mut stack = vec![(tree.roots[0], None)];
     while let Some((index, parent)) = stack.pop() {
         let node = tree.boxes.get(index).ok_or(PageError::Unsupported)?;
-        if seen[index]
-            || node.parent != parent
-            || node.source.is_none()
-            || node.style.box_sizing != BoxSizing::ContentBox
-        {
+        if seen[index] || node.parent != parent || node.source.is_none() {
             return Err(PageError::Unsupported);
         }
         seen[index] = true;

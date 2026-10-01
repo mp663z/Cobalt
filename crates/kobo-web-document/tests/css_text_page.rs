@@ -818,3 +818,55 @@ fn contractions_and_possessives_wrap_with_terminal_punctuation() {
     assert_eq!(at(1, 40), &[0xfe, 0xdc, 0xba]);
     assert_eq!(at(0, 44), &[0, 0, 0]);
 }
+
+#[test]
+fn border_box_and_equivalent_content_box_have_identical_complete_rasters() {
+    let page = |sizing: &str, width: u32, height: u32| {
+        tree(&format!("<html><body><p style='box-sizing:{sizing};width:{width}px;height:{height}px;padding:2px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>"))
+    };
+    let border =
+        paint_direct_text_blocks(&page("border-box", 10, 24), 100, 100, &TestFace).unwrap();
+    let content =
+        paint_direct_text_blocks(&page("content-box", 6, 20), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        border.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        content.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn auto_border_box_height_uses_wrapped_content_and_padding() {
+    let boxes = tree("<html><body><p style='box-sizing:border-box;width:10px;padding:2px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(2, 6), &[0, 0, 0]);
+    assert_eq!(at(2, 16), &[0, 0, 0]);
+    assert_eq!(at(1, 23), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 24), &[0xfe, 0xdc, 0xba]);
+}
+
+#[test]
+fn border_box_height_clamps_to_zero_content_when_padding_exceeds_declaration() {
+    let boxes = tree("<html><body><p style='box-sizing:border-box;width:10px;height:1px;padding:2px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[(3 * 100 + 1) * 4..][..3], &[0xab, 0xcd, 0xef]);
+    assert_eq!(&pixels[(4 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+}
+
+#[test]
+fn zero_content_width_and_real_borders_still_refuse() {
+    for style in [
+        "box-sizing:border-box;width:4px;padding:2px",
+        "box-sizing:border-box;width:10px;border:1px solid black",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style}'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}

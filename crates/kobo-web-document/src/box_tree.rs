@@ -546,7 +546,6 @@ impl VerticalPass {
                         h == 0 && node.style.padding_top == 0 && node.style.padding_bottom == 0
                     }))
                 || (node.kind != BoxKind::Text && widths.widths[index].is_none())
-                || node.style.box_sizing != BoxSizing::ContentBox
             {
                 result.unsupported = true;
                 break;
@@ -1086,7 +1085,7 @@ mod tests {
         };
         assert_eq!(height("body"), Some(25));
         assert_eq!(height("main"), Some(12));
-        assert!(VerticalPass::from_boxes(&tree, 100, 100).unsupported); // border-box y unsupported
+        assert!(!VerticalPass::from_boxes(&tree, 100, 100).unsupported);
     }
 
     #[test]
