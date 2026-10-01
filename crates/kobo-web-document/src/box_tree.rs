@@ -465,7 +465,7 @@ impl UsedHeightPass {
 
 /// Diagnostic vertical coordinates only for a narrow, fully resolved block
 /// subtree. The first child's top margin must be zero so parent/child margin
-/// collapse is inert. Zero-height boxes, inline content, and additional roots
+/// collapse is inert. Unpadded zero-height boxes, inline content, and additional roots
 /// are rejected rather than assigned speculative positions.
 pub struct VerticalPass {
     pub content_y: Vec<Option<i64>>,
@@ -541,7 +541,10 @@ impl VerticalPass {
                             tree.boxes[owner].children.as_slice() == [index]
                                 && heights.heights[owner].is_some()
                         })))
-                || (node.kind != BoxKind::Text && heights.heights[index].is_none_or(|h| h == 0))
+                || (node.kind != BoxKind::Text
+                    && heights.heights[index].is_none_or(|h| {
+                        h == 0 && node.style.padding_top == 0 && node.style.padding_bottom == 0
+                    }))
                 || (node.kind != BoxKind::Text && widths.widths[index].is_none())
                 || node.style.box_sizing != BoxSizing::ContentBox
             {

@@ -70,6 +70,8 @@ pub fn paint_single_text_page(
 /// glyph ink may overflow the content box; viewport clipping happens only
 /// during rasterization. Direct text may also overflow a positive definite
 /// block height without expanding that block or moving its next sibling.
+/// Zero content height is also allowed with vertical padding, which prevents
+/// through-collapse and provides a nonempty padding-box background.
 /// Ink may overflow the line box after exact half-leading; advances and
 /// line placement remain bounded.
 ///
@@ -247,7 +249,12 @@ pub fn paint_direct_text_blocks(
                 |size| font.line_height(size),
             )
             .map_err(|_| PageError::Unsupported)?;
-            if lines.content_height == 0 || heights.heights[parent].is_none_or(|height| height == 0)
+            if lines.content_height == 0
+                || heights.heights[parent].is_none_or(|height| {
+                    height == 0
+                        && tree.boxes[parent].style.padding_top == 0
+                        && tree.boxes[parent].style.padding_bottom == 0
+                })
             {
                 return Err(PageError::Unsupported);
             }

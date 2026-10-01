@@ -736,3 +736,48 @@ fn invalid_natural_baselines_still_refuse_before_adjustment() {
         );
     }
 }
+
+#[test]
+fn padded_zero_content_height_paints_padding_and_visible_text_overflow() {
+    let boxes = tree("<html><body><p style='height:0px;padding-top:2px;padding-bottom:3px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 0), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 4), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 5), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 6), &[0, 0, 0]);
+    assert_eq!(at(0, 9), &[0, 0, 0]);
+}
+
+#[test]
+fn padded_zero_height_ancestor_does_not_expand_to_child_text() {
+    let boxes = tree("<html><body><div style='height:0px;padding-top:2px;padding-bottom:3px;background-color:#abcdef'><p>ab</p></div><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [6, 6, 9, 9]);
+}
+
+#[test]
+fn zero_height_without_vertical_padding_still_refuses_through_collapse() {
+    for style in [
+        "height:0px",
+        "height:0px;padding-left:4px",
+        "height:0px;padding-top:0px;padding-bottom:0px",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style}'>ab</p><p>cd</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
