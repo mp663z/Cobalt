@@ -928,3 +928,36 @@ fn exact_border_box_percentage_width_subtracts_padding_after_resolution() {
         pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
     );
 }
+
+#[test]
+fn fractional_percentage_heights_refuse_instead_of_flooring_backgrounds() {
+    for html in [
+        "<html style='height:99px'><body style='height:50%'><p>ab</p></body></html>",
+        "<html style='height:100px'><body style='height:50px'><p style='height:33.33%;background-color:#abcdef'>ab</p></body></html>",
+        "<html style='height:100px'><body style='box-sizing:border-box;height:50px;padding-top:1px'><p style='height:50%'>ab</p></body></html>",
+    ] {
+        assert_eq!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).err(), Some(PageError::Unsupported));
+    }
+}
+
+#[test]
+fn exact_nested_percentage_height_matches_equivalent_pixel_geometry() {
+    let page = |height: &str| {
+        tree(&format!("<html style='height:100px'><body style='box-sizing:border-box;height:60px;padding:10px'><p style='height:{height};background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("50%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("20px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn measured_auto_height_does_not_make_percentage_descendant_definite() {
+    let boxes = tree("<html style='height:100px'><body><p style='height:50%'>ab</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}

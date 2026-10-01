@@ -75,7 +75,8 @@ pub fn paint_single_text_page(
 /// line placement remain bounded. Border-box sizing uses the existing width
 /// and definite-height passes to subtract padding before text placement.
 /// Percentage widths must resolve to exact integer pixels; diagnostic
-/// flooring is not enough to prove wrapping or painted geometry.
+/// flooring is not enough to prove wrapping or painted geometry. Percentage
+/// heights likewise require exact pixels against specified definite ancestors.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -139,6 +140,21 @@ pub fn paint_direct_text_blocks(
         });
         matches!(node.style.width, crate::computed_style::Length::Percent(value)
             if (u64::from(containing) * u64::from(value)) % 10_000 != 0)
+    }) {
+        return Err(PageError::Unsupported);
+    }
+    // Percent heights resolve against specified definite ancestors, never
+    // an auto height derived from children. The diagnostic pass floors them.
+    let specified = crate::box_tree::HeightPass::from_boxes(tree, viewport_height);
+    if tree.boxes.iter().any(|node| {
+        if node.kind == BoxKind::Text {
+            return false;
+        }
+        let containing = node
+            .parent
+            .map_or(Some(viewport_height), |parent| specified.heights[parent]);
+        matches!(node.style.height, crate::computed_style::Length::Percent(value)
+            if containing.is_none_or(|base| (u64::from(base) * u64::from(value)) % 10_000 != 0))
     }) {
         return Err(PageError::Unsupported);
     }
