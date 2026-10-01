@@ -169,10 +169,48 @@ pub fn prepare_page(
         return Err("sheet budget");
     }
     let styled = kobo_web_document::parse_style_tree(html, sheets, &limits);
+    // A picture has no semantic hit targets. Refuse controls/links until
+    // a shipping caller can preserve their interactions, even if styled block.
+    if styled.nodes.iter().any(|node| {
+        matches!(
+            node.tag.as_str(),
+            "a" | "area"
+                | "form"
+                | "input"
+                | "button"
+                | "select"
+                | "textarea"
+                | "option"
+                | "label"
+                | "details"
+                | "summary"
+                | "iframe"
+                | "audio"
+                | "video"
+        )
+    }) {
+        return Err("interactive page needs semantic fallback");
+    }
     let tree = kobo_web_document::box_tree::BoxTree::from_style(&styled);
     let list =
         kobo_web_document::css_text_page::paint_direct_text_blocks(&tree, width, height, font)
             .map_err(|_| "unsupported complete page")?;
+    // This seam has no scrolling or pagination. Viewport clipping is useful
+    // in the paint primitive, but cannot silently drop content on handoff.
+    if list.commands().iter().any(|command| {
+        use kobo_web_document::display_list::Command;
+        let rect = match command {
+            Command::Fill { rect, .. } | Command::PushClip(rect) => rect,
+            Command::GlyphRun { bounds, .. } => bounds,
+            Command::PopClip => return false,
+        };
+        rect.x < 0
+            || rect.y < 0
+            || i64::from(rect.x) + i64::from(rect.width) > i64::from(width)
+            || i64::from(rect.y) + i64::from(rect.height) > i64::from(height)
+    }) {
+        return Err("page needs scrolling or pagination");
+    }
     let rgba = list
         .rasterize(
             width,
@@ -353,6 +391,25 @@ mod tests {
             None
         )
         .is_err());
+    }
+    #[test]
+    fn interaction_and_overflow_refuse_without_partial_queue() {
+        let face = LocalFace::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+        .unwrap();
+        let mut context = kobo_sdk::AppRunner::new(EmptyApp).context();
+        for html in [
+            "<!doctype html><a style='display:block' href='/next'>Next</a>",
+            "<!doctype html><form style='display:block'>Text</form>",
+            "<!doctype html><button style='display:block'>Go</button>",
+            "<!doctype html><p style='height:100px;background-color:red'>Text</p>",
+            "<!doctype html><p style='width:250px;background-color:red'>Text</p>",
+            "<!doctype html><p style='width:50px'>One two three four five six seven eight nine ten</p>",
+        ] {
+            assert!(queue_page(&mut context,kobo_sdk::PictureHandle(700),html.as_bytes(),&[],200,80,&face,None).is_err(), "{html}");
+            assert!(context.commands().is_empty());
+        }
     }
     #[test]
     fn invalid_surfaces_and_fonts_refuse_without_a_picture() {

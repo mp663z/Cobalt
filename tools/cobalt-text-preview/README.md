@@ -52,3 +52,11 @@ the future app caller. A reserved picture handle is caller-owned and must be
 dropped on replacement. The `--blocks` host preview now runs this preparation
 path. Tests cover whole-page refusal, linked styles, input budgets, unknown
 identity and the matching SDK drop command; no app screen is enabled.
+
+Until a picture screen has real hit-target and scrolling/pagination rules,
+preparation refuses retained interactive tags (including block-styled links
+and controls) and any paint command extending beyond the supplied room.
+This is deliberately conservative: even hidden interactive tags or harmless
+ink overhang at the viewport edge can trigger semantic fallback. Primitive
+raster clipping remains unchanged; it is not permission to drop page content
+when queueing a browser picture.
