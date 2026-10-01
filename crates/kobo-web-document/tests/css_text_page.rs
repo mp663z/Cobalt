@@ -870,3 +870,24 @@ fn zero_content_width_and_real_borders_still_refuse() {
         );
     }
 }
+
+#[test]
+fn nonbreaking_html_entity_preserves_word_group_during_page_wrap() {
+    let boxes = tree("<html><body><p style='width:9px;background-color:#abcdef'>a&nbsp;b cd.</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(&glyph_y[..6], &[4, 4, 4, 14, 14, 14]);
+    assert_eq!(glyph_y[6], 24);
+    let narrow = tree("<html><body><p style='width:6px'>a&nbsp;b</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&narrow, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}

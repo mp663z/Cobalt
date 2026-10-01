@@ -35,7 +35,8 @@ pub enum LineError {
 
 /// Place a single block's normal-white-space ASCII text at given integer
 /// advances. ASCII whitespace collapses to one breakable space; leading and
-/// line-end spaces are omitted. A word that cannot fit fails rather than
+/// line-end spaces are omitted. U+00A0 remains a measured nonbreaking glyph
+/// inside a word, rather than a whitespace wrap opportunity. A word that cannot fit fails rather than
 /// silently overflowing or splitting at an unsupported break opportunity.
 /// The caller supplies the exact font advances and owns line-height and paint.
 ///
@@ -66,7 +67,7 @@ pub fn place_ascii_normal(
                 words.push(std::mem::take(&mut word));
             }
         } else {
-            if !ch.is_ascii_graphic() {
+            if !ch.is_ascii_graphic() && ch != '\u{a0}' {
                 return Err(LineError::UnsupportedText);
             }
             let width = advance(ch)
@@ -162,6 +163,10 @@ fn needs_extra_break_rules(ch: char) -> bool {
 // quotes, runs of punctuation, hyphens and slashes. One ASCII apostrophe
 // between alphabetic stems stays inside a contraction or possessive.
 fn sentence_word(word: &[(char, u32)]) -> bool {
+    word.split(|&(ch, _)| ch == '\u{a0}').all(sentence_piece)
+}
+
+fn sentence_piece(word: &[(char, u32)]) -> bool {
     let Some(&(last, _)) = word.last() else {
         return false;
     };
@@ -696,5 +701,40 @@ mod apostrophe_wrap_tests {
                 "{text}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod nonbreaking_space_tests {
+    use super::*;
+    #[test]
+    fn nonbreaking_space_uses_its_own_advance_and_stays_in_word() {
+        let lines = place_ascii_normal("a\u{a0}b cd.", 15, |ch| {
+            Some(if ch == '\u{a0}' { 7 } else { 3 })
+        })
+        .unwrap();
+        assert_eq!(lines.count, 2);
+        assert_eq!(lines.glyphs[1].character, '\u{a0}');
+        assert_eq!(lines.glyphs[2].x, 10);
+        assert_eq!(lines.glyphs[2].line, 0);
+        assert_eq!(lines.glyphs[3].line, 1);
+        assert_eq!(
+            place_ascii_normal("a\u{a0}b", 12, |ch| Some(if ch == '\u{a0}' {
+                7
+            } else {
+                3
+            })),
+            Err(LineError::UnbreakableWord)
+        );
+    }
+    #[test]
+    fn nonbreaking_space_is_not_trimmed_or_collapsed() {
+        let lines = place_ascii_normal("\u{a0}a\u{a0}\u{a0}", 30, |_| Some(3)).unwrap();
+        assert_eq!(lines.glyphs.len(), 4);
+        assert_eq!(lines.glyphs[3].x, 9);
+        assert_eq!(
+            place_ascii_normal("a\u{a0}b", 30, |ch| (ch != '\u{a0}').then_some(3)),
+            Err(LineError::InvalidMetrics)
+        );
     }
 }
