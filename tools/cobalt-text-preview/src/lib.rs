@@ -284,6 +284,109 @@ pub fn queue_page(
         .ok_or("SDK picture rejected")
 }
 
+/// Conservative, native-pixel room for one experimental picture screen.
+/// This is not a shipping page mode. Non-default reader text sizes refuse
+/// rather than ignoring the user's accessibility preference or scaling CSS.
+#[cfg(feature = "sdk-handoff")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExperimentalRoom {
+    metrics: kobo_ui::DisplayMetrics,
+    width: u32,
+    height: u32,
+}
+#[cfg(feature = "sdk-handoff")]
+fn experimental_shell(title: &str) -> kobo_sdk::ScreenBuilder {
+    kobo_sdk::ScreenBuilder::new("browser-css-experiment")
+        .top_bar(title)
+        .top_bar_action("reader", "Reader")
+        .top_bar_action("navigate", "Navigate")
+        .reading(true)
+        .action_bar([
+            ("back", "Back"),
+            ("address", "Go to"),
+            ("forward", "Forward"),
+        ])
+}
+#[cfg(feature = "sdk-handoff")]
+impl ExperimentalRoom {
+    /// Measure real shell chrome and cap native pixels without enlarging the
+    /// painter budget. Extra room on a large panel stays unused.
+    /// # Errors
+    /// Refuses invalid metrics, non-default text scale or an empty room.
+    pub fn measure(metrics: kobo_ui::DisplayMetrics) -> Result<Self, &'static str> {
+        if metrics.text_scale != kobo_ui::TextScale::Default {
+            return Err("reader text scale needs semantic fallback");
+        }
+        // Bound arithmetic before calling the UI's physical-unit helpers.
+        if !(1..=4096).contains(&metrics.width)
+            || !(1..=4096).contains(&metrics.height)
+            || !(1..=1200).contains(&metrics.pixels_per_inch)
+        {
+            return Err("invalid display metrics");
+        }
+        let layout = experimental_shell("")
+            .build()
+            .layout_with(&metrics, &kobo_ui::Chrome::measuring(true));
+        let width = u32::try_from(metrics.content_width()).map_err(|_| "invalid room")?;
+        if width == 0 {
+            return Err("invalid room");
+        }
+        let ceiling = u32::try_from(kobo_web_document::display_list::MAX_PIXELS)
+            .map_err(|_| "invalid pixel budget")?
+            / width;
+        let height = u32::try_from(layout.content.height)
+            .map_err(|_| "invalid room")?
+            .min(ceiling);
+        if height == 0 {
+            return Err("invalid room");
+        }
+        Ok(Self {
+            metrics,
+            width,
+            height,
+        })
+    }
+    #[must_use]
+    pub const fn dimensions(self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    /// Make a screen only for the exact measured viewport and picture. No
+    /// page turns or content hit targets are invented. Validate before showing.
+    /// # Errors
+    /// Refuses stale metrics, mismatched pictures, shrinking or layout errors.
+    pub fn screen(
+        self,
+        title: &str,
+        picture: kobo_sdk::TilePicture,
+        metrics: kobo_ui::DisplayMetrics,
+    ) -> Result<kobo_ui::Screen, &'static str> {
+        if metrics != self.metrics || picture.source != self.dimensions() {
+            return Err("stale room or mismatched picture");
+        }
+        let screen = experimental_shell(title)
+            .unframed_picture(picture, 1200)
+            .build();
+        let diagnostics = screen.diagnostics(&metrics, &kobo_ui::Chrome::measuring(true));
+        let rect = diagnostics.layout.nodes.iter().find_map(|node| {
+            matches!(node.kind, kobo_ui::LayoutKind::Picture(handle) if handle == picture.handle)
+                .then_some(node.rect)
+        }).ok_or("missing picture layout")?;
+        let content = diagnostics.layout.content;
+        if diagnostics.has_errors()
+            || u32::try_from(rect.width).ok() != Some(self.width)
+            || u32::try_from(rect.height).ok() != Some(self.height)
+            || rect.x < 0
+            || rect.x + rect.width > metrics.width
+            || rect.y < content.y
+            || rect.y + rect.height > content.y + content.height
+        {
+            return Err("picture room does not fit");
+        }
+        Ok(screen)
+    }
+}
+
 /// Experimental owner of two caller-reserved picture handles. Preparing a
 /// replacement happens separately; queue the new frame before releasing the
 /// old one. The future app caller must clear on semantic fallback/navigation.
@@ -338,6 +441,95 @@ mod tests {
     impl kobo_sdk::KoboApp for EmptyApp {
         fn on_start(&mut self, _: &mut kobo_sdk::Context) {}
         fn on_action(&mut self, _: &mut kobo_sdk::Context, _: kobo_sdk::ActionId) {}
+    }
+    #[test]
+    fn native_room_preserves_controls_across_panels_and_refuses_accessibility_mismatch() {
+        for (width, height, pixels_per_inch) in [
+            (1072, 1448, 300),
+            (758, 1024, 212),
+            (1264, 1680, 300),
+            (1440, 1920, 300),
+            (1404, 1872, 227),
+        ] {
+            for text_scale in kobo_ui::TextScale::STEPS {
+                let metrics = kobo_ui::DisplayMetrics {
+                    width,
+                    height,
+                    pixels_per_inch,
+                    text_scale,
+                };
+                let room = ExperimentalRoom::measure(metrics);
+                if text_scale != kobo_ui::TextScale::Default {
+                    assert_eq!(room, Err("reader text scale needs semantic fallback"));
+                    continue;
+                }
+                let room = room.unwrap();
+                let (w, h) = room.dimensions();
+                assert!(
+                    usize::try_from(w * h).unwrap() <= kobo_web_document::display_list::MAX_PIXELS
+                );
+                let picture = kobo_sdk::TilePicture::new(kobo_sdk::PictureHandle(700), w, h);
+                let screen = room
+                    .screen("Restricted CSS preview", picture, metrics)
+                    .unwrap();
+                assert!(screen.page_turns.is_none());
+                for chrome in [
+                    kobo_ui::Chrome::with_back(true),
+                    kobo_ui::Chrome::measuring(true),
+                ] {
+                    let diagnostic = screen.diagnostics(&metrics, &chrome);
+                    assert!(!diagnostic.has_errors(), "{:?}", diagnostic.issues);
+                    let rect = diagnostic
+                        .layout
+                        .nodes
+                        .iter()
+                        .find(|node| matches!(node.kind, kobo_ui::LayoutKind::Picture(_)))
+                        .unwrap()
+                        .rect;
+                    assert_eq!(
+                        (
+                            u32::try_from(rect.width).unwrap(),
+                            u32::try_from(rect.height).unwrap()
+                        ),
+                        (w, h)
+                    );
+                    assert!(rect.y >= diagnostic.layout.content.y);
+                    assert!(
+                        rect.y + rect.height
+                            <= diagnostic.layout.content.y + diagnostic.layout.content.height
+                    );
+                }
+                assert!(room
+                    .screen("Long title ".repeat(200).as_str(), picture, metrics)
+                    .is_ok());
+                let wrong = kobo_sdk::TilePicture::new(picture.handle, w, h - 1);
+                assert!(room.screen("Preview", wrong, metrics).is_err());
+                let stale = kobo_ui::DisplayMetrics {
+                    height: height + 1,
+                    ..metrics
+                };
+                assert!(room.screen("Preview", picture, stale).is_err());
+            }
+        }
+    }
+    #[test]
+    fn invalid_panel_metrics_refuse_before_layout_arithmetic() {
+        for (width, height, pixels_per_inch) in [
+            (0, 1448, 300),
+            (1072, 0, 300),
+            (i32::MAX, 1448, 300),
+            (1072, 1448, i32::MAX),
+            (1, 1, 300),
+            (1072, 1448, 0),
+        ] {
+            assert!(ExperimentalRoom::measure(kobo_ui::DisplayMetrics {
+                width,
+                height,
+                pixels_per_inch,
+                text_scale: kobo_ui::TextScale::Default,
+            })
+            .is_err());
+        }
     }
     #[test]
     fn rgb_and_unknown_identity_use_existing_sdk_picture_commands() {

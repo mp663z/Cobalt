@@ -98,3 +98,19 @@ format and bytes but cannot mutate a validated frame into a different format
 or size before queueing. Preparation checks zero, overflow and pixel room
 budgets before parsing markup or requesting font metrics. This is a memory
 and correctness guard, not a change to the app's screen dimensions.
+
+## Native picture-room experiment
+
+`ExperimentalRoom` measures the SDK shell rather than guessing a viewport.
+It keeps the Reader/Navigate top actions and Back/Go to/Forward bottom actions,
+uses conservative status-band measurement, caps room pixels at the unchanged
+painter budget and verifies that the final picture retains its source dimensions.
+No page-turn zones are declared for this single complete picture. Larger panels
+can have substantial unused height; this is not a full-panel browsing solution.
+
+Non-default reader text scales refuse to the semantic caller. The experiment
+must not silently ignore accessibility settings or multiply CSS font sizes.
+Metrics and picture dimensions must still match when constructing the screen.
+Invalid panel metrics refuse before UI arithmetic. This screen constructor does
+not show UI, reserve handles, retain HTML, fetch sheets or alter browser behavior.
+The app still does not depend on the standalone tool.
