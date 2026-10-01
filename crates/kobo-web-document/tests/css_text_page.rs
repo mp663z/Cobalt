@@ -961,3 +961,44 @@ fn measured_auto_height_does_not_make_percentage_descendant_definite() {
         Some(PageError::Unsupported)
     );
 }
+
+#[test]
+fn fractional_horizontal_margins_and_half_pixel_centering_refuse() {
+    for style in [
+        "width:20px;margin-left:33.33%",
+        "margin-right:33.33%",
+        "width:19px;margin-left:auto;margin-right:auto",
+        "box-sizing:border-box;width:19px;padding:2px;margin-left:auto;margin-right:auto",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style};background-color:#abcdef'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported),
+            "{style}"
+        );
+    }
+}
+
+#[test]
+fn exact_horizontal_percentage_margins_match_pixels() {
+    let page = |margin: &str| {
+        tree(&format!("<html><body style='width:60px'><p style='margin-left:{margin};margin-right:{margin};background-color:#abcdef'>ab cd</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("25%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("15px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn overconstrained_auto_margins_use_zero_not_fractional_centering() {
+    let boxes = tree("<html><body><p style='width:101px;margin-left:auto;margin-right:auto;background-color:#abcdef'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert!(
+        matches!(list.commands()[0], Command::Fill { rect, .. } if rect.x == 0 && rect.width == 101)
+    );
+}

@@ -77,6 +77,8 @@ pub fn paint_single_text_page(
 /// Percentage widths must resolve to exact integer pixels; diagnostic
 /// flooring is not enough to prove wrapping or painted geometry. Percentage
 /// heights likewise require exact pixels against specified definite ancestors.
+/// Horizontal percentage margins and two-auto-margin centering must also
+/// produce integer origins rather than diagnostic rounded positions.
 ///
 /// # Errors
 /// Returns an error on unsupported trees, invalid metrics or paint limits.
@@ -155,6 +157,37 @@ pub fn paint_direct_text_blocks(
             .map_or(Some(viewport_height), |parent| specified.heights[parent]);
         matches!(node.style.height, crate::computed_style::Length::Percent(value)
             if containing.is_none_or(|base| (u64::from(base) * u64::from(value)) % 10_000 != 0))
+    }) {
+        return Err(PageError::Unsupported);
+    }
+    if tree.boxes.iter().enumerate().any(|(index, node)| {
+        if node.kind == BoxKind::Text {
+            return false;
+        }
+        let containing = node.parent.map_or(viewport_width, |parent| {
+            widths.widths[parent].map_or(0, |width| width.content)
+        });
+        let fractional = |margin| {
+            matches!(margin, crate::computed_style::Margin::Percent(value)
+            if (i64::from(containing) * i64::from(value)) % 10_000 != 0)
+        };
+        if fractional(node.style.margin_left) || fractional(node.style.margin_right) {
+            return true;
+        }
+        // Two auto margins divide positive spare width equally. An odd
+        // remainder needs half-pixel origins, not the diagnostic floor.
+        let both_auto = node.style.margin_left == crate::computed_style::Margin::Auto
+            && node.style.margin_right == crate::computed_style::Margin::Auto;
+        let free = widths.widths[index].map_or(0, |width| {
+            i64::from(containing)
+                - i64::from(width.content)
+                - i64::from(node.style.padding_left)
+                - i64::from(node.style.padding_right)
+        });
+        both_auto
+            && node.style.width != crate::computed_style::Length::Auto
+            && free > 0
+            && free % 2 != 0
     }) {
         return Err(PageError::Unsupported);
     }
