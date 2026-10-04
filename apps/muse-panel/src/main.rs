@@ -1034,11 +1034,17 @@ impl KoboApp for Panel {
 
 /// The offset the runtime was started with, if it gave a usable one.
 fn reader_offset() -> Option<i16> {
-    std::env::var("KOBO_UTC_OFFSET_MINUTES")
-        .ok()?
+    parse_offset(&std::env::var("KOBO_UTC_OFFSET_MINUTES").ok()?)
+}
+
+/// A whole number of minutes the clock accepts (-840 to 840), else None so the
+/// labelled UTC fallback applies instead of no time at all.
+fn parse_offset(value: &str) -> Option<i16> {
+    value
         .trim()
         .parse::<i16>()
         .ok()
+        .filter(|minutes| (-840..=840).contains(minutes))
 }
 
 fn local_time(offset_minutes: i16) -> Option<(u8, u8)> {
@@ -1444,6 +1450,16 @@ mod tests {
             "delta {delta}"
         );
         assert!(local_time(2000).is_none());
+    }
+
+    #[test]
+    fn offsets_outside_the_clock_range_fall_back_to_labelled_utc() {
+        assert_eq!(parse_offset("330"), Some(330));
+        assert_eq!(parse_offset(" -480 "), Some(-480));
+        assert_eq!(parse_offset("840"), Some(840));
+        for bad in ["841", "-841", "30000", "abc", ""] {
+            assert_eq!(parse_offset(bad), None, "{bad}");
+        }
     }
 
     #[test]
