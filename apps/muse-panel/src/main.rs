@@ -16,9 +16,9 @@ mod wire;
 
 use kobo_sdk::keyboard::{Keyboard, Pressed};
 use kobo_sdk::{
-    action_id, ActionId, BannerLevel, Context, Failure, Glyph, KoboApp, ParagraphPresentation,
-    PictureHandle, RichTextSpan, Screen, ScreenBuilder, Space, StoreResult, Task, TaskId,
-    TaskOutcome, TextPresentation, TilePicture,
+    action_id, ActionId, BannerLevel, Context, Failure, Glyph, Header, KoboApp,
+    ParagraphPresentation, PictureHandle, RichTextSpan, Screen, ScreenBuilder, Space, StoreResult,
+    Task, TaskId, TaskOutcome, TextPresentation, TilePicture,
 };
 use std::process::ExitCode;
 use wire::{plain, Block, Content, Live, Question, Reply, Span};
@@ -171,17 +171,13 @@ impl Panel {
         let Some(Content::Image(picture)) = self.live.as_ref().map(|live| &live.content) else {
             return;
         };
-        let url = format!(
-            "{}?t={}",
-            self.url(&format!("blob/{}", picture.blob)),
-            self.token
-        );
+        let url = self.url(&format!("blob/{}", picture.blob));
         self.fetching = context.spawn(Task::Fetch {
             url,
             offset: 0,
             max_bytes: MAX_PICTURE,
             credential: None,
-            headers: Vec::new(),
+            headers: self.auth(),
         });
     }
 
@@ -430,6 +426,12 @@ impl Panel {
 
     // -- Network -------------------------------------------------------------
 
+    /// The paired token travels in a header, never in the URL, so it stays out
+    /// of access logs and proxy records.
+    fn auth(&self) -> Vec<Header> {
+        vec![Header::new("X-Muse-Panel-Token", self.token.clone())]
+    }
+
     fn url(&self, path: &str) -> String {
         format!("https://{}/v1/{path}", self.address)
     }
@@ -439,27 +441,23 @@ impl Panel {
             return;
         }
         let rev = self.rev.map_or(String::new(), |rev| format!("rev={rev}&"));
-        let url = format!(
-            "{}?{rev}wait={POLL_WAIT}&t={}",
-            self.url("screen"),
-            self.token
-        );
+        let url = format!("{}?{rev}wait={POLL_WAIT}", self.url("screen"));
         self.poll = context.spawn(Task::Fetch {
             url,
             offset: 0,
             max_bytes: MAX_REPLY,
             credential: None,
-            headers: Vec::new(),
+            headers: self.auth(),
         });
     }
 
     fn post(&self, context: &mut Context, path: &str, body: String) -> Option<TaskId> {
         context.spawn(Task::Post {
-            url: format!("{}?t={}", self.url(path), self.token),
+            url: self.url(path),
             body,
             content_type: "application/json".to_owned(),
             credential: None,
-            headers: Vec::new(),
+            headers: self.auth(),
             max_bytes: MAX_SMALL_REPLY,
         })
     }
@@ -1229,7 +1227,7 @@ mod tests {
         app.poll = None;
         app.start_poll(&mut context);
         let (_, url) = fetched(&context.take_commands()).expect("a poll");
-        assert_eq!(url, "https://192.168.1.5:8473/v1/screen?wait=25&t=tok123");
+        assert_eq!(url, "https://192.168.1.5:8473/v1/screen?wait=25");
     }
 
     #[test]
@@ -1259,7 +1257,7 @@ mod tests {
                 "image":{"blob":"b9","fill":true}}"#,
         );
         let (task, url) = fetched(&commands).expect("the picture is asked for");
-        assert_eq!(url, "https://192.168.1.5:8473/v1/blob/b9?t=tok123");
+        assert_eq!(url, "https://192.168.1.5:8473/v1/blob/b9");
         let commands = deliver(&mut app, task, b"not a picture");
         let screen = painted(&commands).expect("the failure is drawn");
         assert!(shown(&screen)
@@ -1339,7 +1337,7 @@ mod tests {
         deliver(&mut app, poll, SCREEN_ASK);
         let commands = act(&mut app, action_id("choose-1"));
         let (task, url, body) = posted(&commands).expect("the tap is posted");
-        assert_eq!(url, "https://192.168.1.5:8473/v1/event?t=tok123");
+        assert_eq!(url, "https://192.168.1.5:8473/v1/event");
         assert_eq!(body, r#"{"ask_id":"lunch","choice":"c2"}"#);
         assert_eq!(app.view, View::Sending);
         // A second tap while sending posts nothing.
@@ -1424,7 +1422,18 @@ mod tests {
             saved,
             Some((PAIRED.to_owned(), b"192.168.1.9:8473\nnewtok".to_vec()))
         );
-        assert!(fetched(&commands).expect("polls").1.ends_with("t=newtok"));
+        assert!(!fetched(&commands).expect("polls").1.contains("newtok"));
+        let sent = commands.iter().find_map(|command| match command {
+            Command::Spawn {
+                work: Task::Fetch { headers, .. },
+                ..
+            } => Some(headers.clone()),
+            _ => None,
+        });
+        assert_eq!(
+            sent,
+            Some(vec![Header::new("X-Muse-Panel-Token", "newtok")])
+        );
         assert_eq!(app.view, View::Live);
     }
 

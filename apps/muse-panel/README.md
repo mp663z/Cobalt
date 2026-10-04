@@ -41,15 +41,21 @@ can take up to a minute to appear, and nothing wakes the Kobo from sleep.
 4. Run `kobo-bridge run` and leave it running.
 
 The companion bridge is a separate Python package and is not part of this
-repository. It exposes Muse only to the commands it defines for display. It
-cannot run shell commands or read files on your computer.
+repository, so this app cannot vouch for what it does. This app only asks it
+for display content and sends back the answer you tap.
 
 ## Privacy
 
-The connection is TLS against the certificate you installed. The pairing code
-works once and locks after repeated wrong guesses. The Kobo keeps one token,
-and the bridge keeps only its hash. The app does not use Wi-Fi in the
-background.
+What this app does, and what you can check in its source:
+
+- It talks to the bridge address you type, over HTTPS, using the certificate
+  you installed with `kobo trust set`.
+- It stores one pairing record: the bridge address and a token, in the app's
+  own storage. The token is sent in an `X-Muse-Panel-Token` header, never in a URL.
+- It declares the network capability only (see `cobalt-app.json`).
+
+How the bridge handles the pairing code, token and commands is up to the
+bridge and is not covered here.
 
 ## Notes
 
