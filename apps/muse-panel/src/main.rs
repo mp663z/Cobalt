@@ -71,6 +71,9 @@ struct Panel {
     token: String,
     trouble: Option<String>,
     live: Option<Live>,
+    /// Reader-local hour and minute at which the bridge last returned a reply
+    /// this app validated and drew. Never set from a failed or unreadable poll.
+    updated: Option<(u8, u8)>,
     /// The revision this reader last asked about.
     rev: Option<u64>,
     /// A page or question the reader put away with Back. It stays away until
@@ -280,6 +283,14 @@ impl Panel {
             .live
             .as_ref()
             .map_or(("", ""), |live| (live.line.as_str(), live.detail.as_str()));
+        let stamp = self
+            .updated
+            .map(|(hour, minute)| format!("Updated {hour:02}:{minute:02}"));
+        let detail = match (detail.is_empty(), stamp) {
+            (_, None) => detail.to_owned(),
+            (true, Some(stamp)) => stamp,
+            (false, Some(stamp)) => format!("{detail}\n{stamp}"),
+        };
         let mut screen = ScreenBuilder::new("muse-resting").top_bar(TITLE).splash(
             Some(Glyph::Chat),
             if line.is_empty() {
@@ -493,6 +504,7 @@ impl Panel {
                         self.rev = Some(live.rev);
                         self.dismissed = None;
                         self.page = 0;
+                        self.updated = reader_time();
                         self.live = Some(live);
                         if matches!(
                             self.live.as_ref().map(|live| &live.content),
@@ -1008,6 +1020,17 @@ impl KoboApp for Panel {
     }
 }
 
+/// The reader's local time, at the offset the runtime was started with.
+/// None when the clock is unavailable, so no time is invented.
+fn reader_time() -> Option<(u8, u8)> {
+    use kobo_sdk::clock::{Clock, SystemClock};
+    let minutes = std::env::var("KOBO_UTC_OFFSET_MINUTES")
+        .ok()
+        .and_then(|value| value.parse::<i16>().ok())
+        .unwrap_or(0);
+    SystemClock::new(minutes).ok()?.now().ok()?.hour_minute()
+}
+
 fn main() -> ExitCode {
     match kobo_sdk::run("muse-panel", Panel::default()) {
         Ok(()) => ExitCode::SUCCESS,
@@ -1383,6 +1406,29 @@ mod tests {
         let commands = context.take_commands();
         assert!(painted(&commands).is_some() && slept(&commands).is_some());
         assert!(app.trouble.is_some());
+    }
+
+    #[test]
+    fn the_update_time_is_set_only_by_a_validated_reply() {
+        let (mut app, poll) = paired();
+        let mut context = Context::default();
+        app.on_task(
+            &mut context,
+            poll,
+            TaskOutcome::Failed(TaskError::Unreachable),
+        );
+        assert!(app.updated.is_none());
+        assert!(!format!("{:?}", app.resting()).contains("Updated "));
+
+        let (mut app, poll) = paired();
+        deliver(&mut app, poll, b"not json at all");
+        assert!(app.updated.is_none());
+
+        let (mut app, poll) = paired();
+        deliver(&mut app, poll, SCREEN_STATUS);
+        let (hour, minute) = app.updated.expect("a validated reply stamps the time");
+        assert!(hour < 24 && minute < 60);
+        assert!(format!("{:?}", app.resting()).contains("Updated "));
     }
 
     #[test]
