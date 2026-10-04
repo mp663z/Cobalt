@@ -293,10 +293,12 @@ impl Panel {
         };
         let mut screen = ScreenBuilder::new("muse-resting").top_bar(TITLE).splash(
             Some(Glyph::Chat),
-            if line.is_empty() {
-                "Waiting for Muse"
-            } else {
+            if !line.is_empty() {
                 line
+            } else if self.live.is_some() {
+                "Muse has nothing to show"
+            } else {
+                "Waiting for Muse"
             },
             detail,
         );
@@ -1406,6 +1408,21 @@ mod tests {
         let commands = context.take_commands();
         assert!(painted(&commands).is_some() && slept(&commands).is_some());
         assert!(app.trouble.is_some());
+    }
+
+    #[test]
+    fn an_empty_status_from_muse_reads_differently_from_no_contact_yet() {
+        let (mut app, poll) = paired();
+        assert!(format!("{:?}", app.resting()).contains("Waiting for Muse"));
+        deliver(
+            &mut app,
+            poll,
+            br#"{"rev":3,"kind":"status","status":{"line":"","detail":""},
+                "page":null,"ask":null,"image":null}"#,
+        );
+        let text = format!("{:?}", app.resting());
+        assert!(text.contains("Muse has nothing to show"));
+        assert!(!text.contains("Waiting for Muse"));
     }
 
     #[test]
