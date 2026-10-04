@@ -426,8 +426,9 @@ impl Panel {
 
     // -- Network -------------------------------------------------------------
 
-    /// The paired token travels in a header, never in the URL, so it stays out
-    /// of access logs and proxy records.
+    /// The paired token travels in a header, never in the URL, so it does not
+    /// end up in URL-based logs or history. Headers can still be logged by
+    /// anything that terminates the connection.
     fn auth(&self) -> Vec<Header> {
         vec![Header::new("X-Muse-Panel-Token", self.token.clone())]
     }
