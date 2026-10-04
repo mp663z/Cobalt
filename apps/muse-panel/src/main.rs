@@ -74,6 +74,11 @@ struct Panel {
     /// Reader-local hour and minute at which the bridge last returned a reply
     /// this app validated and drew. Never set from a failed or unreadable poll.
     updated: Option<(u8, u8)>,
+    /// The reader's UTC offset in minutes, from `KOBO_UTC_OFFSET_MINUTES`.
+    /// None when the variable is missing or not a number. The time is then
+    /// computed at UTC, as the other apps do, and labelled "UTC" on screen so
+    /// it is never passed off as local time.
+    offset_minutes: Option<i16>,
     /// The revision this reader last asked about.
     rev: Option<u64>,
     /// A page or question the reader put away with Back. It stays away until
@@ -283,9 +288,14 @@ impl Panel {
             .live
             .as_ref()
             .map_or(("", ""), |live| (live.line.as_str(), live.detail.as_str()));
+        let zone = if self.offset_minutes.is_some() {
+            ""
+        } else {
+            " UTC"
+        };
         let stamp = self
             .updated
-            .map(|(hour, minute)| format!("Updated {hour:02}:{minute:02}"));
+            .map(|(hour, minute)| format!("Updated {hour:02}:{minute:02}{zone}"));
         let detail = match (detail.is_empty(), stamp) {
             (_, None) => detail.to_owned(),
             (true, Some(stamp)) => stamp,
@@ -506,7 +516,7 @@ impl Panel {
                         self.rev = Some(live.rev);
                         self.dismissed = None;
                         self.page = 0;
-                        self.updated = reader_time();
+                        self.updated = local_time(self.offset_minutes.unwrap_or(0));
                         self.live = Some(live);
                         if matches!(
                             self.live.as_ref().map(|live| &live.content),
@@ -1022,19 +1032,32 @@ impl KoboApp for Panel {
     }
 }
 
-/// The reader's local time, at the offset the runtime was started with.
-/// None when the clock is unavailable, so no time is invented.
-fn reader_time() -> Option<(u8, u8)> {
-    use kobo_sdk::clock::{Clock, SystemClock};
-    let minutes = std::env::var("KOBO_UTC_OFFSET_MINUTES")
+/// The offset the runtime was started with, if it gave a usable one.
+fn reader_offset() -> Option<i16> {
+    std::env::var("KOBO_UTC_OFFSET_MINUTES")
+        .ok()?
+        .trim()
+        .parse::<i16>()
         .ok()
-        .and_then(|value| value.parse::<i16>().ok())
-        .unwrap_or(0);
-    SystemClock::new(minutes).ok()?.now().ok()?.hour_minute()
+}
+
+fn local_time(offset_minutes: i16) -> Option<(u8, u8)> {
+    use kobo_sdk::clock::{Clock, SystemClock};
+    SystemClock::new(offset_minutes)
+        .ok()?
+        .now()
+        .ok()?
+        .hour_minute()
 }
 
 fn main() -> ExitCode {
-    match kobo_sdk::run("muse-panel", Panel::default()) {
+    match kobo_sdk::run(
+        "muse-panel",
+        Panel {
+            offset_minutes: reader_offset(),
+            ..Panel::default()
+        },
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("muse-panel: {error}");
@@ -1411,6 +1434,19 @@ mod tests {
     }
 
     #[test]
+    fn local_time_follows_the_given_offset_and_rejects_an_invalid_one() {
+        let utc = local_time(0).expect("system clock");
+        let ahead = local_time(330).expect("system clock");
+        let total = |(h, m): (u8, u8)| i32::from(h) * 60 + i32::from(m);
+        let delta = (total(ahead) - total(utc)).rem_euclid(1440);
+        assert!(
+            delta == 330 || delta == 331 || delta == 329,
+            "delta {delta}"
+        );
+        assert!(local_time(2000).is_none());
+    }
+
+    #[test]
     fn an_empty_status_from_muse_reads_differently_from_no_contact_yet() {
         let (mut app, poll) = paired();
         assert!(format!("{:?}", app.resting()).contains("Waiting for Muse"));
@@ -1442,10 +1478,23 @@ mod tests {
         assert!(app.updated.is_none());
 
         let (mut app, poll) = paired();
+        app.offset_minutes = Some(0);
         deliver(&mut app, poll, SCREEN_STATUS);
         let (hour, minute) = app.updated.expect("a validated reply stamps the time");
         assert!(hour < 24 && minute < 60);
+
         assert!(format!("{:?}", app.resting()).contains("Updated "));
+
+        let (mut app, poll) = paired();
+        assert!(app.offset_minutes.is_none());
+        deliver(&mut app, poll, SCREEN_STATUS);
+        assert!(app.updated.is_some());
+        let text = format!("{:?}", app.resting());
+        assert!(text.contains(" UTC"), "an unknown offset is labelled UTC");
+        let (mut app, poll) = paired();
+        app.offset_minutes = Some(330);
+        deliver(&mut app, poll, SCREEN_STATUS);
+        assert!(!format!("{:?}", app.resting()).contains(" UTC"));
     }
 
     #[test]
