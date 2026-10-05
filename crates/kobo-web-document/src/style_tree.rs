@@ -381,19 +381,27 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
             }
             continue;
         }
-        if let Some(declared) = border_declarations(&name, value) {
-            match declared {
-                Some(list) => {
-                    result.extend(list.into_iter().map(|(property, v)| (property, v, important)));
-                }
-                None => unsupported = true,
+        match border_declarations(&name, value) {
+            BorderParse::NotBorder => {}
+            BorderParse::Unsupported => {
+                unsupported = true;
+                continue;
             }
-            continue;
+            BorderParse::Declared(list) => {
+                result.extend(
+                    list.into_iter()
+                        .map(|(property, v)| (property, v, important)),
+                );
+                continue;
+            }
         }
         if name == "background-image" || name == "background-clip" {
             match background_layers(&name, value) {
                 Some(list) => {
-                    result.extend(list.into_iter().map(|(property, v)| (property, v, important)));
+                    result.extend(
+                        list.into_iter()
+                            .map(|(property, v)| (property, v, important)),
+                    );
                 }
                 None => unsupported = true,
             }
@@ -1530,10 +1538,23 @@ fn four_sides<T: Copy>(tokens: &[&str], parse: impl Fn(&str) -> Option<T>) -> Op
 
 type Declared = Vec<(Property, Value)>;
 
-/// The outer `Option` says whether `name` is a border property at all; the
-/// inner one whether its value is something this engine can account for.
-fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
-    let rest = name.strip_prefix("border")?;
+enum BorderParse {
+    NotBorder,
+    /// A border property whose value this engine cannot account for.
+    Unsupported,
+    Declared(Declared),
+}
+
+impl From<Option<Declared>> for BorderParse {
+    fn from(parsed: Option<Declared>) -> Self {
+        parsed.map_or(Self::Unsupported, Self::Declared)
+    }
+}
+
+fn border_declarations(name: &str, value: &str) -> BorderParse {
+    let Some(rest) = name.strip_prefix("border") else {
+        return BorderParse::NotBorder;
+    };
     let tokens: Vec<&str> = value.split_ascii_whitespace().collect();
     let global = parse_keyword(value);
     let rest = rest.strip_prefix('-').unwrap_or(rest);
@@ -1549,19 +1570,26 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
                 _ => four_sides(&tokens, border_clear).map(|v| v.map(Value::Flag)),
             }
         };
-        return Some(sides.map(|sides| {
-            for (side, v) in sides.into_iter().enumerate() {
-                out.push((side_property(side, rest), v));
-            }
-            out
-        }));
+        return sides
+            .map(|sides| {
+                for (side, v) in sides.into_iter().enumerate() {
+                    out.push((side_property(side, rest), v));
+                }
+                out
+            })
+            .into();
     }
     // border: and border-<side>[-width|-style|-color]
     let (sides, kind): (Vec<usize>, &str) = if rest.is_empty() {
         ((0..4).collect(), "")
     } else {
         let mut parts = rest.splitn(2, '-');
-        let side = SIDES.iter().position(|candidate| Some(*candidate) == parts.next())?;
+        let Some(side) = SIDES
+            .iter()
+            .position(|candidate| Some(*candidate) == parts.next())
+        else {
+            return BorderParse::NotBorder;
+        };
         (vec![side], parts.next().unwrap_or(""))
     };
     if matches!(kind, "width" | "style" | "color") {
@@ -1570,10 +1598,12 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
             "style" => border_style(value).map(Value::Flag),
             _ => border_clear(value).map(Value::Flag),
         });
-        return Some(v.map(|v| sides.iter().map(|&s| (side_property(s, kind), v)).collect()));
+        return v
+            .map(|v| sides.iter().map(|&s| (side_property(s, kind), v)).collect())
+            .into();
     }
     if !kind.is_empty() {
-        return None;
+        return BorderParse::NotBorder;
     }
     // Shorthand: width, style and colour in any order; omitted ones reset.
     if let Some(keyword) = global {
@@ -1582,12 +1612,12 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
                 out.push((side_property(side, k), keyword));
             }
         }
-        return Some(Some(out));
+        return BorderParse::Declared(out);
     }
     let (mut width, mut style, mut clear) = (3, false, false);
     let (mut seen_width, mut seen_style, mut seen_colour) = (false, false, false);
     if tokens.is_empty() || tokens.len() > 3 {
-        return Some(None);
+        return BorderParse::Unsupported;
     }
     for token in tokens {
         if let (false, Some(w)) = (seen_width, border_width(token)) {
@@ -1600,7 +1630,7 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
             clear = c;
             seen_colour = true;
         } else {
-            return Some(None);
+            return BorderParse::Unsupported;
         }
     }
     for &side in &sides {
@@ -1608,7 +1638,7 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
         out.push((side_property(side, "style"), Value::Flag(style)));
         out.push((side_property(side, "color"), Value::Flag(clear)));
     }
-    Some(Some(out))
+    BorderParse::Declared(out)
 }
 
 /// `background-image` only counts layers (every one must be `none`), and
@@ -1616,8 +1646,7 @@ fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
 fn background_layers(name: &str, value: &str) -> Option<Declared> {
     if let Some(keyword) = parse_keyword(value) {
         // An inherited image list is not something this engine tracks.
-        return (name == "background-clip")
-            .then(|| vec![(Property::BackgroundClip, keyword)]);
+        return (name == "background-clip").then(|| vec![(Property::BackgroundClip, keyword)]);
     }
     let items: Vec<&str> = value.split(',').map(str::trim).collect();
     if items.is_empty() || items.len() > 4 {

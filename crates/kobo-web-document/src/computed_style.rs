@@ -577,19 +577,6 @@ fn resolve(
         Value::Inherit => inherited,
         Value::Initial => initial_value,
         Value::Unset => match property {
-            Property::Display
-            | Property::Width
-            | Property::Height
-            | Property::BoxSizing
-            | Property::MarginLeft
-            | Property::MarginRight
-            | Property::MarginTop
-            | Property::MarginBottom
-            | Property::BackgroundColor
-            | Property::PaddingLeft
-            | Property::PaddingRight
-            | Property::PaddingTop
-            | Property::PaddingBottom => initial_value,
             Property::Color | Property::Direction | Property::FontSize | Property::LineHeight => {
                 inherited
             }
