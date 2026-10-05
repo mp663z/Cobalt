@@ -1,0 +1,15 @@
+[package]
+name = "cobalt-verification"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+kobo-protocol = { path = "../../crates/kobo-protocol" }
+kobo-web-layout = { path = "../../crates/kobo-web-layout" }
+kobo-web-document = { path = "../../crates/kobo-web-document" }
+
+[dev-dependencies]
+proptest = "1"

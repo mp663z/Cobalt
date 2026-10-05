@@ -1,0 +1,29 @@
+[package]
+name = "cobalt-verification-fuzz"
+version = "0.1.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kobo-protocol = { path = "../../../crates/kobo-protocol" }
+kobo-web-document = { path = "../../../crates/kobo-web-document" }
+
+[[bin]]
+name = "protocol"
+path = "fuzz_targets/protocol.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html"
+path = "fuzz_targets/html.rs"
+test = false
+doc = false
+bench = false
