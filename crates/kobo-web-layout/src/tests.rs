@@ -359,6 +359,7 @@ fn an_image_with_a_declared_size_gets_room_and_keeps_its_description() {
 
 #[test]
 fn a_picture_is_never_squeezed_into_the_foot_of_a_page() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
     let mut markup = String::new();
     for n in 0..40 {
         markup.push_str(&format!(
@@ -529,6 +530,41 @@ fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() 
                 screen.nodes.first(),
                 Some(kobo_ui::Node::Table { .. })
             ));
+        }
+    }
+}
+
+#[test]
+fn a_single_word_wider_than_the_page_is_cut_inside_the_word_without_losing_a_letter() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let word = "x".repeat(3000);
+    let document = html(&format!("<p>{word}</p>"));
+    let metrics = kobo_ui::CLARA_BW_METRICS;
+    let layout = paginate_for(&document, "Long", &metrics);
+    assert!(
+        layout.pages.len() > 1,
+        "a 3000 letter word needs several pages"
+    );
+    let kept: usize = layout
+        .pages
+        .iter()
+        .flatten()
+        .filter_map(text_of)
+        .map(|text| text.chars().filter(|c| *c == 'x').count())
+        .sum();
+    assert_eq!(kept, 3000, "no letter is dropped between pages");
+}
+
+#[test]
+fn splitting_preformatted_text_keeps_every_line_break() {
+    for text in ["a\n\nz", "a\n\n\nz", "ab\ncd\n\nef\n", "\n\nx"] {
+        let piece = Piece::Preformatted(text.to_owned());
+        for at in cut_points(&piece) {
+            let (head, tail) = split_at(&piece, at);
+            let (Piece::Preformatted(head), Piece::Preformatted(tail)) = (head, tail) else {
+                panic!("a preformatted piece splits into preformatted pieces");
+            };
+            assert_eq!(format!("{head}\n{tail}"), text, "{text:?} cut at {at}");
         }
     }
 }

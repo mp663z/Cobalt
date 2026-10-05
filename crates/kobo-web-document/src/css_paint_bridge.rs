@@ -7,7 +7,7 @@
 //! an unverified tree by hand: unknown declarations set its `unsupported` flag.
 
 use crate::box_tree::{BoxKind, BoxTree, UsedHeightPass, VerticalPass, WidthPass};
-use crate::computed_style::BoxSizing;
+use crate::computed_style::{BoxSizing, Clip};
 use crate::display_list::{
     DisplayList, Error as DisplayError, Rect, Rgb, Source, MAX_COMMANDS, MAX_PIXELS,
 };
@@ -129,6 +129,14 @@ fn paint_rectangles(
     if viewport_width == 0 || viewport_height == 0 || pixels.is_none_or(|n| n > MAX_PIXELS) {
         return Err(BridgeError::InvalidViewport);
     }
+    if tree
+        .boxes
+        .iter()
+        .any(|node| node.style.decor.has_painted_border())
+    {
+        // Only transparent borders are accepted: nothing paints them.
+        return Err(BridgeError::Unsupported);
+    }
     if tree.unsupported
         || tree.quirks
         || tree.truncated
@@ -181,24 +189,48 @@ fn paint_rectangles(
         let x = widths.content_x[fill.box_index].ok_or(BridgeError::InvalidGeometry)?;
         let y = vertical.content_y[fill.box_index].ok_or(BridgeError::InvalidGeometry)?;
         let (x, y, width, height) = if area == PaintArea::Padding {
+            // `padding_*` is padding plus border; the background colour is
+            // bounded by the clip of the bottom-most background layer.
+            let border = node.style.decor.used_border();
+            let (top, right, bottom, left) = match node.style.decor.colour_clip() {
+                Clip::Border => (0, 0, 0, 0),
+                Clip::Padding => (border[0], border[1], border[2], border[3]),
+                Clip::Content => (
+                    node.style.padding_top,
+                    node.style.padding_right,
+                    node.style.padding_bottom,
+                    node.style.padding_left,
+                ),
+            };
+            let grow = |edge: u32, inset: u32| edge.saturating_sub(inset);
+            let (top, right, bottom, left) = (
+                grow(node.style.padding_top, top),
+                grow(node.style.padding_right, right),
+                grow(node.style.padding_bottom, bottom),
+                grow(node.style.padding_left, left),
+            );
             (
-                x.checked_sub(i64::from(node.style.padding_left))
+                x.checked_sub(i64::from(left))
                     .ok_or(BridgeError::InvalidGeometry)?,
-                y.checked_sub(i64::from(node.style.padding_top))
+                y.checked_sub(i64::from(top))
                     .ok_or(BridgeError::InvalidGeometry)?,
                 width
-                    .checked_add(node.style.padding_left)
-                    .and_then(|w| w.checked_add(node.style.padding_right))
+                    .checked_add(left)
+                    .and_then(|w| w.checked_add(right))
                     .ok_or(BridgeError::InvalidGeometry)?,
                 height
-                    .checked_add(node.style.padding_top)
-                    .and_then(|h| h.checked_add(node.style.padding_bottom))
+                    .checked_add(top)
+                    .and_then(|h| h.checked_add(bottom))
                     .ok_or(BridgeError::InvalidGeometry)?,
             )
         } else {
             (x, y, width, height)
         };
         if width == 0 || height == 0 {
+            if area == PaintArea::Padding {
+                // A background clipped to an empty area paints nothing.
+                continue;
+            }
             return Err(BridgeError::InvalidGeometry);
         }
         let rect = Rect {

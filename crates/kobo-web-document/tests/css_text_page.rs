@@ -39,7 +39,7 @@ impl FontProvider for TestFace {
 }
 fn tree(html: &str) -> BoxTree {
     BoxTree::from_style(&parse_style_tree(
-        format!("<!doctype html>{html}").as_bytes(),
+        format!("<!doctype html><style>body{{margin:0}}</style>{html}").as_bytes(),
         &[],
         &Limits::DEFAULT,
     ))

@@ -22,6 +22,7 @@ pub enum BoxKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssBox {
     pub kind: BoxKind,
+    // Note: `style.padding_*` is the padding plus border edge, see `from_style`.
     /// Index into the styled arena; anonymous boxes have no DOM source.
     pub source: Option<usize>,
     pub parent: Option<usize>,
@@ -239,6 +240,60 @@ pub fn resolve_vertical_margin(margin: Margin, containing_width: u32) -> i64 {
     resolve_margin(margin, containing_width).unwrap_or(0)
 }
 
+impl BoxTree {
+    /// The vertical margin `index` presents to its neighbours once margins
+    /// that touch collapse (CSS 2.2 8.3.1): a box with no padding or border on
+    /// that edge shares its margin with its first (top) or last (bottom)
+    /// in-flow block child. The root element never collapses with its
+    /// children, and a bottom margin only escapes an auto-height box.
+    fn collapsed_margin(
+        &self,
+        index: usize,
+        top: bool,
+        widths: &WidthPass,
+        viewport_width: u32,
+    ) -> i64 {
+        let mut margins = Vec::new();
+        let mut current = index;
+        loop {
+            let node = &self.boxes[current];
+            let containing = node
+                .parent
+                .and_then(|parent| widths.widths[parent])
+                .map_or(viewport_width, |w| w.content);
+            margins.push(resolve_vertical_margin(
+                if top {
+                    node.style.margin_top
+                } else {
+                    node.style.margin_bottom
+                },
+                containing,
+            ));
+            let open = node.parent.is_some()
+                && if top {
+                    node.style.padding_top == 0
+                } else {
+                    node.style.padding_bottom == 0 && node.style.height == Length::Auto
+                };
+            let next = if top {
+                node.children.first()
+            } else {
+                node.children.last()
+            };
+            match next {
+                Some(&child)
+                    if open
+                        && matches!(self.boxes[child].kind, BoxKind::Block | BoxKind::ListItem) =>
+                {
+                    current = child;
+                }
+                _ => break,
+            }
+        }
+        collapse_adjoining_margins(&margins)
+    }
+}
+
 /// Top-down diagnostic of definite block heights. Missing heights remain
 /// unknown for descendant percentage heights. No y position is inferred.
 pub struct HeightPass {
@@ -420,17 +475,6 @@ impl UsedHeightPass {
                     valid = false;
                     break;
                 }
-                let top = resolve_vertical_margin(next.style.margin_top, width);
-                if previous.is_none() && top != 0 {
-                    valid = false; // parent/first-child collapse not implemented
-                    break;
-                }
-                if let Some(prev) = previous {
-                    content = content.saturating_add(collapse_adjoining_margins(&[
-                        resolve_vertical_margin(tree.boxes[prev].style.margin_bottom, width),
-                        top,
-                    ]));
-                }
                 let Some(height) = result.heights[child] else {
                     valid = false;
                     break;
@@ -439,6 +483,16 @@ impl UsedHeightPass {
                     valid = false; // empty child's margins may collapse through
                     break;
                 }
+                let top = tree.collapsed_margin(child, true, &widths, viewport_width);
+                if let Some(prev) = previous {
+                    content = content.saturating_add(collapse_adjoining_margins(&[
+                        tree.collapsed_margin(prev, false, &widths, viewport_width),
+                        top,
+                    ]));
+                } else if node.style.padding_top != 0 || node.parent.is_none() {
+                    // Nothing to collapse with: the margin sits inside.
+                    content = content.saturating_add(top);
+                }
                 content = content
                     .saturating_add(i64::from(height))
                     .saturating_add(i64::from(next.style.padding_top))
@@ -446,8 +500,13 @@ impl UsedHeightPass {
                 previous = Some(child);
             }
             if let Some(last) = previous {
-                if resolve_vertical_margin(tree.boxes[last].style.margin_bottom, width) != 0 {
-                    valid = false; // last-child/parent collapse not implemented
+                if node.style.padding_bottom != 0 || node.parent.is_none() {
+                    content = content.saturating_add(tree.collapsed_margin(
+                        last,
+                        false,
+                        &widths,
+                        viewport_width,
+                    ));
                 }
             } else if node.style.padding_top == 0 && node.style.padding_bottom == 0 {
                 valid = false; // margin-through empty block
@@ -554,58 +613,48 @@ impl VerticalPass {
             if node.kind == BoxKind::Text {
                 continue;
             }
-            if let Some(&first) = node.children.first() {
-                let Some(child) = tree.boxes.get(first) else {
-                    result.unsupported = true;
-                    break;
-                };
-                if child.kind != BoxKind::Text
-                    && resolve_vertical_margin(
-                        child.style.margin_top,
-                        widths.widths[index].map_or(0, |w| w.content),
-                    ) != 0
-                {
-                    result.unsupported = true;
-                    break;
-                }
-            }
             for &child in node.children.iter().rev() {
                 stack.push((child, Some(index)));
             }
         }
-        if result.unsupported
-            || seen.iter().any(|&visited| !visited)
-            || resolve_vertical_margin(tree.boxes[root].style.margin_top, viewport_width) != 0
-        {
+        if result.unsupported || seen.iter().any(|&visited| !visited) {
             result.unsupported = true;
             return result;
         }
-        result.content_y[root] = Some(i64::from(tree.boxes[root].style.padding_top));
+        result.content_y[root] = Some(
+            resolve_vertical_margin(tree.boxes[root].style.margin_top, viewport_width)
+                .saturating_add(i64::from(tree.boxes[root].style.padding_top)),
+        );
         let mut stack = vec![root];
         while let Some(index) = stack.pop() {
             let node = &tree.boxes[index];
             if node.kind == BoxKind::Text {
                 continue;
             }
-            let containing_width = widths.widths[index].map_or(0, |w| w.content);
             let mut previous = None::<usize>;
             for &child in &node.children {
                 if tree.boxes[child].kind == BoxKind::Text {
                     result.content_y[child] = result.content_y[index];
                     continue;
                 }
-                let gap = previous.map_or(0, |prev| {
-                    collapse_adjoining_margins(&[
-                        resolve_vertical_margin(
-                            tree.boxes[prev].style.margin_bottom,
-                            containing_width,
-                        ),
-                        resolve_vertical_margin(
-                            tree.boxes[child].style.margin_top,
-                            containing_width,
-                        ),
-                    ])
-                });
+                let top = tree.collapsed_margin(child, true, &widths, viewport_width);
+                let gap = previous.map_or_else(
+                    || {
+                        // The first child's margin sits inside a box that
+                        // cannot share it: the root, or one with top padding.
+                        if node.parent.is_none() || node.style.padding_top != 0 {
+                            top
+                        } else {
+                            0
+                        }
+                    },
+                    |prev| {
+                        collapse_adjoining_margins(&[
+                            tree.collapsed_margin(prev, false, &widths, viewport_width),
+                            top,
+                        ])
+                    },
+                );
                 let baseline = previous.map_or(result.content_y[index], |prev| {
                     result.content_y[prev].and_then(|y| {
                         heights.heights[prev].and_then(|h| {
@@ -836,12 +885,20 @@ impl BoxTree {
                 break;
             }
             let index = tree.boxes.len();
+            // Every pass below sees one edge per side: padding plus border.
+            // The border widths stay in `style.decor` for painting.
+            let mut style = node.style;
+            let [top, right, bottom, left] = style.decor.used_border();
+            style.padding_top = style.padding_top.saturating_add(top);
+            style.padding_right = style.padding_right.saturating_add(right);
+            style.padding_bottom = style.padding_bottom.saturating_add(bottom);
+            style.padding_left = style.padding_left.saturating_add(left);
             tree.boxes.push(CssBox {
                 kind,
                 source: Some(source),
                 parent,
                 children: Vec::new(),
-                style: node.style,
+                style,
                 text: node.text.clone(),
             });
             if let Some(parent) = parent {
@@ -922,8 +979,21 @@ mod tests {
     use super::*;
     use crate::{parse_style_tree, Limits};
 
+    /// Parses `html` with the user-agent body margin removed, so geometry
+    /// tests state every margin they depend on.
+    fn styled(html: &str) -> crate::style_tree::StyleTree {
+        let mut tree = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        for node in tree.nodes.iter_mut().filter(|node| node.tag == "body") {
+            node.style.margin_top = Margin::Px(0);
+            node.style.margin_right = Margin::Px(0);
+            node.style.margin_bottom = Margin::Px(0);
+            node.style.margin_left = Margin::Px(0);
+        }
+        tree
+    }
+
     fn boxes(html: &str) -> BoxTree {
-        BoxTree::from_style(&parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT))
+        BoxTree::from_style(&styled(html))
     }
 
     #[test]
@@ -1023,7 +1093,7 @@ mod tests {
     #[test]
     fn vertical_pass_positions_only_definite_block_subtrees() {
         let html = "<html style='height:600px'><body style='height:400px'><main style='height:100px'><section style='height:10px;margin-bottom:20px'></section><article style='height:30px;margin-top:15px'></article></main></body></html>";
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = styled(html);
         let tree = BoxTree::from_style(&styled);
         let pass = VerticalPass::from_boxes(&tree, 400, 600);
         assert!(!pass.unsupported);
@@ -1047,7 +1117,7 @@ mod tests {
     #[test]
     fn vertical_padding_moves_content_and_siblings_without_margin_collapse() {
         let html = "<html style='height:300px;padding-top:7px'><body style='height:200px;padding-top:11px;padding-bottom:13px'><main style='height:30px;padding-top:5px;padding-bottom:3px;margin-bottom:9px'></main><section style='height:20px;padding-top:4px;margin-top:6px'></section></body></html>";
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = styled(html);
         let tree = BoxTree::from_style(&styled);
         let pass = VerticalPass::from_boxes(&tree, 400, 600);
         assert!(!pass.unsupported);
@@ -1070,7 +1140,7 @@ mod tests {
     #[test]
     fn border_box_height_subtracts_vertical_padding_without_underflow() {
         let html = "<html style='height:100px'><body style='height:50%;box-sizing:border-box;padding-top:12px;padding-bottom:13px'><main style='height:50%'></main></body></html>";
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = styled(html);
         let tree = BoxTree::from_style(&styled);
         let pass = HeightPass::from_boxes(&tree, 100);
         let height = |tag: &str| {
@@ -1089,9 +1159,31 @@ mod tests {
     }
 
     #[test]
+    fn root_children_keep_their_top_margin_and_nested_first_margins_collapse() {
+        // The root element never collapses with its children.
+        let tree = boxes("<html style='height:600px'><body style='height:400px'><main style='height:30px;margin-top:10px'></main></body></html>");
+        let pass = VerticalPass::from_boxes(&tree, 400, 600);
+        assert!(!pass.unsupported);
+        // html, body, main: the body has no padding, so main's margin and
+        // the body's (zero here) are shared and both start at y = 10.
+        assert_eq!(pass.content_y, vec![Some(0), Some(10), Some(10)]);
+        // The larger of two touching margins wins.
+        let tree = boxes("<html style='height:600px'><body style='height:400px'><main style='margin-top:10px'><div style='margin-top:25px;height:30px'></div></main></body></html>");
+        let pass = VerticalPass::from_boxes(&tree, 400, 600);
+        assert!(!pass.unsupported);
+        assert_eq!(pass.content_y[2], Some(25));
+        assert_eq!(pass.content_y[3], Some(25));
+        // With top padding the two margins stay apart.
+        let tree = boxes("<html style='height:600px'><body style='height:400px'><main style='margin-top:10px;padding-top:4px'><div style='margin-top:25px;height:30px'></div></main></body></html>");
+        let pass = VerticalPass::from_boxes(&tree, 400, 600);
+        assert!(!pass.unsupported);
+        assert_eq!(pass.content_y[2], Some(14));
+        assert_eq!(pass.content_y[3], Some(39));
+    }
+
+    #[test]
     fn vertical_pass_rejects_unknown_height_and_parent_child_collapse() {
         for html in [
-            "<html style='height:600px'><body style='height:400px;margin-top:10px'></body></html>",
             "<html style='height:600px'><body style='height:400px'>text</body></html>",
             "<html style='height:600px'><body style='height:400px'><div style='height:0'></div></body></html>",
         ] {
@@ -1104,7 +1196,7 @@ mod tests {
     #[test]
     fn auto_block_height_contains_definite_children_but_not_indefinite_percent() {
         let html = "<html style='height:600px'><body style='padding-top:7px;padding-bottom:3px'><main style='height:20px;padding-top:2px;padding-bottom:3px;margin-bottom:5px'></main><section style='height:10px;margin-top:8px'></section></body></html>";
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = styled(html);
         let tree = BoxTree::from_style(&styled);
         let height = UsedHeightPass::from_boxes(&tree, 400, 600);
         let vertical = VerticalPass::from_boxes(&tree, 400, 600);
@@ -1375,7 +1467,7 @@ mod tests {
         assert_eq!(resolve_margin(Margin::Px(-5), 200), Some(-5));
         assert_eq!(resolve_margin(Margin::Percent(2500), 200), Some(50));
         let html = "<div style='direction:rtl;width:200px;margin-left:20px'>A<p style='width:100px;margin-right:auto'>B</p>C</div>";
-        let styled = parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let styled = styled(html);
         let tree = BoxTree::from_style(&styled);
         let pass = WidthPass::from_boxes(&tree, 400);
         let div = tree

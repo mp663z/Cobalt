@@ -8,7 +8,7 @@ use kobo_web_document::{parse_style_tree, Limits};
 
 fn setup(html: &str) -> (BoxTree, WidthPass, VerticalPass) {
     let styled = parse_style_tree(
-        format!("<!doctype html>{html}").as_bytes(),
+        format!("<!doctype html><style>body{{margin:0}}</style>{html}").as_bytes(),
         &[],
         &Limits::DEFAULT,
     );

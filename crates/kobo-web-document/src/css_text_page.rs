@@ -252,6 +252,14 @@ pub fn paint_direct_text_blocks(
         if !exact(node.style.margin_top) || !exact(node.style.margin_bottom) {
             return true;
         }
+        // A first child's top margin may collapse with its parent's; that
+        // geometry is not part of this restricted paint proof yet.
+        if node.children.first().is_some_and(|&child| {
+            tree.boxes[child].kind != BoxKind::Text
+                && tree.boxes[child].style.margin_top != crate::computed_style::Margin::Px(0)
+        }) {
+            return true;
+        }
         // A final child's bottom margin may collapse out of its parent;
         // that geometry is not part of this restricted paint proof yet.
         node.children.last().is_some_and(|&child| {
@@ -259,6 +267,7 @@ pub fn paint_direct_text_blocks(
                 && tree.boxes[child].style.margin_bottom != crate::computed_style::Margin::Px(0)
         })
     }) || tree.boxes[root].style.margin_bottom != crate::computed_style::Margin::Px(0)
+        || tree.boxes[root].style.margin_top != crate::computed_style::Margin::Px(0)
     {
         return Err(PageError::Unsupported);
     }

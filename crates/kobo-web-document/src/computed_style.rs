@@ -25,6 +25,149 @@ pub enum Property {
     PaddingRight,
     PaddingTop,
     PaddingBottom,
+    BorderTopWidth,
+    BorderRightWidth,
+    BorderBottomWidth,
+    BorderLeftWidth,
+    BorderTopStyle,
+    BorderRightStyle,
+    BorderBottomStyle,
+    BorderLeftStyle,
+    BorderTopColor,
+    BorderRightColor,
+    BorderBottomColor,
+    BorderLeftColor,
+    BackgroundClip,
+    BackgroundLayers,
+}
+
+impl Property {
+    /// Properties kept together in [`Decor`]: none of them is inherited.
+    const DECOR: [Self; 14] = [
+        Self::BorderTopWidth,
+        Self::BorderRightWidth,
+        Self::BorderBottomWidth,
+        Self::BorderLeftWidth,
+        Self::BorderTopStyle,
+        Self::BorderRightStyle,
+        Self::BorderBottomStyle,
+        Self::BorderLeftStyle,
+        Self::BorderTopColor,
+        Self::BorderRightColor,
+        Self::BorderBottomColor,
+        Self::BorderLeftColor,
+        Self::BackgroundClip,
+        Self::BackgroundLayers,
+    ];
+}
+
+/// Which box edge the background colour is clipped to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Clip {
+    Border,
+    Padding,
+    Content,
+}
+
+/// Computed borders and background layer clipping. Sides are top, right,
+/// bottom, left. A border whose style is `none` has no width when used.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Decor {
+    pub border_width: [u32; 4],
+    pub border_visible: [bool; 4],
+    /// Whether each side's border colour is `transparent`. Any other colour
+    /// would need painting that does not exist yet.
+    pub border_clear: [bool; 4],
+    /// Number of background layers: the length of the `background-image` list.
+    pub layers: u8,
+    /// `background-clip` list; it repeats to cover every layer.
+    pub clips: [Clip; 4],
+    pub clip_len: u8,
+}
+
+impl Decor {
+    pub const INITIAL: Self = Self {
+        border_width: [3; 4],
+        border_visible: [false; 4],
+        border_clear: [false; 4],
+        layers: 1,
+        clips: [Clip::Border; 4],
+        clip_len: 1,
+    };
+
+    /// Whether any border would be drawn in a colour other than transparent.
+    #[must_use]
+    pub fn has_painted_border(self) -> bool {
+        (0..4).any(|side| {
+            self.border_visible[side] && self.border_width[side] > 0 && !self.border_clear[side]
+        })
+    }
+
+    /// Used border widths, with `none` styles collapsed to zero.
+    #[must_use]
+    pub fn used_border(self) -> [u32; 4] {
+        let mut used = [0; 4];
+        for (side, slot) in used.iter_mut().enumerate() {
+            if self.border_visible[side] {
+                *slot = self.border_width[side];
+            }
+        }
+        used
+    }
+
+    /// The clip of the bottom-most layer, which is the one that bounds the
+    /// background colour (CSS Backgrounds 3, section 3.2).
+    #[must_use]
+    pub fn colour_clip(self) -> Clip {
+        let layers = usize::from(self.layers.max(1));
+        let len = usize::from(self.clip_len.max(1));
+        self.clips[(layers - 1) % len]
+    }
+
+    fn get(self, property: Property) -> Value {
+        match property {
+            Property::BorderTopWidth => Value::Padding(self.border_width[0]),
+            Property::BorderRightWidth => Value::Padding(self.border_width[1]),
+            Property::BorderBottomWidth => Value::Padding(self.border_width[2]),
+            Property::BorderLeftWidth => Value::Padding(self.border_width[3]),
+            Property::BorderTopStyle => Value::Flag(self.border_visible[0]),
+            Property::BorderRightStyle => Value::Flag(self.border_visible[1]),
+            Property::BorderBottomStyle => Value::Flag(self.border_visible[2]),
+            Property::BorderLeftStyle => Value::Flag(self.border_visible[3]),
+            Property::BorderTopColor => Value::Flag(self.border_clear[0]),
+            Property::BorderRightColor => Value::Flag(self.border_clear[1]),
+            Property::BorderBottomColor => Value::Flag(self.border_clear[2]),
+            Property::BorderLeftColor => Value::Flag(self.border_clear[3]),
+            Property::BackgroundClip => Value::BackgroundClips {
+                clips: self.clips,
+                len: self.clip_len,
+            },
+            _ => Value::BackgroundLayers(self.layers),
+        }
+    }
+
+    fn set(&mut self, property: Property, value: Value) {
+        match (property, value) {
+            (Property::BorderTopWidth, Value::Padding(px)) => self.border_width[0] = px,
+            (Property::BorderRightWidth, Value::Padding(px)) => self.border_width[1] = px,
+            (Property::BorderBottomWidth, Value::Padding(px)) => self.border_width[2] = px,
+            (Property::BorderLeftWidth, Value::Padding(px)) => self.border_width[3] = px,
+            (Property::BorderTopStyle, Value::Flag(v)) => self.border_visible[0] = v,
+            (Property::BorderRightStyle, Value::Flag(v)) => self.border_visible[1] = v,
+            (Property::BorderBottomStyle, Value::Flag(v)) => self.border_visible[2] = v,
+            (Property::BorderLeftStyle, Value::Flag(v)) => self.border_visible[3] = v,
+            (Property::BorderTopColor, Value::Flag(v)) => self.border_clear[0] = v,
+            (Property::BorderRightColor, Value::Flag(v)) => self.border_clear[1] = v,
+            (Property::BorderBottomColor, Value::Flag(v)) => self.border_clear[2] = v,
+            (Property::BorderLeftColor, Value::Flag(v)) => self.border_clear[3] = v,
+            (Property::BackgroundClip, Value::BackgroundClips { clips, len }) => {
+                self.clips = clips;
+                self.clip_len = len;
+            }
+            (Property::BackgroundLayers, Value::BackgroundLayers(n)) => self.layers = n,
+            _ => unreachable!("resolved decor value has the wrong type"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,6 +192,12 @@ pub enum Value {
     BackgroundColor(Option<u32>),
     BackgroundCurrentColor,
     Padding(u32),
+    Flag(bool),
+    BackgroundClips {
+        clips: [Clip; 4],
+        len: u8,
+    },
+    BackgroundLayers(u8),
     FontSize(u32),
     FontSizePercent(u32),
     LineHeight(Option<u32>),
@@ -137,6 +286,7 @@ pub struct Computed {
     pub padding_right: u32,
     pub padding_top: u32,
     pub padding_bottom: u32,
+    pub decor: Decor,
 }
 
 impl Computed {
@@ -160,6 +310,7 @@ impl Computed {
         padding_right: 0,
         padding_top: 0,
         padding_bottom: 0,
+        decor: Decor::INITIAL,
     };
 
     fn computed_line_height(self) -> Value {
@@ -215,6 +366,7 @@ impl Computed {
             padding_right: initial.padding_right,
             padding_top: initial.padding_top,
             padding_bottom: initial.padding_bottom,
+            decor: initial.decor,
         };
         for property in [
             Property::Display,
@@ -234,7 +386,10 @@ impl Computed {
             Property::PaddingRight,
             Property::PaddingTop,
             Property::PaddingBottom,
-        ] {
+        ]
+        .into_iter()
+        .chain(Property::DECOR)
+        {
             let chosen = declarations
                 .iter()
                 .filter(|decl| decl.property == property)
@@ -263,6 +418,7 @@ impl Computed {
                 Property::PaddingRight => Value::Padding(initial.padding_right),
                 Property::PaddingTop => Value::Padding(initial.padding_top),
                 Property::PaddingBottom => Value::Padding(initial.padding_bottom),
+                decor => initial.decor.get(decor),
             };
             let value = chosen.map_or(fallback, |decl| {
                 resolve(
@@ -343,6 +499,7 @@ impl Computed {
                 Value::Padding(px) if property == Property::PaddingBottom => {
                     computed.padding_bottom = px;
                 }
+                value if Property::DECOR.contains(&property) => computed.decor.set(property, value),
                 _ => unreachable!("resolved property value has the wrong type"),
             }
         }
@@ -388,6 +545,7 @@ fn resolve(
         Property::PaddingRight => Value::Padding(initial.padding_right),
         Property::PaddingTop => Value::Padding(initial.padding_top),
         Property::PaddingBottom => Value::Padding(initial.padding_bottom),
+        decor => initial.decor.get(decor),
     };
     let inherited = match property {
         Property::Display => Value::Display(parent.unwrap_or(initial).display),
@@ -413,27 +571,16 @@ fn resolve(
         Property::PaddingRight => Value::Padding(parent.unwrap_or(initial).padding_right),
         Property::PaddingTop => Value::Padding(parent.unwrap_or(initial).padding_top),
         Property::PaddingBottom => Value::Padding(parent.unwrap_or(initial).padding_bottom),
+        decor => parent.unwrap_or(initial).decor.get(decor),
     };
     match value {
         Value::Inherit => inherited,
         Value::Initial => initial_value,
         Value::Unset => match property {
-            Property::Display
-            | Property::Width
-            | Property::Height
-            | Property::BoxSizing
-            | Property::MarginLeft
-            | Property::MarginRight
-            | Property::MarginTop
-            | Property::MarginBottom
-            | Property::BackgroundColor
-            | Property::PaddingLeft
-            | Property::PaddingRight
-            | Property::PaddingTop
-            | Property::PaddingBottom => initial_value,
             Property::Color | Property::Direction | Property::FontSize | Property::LineHeight => {
                 inherited
             }
+            _ => initial_value,
         },
         Value::Revert => {
             // Revert crosses the *origin* boundary, even for important values.
@@ -527,6 +674,7 @@ mod tests {
             padding_right: 0,
             padding_top: 0,
             padding_bottom: 0,
+            decor: Decor::INITIAL,
         };
         assert_eq!(
             Computed::cascade(Some(parent), &[]),
@@ -549,7 +697,8 @@ mod tests {
                 padding_left: 0,
                 padding_right: 0,
                 padding_top: 0,
-                padding_bottom: 0
+                padding_bottom: 0,
+                decor: Decor::INITIAL,
             }
         );
     }
@@ -678,6 +827,7 @@ mod tests {
             padding_right: 0,
             padding_top: 0,
             padding_bottom: 0,
+            decor: Decor::INITIAL,
         };
         for (keyword, expected_display, expected_color) in [
             (Value::Inherit, Display::Block, parent.color),
@@ -709,7 +859,8 @@ mod tests {
                     padding_left: 0,
                     padding_right: 0,
                     padding_top: 0,
-                    padding_bottom: 0
+                    padding_bottom: 0,
+                    decor: Decor::INITIAL,
                 }
             );
         }
