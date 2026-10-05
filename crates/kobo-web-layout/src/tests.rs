@@ -533,3 +533,21 @@ fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() 
         }
     }
 }
+
+#[test]
+fn a_single_word_wider_than_the_page_is_cut_inside_the_word_without_losing_a_letter() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let word = "x".repeat(3000);
+    let document = html(&format!("<p>{word}</p>"));
+    let metrics = kobo_ui::CLARA_BW_METRICS;
+    let layout = paginate_for(&document, "Long", &metrics);
+    assert!(layout.pages.len() > 1, "a 3000 letter word needs several pages");
+    let kept: usize = layout
+        .pages
+        .iter()
+        .flatten()
+        .filter_map(text_of)
+        .map(|text| text.chars().filter(|c| *c == 'x').count())
+        .sum();
+    assert_eq!(kept, 3000, "no letter is dropped between pages");
+}

@@ -1159,7 +1159,7 @@ fn cut(
     fits: &mut impl FnMut(&[Piece]) -> bool,
 ) -> Option<(Piece, Piece)> {
     let points = cut_points(piece);
-    if points.is_empty() {
+    if points.is_empty() && !page.is_empty() {
         return None;
     }
     let try_at = |at: usize, fits: &mut dyn FnMut(&[Piece]) -> bool| {
