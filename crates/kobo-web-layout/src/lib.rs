@@ -1270,8 +1270,16 @@ fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
                 },
             )
         }
+        // Only the line break that the cut itself ends is removed from the
+        // head, so `head + "\n" + tail` is always the original text and a
+        // blank line at the boundary is kept as the tail's first line.
         Piece::Preformatted(text) => (
-            Piece::Preformatted(text[..at].trim_end_matches('\n').to_owned()),
+            Piece::Preformatted(
+                text[..at]
+                    .strip_suffix('\n')
+                    .unwrap_or(&text[..at])
+                    .to_owned(),
+            ),
             Piece::Preformatted(text[at..].to_owned()),
         ),
         // Both halves offer the quote's links: which half a link's words fell

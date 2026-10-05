@@ -554,3 +554,17 @@ fn a_single_word_wider_than_the_page_is_cut_inside_the_word_without_losing_a_let
         .sum();
     assert_eq!(kept, 3000, "no letter is dropped between pages");
 }
+
+#[test]
+fn splitting_preformatted_text_keeps_every_line_break() {
+    for text in ["a\n\nz", "a\n\n\nz", "ab\ncd\n\nef\n", "\n\nx"] {
+        let piece = Piece::Preformatted(text.to_owned());
+        for at in cut_points(&piece) {
+            let (head, tail) = split_at(&piece, at);
+            let (Piece::Preformatted(head), Piece::Preformatted(tail)) = (head, tail) else {
+                panic!("a preformatted piece splits into preformatted pieces");
+            };
+            assert_eq!(format!("{head}\n{tail}"), text, "{text:?} cut at {at}");
+        }
+    }
+}
