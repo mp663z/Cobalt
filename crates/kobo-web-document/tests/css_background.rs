@@ -6,7 +6,8 @@ use kobo_web_document::{
 };
 
 fn standards_tree(html: &[u8]) -> kobo_web_document::style_tree::StyleTree {
-    let mut bytes = b"<!doctype html>".to_vec();
+    // Geometry here is stated explicitly, so drop the user-agent body margin.
+    let mut bytes = b"<!doctype html><style>body{margin:0}</style>".to_vec();
     bytes.extend_from_slice(html);
     parse_style_tree(&bytes, &[], &Limits::DEFAULT)
 }

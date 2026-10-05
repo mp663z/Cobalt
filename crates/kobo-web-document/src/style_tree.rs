@@ -5,7 +5,8 @@
 //! It is not painted yet. Unsupported CSS does not become a guessed layout.
 
 use crate::computed_style::{
-    BoxSizing, Computed, Declaration, Direction, Display, Length, Margin, Origin, Property, Value,
+    BoxSizing, Clip, Computed, Declaration, Direction, Display, Length, Margin, Origin, Property,
+    Value,
 };
 use crate::css;
 use crate::dom::{Data, Node, DOCUMENT};
@@ -132,6 +133,25 @@ impl StyleTree {
                 specificity: (0, 0, 0),
                 source_order: 0,
             });
+            if name.local.as_ref() == "body" {
+                // The HTML user-agent sheet gives the body an 8px margin on
+                // every side (Chrome, Firefox and WebKit all agree).
+                for property in [
+                    Property::MarginTop,
+                    Property::MarginRight,
+                    Property::MarginBottom,
+                    Property::MarginLeft,
+                ] {
+                    declarations.push(Declaration {
+                        property,
+                        value: Value::Margin(Margin::Px(8)),
+                        origin: Origin::UserAgent,
+                        important: false,
+                        specificity: (0, 0, 0),
+                        source_order: 0,
+                    });
+                }
+            }
             let style = Computed::cascade(Some(inherited), &declarations);
             tree.unsupported |= style.line_height == Some(0) || style.font_size == 0;
             let index = tree.nodes.len();
@@ -312,9 +332,6 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
         // Every accepted background has no image. An explicit `none` makes
         // that invariant clear without manufacturing a color declaration or
         // changing its cascade order. Other image values remain unsupported.
-        if name == "background-image" && value == "none" {
-            continue;
-        }
         if name == "padding" {
             if let Some(keyword) = parse_keyword(value) {
                 for property in [
@@ -361,6 +378,24 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
             .zip(padding)
             {
                 result.push((property, Value::Padding(pixels), important));
+            }
+            continue;
+        }
+        if let Some(declared) = border_declarations(&name, value) {
+            match declared {
+                Some(list) => {
+                    result.extend(list.into_iter().map(|(property, v)| (property, v, important)));
+                }
+                None => unsupported = true,
+            }
+            continue;
+        }
+        if name == "background-image" || name == "background-clip" {
+            match background_layers(&name, value) {
+                Some(list) => {
+                    result.extend(list.into_iter().map(|(property, v)| (property, v, important)));
+                }
+                None => unsupported = true,
             }
             continue;
         }
@@ -411,6 +446,11 @@ fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                 result.push((property, Value::Margin(margin), important));
             }
             continue;
+        }
+        if name == "background" {
+            // The shorthand resets every background longhand it omits.
+            result.push((Property::BackgroundClip, Value::Initial, important));
+            result.push((Property::BackgroundLayers, Value::Initial, important));
         }
         let parsed = match name.as_str() {
             "display" => parse_keyword(value)
@@ -1428,4 +1468,184 @@ mod percentage_font_size_tests {
             );
         }
     }
+}
+
+const SIDES: [&str; 4] = ["top", "right", "bottom", "left"];
+
+fn side_property(side: usize, kind: &str) -> Property {
+    match (kind, side) {
+        ("width", 0) => Property::BorderTopWidth,
+        ("width", 1) => Property::BorderRightWidth,
+        ("width", 2) => Property::BorderBottomWidth,
+        ("width", _) => Property::BorderLeftWidth,
+        ("style", 0) => Property::BorderTopStyle,
+        ("style", 1) => Property::BorderRightStyle,
+        ("style", 2) => Property::BorderBottomStyle,
+        ("style", _) => Property::BorderLeftStyle,
+        (_, 0) => Property::BorderTopColor,
+        (_, 1) => Property::BorderRightColor,
+        (_, 2) => Property::BorderBottomColor,
+        (_, _) => Property::BorderLeftColor,
+    }
+}
+
+fn border_width(token: &str) -> Option<u32> {
+    match token {
+        "thin" => Some(1),
+        "medium" => Some(3),
+        "thick" => Some(5),
+        _ => match parse_width(token) {
+            Some(Length::Px(px)) => Some(px),
+            _ => None,
+        },
+    }
+}
+
+/// `none` and `hidden` draw nothing; `solid` is the only line style painted.
+fn border_style(token: &str) -> Option<bool> {
+    match token {
+        "none" | "hidden" => Some(false),
+        "solid" => Some(true),
+        _ => None,
+    }
+}
+
+/// Only `transparent` is accepted: an opaque border would need painting this
+/// engine does not have, so any other colour makes the declaration unsupported.
+fn border_clear(token: &str) -> Option<bool> {
+    (token == "transparent").then_some(true)
+}
+
+/// One to four values expanded to top, right, bottom, left.
+fn four_sides<T: Copy>(tokens: &[&str], parse: impl Fn(&str) -> Option<T>) -> Option<[T; 4]> {
+    let parsed: Option<Vec<T>> = tokens.iter().map(|token| parse(token)).collect();
+    match parsed?.as_slice() {
+        [a] => Some([*a; 4]),
+        [a, b] => Some([*a, *b, *a, *b]),
+        [a, b, c] => Some([*a, *b, *c, *b]),
+        [a, b, c, d] => Some([*a, *b, *c, *d]),
+        _ => None,
+    }
+}
+
+type Declared = Vec<(Property, Value)>;
+
+/// The outer `Option` says whether `name` is a border property at all; the
+/// inner one whether its value is something this engine can account for.
+fn border_declarations(name: &str, value: &str) -> Option<Option<Declared>> {
+    let rest = name.strip_prefix("border")?;
+    let tokens: Vec<&str> = value.split_ascii_whitespace().collect();
+    let global = parse_keyword(value);
+    let rest = rest.strip_prefix('-').unwrap_or(rest);
+    let mut out: Declared = Vec::new();
+    // border-width / border-style / border-color
+    if matches!(rest, "width" | "style" | "color") {
+        let sides: Option<[Value; 4]> = if let Some(keyword) = global {
+            Some([keyword; 4])
+        } else {
+            match rest {
+                "width" => four_sides(&tokens, border_width).map(|w| w.map(Value::Padding)),
+                "style" => four_sides(&tokens, border_style).map(|v| v.map(Value::Flag)),
+                _ => four_sides(&tokens, border_clear).map(|v| v.map(Value::Flag)),
+            }
+        };
+        return Some(sides.map(|sides| {
+            for (side, v) in sides.into_iter().enumerate() {
+                out.push((side_property(side, rest), v));
+            }
+            out
+        }));
+    }
+    // border: and border-<side>[-width|-style|-color]
+    let (sides, kind): (Vec<usize>, &str) = if rest.is_empty() {
+        ((0..4).collect(), "")
+    } else {
+        let mut parts = rest.splitn(2, '-');
+        let side = SIDES.iter().position(|candidate| Some(*candidate) == parts.next())?;
+        (vec![side], parts.next().unwrap_or(""))
+    };
+    if matches!(kind, "width" | "style" | "color") {
+        let v = global.or_else(|| match kind {
+            "width" => border_width(value).map(Value::Padding),
+            "style" => border_style(value).map(Value::Flag),
+            _ => border_clear(value).map(Value::Flag),
+        });
+        return Some(v.map(|v| sides.iter().map(|&s| (side_property(s, kind), v)).collect()));
+    }
+    if !kind.is_empty() {
+        return None;
+    }
+    // Shorthand: width, style and colour in any order; omitted ones reset.
+    if let Some(keyword) = global {
+        for &side in &sides {
+            for k in ["width", "style", "color"] {
+                out.push((side_property(side, k), keyword));
+            }
+        }
+        return Some(Some(out));
+    }
+    let (mut width, mut style, mut clear) = (3, false, false);
+    let (mut seen_width, mut seen_style, mut seen_colour) = (false, false, false);
+    if tokens.is_empty() || tokens.len() > 3 {
+        return Some(None);
+    }
+    for token in tokens {
+        if let (false, Some(w)) = (seen_width, border_width(token)) {
+            width = w;
+            seen_width = true;
+        } else if let (false, Some(v)) = (seen_style, border_style(token)) {
+            style = v;
+            seen_style = true;
+        } else if let (false, Some(c)) = (seen_colour, border_clear(token)) {
+            clear = c;
+            seen_colour = true;
+        } else {
+            return Some(None);
+        }
+    }
+    for &side in &sides {
+        out.push((side_property(side, "width"), Value::Padding(width)));
+        out.push((side_property(side, "style"), Value::Flag(style)));
+        out.push((side_property(side, "color"), Value::Flag(clear)));
+    }
+    Some(Some(out))
+}
+
+/// `background-image` only counts layers (every one must be `none`), and
+/// `background-clip` lists the clip of each layer.
+fn background_layers(name: &str, value: &str) -> Option<Declared> {
+    if let Some(keyword) = parse_keyword(value) {
+        // An inherited image list is not something this engine tracks.
+        return (name == "background-clip")
+            .then(|| vec![(Property::BackgroundClip, keyword)]);
+    }
+    let items: Vec<&str> = value.split(',').map(str::trim).collect();
+    if items.is_empty() || items.len() > 4 {
+        return None;
+    }
+    if name == "background-image" {
+        if items.iter().any(|item| *item != "none") {
+            return None;
+        }
+        return Some(vec![(
+            Property::BackgroundLayers,
+            Value::BackgroundLayers(u8::try_from(items.len()).ok()?),
+        )]);
+    }
+    let mut clips = [Clip::Border; 4];
+    for (slot, item) in clips.iter_mut().zip(&items) {
+        *slot = match *item {
+            "border-box" => Clip::Border,
+            "padding-box" => Clip::Padding,
+            "content-box" => Clip::Content,
+            _ => return None,
+        };
+    }
+    Some(vec![(
+        Property::BackgroundClip,
+        Value::BackgroundClips {
+            clips,
+            len: u8::try_from(items.len()).ok()?,
+        },
+    )])
 }
