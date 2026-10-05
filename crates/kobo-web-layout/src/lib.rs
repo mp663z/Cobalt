@@ -1319,3 +1319,72 @@ fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(kani)]
+mod bounded_verification {
+    use super::*;
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn empty_paginator_terminates() {
+        let mut paginator = Paginator::new(vec![], vec![]);
+        let mut fits = |_: &[Piece]| true;
+        assert!(!paginator.next_page(&mut fits));
+        assert!(paginator.done());
+        assert!(paginator.pages().is_empty());
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn paginator_one_text_preserves_bytes_and_fits() {
+        let byte: u8 = kani::any();
+        kani::assume((b'a'..=b'z').contains(&byte));
+        let text = String::from_utf8(vec![byte]).unwrap();
+        let mut paginator = Paginator::new(vec![Piece::Preformatted(text)], vec![]);
+        let mut fits = |page: &[Piece]| page.len() <= 1;
+        assert!(paginator.next_page(&mut fits));
+        assert!(paginator.done());
+        assert_eq!(paginator.pages().len(), 1);
+        assert_eq!(paginator.pages()[0].len(), 1);
+        match &paginator.pages()[0][0] {
+            Piece::Preformatted(text) => assert_eq!(text.as_bytes(), &[byte]),
+            _ => unreachable!(),
+        }
+        // Proof covers pagination, not final collection destruction.
+        std::mem::forget(paginator);
+    }
+
+    #[kani::proof]
+    #[kani::unwind(5)]
+    fn paginator_fixed_text_preserves_blank_lines_and_fits() {
+        let byte: u8 = kani::any();
+        kani::assume((b'a'..=b'z').contains(&byte));
+        let text = String::from_utf8(vec![byte, b'\n', b'\n', b'z']).unwrap();
+        let mut paginator = Paginator::new(vec![Piece::Preformatted(text)], vec![]);
+        let mut fits = |page: &[Piece]| page.len() <= 1;
+        assert!(paginator.next_page(&mut fits));
+        assert!(paginator.done());
+        assert_eq!(paginator.pages().len(), 1);
+        assert_eq!(paginator.pages()[0].len(), 1);
+        match &paginator.pages()[0][0] {
+            Piece::Preformatted(text) => assert_eq!(text.as_bytes(), &[byte, b'\n', b'\n', b'z']),
+            _ => unreachable!(),
+        }
+        std::mem::forget(paginator);
+    }
+
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn split_ascii_pair_preserves_bytes() {
+        let byte: u8 = kani::any();
+        kani::assume((b'a'..=b'z').contains(&byte));
+        let text = String::from_utf8(vec![byte, b'z']).unwrap();
+        match split_at(&Piece::Preformatted(text), 1) {
+            (Piece::Preformatted(head), Piece::Preformatted(tail)) => {
+                assert_eq!(head.as_bytes(), &[byte]);
+                assert_eq!(tail.as_bytes(), b"z");
+            }
+            _ => unreachable!(),
+        }
+    }
+}

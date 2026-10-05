@@ -10942,3 +10942,21 @@ mod update_task_tests {
         assert!(encoded_task_len(&work).is_err());
     }
 }
+
+#[cfg(kani)]
+mod bounded_verification {
+    #[kani::proof]
+    #[kani::unwind(16)]
+    fn oversized_header_is_rejected_before_payload_decode() {
+        let size: u32 = kani::any();
+        kani::assume(size > super::MAX_FRAME_LEN as u32);
+        let mut bytes = [0_u8; super::HEADER_LEN];
+        bytes[..4].copy_from_slice(&super::MAGIC);
+        bytes[4] = super::VERSION;
+        bytes[6..10].copy_from_slice(&size.to_be_bytes());
+        assert!(matches!(
+            super::decode(&bytes),
+            Err(super::ProtocolError::FrameTooLarge)
+        ));
+    }
+}
