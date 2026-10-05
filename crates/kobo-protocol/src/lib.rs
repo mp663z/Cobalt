@@ -10943,20 +10943,24 @@ mod update_task_tests {
     }
 }
 
-#[cfg(kani)]
+// Keep Kani configuration scoped to verification, not workspace release inputs.
+#[allow(unexpected_cfgs)]
 mod bounded_verification {
-    #[kani::proof]
-    #[kani::unwind(16)]
-    fn oversized_header_is_rejected_before_payload_decode() {
-        let size: u32 = kani::any();
-        kani::assume(size > super::MAX_FRAME_LEN as u32);
-        let mut bytes = [0_u8; super::HEADER_LEN];
-        bytes[..4].copy_from_slice(&super::MAGIC);
-        bytes[4] = super::VERSION;
-        bytes[6..10].copy_from_slice(&size.to_be_bytes());
-        assert!(matches!(
-            super::decode(&bytes),
-            Err(super::ProtocolError::FrameTooLarge)
-        ));
+    #[cfg(kani)]
+    mod proofs {
+        #[kani::proof]
+        #[kani::unwind(16)]
+        fn oversized_header_is_rejected_before_payload_decode() {
+            let size: u32 = kani::any();
+            kani::assume(size > crate::MAX_FRAME_LEN as u32);
+            let mut bytes = [0_u8; crate::HEADER_LEN];
+            bytes[..4].copy_from_slice(&crate::MAGIC);
+            bytes[4] = crate::VERSION;
+            bytes[6..10].copy_from_slice(&size.to_be_bytes());
+            assert!(matches!(
+                crate::decode(&bytes),
+                Err(crate::ProtocolError::FrameTooLarge)
+            ));
+        }
     }
 }
