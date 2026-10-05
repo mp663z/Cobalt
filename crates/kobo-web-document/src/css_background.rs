@@ -18,6 +18,12 @@ pub fn paint_backgrounds(
     viewport_width: u32,
     viewport_height: u32,
 ) -> Result<DisplayList, BridgeError> {
+    // A root with `display: none` generates no boxes, and it does not
+    // propagate its background (CSS Backgrounds 3, special backgrounds), so
+    // the canvas is simply unpainted.
+    if tree.roots.is_empty() && tree.boxes.is_empty() {
+        return Ok(DisplayList::default());
+    }
     // Reject malformed or disconnected arenas before the geometry passes,
     // which intentionally assume indices from BoxTree::from_style.
     // List-item markers are visible content, even when the item is empty.

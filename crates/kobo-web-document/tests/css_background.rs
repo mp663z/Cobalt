@@ -208,3 +208,13 @@ fn empty_list_item_still_requires_marker_paint() {
     let tree = BoxTree::from_style(&standards_tree(b"<html style='height:100px'><body style='height:80px'><ul style='height:40px'><li style='height:20px;background:red'></li></ul></body></html>"));
     assert!(paint_backgrounds(&tree, 100, 100).is_err());
 }
+
+#[test]
+fn a_display_none_root_neither_paints_nor_propagates_its_background() {
+    let styled = standards_tree(b"<html style='background:red;display:none'></html>");
+    let list = paint_backgrounds(&BoxTree::from_style(&styled), 100, 100).expect("blank canvas");
+    let rgba = list
+        .rasterize(100, 100, Rgb(255, 255, 255))
+        .expect("raster");
+    assert!(rgba.chunks_exact(4).all(|px| px[..3] == [255, 255, 255]));
+}
