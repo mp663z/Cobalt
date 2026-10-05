@@ -51,6 +51,10 @@ def main():
         html = args.output / (name + ".html")
         chrome = args.output / (name + ".chrome.png")
         cobalt = args.output / (name + ".cobalt.ppm")
+        # Never let an earlier render or comparison stand in for this attempt.
+        for stale in (chrome, cobalt, args.output / (name + ".diff.png"),
+                      args.output / (name + ".side-by-side.png")):
+            stale.unlink(missing_ok=True)
         status = {"name": name, "source_url": row["source_url"],
                   "complete_sha256": row["complete_sha256"],
                   "viewport": row["viewport"], "diff_percent": None}
