@@ -33,7 +33,7 @@ They do not replace unrestricted symbolic or physical-panel verification.
 
 ```sh
 cargo +1.85.1 test --manifest-path tools/cobalt-verification/Cargo.toml
-cargo +nightly-2026-08-21 miri test --manifest-path tools/cobalt-verification/Cargo.toml preformatted_line_split_preserves_blank_lines
+MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly-2026-08-21 miri test --manifest-path tools/cobalt-verification/Cargo.toml preformatted_line_
 cd tools/cobalt-verification
 cargo +nightly-2026-08-21 fuzz run protocol -- -max_total_time=10 -max_len=4096
 cargo +nightly-2026-08-21 fuzz run html -- -max_total_time=10 -max_len=4096
@@ -47,8 +47,9 @@ line separator from each head; the preservation oracle reinserts that separator
 between pieces. It does not claim raw concatenation of split byte strings.
 
 Fresh checks on parity head 5a5bf1aa: all five host tests passed; Miri passed
-one fixed preservation case. HTML fuzzing ran 81,813 inputs in 11 seconds,
-maximum input length 4096, no crash. Earlier base protocol fuzzing executed
-3,553,053 inputs in 11 seconds without a crash; this is not yet a protocol
-campaign on the merged head. Short coverage-guided campaigns are not exhaustive
+both preservation tests (2/2, three other tests filtered). Proptest needs host
+getcwd/failure-persistence access, so Miri isolation is disabled for this runner;
+its memory checks remain enabled. HTML fuzzing ran 81,813 inputs in 11 seconds,
+maximum input length 4096, no crash. Protocol fuzzing on the merged head executed
+3,357,477 inputs in 11 seconds without a crash. Short coverage-guided campaigns are not exhaustive
 proofs. No network or real-account content is fetched.
