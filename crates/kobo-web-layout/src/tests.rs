@@ -359,6 +359,7 @@ fn an_image_with_a_declared_size_gets_room_and_keeps_its_description() {
 
 #[test]
 fn a_picture_is_never_squeezed_into_the_foot_of_a_page() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
     let mut markup = String::new();
     for n in 0..40 {
         markup.push_str(&format!(
