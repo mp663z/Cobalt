@@ -229,25 +229,25 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "kobo-abi"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "kobo-dict"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "unicode-normalization",
 ]
 
 [[package]]
 name = "kobo-json"
-version = "0.3.23"
+version = "0.3.25"
 
 [[package]]
 name = "kobo-net"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "http",
  "httparse",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "kobo-policy"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "kobo-abi",
  "kobo-dict",
@@ -272,14 +272,14 @@ dependencies = [
 
 [[package]]
 name = "kobo-protocol"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "kobo-ui",
 ]
 
 [[package]]
 name = "kobo-sdk"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "kobo-json",
  "kobo-net",
@@ -292,14 +292,14 @@ dependencies = [
 
 [[package]]
 name = "kobo-state"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "kobo-json",
 ]
 
 [[package]]
 name = "kobo-text"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "fontdue",
  "kobo-ui",
@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "kobo-ui"
-version = "0.3.23"
+version = "0.3.25"
 dependencies = [
  "unicode-segmentation",
  "unicode-width",
