@@ -20,6 +20,20 @@ mod tests {
             }
         }
         #[test]
+        fn preformatted_line_cuts_keep_blank_lines(blank_count in 1usize..8) {
+            let text = format!("a{}z", "\n".repeat(blank_count + 1));
+            let layout = paginate_pieces(vec![Piece::Preformatted(text.clone())], &[], |page| {
+                page.iter().map(|piece| match piece {
+                    Piece::Preformatted(text) => text.len(), _ => 0,
+                }).sum::<usize>() <= 3
+            });
+            let chunks: Vec<_> = layout.pages.iter().flatten().map(|piece| match piece {
+                Piece::Preformatted(text) => text.as_str(),
+                _ => panic!("piece changed kind"),
+            }).collect();
+            prop_assert_eq!(chunks.join("\n"), text);
+        }
+        #[test]
         fn bounded_whole_pieces_keep_order(items in prop::collection::vec("[a-z]{1,8}", 0..12)) {
             let pieces = items.iter().cloned().map(Piece::Preformatted).collect();
             let layout = paginate_pieces(pieces, &[], |page| page.len() <= 1);
@@ -33,7 +47,7 @@ mod tests {
     }
 
     #[test]
-    fn newline_split_loss_is_recorded_not_called_preserved() {
+    fn preformatted_line_split_preserves_blank_lines() {
         let layout = paginate_pieces(vec![Piece::Preformatted("a\n\nz".into())], &[], |page| {
             page.iter()
                 .map(|piece| match piece {
@@ -43,17 +57,16 @@ mod tests {
                 .sum::<usize>()
                 <= 3
         });
-        let text: String = layout
+        let chunks: Vec<_> = layout
             .pages
             .iter()
             .flatten()
             .map(|piece| match piece {
                 Piece::Preformatted(text) => text.as_str(),
-                _ => "",
+                _ => panic!("piece changed kind"),
             })
             .collect();
-        // Current production split trims boundary newlines. This test records
-        // the defect and must be replaced with equality once semantics are fixed.
-        assert_ne!(text, "a\n\nz");
+        // Line cuts remove exactly one separator from the head.
+        assert_eq!(chunks.join("\n"), "a\n\nz");
     }
 }
