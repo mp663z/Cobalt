@@ -822,7 +822,7 @@ fn matched_rules(
             unsupported |= refused;
             for selector in selectors.by_ref().take(16) {
                 let parsed_selector = if ext_selectors {
-                    css::selector_ext(selector.trim())
+                    css::selector_ext(selector)
                 } else {
                     css::selector(selector.trim())
                 };

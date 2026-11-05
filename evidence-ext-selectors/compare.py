@@ -1,6 +1,6 @@
 import collections
 for p in ['synth','blog','docs','gov','news-npr']:
-    R=[l.rstrip('\n').split('\t') for l in open(f'rust-{p}.tsv')]; C=[l.rstrip('\n').split('\t') for l in open(f'chrome-{p}.tsv')]
+    R=[l.rstrip('\n').rsplit('\t',1) for l in open(f'rust-{p}.tsv')]; C=[l.rstrip('\n').rsplit('\t',1) for l in open(f'chrome-{p}.tsv')]
     assert len(R)==len(C); cnt=collections.Counter(); bad=[]
     for r,c in zip(R,C):
         assert r[0]==c[0]; rv=r[1] if len(r)>1 else ''; cv=c[1] if len(c)>1 else ''

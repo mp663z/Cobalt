@@ -15,10 +15,17 @@ struct Simple {
     classes: Vec<String>,
     /// `:root`: the document element (the parent is the Document node).
     root: bool,
+    /// Extended grammar only: type selectors compare ASCII case-insensitively
+    /// (Chrome matches `linearGradient` and `lineargradient` on SVG elements) and
+    /// class tokens split on ASCII whitespace only.
+    ext: bool,
     /// Extended grammar only: attribute selectors and structural pseudo-classes.
     attrs: Vec<AttrSel>,
     /// Bit 1 `:first-child`, bit 2 `:last-child`, bit 4 `:only-child`.
     structural: u8,
+    /// Occurrences of structural pseudo-classes (each counts toward specificity,
+    /// so `:first-child:first-child` is two).
+    structural_n: u8,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AttrSel {
@@ -305,8 +312,10 @@ fn simple(part: &str) -> Option<Simple> {
         id,
         classes,
         root,
+        ext: false,
         attrs: Vec::new(),
         structural: 0,
+        structural_n: 0,
     })
 }
 
@@ -396,8 +405,10 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
         id: None,
         classes: Vec::new(),
         root: false,
+        ext: true,
         attrs: Vec::new(),
         structural: 0,
+        structural_n: 0,
     };
     let start = at;
     if b.get(at) == Some(&b'*') {
@@ -444,6 +455,12 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
                     _ => return None,
+                }
+                if token.to_ascii_lowercase() != "root" {
+                    if simple.structural_n >= 8 {
+                        return None;
+                    }
+                    simple.structural_n += 1;
                 }
                 at = next;
             }
@@ -497,7 +514,7 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
             classes
                 + u16::try_from(part.classes.len() + part.attrs.len()).unwrap_or(16)
                 + u16::from(part.root)
-                + u16::try_from(part.structural.count_ones()).unwrap_or(3),
+                + u16::from(part.structural_n),
             types + u16::from(part.tag.is_some()),
         )
     });
@@ -543,9 +560,12 @@ impl AttrSel {
             AttrOp::Exists => true,
             AttrOp::Equals => actual == want,
             AttrOp::Word => {
+                // CSS whitespace is ASCII only (space, tab, LF, FF, CR); U+00A0 and
+                // other Unicode spaces are ordinary characters.
+                let is_space = |c: char| matches!(c, ' ' | '\t' | '\n' | '\u{c}' | '\r');
                 !want.is_empty()
-                    && !want.contains(char::is_whitespace)
-                    && actual.split(char::is_whitespace).any(|word| word == want)
+                    && !want.contains(is_space)
+                    && actual.split(is_space).any(|word| word == want)
             }
             AttrOp::Dash => actual == want || actual.starts_with(&format!("{want}-")),
             AttrOp::Prefix => !want.is_empty() && actual.starts_with(&want),
@@ -679,11 +699,13 @@ impl Simple {
         {
             return false;
         }
-        if self
-            .tag
-            .as_ref()
-            .is_some_and(|tag| name.local.as_ref() != tag)
-        {
+        if self.tag.as_ref().is_some_and(|tag| {
+            if self.ext {
+                !name.local.as_ref().eq_ignore_ascii_case(tag)
+            } else {
+                name.local.as_ref() != tag
+            }
+        }) {
             return false;
         }
         if self
@@ -694,8 +716,16 @@ impl Simple {
             return false;
         }
         self.classes.iter().all(|class| {
-            attribute(nodes, handle, "class")
-                .is_some_and(|value| value.split_whitespace().any(|word| word == class))
+            attribute(nodes, handle, "class").is_some_and(|value| {
+                if self.ext {
+                    // Extended grammar: class tokens split on ASCII whitespace only.
+                    value
+                        .split(|c: char| matches!(c, ' ' | '\t' | '\n' | '\u{c}' | '\r'))
+                        .any(|word| word == class)
+                } else {
+                    value.split_whitespace().any(|word| word == class)
+                }
+            })
         }) && self.attrs.iter().all(|attr| attr.matches(nodes, handle))
             && (self.structural == 0 || structural_ok(nodes, handle, self.structural))
     }
@@ -784,7 +814,7 @@ mod selector_control {
         let mut out = String::new();
         for line in list.lines() {
             let line = line.trim_end_matches('\r');
-            match selector_ext(line.trim()) {
+            match selector_ext(line) {
                 None => out.push_str(&format!("{line}\tREFUSED\n")),
                 Some(sel) => {
                     let mut hits = Vec::new();
@@ -925,6 +955,72 @@ mod ext_selector_tests {
         html.push_str("</div>");
         let tree = run(true, &html);
         assert!(tree.truncated || tree.unsupported);
+    }
+    #[test]
+    fn repeated_structural_pseudo_classes_count_each_occurrence_for_specificity() {
+        // Chrome: two pseudo-classes beat one attribute selector.
+        let html = "<style>p:first-child:first-child{color:#ff0000} p[a]{color:#0000ff}</style><div><p a=x>t</p></div>";
+        let tree = run(true, html);
+        assert!(!tree.unsupported);
+        assert_eq!(tree.nodes.iter().find(|n| n.tag == "p").unwrap().style.color, 0xff_00_00);
+        for pseudo in ["last-child", "only-child"] {
+            let html = format!("<style>p:{pseudo}:{pseudo}{{color:#ff0000}} p[a]{{color:#0000ff}}</style><div><p a=x>t</p></div>");
+            let tree = run(true, &html);
+            assert_eq!(tree.nodes.iter().find(|n| n.tag == "p").unwrap().style.color, 0xff_00_00, "{pseudo}");
+        }
+        // Mixed kinds add up too: first+last+only (3) beats .a.b (2).
+        let html = "<style>p:first-child:last-child:only-child{color:#ff0000} p.a.b{color:#0000ff}</style><div><p class='a b'>t</p></div>";
+        assert_eq!(run(true, html).nodes.iter().find(|n| n.tag == "p").unwrap().style.color, 0xff_00_00);
+    }
+    #[test]
+    fn word_and_class_matching_use_ascii_css_whitespace_only() {
+        let cases: &[(&str, &str, bool)] = &[
+            ("[data-w~=b]", "data-w=\"a\u{a0}b\"", false),
+            ("[data-w~=b]", "data-w=\"a\u{b}b\"", false),
+            ("[data-w~=b]", "data-w=\"a\u{2003}b\"", false),
+            ("[data-w~=b]", "data-w=\"a\u{c}b\"", true),
+            ("[data-w~=b]", "data-w=\"a\tb\"", true),
+            ("[data-w~=b]", "data-w=\"a\nb\"", true),
+            ("[data-w~=b]", "data-w=\"a\rb\"", true),
+            ("[data-w~=\"a\u{a0}b\"]", "data-w=\"a\u{a0}b\"", true),
+            ("[data-w~=\"a\tb\"]", "data-w=\"a\tb\"", false),
+            ("[class~=b]", "class=\"a\u{a0}b\"", false),
+            (".b", "class=\"a\u{a0}b\"", false),
+            (".b", "class=\"a\u{b}b\"", false),
+            (".b", "class=\"a\u{c}b\"", true),
+            (".b", "class=\"a b\"", true),
+        ];
+        for (selector, attribute, expected) in cases {
+            let html = format!("<style>p{selector}{{background-color:#ff0000}}</style><p {attribute}>x</p>");
+            let tree = run(true, &html);
+            assert!(!tree.unsupported, "{selector}");
+            assert_eq!(reds(&tree, "p"), [*expected], "{selector} on {attribute:?}");
+        }
+    }
+    #[test]
+    fn svg_type_selectors_match_camel_case_elements_case_insensitively() {
+        let html = "<style>lineargradient{background-color:#ff0000} foreignObject{background-color:#ff0000} CLIPPATH{background-color:#ff0000}</style>\
+            <svg><defs><linearGradient></linearGradient><clipPath></clipPath></defs><foreignObject></foreignObject></svg>";
+        let tree = run(true, html);
+        assert!(!tree.unsupported);
+        for tag in ["lineargradient", "foreignobject", "clippath"] {
+            // html5ever keeps the adjusted camel-case local name; find ignoring case.
+            let hit: Vec<bool> = tree.nodes.iter().filter(|n| n.tag.eq_ignore_ascii_case(tag)).map(|n| n.style.background_color == RED).collect();
+            assert_eq!(hit, [true], "{tag}");
+        }
+    }
+    #[test]
+    fn unicode_whitespace_around_selectors_does_not_trim_or_split() {
+        for selector in ["p\u{a0}", "\u{a0}p", "div\u{a0}span", "div\u{a0}> span", "p\u{2003}"] {
+            let html = format!("<style>{selector}{{background-color:#ff0000}}</style><div><span>x</span></div><p>y</p>");
+            let tree = run(true, &html);
+            assert!(tree.unsupported, "{selector:?} must refuse");
+            assert!(reds(&tree, "p").iter().chain(reds(&tree, "span").iter()).all(|r| !r), "{selector:?}");
+        }
+        for selector in ["div\u{c}>\u{c}span", "\tdiv\t", "div\n> span"] {
+            let html = format!("<style>{selector}{{background-color:#ff0000}}</style><div><span>x</span></div>");
+            assert!(!run(true, &html).unsupported, "{selector:?}");
+        }
     }
     #[test]
     fn specificity_counts_attributes_and_structural_pseudos_as_classes() {

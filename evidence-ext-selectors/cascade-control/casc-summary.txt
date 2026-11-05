@@ -1,7 +1,11 @@
-doc 0 mismatching elements 0 of 45
-doc 1 mismatching elements 0 of 45
-doc 2 mismatching elements 0 of 45
-doc 3 mismatching elements 0 of 45
-doc 4 mismatching elements 0 of 45
-doc 5 mismatching elements 0 of 45
-{'elements': 270, 'color_ok': 270, 'bg_ok': 270}
+doc 0 mismatching elements 0 of 58
+doc 1 mismatching elements 0 of 58
+doc 2 mismatching elements 0 of 58
+doc 3 mismatching elements 0 of 58
+doc 4 mismatching elements 0 of 58
+doc 5 mismatching elements 0 of 58
+doc 6 mismatching elements 0 of 58
+doc 7 mismatching elements 0 of 58
+doc 8 mismatching elements 0 of 58
+doc 9 mismatching elements 0 of 58
+{'elements': 580, 'color_ok': 580, 'bg_ok': 580}

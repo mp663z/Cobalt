@@ -1,20 +1,3 @@
-   Compiling find-msvc-tools v0.1.14
-   Compiling kobo-ui v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-ui)
-   Compiling cc v1.5.1
-   Compiling ring v0.17.14
-   Compiling libsqlite3-sys v0.35.0
-   Compiling rustls-webpki v0.103.15
-   Compiling rustls v0.23.45
-   Compiling tinyvec v1.13.3
-   Compiling unicode-normalization v0.1.25
-   Compiling kobo-protocol v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-protocol)
-   Compiling kobo-json v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-json)
-   Compiling rusqlite v0.37.0
-   Compiling kobo-net v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-net)
-   Compiling kobo-dict v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-dict)
-   Compiling kobo-abi v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-abi)
-   Compiling kobo-state v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-state)
-   Compiling kobo-policy v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-policy)
    Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/clean4v/crates/kobo-web-document)
 warning: method `flex_units_shadow` is never used
    --> /home/sandbox/cb/clean4v/crates/kobo-web-document/src/box_tree.rs:464:8
@@ -27,10 +10,9 @@ warning: method `flex_units_shadow` is never used
     |
     = note: `#[warn(dead_code)]` on by default
 
-   Compiling kobo-sdk v0.3.25 (/home/sandbox/cb/clean4v/crates/kobo-sdk)
    Compiling cobalt-text-preview v0.1.0 (/home/sandbox/cb/clean4v/tools/cobalt-text-preview)
 warning: `kobo-web-document` (lib) generated 1 warning
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.10s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.96s
      Running unittests src/lib.rs (/home/sandbox/cb/tgt-v/debug/deps/cobalt_text_preview-dbb6e2e8dd0f0a03)
 
 running 29 tests
@@ -58,13 +40,13 @@ test normal_constructor_tests::byte_constructor_activates_only_sampled_sizes_and
 test tests::complete_page_queue_refuses_without_partial_commands ... ok
 test tests::invalid_panel_metrics_refuse_before_layout_arithmetic ... ok
 test tests::invalid_surfaces_and_fonts_refuse_without_a_picture ... ok
-test tests::native_room_preserves_controls_across_panels_and_refuses_accessibility_mismatch ... ok
+test tests::interaction_and_overflow_refuse_without_partial_queue ... ok
 test tests::rgb_and_unknown_identity_use_existing_sdk_picture_commands ... ok
 test tests::slot_rejection_keeps_old_ownership_until_explicit_fallback_clear ... ok
 test tests::slot_replacement_queues_new_before_dropping_old_and_clear_is_idempotent ... ok
-test tests::interaction_and_overflow_refuse_without_partial_queue ... ok
+test tests::native_room_preserves_controls_across_panels_and_refuses_accessibility_mismatch ... ok
 
-test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
 
      Running unittests src/main.rs (/home/sandbox/cb/tgt-v/debug/deps/cobalt_text_preview-3916d26ad2a6fcef)
 
@@ -75,8 +57,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
      Running tests/charset_media.rs (/home/sandbox/cb/tgt-v/debug/deps/charset_media-573a2fbbb1571bf6)
 
 running 2 tests
-test unsupported_conditions_and_interaction_still_fail_whole_page ... ok
 test leading_charset_screen_media_matches_flat_preview ... ok
+test unsupported_conditions_and_interaction_still_fail_whole_page ... ok
 
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
