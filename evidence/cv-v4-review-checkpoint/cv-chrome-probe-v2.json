@@ -1,0 +1,194 @@
+[
+ {
+  "name": "defined root used below",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "case sensitive: Foo vs foo (expect black=initial/inherit)",
+  "chrome": "rgb(0, 0, 0)",
+  "spec_expected": "rgb(0, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "case sensitive Foo",
+  "chrome": "rgb(0, 255, 0)",
+  "spec_expected": "rgb(0, 255, 0)",
+  "match": true
+ },
+ {
+  "name": "fallback",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "nested fallback",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "defined ignores fallback",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "later wins",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "specificity",
+  "chrome": "rgb(0, 255, 0)",
+  "spec_expected": "rgb(0, 255, 0)",
+  "match": true
+ },
+ {
+  "name": "important",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "closer overrides",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "initial resets",
+  "chrome": "rgb(0, 255, 0)",
+  "spec_expected": "rgb(0, 255, 0)",
+  "match": true
+ },
+ {
+  "name": "inherit",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "shorthand border",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "chain",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "inline",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "glued 10px (Chrome: invalid->unset; margin-top initial 16)",
+  "chrome": "0px",
+  "spec_expected": "0px",
+  "match": true,
+  "original_spec_expected": "16px",
+  "engine_note": "engine refuses page (stricter than Chrome); expected value corrected per review"
+ },
+ {
+  "name": "wide kw via var (invalid -> inherit black)",
+  "chrome": "rgb(0, 0, 0)",
+  "spec_expected": "rgb(0, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "cycle -> invalid -> fallback unused; color black",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true,
+  "original_spec_expected": "rgb(0, 0, 0)",
+  "engine_note": "engine refuses page (stricter than Chrome); expected value corrected per review"
+ },
+ {
+  "name": "--c:initial with later normal def",
+  "chrome": "rgb(0, 255, 0)",
+  "spec_expected": "rgb(0, 255, 0)",
+  "match": true
+ },
+ {
+  "name": "child override does not re-resolve parent",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "child redefines b",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "invalid winner no lower fallback (black)",
+  "chrome": "rgb(0, 0, 0)",
+  "spec_expected": "rgb(0, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "invalid loser",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "inline beats #id custom",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "inline typed beats #id",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "author important beats inline normal",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ },
+ {
+  "name": "inline important beats author important",
+  "chrome": "rgb(0, 0, 255)",
+  "spec_expected": "rgb(0, 0, 255)",
+  "match": true
+ },
+ {
+  "name": "shorthand after longhand",
+  "chrome": "5px",
+  "spec_expected": "5px",
+  "match": true
+ },
+ {
+  "name": "shorthand before longhand",
+  "chrome": "9px",
+  "spec_expected": "9px",
+  "match": true
+ },
+ {
+  "name": "fallback edge cycle defined x (Chrome: cycle invalid -> black)",
+  "chrome": "rgb(0, 255, 0)",
+  "spec_expected": "rgb(0, 255, 0)",
+  "match": true,
+  "original_spec_expected": "rgb(0, 0, 0)",
+  "engine_note": "engine refuses page (stricter than Chrome); expected value corrected per review"
+ },
+ {
+  "name": "diamond",
+  "chrome": "rgb(255, 0, 0)",
+  "spec_expected": "rgb(255, 0, 0)",
+  "match": true
+ }
+]
