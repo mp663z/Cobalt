@@ -362,7 +362,7 @@ fn append_at_reading_scale(
             Piece::Heading { level, text, .. } => builder.heading_at_level(*level, text),
             Piece::Prose(runs) => prose(builder, runs),
             Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
-            Piece::Preformatted(text) => preformatted(builder, text),
+            Piece::Preformatted(text) => builder.text(text),
             Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
             Piece::Note(text) => builder.secondary(text),
             Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
@@ -376,29 +376,6 @@ fn append_at_reading_scale(
                 PICTURE_MAX_MM,
             ),
         };
-    }
-    builder
-}
-
-// Hard-line indentation belongs to the browser's code presentation. Use the
-// protocol's paragraph indent, leaving shared soft-wrap behavior unchanged.
-fn preformatted(mut builder: ScreenBuilder, text: &str) -> ScreenBuilder {
-    let em = kobo_ui::measure_text_in("M", FontSize::Body, Face::Reading)
-        .0
-        .max(1);
-    for line in text.split('\n') {
-        let content = line.trim_start_matches(|c: char| c.is_whitespace());
-        let prefix = &line[..line.len() - content.len()];
-        let width = kobo_ui::measure_text_in(prefix, FontSize::Body, Face::Reading).0;
-        let indent = i16::try_from(width.saturating_mul(100) / em).unwrap_or(i16::MAX);
-        builder = builder.rich_text(
-            content,
-            Vec::new(),
-            ParagraphPresentation {
-                first_line_indent_em: indent,
-                ..ParagraphPresentation::default()
-            },
-        );
     }
     builder
 }

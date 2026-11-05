@@ -413,31 +413,131 @@ fn a_page_is_found_again_by_its_place_in_the_text() {
     assert_eq!(five.place_of(0), Some(0));
 }
 
+fn code_panels() -> Vec<(DisplayMetrics, String)> {
+    let mut out = Vec::new();
+    for base in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            out.push((
+                DisplayMetrics {
+                    text_scale: scale,
+                    ..base
+                },
+                format!("{}x{} {scale:?}", base.width, base.height),
+            ));
+        }
+    }
+    out
+}
+
+fn code_nodes(screen: &Screen, metrics: &DisplayMetrics, marker: &str) -> Vec<Vec<String>> {
+    screen
+        .layout_with(metrics, &Chrome::measuring(true))
+        .nodes
+        .iter()
+        .filter(|node| node.text_lines.iter().any(|line| line.contains(marker)))
+        .map(|node| node.text_lines.clone())
+        .collect()
+}
+
 #[test]
 fn browser_code_retains_hard_line_indents_without_changing_shared_wrapping() {
     kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
-    for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
-        let metrics = DisplayMetrics {
-            text_scale: scale,
-            ..kobo_ui::CLARA_BW_METRICS
-        };
+    for (metrics, name) in code_panels() {
         let pieces = [Piece::Preformatted(
-            "fn turn() {\n    *page += 1;\n}".into(),
+            "fn turn() {\n    *page += 1;\n        deeper();\n}".into(),
         )];
         let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
-        let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
-        let x_for = |text: &str| {
-            layout
-                .nodes
-                .iter()
-                .find(|node| node.text_lines.iter().any(|line| line == text))
-                .unwrap()
-                .rect
-                .x
+        // One node per block: indentation lives in the text, not in extra
+        // paragraphs that would add spacing between code lines.
+        let nodes = code_nodes(&screen, &metrics, "fn turn()");
+        assert_eq!(nodes.len(), 1, "{name}: one node for the block");
+        assert_eq!(
+            nodes[0],
+            vec!["fn turn() {", "    *page += 1;", "        deeper();", "}"],
+            "{name}"
+        );
+        assert!(fits(&screen, &metrics), "{name}");
+    }
+}
+
+#[test]
+fn browser_code_keeps_a_blank_line_as_one_line_and_still_fits() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for (metrics, name) in code_panels() {
+        let pieces = [Piece::Preformatted("a();\n\nb();".into())];
+        let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+        let nodes = code_nodes(&screen, &metrics, "a();");
+        assert_eq!(nodes.len(), 1, "{name}");
+        assert_eq!(
+            nodes[0],
+            vec!["a();", "", "b();"],
+            "{name}: blank line kept"
+        );
+        assert!(
+            fits(&screen, &metrics),
+            "{name}: no hidden node for the blank line"
+        );
+    }
+}
+
+#[test]
+fn browser_code_wrap_continuations_do_not_inherit_the_indent() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    let long = format!("    {}", "word ".repeat(80));
+    for (metrics, name) in code_panels() {
+        let pieces = [Piece::Preformatted(long.clone())];
+        let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+        let nodes = code_nodes(&screen, &metrics, "word");
+        assert_eq!(nodes.len(), 1, "{name}");
+        assert!(nodes[0].len() > 1, "{name}: the line wrapped");
+        assert!(
+            nodes[0][0].starts_with("    word"),
+            "{name}: hard-line indent kept"
+        );
+        assert!(
+            nodes[0][1..].iter().all(|line| !line.starts_with(' ')),
+            "{name}: continuation rows start at the left edge: {:?}",
+            nodes[0]
+        );
+    }
+}
+
+#[test]
+fn browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    let code = "fn main() {\n    let v = vec![1, 2, 3];\n    for x in &v {\n        println!(\"{x}\");\n    }\n\n}";
+    for (metrics, name) in code_panels() {
+        let pieces = [Piece::Preformatted(code.into())];
+        let browser = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+        let plain = kobo_ui::with_reading_scale(metrics.text_scale, || {
+            page_screen_with_metrics("Code", &[], 0, Some(1), None, &metrics)
+                .text(code)
+                .build()
+        });
+        let height = |screen: &Screen| {
+            screen
+                .layout_with(&metrics, &Chrome::measuring(true))
+                .flow_height
         };
-        assert!(x_for("*page += 1;") > x_for("fn turn() {"));
-        assert_eq!(x_for("}"), x_for("fn turn() {"));
-        assert!(fits(&screen, &metrics));
+        assert_eq!(
+            height(&browser),
+            height(&plain),
+            "{name}: no per-line spacing"
+        );
     }
 }
 

@@ -11514,8 +11514,15 @@ fn wrap_ranges_with(
         });
     let mut lines: Vec<(usize, usize)> = Vec::new();
     let mut start = 0;
+    // A line the text itself begins keeps its indentation: code and verse
+    // say something with it. Only a line the wrap began drops the spaces it
+    // was broken at.
+    let mut hard = true;
     while start < text.len() {
-        start = skip_soft_whitespace(text, start);
+        if !hard {
+            start = skip_soft_whitespace(text, start);
+        }
+        hard = false;
         if start == text.len() {
             break;
         }
@@ -11544,6 +11551,7 @@ fn wrap_ranges_with(
                 if opportunity == BreakOpportunity::Mandatory {
                     lines.push((start, candidate_end));
                     start = end;
+                    hard = true;
                     emitted = true;
                     break;
                 }
@@ -16958,6 +16966,23 @@ mod tests {
             .find(|node| matches!(node.kind, LayoutKind::CellLabel(_)))
             .expect("the mark drew a label");
         assert_eq!(label.kind, LayoutKind::CellLabel(true));
+    }
+
+    #[test]
+    fn a_line_the_text_begins_keeps_its_indentation() {
+        let code = "fn turn() {\n    *page += 1;\n}";
+        assert_eq!(
+            wrap_text(code, 10_000, FontSize::Body),
+            vec!["fn turn() {", "    *page += 1;", "}"]
+        );
+        let prose = "one two three four five six seven eight nine ten";
+        let lines = wrap_text(
+            prose,
+            measure_text("one two three", FontSize::Body).0,
+            FontSize::Body,
+        );
+        assert!(lines.len() > 1);
+        assert!(lines.iter().all(|line| !line.starts_with(' ')), "{lines:?}");
     }
 
     #[test]
