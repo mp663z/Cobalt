@@ -26,6 +26,12 @@ pub struct NormalLineMetrics {
 /// substitute regular metrics or bitmaps for a bold glyph.
 pub trait FontProvider {
     /// None preserves the existing explicit-face legacy contract, not parity.
+    /// Lowercase hex SHA-256 of the regular face's font bytes, if the provider can prove it.
+    /// `None` (default) makes the measured underline profile refuse.
+    fn face_sha256_hex(&self) -> Option<String> {
+        None
+    }
+
     fn normal_line_metrics(&self, _size: u32, _bold: bool) -> Option<NormalLineMetrics> {
         None
     }
@@ -143,6 +149,9 @@ pub fn paint_direct_text_blocks_underline(
     font: &impl FontProvider,
     profile: UnderlineProfile,
 ) -> Result<DisplayList, PageError> {
+    if font.face_sha256_hex().as_deref() != Some(profile.face_sha256_hex()) {
+        return Err(PageError::Unsupported);
+    }
     paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, Some(profile))
 }
 
@@ -170,12 +179,19 @@ fn underline_char_allowed(c: char) -> bool {
     match c {
         'A'..='Z' => c != 'Q',
         'a'..='z' => !matches!(c, 'g' | 'j' | 'p' | 'q' | 'y'),
-        '0'..='9' | ' ' | '.' | ':' | '!' | '?' | '-' | '_' | '/' | '\\' | '\'' | '"' | '#' | '&' | '*' | '+' | '=' | '%' => true,
+        '0'..='9' | ' ' | '.' | ':' | '!' | '?' | '-' | '/' | '\\' | '\'' | '"' | '#' | '&' | '*' | '+' | '=' | '%' => true,
         _ => false,
     }
 }
 
 impl UnderlineProfile {
+    /// SHA-256 of the exact face bytes the profile was measured against (fonts-liberation2 2.1.5).
+    #[must_use]
+    pub const fn face_sha256_hex(self) -> &'static str {
+        match self {
+            Self::ChromeLiberationSerif156 => "29d12439831b7f59194efec85872f24f54eff05738933f9a860220d2abff88ba",
+        }
+    }
     #[allow(clippy::too_many_arguments)]
     fn underline_rect(
         self,

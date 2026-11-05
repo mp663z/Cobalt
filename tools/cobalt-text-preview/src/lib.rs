@@ -4,6 +4,7 @@ use fontdue::{Font, FontSettings};
 use kobo_web_document::{css_text_page::FontProvider, inline_lines::GlyphBitmap};
 pub struct LocalFace {
     regular: Font,
+    sha256: String,
     normal: Option<normal_metrics::Pair>,
     /// The bold face is loaded lazily on the first bold glyph: pages without
     /// bold runs never consult it, so a missing or broken bold file cannot
@@ -40,6 +41,10 @@ impl LocalFace {
 }
 
 impl FontProvider for LocalFace {
+    fn face_sha256_hex(&self) -> Option<String> {
+        Some(self.sha256.clone())
+    }
+
     fn normal_line_metrics(
         &self,
         size: u32,
@@ -164,6 +169,7 @@ impl LocalFace {
             Font::from_bytes(bytes, FontSettings::default()).map_err(|_| "invalid font")?;
         Ok(Self {
             regular,
+            sha256: kobo_net::sha256::hex_digest(bytes),
             normal: None,
             bold_loader,
             bold: std::cell::OnceCell::new(),

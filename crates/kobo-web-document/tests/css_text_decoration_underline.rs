@@ -9,6 +9,7 @@ use kobo_web_document::{
 };
 struct Face;
 impl FontProvider for Face {
+    fn face_sha256_hex(&self) -> Option<String> { Some(UnderlineProfile::ChromeLiberationSerif156.face_sha256_hex().to_owned()) }
     fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
     fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
     fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
@@ -76,7 +77,7 @@ fn skip_ink_chars_and_unmeasured_chars_refuse_but_plain_letters_pass() {
     for ch in ["g", "j", "p", "q", "y", "Q", ",", ";", "(", ")", "[", "]", "@", "é", "~", "$"] {
         assert!(ul(&format!("<p style='font-size:16px;text-decoration:underline'>A{ch}B</p>")).is_err(), "{ch}");
     }
-    assert!(ul("<p style='font-size:16px;text-decoration:underline'>AZaz09 .:!?-_</p>").is_ok());
+    assert!(ul("<p style='font-size:16px;text-decoration:underline'>AZaz09 .:!?-</p>").is_ok());
 }
 #[test]
 fn overflow_beyond_viewport_refuses_or_stays_inside() {
@@ -85,4 +86,31 @@ fn overflow_beyond_viewport_refuses_or_stays_inside() {
     if let Ok(d) = ul(&format!("<p style='font-size:16px;text-decoration:underline'>{long}</p>")) {
         assert!(fills(&d).iter().all(|r| r.0 >= 0 && r.0 + r.2 as i32 <= 100), "{:?}", fills(&d));
     }
+}
+struct NoId;
+impl FontProvider for NoId {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
+    fn raster(&self, ch: char, s: u32, b: bool) -> Option<GlyphBitmap> { Face.raster(ch, s, b) }
+}
+struct WrongId;
+impl FontProvider for WrongId {
+    fn face_sha256_hex(&self) -> Option<String> { Some("0".repeat(64)) }
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
+    fn raster(&self, ch: char, s: u32, b: bool) -> Option<GlyphBitmap> { Face.raster(ch, s, b) }
+}
+#[test]
+fn unbound_or_wrong_face_refuses_at_library_boundary() {
+    let t = tree("<p style='font-size:16px;text-decoration:underline'>AB</p>", true);
+    let p = UnderlineProfile::ChromeLiberationSerif156;
+    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &Face, p).is_ok());
+    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &NoId, p).is_err());
+    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &WrongId, p).is_err());
+}
+#[test]
+fn underscore_refuses_as_skip_ink_unproven() {
+    assert!(ul("<p style='font-size:16px;text-decoration:underline'>A_B</p>").is_err());
 }
