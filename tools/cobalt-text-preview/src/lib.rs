@@ -329,6 +329,29 @@ impl PanelFrame {
     }
 }
 
+/// Text-decoration parse acceptance is opt-in (rev2+): only the underline measurement path asks
+/// for it; every other path keeps the r1 parser behavior. The budget is the canonical one,
+/// exactly what `parse_style_tree_with_media` uses.
+fn parse_styled(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &kobo_web_document::Limits,
+    media: kobo_web_document::MediaContext,
+    underline: bool,
+) -> kobo_web_document::style_tree::StyleTree {
+    if underline {
+        kobo_web_document::parse_style_tree_with_supply_and_text_decoration(
+            html,
+            sheets,
+            limits,
+            Some(media),
+            kobo_web_document::SupplyBudget::CANONICAL,
+        )
+    } else {
+        kobo_web_document::parse_style_tree_with_media(html, sheets, limits, media)
+    }
+}
+
 fn build_page_list(
     html: &[u8],
     sheets: &[Vec<u8>],
@@ -361,20 +384,7 @@ fn build_page_list(
     // Media queries see the same width the page is laid out with; a different
     // width means a new parse. Width is non-zero (checked above).
     let media = kobo_web_document::MediaContext::new(width).ok_or("invalid room budget")?;
-    // Text-decoration parse acceptance is opt-in (rev2+): only the underline measurement path
-    // asks for it; every other path keeps the r1 parser behavior. Budget is the canonical one,
-    // exactly what parse_style_tree_with_media uses.
-    let styled = if underline {
-        kobo_web_document::parse_style_tree_with_supply_and_text_decoration(
-            html,
-            sheets,
-            &limits,
-            Some(media),
-            kobo_web_document::SupplyBudget::CANONICAL,
-        )
-    } else {
-        kobo_web_document::parse_style_tree_with_media(html, sheets, &limits, media)
-    };
+    let styled = parse_styled(html, sheets, &limits, media, underline);
     // A picture has no semantic hit targets. Refuse controls/links until
     // a shipping caller can preserve their interactions, even if styled block.
     // The measurement-only static capture renders them inert instead; the
@@ -1526,5 +1536,20 @@ mod media_width_wiring {
         // An unknown media feature still refuses the whole page.
         let unknown = b"<!doctype html><style>@media (hover:hover){html{background:#fa0000}}</style><body><p>Hi</p></body>";
         assert!(prepare_page(unknown, &[], 300, 80, &face, Some(true)).is_err());
+    }
+
+    #[test]
+    fn underline_path_parses_text_decoration_and_every_other_path_does_not() {
+        use kobo_web_document::computed_style::TextDecoration;
+        let html = b"<!doctype html><p style='text-decoration:underline'>Hi</p>";
+        let limits = kobo_web_document::Limits::DEFAULT;
+        let media = kobo_web_document::MediaContext::new(400).expect("media");
+        let on = super::parse_styled(html, &[], &limits, media, true);
+        assert!(on.nodes.iter().any(|n| n.style.text_decoration == TextDecoration::Underline));
+        assert!(!on.unsupported);
+        let media = kobo_web_document::MediaContext::new(400).expect("media");
+        let off = super::parse_styled(html, &[], &limits, media, false);
+        assert!(off.nodes.iter().all(|n| n.style.text_decoration == TextDecoration::None));
+        assert!(off.unsupported, "default path must keep refusing text-decoration like r1");
     }
 }
