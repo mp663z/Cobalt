@@ -1,0 +1,9 @@
+# S3 rev2 independent review record (recorded by the build agent from the reviewer's report as relayed by main; reviewer's own files are with main)
+
+Verdict: PASS at candidate level for source head 0c2a8cb028577679aa6ec95e4483dfa484475b99 (tree 9d2276c6be468251c23a86e177323faa48fe69ab). Not canonical adoption. Frozen gates unchanged; real-page gate 0/5 (last-known); no page flips.
+
+Earlier: source 2590928061efcb6792922a4db5f6af110e1a3757 was NOT PASS (two measured blockers: Unicode/vertical-tab `~=` tokenization; duplicate structural-pseudo specificity).
+
+Reviewer-verified fixes (fresh Chrome plus independently rebuilt engine): ASCII-whitespace `~=` and class tokens; structural_n occurrence counter (cap 8, overflow refuses); case-insensitive type selectors on the opt-in path; raw (untrimmed) selector handed to the opt-in parser.
+Reviewer replay: packet sha256 9a61bccccab1354ae4f4ebddaa8c036dfa38be61538174e75f59293765f0337c exact; engine 697/0/1 (kobo-web-document + kobo-web-layout + kobo-browser-core, selected packages, not full workspace); preview 32/0/1; 10 default plain/inline full-tree+diagnostics comparisons on 5 pages byte-identical to r1; 11,326-row identity table and 580-element color/background cascade control reproduced.
+Limits stated in this record: not the full workspace (kobo-cli needs an assets dir absent from these trees); cascade control is synthetic, color and background-color only, 58-element documents; no real-page cascade or layout claim; synthetic table has 94 selectors refused because Chrome rejects them and 173 refused though Chrome accepts (coverage gap); duplicate `:root` and more than 8 structural pseudo-classes refuse; inherited default behaviors (Unicode trim/split_whitespace, greedy descendant matcher, lowercase type compare) are unchanged in the default entries.
