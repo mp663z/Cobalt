@@ -21,9 +21,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bold_path = None;
     let mut blocks = false;
     let mut static_capture = false;
+    let mut verified_normal = false;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--blocks" if !blocks => blocks = true,
+            // EXPERIMENTAL opt-in: byte-verified normal-line baseline (a + floor(gap/2)); default unchanged.
+            "--verified-normal-bytes" if !verified_normal => verified_normal = true,
             "--static-capture" if !static_capture => static_capture = true,
             "--mask-json" if mask_path.is_none() => {
                 mask_path = Some(args.next().ok_or("missing mask output path")?);
@@ -47,6 +50,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // The optional bold face loads only when a bold glyph actually needs it.
     let face = match bold_path {
+        None if verified_normal => LocalFace::with_verified_normal_bytes(&fs::read(font_path)?, None)?,
+        Some(_) if verified_normal => return Err("--verified-normal-bytes with --font-bold is not wired".into()),
         None => LocalFace::from_bytes(&fs::read(font_path)?)?,
         Some(path) => LocalFace::with_bold_loader(
             &fs::read(font_path)?,

@@ -1,0 +1,328 @@
+{
+ "libserif|normal|default": {
+  "match": 28,
+  "mismatch": 22,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    36,
+    32,
+    33
+   ],
+   [
+    37,
+    33,
+    34
+   ],
+   [
+    38,
+    34,
+    35
+   ],
+   [
+    39,
+    35,
+    36
+   ],
+   [
+    40,
+    36,
+    37
+   ],
+   [
+    41,
+    37,
+    38
+   ]
+  ]
+ },
+ "libserif|normal|variant": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libserif|2|default": {
+  "match": 16,
+  "mismatch": 11,
+  "refused": 23,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    36,
+    47,
+    48
+   ],
+   [
+    38,
+    50,
+    51
+   ],
+   [
+    41,
+    54,
+    55
+   ],
+   [
+    42,
+    55,
+    56
+   ],
+   [
+    45,
+    59,
+    60
+   ],
+   [
+    47,
+    62,
+    63
+   ]
+  ]
+ },
+ "libserif|2|variant": {
+  "match": 16,
+  "mismatch": 11,
+  "refused": 23,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    36,
+    47,
+    48
+   ],
+   [
+    38,
+    50,
+    51
+   ],
+   [
+    41,
+    54,
+    55
+   ],
+   [
+    42,
+    55,
+    56
+   ],
+   [
+    45,
+    59,
+    60
+   ],
+   [
+    47,
+    62,
+    63
+   ]
+  ]
+ },
+ "dejavusans|normal|default": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavusans|normal|variant": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavusans|2|default": {
+  "match": 26,
+  "mismatch": 0,
+  "refused": 24,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavusans|2|variant": {
+  "match": 26,
+  "mismatch": 0,
+  "refused": 24,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libsans|normal|default": {
+  "match": 38,
+  "mismatch": 12,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    46,
+    42,
+    43
+   ],
+   [
+    47,
+    43,
+    44
+   ],
+   [
+    48,
+    43,
+    44
+   ],
+   [
+    49,
+    44,
+    45
+   ],
+   [
+    50,
+    45,
+    46
+   ],
+   [
+    51,
+    46,
+    47
+   ]
+  ]
+ },
+ "libsans|normal|variant": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libsans|2|default": {
+  "match": 21,
+  "mismatch": 7,
+  "refused": 22,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    46,
+    61,
+    62
+   ],
+   [
+    49,
+    65,
+    66
+   ],
+   [
+    50,
+    66,
+    67
+   ],
+   [
+    52,
+    69,
+    70
+   ],
+   [
+    54,
+    72,
+    73
+   ],
+   [
+    55,
+    73,
+    74
+   ]
+  ]
+ },
+ "libsans|2|variant": {
+  "match": 21,
+  "mismatch": 7,
+  "refused": 22,
+  "HE_disagree": 0,
+  "mismatch_list": [
+   [
+    46,
+    61,
+    62
+   ],
+   [
+    49,
+    65,
+    66
+   ],
+   [
+    50,
+    66,
+    67
+   ],
+   [
+    52,
+    69,
+    70
+   ],
+   [
+    54,
+    72,
+    73
+   ],
+   [
+    55,
+    73,
+    74
+   ]
+  ]
+ },
+ "libmono|normal|default": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libmono|normal|variant": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libmono|2|default": {
+  "match": 24,
+  "mismatch": 0,
+  "refused": 26,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "libmono|2|variant": {
+  "match": 24,
+  "mismatch": 0,
+  "refused": 26,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavuserif|normal|default": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavuserif|normal|variant": {
+  "match": 50,
+  "mismatch": 0,
+  "refused": 0,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavuserif|2|default": {
+  "match": 26,
+  "mismatch": 0,
+  "refused": 24,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ },
+ "dejavuserif|2|variant": {
+  "match": 26,
+  "mismatch": 0,
+  "refused": 24,
+  "HE_disagree": 0,
+  "mismatch_list": []
+ }
+}

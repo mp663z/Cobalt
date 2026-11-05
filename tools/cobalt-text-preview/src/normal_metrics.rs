@@ -106,8 +106,9 @@ impl Metrics {
         })
     }
     pub(crate) fn at(self, size: u32) -> Option<NormalLineMetrics> {
-        // Only the exact sampled integer sizes activate. Every other size uses legacy.
-        if ![8, 10, 12, 13, 14, 15, 16, 17, 18, 20, 24, 32, 48].contains(&size) {
+        // Only integer sizes 8..=57 activate (Chrome 156 DOM baseline/height probe, 5 faces,
+        // 0 mismatches over every integer size in that range). Every other size uses legacy.
+        if !(8..=57).contains(&size) {
             return None;
         }
         let round = |value: i32| -> Option<u32> {
@@ -202,8 +203,8 @@ mod tests {
             })
         );
         assert!(m.at(7).is_none());
-        assert!(m.at(49).is_none());
-        for size in [0, 7, 9, 11, 19, 21, 23, 25, 31, 33, 47, 49, u32::MAX] {
+        assert!(m.at(58).is_none());
+        for size in [0, 7, 58, 59, 100, u32::MAX] {
             let pair = Pair {
                 regular: Some(m),
                 bold: Some(m),

@@ -1,0 +1,6 @@
+EXPERIMENTAL, UNREVIEWED. Opt-in only. No default, frozen profile, underline, or kobo-web-document source change.
+Change: (1) existing byte-verified normal metrics (LocalFace::with_verified_normal_bytes; baseline = round(asc)+floor(round(gap)/2)) now activate for integer sizes 8..=57 instead of 13 sampled sizes; (2) new preview CLI flag --verified-normal-bytes (no bold face) to exercise it. LocalFace::from_bytes and all existing entries unchanged.
+Evidence: Chrome 156 DOM zero-height inline-block baseline probe (bl.mjs/blf.mjs), 5 faces x sizes 8..57 x {normal, 2*size px}; Cobalt engine baseline read from pixels (flat H and E bottoms agree, 0 disagreements) default vs variant: bl-variant-table.json.
+Result normal line-height: Liberation Serif 22 mismatches -> 0, Liberation Sans 12 -> 0, DejaVu Sans/Serif, Liberation Mono 0 -> 0 (no regression).
+NOT fixed (separate): explicit line-height: Liberation Serif 11 and Liberation Sans 7 one-row mismatches remain; Chrome half-leading uses (a+d) not (a+d+g); 22-26 sizes per face still refuse (odd leading). Refusals unchanged.
+Not tested: other faces, fallback fonts, multiline, bold, fractional sizes, other Chrome versions; glyph raster diffs unchanged.

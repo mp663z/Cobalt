@@ -105,7 +105,7 @@ impl LocalFace {
     }
 
     /// Byte-aware normal-strut proof path. No CLI or canonical profile uses it.
-    /// Activates only at integer px sizes 8,10,12,13,14,15,16,17,18,20,24,32,48.
+    /// Activates only at integer px sizes 8..=57 (Chrome-probed).
     /// All other sizes return None for both weights and uniformly use legacy.
     /// Existing constructors keep their legacy metric contract unchanged.
     /// Unsupported metadata or per-size pair disagreement returns no new normal
@@ -1376,14 +1376,14 @@ mod normal_constructor_tests {
         bytes[os + 63] &= !128;
         let legacy = LocalFace::from_bytes(&bytes).unwrap();
         let face = LocalFace::with_verified_normal_bytes(&bytes, Some(&bytes)).unwrap();
-        for size in [8, 10, 12, 13, 14, 15, 16, 17, 18, 20, 24, 32, 48] {
+        for size in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 32, 36, 40, 48, 57] {
             assert!(face.normal_line_metrics(size, false).is_some());
             assert_eq!(
                 face.normal_line_metrics(size, false),
                 face.normal_line_metrics(size, true)
             );
         }
-        for size in [9, 11, 19, 21, 23, 25, 31, 33, 47, 49] {
+        for size in [0, 7, 58, 64, 100] {
             assert_eq!(face.normal_line_metrics(size, false), None);
             assert_eq!(face.normal_line_metrics(size, true), None);
         }

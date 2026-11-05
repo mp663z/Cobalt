@@ -1,0 +1,80 @@
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/tools/cobalt-text-preview/src/lib.rs clean4t/tools/cobalt-text-preview/src/lib.rs
+--- clean4r/tools/cobalt-text-preview/src/lib.rs	2026-11-02 17:15:42.000000000 +0530
++++ clean4t/tools/cobalt-text-preview/src/lib.rs	2026-11-05 20:22:48.045314979 +0530
+@@ -105,7 +105,7 @@
+     }
+ 
+     /// Byte-aware normal-strut proof path. No CLI or canonical profile uses it.
+-    /// Activates only at integer px sizes 8,10,12,13,14,15,16,17,18,20,24,32,48.
++    /// Activates only at integer px sizes 8..=57 (Chrome-probed).
+     /// All other sizes return None for both weights and uniformly use legacy.
+     /// Existing constructors keep their legacy metric contract unchanged.
+     /// Unsupported metadata or per-size pair disagreement returns no new normal
+@@ -1376,14 +1376,14 @@
+         bytes[os + 63] &= !128;
+         let legacy = LocalFace::from_bytes(&bytes).unwrap();
+         let face = LocalFace::with_verified_normal_bytes(&bytes, Some(&bytes)).unwrap();
+-        for size in [8, 10, 12, 13, 14, 15, 16, 17, 18, 20, 24, 32, 48] {
++        for size in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 32, 36, 40, 48, 57] {
+             assert!(face.normal_line_metrics(size, false).is_some());
+             assert_eq!(
+                 face.normal_line_metrics(size, false),
+                 face.normal_line_metrics(size, true)
+             );
+         }
+-        for size in [9, 11, 19, 21, 23, 25, 31, 33, 47, 49] {
++        for size in [0, 7, 58, 64, 100] {
+             assert_eq!(face.normal_line_metrics(size, false), None);
+             assert_eq!(face.normal_line_metrics(size, true), None);
+         }
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/tools/cobalt-text-preview/src/main.rs clean4t/tools/cobalt-text-preview/src/main.rs
+--- clean4r/tools/cobalt-text-preview/src/main.rs	2026-11-05 19:25:18.553307646 +0530
++++ clean4t/tools/cobalt-text-preview/src/main.rs	2026-11-05 20:22:48.045314979 +0530
+@@ -21,9 +21,12 @@
+     let mut bold_path = None;
+     let mut blocks = false;
+     let mut static_capture = false;
++    let mut verified_normal = false;
+     while let Some(flag) = args.next() {
+         match flag.as_str() {
+             "--blocks" if !blocks => blocks = true,
++            // EXPERIMENTAL opt-in: byte-verified normal-line baseline (a + floor(gap/2)); default unchanged.
++            "--verified-normal-bytes" if !verified_normal => verified_normal = true,
+             "--static-capture" if !static_capture => static_capture = true,
+             "--mask-json" if mask_path.is_none() => {
+                 mask_path = Some(args.next().ok_or("missing mask output path")?);
+@@ -47,6 +50,8 @@
+     }
+     // The optional bold face loads only when a bold glyph actually needs it.
+     let face = match bold_path {
++        None if verified_normal => LocalFace::with_verified_normal_bytes(&fs::read(font_path)?, None)?,
++        Some(_) if verified_normal => return Err("--verified-normal-bytes with --font-bold is not wired".into()),
+         None => LocalFace::from_bytes(&fs::read(font_path)?)?,
+         Some(path) => LocalFace::with_bold_loader(
+             &fs::read(font_path)?,
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/tools/cobalt-text-preview/src/normal_metrics.rs clean4t/tools/cobalt-text-preview/src/normal_metrics.rs
+--- clean4r/tools/cobalt-text-preview/src/normal_metrics.rs	2026-11-02 17:02:28.000000000 +0530
++++ clean4t/tools/cobalt-text-preview/src/normal_metrics.rs	2026-11-05 20:22:48.045314979 +0530
+@@ -106,8 +106,9 @@
+         })
+     }
+     pub(crate) fn at(self, size: u32) -> Option<NormalLineMetrics> {
+-        // Only the exact sampled integer sizes activate. Every other size uses legacy.
+-        if ![8, 10, 12, 13, 14, 15, 16, 17, 18, 20, 24, 32, 48].contains(&size) {
++        // Only integer sizes 8..=57 activate (Chrome 156 DOM baseline/height probe, 5 faces,
++        // 0 mismatches over every integer size in that range). Every other size uses legacy.
++        if !(8..=57).contains(&size) {
+             return None;
+         }
+         let round = |value: i32| -> Option<u32> {
+@@ -202,8 +203,8 @@
+             })
+         );
+         assert!(m.at(7).is_none());
+-        assert!(m.at(49).is_none());
+-        for size in [0, 7, 9, 11, 19, 21, 23, 25, 31, 33, 47, 49, u32::MAX] {
++        assert!(m.at(58).is_none());
++        for size in [0, 7, 58, 59, 100, u32::MAX] {
+             let pair = Pair {
+                 regular: Some(m),
+                 bold: Some(m),
