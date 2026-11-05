@@ -1,0 +1,12 @@
+diff --git a/apps/browser/src/corpus_tests.rs b/apps/browser/src/corpus_tests.rs
+index ad140b15..ce87116c 100644
+--- a/apps/browser/src/corpus_tests.rs
++++ b/apps/browser/src/corpus_tests.rs
+@@ -93,6 +93,7 @@ fn check(name: &str, kind: &str, actual: &str, failures: &mut Vec<String>) {
+         std::fs::write(&path, actual).unwrap_or_else(|error| panic!("{path}: {error}"));
+         return;
+     }
++    if let Some(dir) = std::env::var_os("ACTUAL_DUMP_DIR") { std::fs::write(std::path::Path::new(&dir).join(format!("{name}.{kind}")), actual).unwrap(); }
+     let expected = std::fs::read_to_string(&path).unwrap_or_default();
+     if expected != actual {
+         let line = expected

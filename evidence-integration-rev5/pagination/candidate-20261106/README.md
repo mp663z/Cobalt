@@ -1,0 +1,7 @@
+Candidate 1ae1bee7 (branch agent/cand-pre-indent-UNREVIEWED-20261106), UNREVIEWED. Measurement only; no expectations changed.
+- cand-pre.diff: candidate vs rev5 083601a6. actual-dump-diagnostic.diff: temporary ACTUAL_DUMP_DIR writer in corpus_tests.rs check(), used then reverted (not committed). It writes actual output only; it does not touch expected.
+- actual-cand/: full actual .pages for all 8 docs. Byte-identical to classification-20261105/actual-base (4dc074c7 lineage, a cross-lineage control, not an ancestor). The 4 inherited stale-expectation docs still differ from expected; rev5's extra growth (python, rust-blog, rust-std-option, windows-1252, 9 lines each) is absent in the candidate.
+- cand-mutation-rev5-src.log: new tests vs rev5 sources: 0 passed, 4 failed. cand-suites.log: kobo-ui 288 passed/2 ignored, kobo-web-layout 24 passed.
+- Equality with base is page COUNTS only. Real code-block pixels and Chrome comparison are not yet done.
+- Probe sources: scratch-geometry-tests.rs (base probe; A line needs the page_screen_with_metrics replacement described in the packet), v5-nbsp.rs (diagnostic perturbation).
+- Fractional spike final review (relayed 23:33, record): shifted-size fit 1173/1173 on grid; reviewer holdout 1724/1725 (DejaVu 18.515625 / W200.21875 miss); size fit 75/75 on 3 fonts; single-text-node vs span-per-word DOM truth differs in 9/1173; old 17-flip and margin 17/17 were span-DOM-specific; single-node baseline 24/23 flips; margin 0.25 catches 21/24. Fitted, not mechanism; Tier B empty.

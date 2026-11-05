@@ -1,0 +1,596 @@
+use super::*;
+use kobo_ui::TextScale;
+use kobo_web_document::{parse_document, Limits, Url};
+
+fn fixture(name: &str) -> Document {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../kobo-web-document/tests/fixtures")
+        .join(format!("{name}.html"));
+    let bytes = std::fs::read(path).expect("fixture");
+    parse_document(
+        &bytes,
+        &Url::parse("https://fixtures.example/page.html").expect("url"),
+        &Limits::DEFAULT,
+    )
+}
+
+fn text_of_piece(piece: &Piece) -> String {
+    match piece {
+        Piece::Heading { text, .. }
+        | Piece::Quote { text, .. }
+        | Piece::Preformatted(text)
+        | Piece::Note(text) => text.clone(),
+        Piece::Prose(runs) => runs.iter().map(|run| run.text.as_str()).collect(),
+        Piece::Table { rows, .. } => rows
+            .iter()
+            .filter(|row| !row.header)
+            .map(|row| row.cells.join(" "))
+            .collect::<Vec<_>>()
+            .join(" "),
+        Piece::Rule | Piece::Picture { .. } | Piece::Form { .. } => String::new(),
+    }
+}
+
+fn words(pieces: &[Piece]) -> Vec<String> {
+    pieces
+        .iter()
+        .flat_map(|piece| {
+            text_of_piece(piece)
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// A stand-in for the panel: a page holds `budget` characters, and each
+/// piece costs its text plus a line.
+fn budget(budget: usize) -> impl FnMut(&[Piece]) -> bool {
+    move |pieces| {
+        pieces
+            .iter()
+            .map(|piece| text_of_piece(piece).len() + 40)
+            .sum::<usize>()
+            <= budget
+    }
+}
+
+/// Pages rejoined, with the words of cut prose rejoined across the cut.
+fn page_words(layout: &Layout) -> Vec<String> {
+    let all: Vec<Piece> = layout.pages.iter().flatten().cloned().collect();
+    words(&all)
+}
+
+fn document_words(document: &Document) -> Vec<String> {
+    words(&pieces(document).0)
+}
+
+#[test]
+fn packing_keeps_every_word_in_order() {
+    for name in ["basic", "malformed", "sanitize", "latin1", "links"] {
+        let document = fixture(name);
+        for size in [200, 300, 500, 2_000] {
+            let layout = paginate(&document, budget(size));
+            assert_eq!(
+                page_words(&layout),
+                document_words(&document),
+                "{name} at {size}"
+            );
+            assert!(!layout.truncated);
+        }
+    }
+}
+
+#[test]
+fn no_page_ends_on_a_heading_it_could_have_carried() {
+    let document = fixture("basic");
+    for size in [200, 300, 400, 500] {
+        let layout = paginate(&document, budget(size));
+        for (index, page) in layout.pages.iter().enumerate() {
+            if index + 1 < layout.pages.len() && page.len() > 1 {
+                assert!(
+                    !page.last().is_some_and(Piece::is_heading),
+                    "page {index} at {size} ends on a heading: {page:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn every_link_is_reachable_in_reading_order() {
+    for name in ["basic", "links"] {
+        let document = fixture(name);
+        let layout = paginate(&document, budget(300));
+        let mut seen: Vec<usize> = Vec::new();
+        for piece in layout.pages.iter().flatten() {
+            for link in piece.links() {
+                if seen.last() != Some(&link) {
+                    seen.push(link);
+                }
+            }
+        }
+        // Links in headings and quotes are reached from the link list; the
+        // rest are drawn in the text.
+        let expected: Vec<usize> = pieces(&document).0.iter().flat_map(Piece::links).collect();
+        assert_eq!(seen, expected, "{name}");
+        assert!(layout
+            .pages
+            .iter()
+            .flatten()
+            .all(|piece| piece.links().len() <= MAX_LINKS_PER_PIECE));
+    }
+}
+
+#[test]
+fn a_paragraph_with_many_links_is_carried_as_several_pieces() {
+    let (flat, _) = pieces(&fixture("links"));
+    let prose: Vec<&Piece> = flat
+        .iter()
+        .filter(|p| matches!(p, Piece::Prose(_)))
+        .collect();
+    let linked: Vec<usize> = prose.iter().flat_map(|piece| piece.links()).collect();
+    assert_eq!(linked, (0..40).collect::<Vec<_>>());
+    assert!(prose
+        .iter()
+        .all(|piece| piece.links().len() <= MAX_LINKS_PER_PIECE));
+}
+
+#[test]
+fn a_word_wider_than_any_page_is_cut_and_packing_ends() {
+    let long = "x".repeat(5_000);
+    let document = parse_document(
+        format!("<p>before {long} after</p>").as_bytes(),
+        &Url::parse("https://x.example/").expect("url"),
+        &Limits::DEFAULT,
+    );
+    let layout = paginate(&document, budget(400));
+    let joined: String = layout.pages.iter().flatten().map(text_of_piece).collect();
+    assert_eq!(joined.matches('x').count(), 5_000);
+    assert!(layout.pages.len() > 10);
+}
+
+#[test]
+fn a_page_that_can_never_fit_is_drawn_alone_rather_than_looping() {
+    let document = fixture("basic");
+    let layout = paginate(&document, |_| false);
+    assert_eq!(layout.pages.len(), pieces(&document).0.len());
+}
+
+#[test]
+fn page_count_is_capped() {
+    let html = "<p>w</p>".repeat(5_000);
+    let document = parse_document(
+        html.as_bytes(),
+        &Url::parse("https://x.example/").expect("url"),
+        &Limits::DEFAULT,
+    );
+    let layout = paginate(&document, |pieces| pieces.len() <= 1);
+    assert!(layout.truncated);
+    assert_eq!(layout.pages.len(), MAX_PAGES);
+}
+
+#[test]
+fn anchors_name_the_page_their_block_starts_on() {
+    let document = fixture("basic");
+    let layout = paginate(&document, budget(300));
+    assert_eq!(layout.page_of("top"), Some(0));
+    let history = layout.page_of("history").expect("history anchor");
+    assert!(layout.pages[history]
+        .iter()
+        .any(|piece| matches!(piece, Piece::Heading { text, .. } if text == "A short history")));
+    assert_eq!(layout.page_of("missing"), None);
+}
+
+#[test]
+fn packing_is_deterministic() {
+    let document = fixture("basic");
+    assert_eq!(
+        paginate(&document, budget(300)),
+        paginate(&document, budget(300))
+    );
+}
+
+#[test]
+fn link_actions_round_trip() {
+    assert_eq!(link_of(&link_action(0)), Some(0));
+    assert_eq!(link_of(&link_action(3_999)), Some(3_999));
+    assert_eq!(link_of("links"), None);
+    assert_eq!(link_of("link-x"), None);
+}
+
+// Real panels from here: the toolkit's own layout decides what fits.
+
+fn panels() -> Vec<(String, DisplayMetrics)> {
+    let mut out = Vec::new();
+    for profile in kobo_profile::SUPPORTED_PROFILES {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            out.push((
+                format!("{} {scale:?}", profile.id),
+                DisplayMetrics {
+                    width: i32::try_from(profile.width).expect("width"),
+                    height: i32::try_from(profile.height).expect("height"),
+                    pixels_per_inch: i32::from(profile.pixels_per_inch),
+                    text_scale: scale,
+                },
+            ));
+        }
+    }
+    out
+}
+
+#[test]
+fn fixture_pages_fit_every_supported_panel_at_every_text_size() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    for name in ["basic", "malformed", "links"] {
+        let document = fixture(name);
+        let title = document.title.clone().unwrap_or_default();
+        for (panel, metrics) in panels() {
+            let layout = paginate_for(&document, &title, &metrics);
+            assert_eq!(
+                page_words(&layout),
+                document_words(&document),
+                "{name} on {panel}"
+            );
+            for (index, page) in layout.pages.iter().enumerate() {
+                let screen = page_screen(&title, page, index, Some(layout.pages.len())).build();
+                let issues: Vec<_> = screen
+                    .diagnostics(&metrics, &Chrome::measuring(true))
+                    .issues
+                    .into_iter()
+                    .filter(|issue| issue.severity == kobo_ui::DiagnosticSeverity::Error)
+                    .collect();
+                assert!(
+                    issues.is_empty(),
+                    "{name} page {index} on {panel}: {issues:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn larger_text_takes_more_pages() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let document = fixture("basic");
+    let at = |text_scale| {
+        paginate_for(
+            &document,
+            "t",
+            &DisplayMetrics {
+                text_scale,
+                ..kobo_ui::CLARA_BW_METRICS
+            },
+        )
+        .pages
+        .len()
+    };
+    let (normal, large, extra) = (
+        at(TextScale::Default),
+        at(TextScale::Large),
+        at(TextScale::ExtraLarge),
+    );
+    assert!(
+        normal <= large && large <= extra && normal < extra,
+        "{normal} {large} {extra}"
+    );
+}
+
+#[test]
+fn pages_made_one_at_a_time_match_pages_made_at_once() {
+    let document = fixture("basic");
+    let whole = paginate(&document, budget(300));
+    let mut paginator = Paginator::for_document(&document);
+    let mut fits = budget(300);
+    assert!(paginator.next_page(&mut fits));
+    assert_eq!(paginator.pages()[0], whole.pages[0]);
+    assert_eq!(paginator.page_of("top"), Some(0));
+    assert!(paginator.has_fragment("history"));
+    while paginator.next_page(&mut fits) {}
+    assert!(paginator.done());
+    assert_eq!(paginator.into_layout(), whole);
+}
+
+#[test]
+fn every_link_in_the_document_is_offered_on_some_page() {
+    let html = r#"<h2><a href="/h">Heading link</a></h2>
+        <blockquote><p>Quoted <a href="/q">link</a></p></blockquote>
+        <table><tr><th>A</th></tr><tr><td><a href="/t">cell link</a></td></tr></table>
+        <a href="/i"><img src="/i.png" alt="linked picture"></a>
+        <p>Plain <a href="/p">link</a>.</p>"#;
+    let document = parse_document(
+        html.as_bytes(),
+        &Url::parse("https://x.example/").expect("url"),
+        &Limits::DEFAULT,
+    );
+    for size in [120, 400, 5_000] {
+        let layout = paginate(&document, budget(size));
+        let mut offered: Vec<usize> = Vec::new();
+        for link in layout.pages.iter().flatten().flat_map(Piece::all_links) {
+            if !offered.contains(&link) {
+                offered.push(link);
+            }
+        }
+        assert_eq!(
+            offered,
+            (0..document.links.len()).collect::<Vec<_>>(),
+            "at {size}: {:?}",
+            document.links
+        );
+    }
+}
+
+fn html(markup: &str) -> Document {
+    parse_document(
+        markup.as_bytes(),
+        &Url::parse("https://fixtures.example/page.html").expect("url"),
+        &Limits::DEFAULT,
+    )
+}
+
+#[test]
+fn an_image_with_a_declared_size_gets_room_and_keeps_its_description() {
+    let document = html(
+        "<p>Before.</p><img src=a.png width=640 height=480 alt=\"A chart\">\
+         <img src=pixel.gif width=1 height=1><img src=b.png alt=\"No size\"><p>After.</p>",
+    );
+    let (pieces, _) = pieces(&document);
+    let pictures: Vec<_> = pieces
+        .iter()
+        .filter_map(|piece| match piece {
+            Piece::Picture {
+                image,
+                width,
+                height,
+            } => Some((*image, *width, *height)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        pictures,
+        vec![(0, 640, 480)],
+        "only the sized, visible image"
+    );
+    let text: Vec<String> = pieces.iter().map(text_of_piece).collect();
+    assert!(text.contains(&"Image: A chart".to_owned()));
+    assert!(text.contains(&"Image: No size".to_owned()));
+    assert_eq!(document.images()[0].src.path(), "/a.png");
+}
+
+#[test]
+fn a_picture_is_never_squeezed_into_the_foot_of_a_page() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let mut markup = String::new();
+    for n in 0..40 {
+        markup.push_str(&format!(
+            "<p>Paragraph {n} with enough words to fill a line or two.</p>\
+             <img src=p{n}.png width=800 height=600 alt=\"Plate {n}\">"
+        ));
+    }
+    let document = html(&markup);
+    for (panel, metrics) in panels() {
+        let layout = paginate_for(&document, "Plates", &metrics);
+        let whole = {
+            let alone = page_screen(
+                "Plates",
+                &[Piece::Picture {
+                    image: 0,
+                    width: 800,
+                    height: 600,
+                }],
+                0,
+                Some(1),
+            )
+            .build();
+            picture_heights(&alone, &metrics)[0].1
+        };
+        let mut seen = 0;
+        for (index, page) in layout.pages.iter().enumerate() {
+            let screen = page_screen("Plates", page, index, Some(layout.pages.len())).build();
+            for (_, height) in picture_heights(&screen, &metrics) {
+                assert_eq!(height, whole, "page {index} on {panel}");
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 40, "every picture is on some page on {panel}");
+    }
+}
+
+#[test]
+fn a_page_is_found_again_by_its_place_in_the_text() {
+    let pieces: Vec<Piece> = (0..20).map(|n| Piece::Note(format!("piece {n}"))).collect();
+    let mut three = Paginator::new(pieces.clone(), Vec::new());
+    let mut fits = |page: &[Piece]| page.len() <= 3;
+    while three.next_page(&mut fits) {}
+    // Pieces 0-2 on page 0, 3-5 on page 1, and so on.
+    assert_eq!(three.place_of(2), Some(6));
+    let mut five = Paginator::new(pieces, Vec::new());
+    let mut fits = |page: &[Piece]| page.len() <= 5;
+    while five.next_page(&mut fits) {}
+    // The same words, cut into bigger pages, are on page 1.
+    assert_eq!(five.page_of_place(6), Some(1));
+    assert_eq!(five.page_of_place(99), Some(five.pages().len() - 1));
+    assert_eq!(five.place_of(0), Some(0));
+}
+
+#[test]
+fn browser_code_retains_hard_line_indents_without_changing_shared_wrapping() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+        let metrics = DisplayMetrics {
+            text_scale: scale,
+            ..kobo_ui::CLARA_BW_METRICS
+        };
+        let pieces = [Piece::Preformatted(
+            "fn turn() {\n    *page += 1;\n}".into(),
+        )];
+        let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+        let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
+        let x_for = |text: &str| {
+            layout
+                .nodes
+                .iter()
+                .find(|node| node.text_lines.iter().any(|line| line == text))
+                .unwrap()
+                .rect
+                .x
+        };
+        assert!(x_for("*page += 1;") > x_for("fn turn() {"));
+        assert_eq!(x_for("}"), x_for("fn turn() {"));
+        assert!(fits(&screen, &metrics));
+    }
+}
+
+#[test]
+fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for profile in [
+        kobo_ui::CLARA_BW_METRICS,
+        DisplayMetrics {
+            width: 1264,
+            height: 1680,
+            pixels_per_inch: 300,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+        DisplayMetrics {
+            width: 1404,
+            height: 1872,
+            pixels_per_inch: 227,
+            ..kobo_ui::CLARA_BW_METRICS
+        },
+    ] {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let metrics = DisplayMetrics {
+                text_scale: scale,
+                ..profile
+            };
+            let rows = vec![
+                TableRow {
+                    header: true,
+                    cells: vec!["Mode".into(), "Speed".into()],
+                },
+                TableRow {
+                    header: false,
+                    cells: vec!["Full".into(), "Slow".into()],
+                },
+            ];
+            let pieces = [
+                Piece::Prose(vec![Run {
+                    text: "Prose".into(),
+                    strong: false,
+                    emphasis: false,
+                    link: None,
+                }]),
+                Piece::Table {
+                    rows,
+                    links: Vec::new(),
+                },
+            ];
+            let screen =
+                page_screen_with_metrics("Tables", &pieces, 0, Some(1), None, &metrics).build();
+            let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
+            let text = layout
+                .nodes
+                .iter()
+                .find(|node| node.text_lines == ["Prose"])
+                .unwrap();
+            let table = layout
+                .nodes
+                .iter()
+                .find(|node| matches!(node.kind, LayoutKind::TableHeaderCell))
+                .unwrap();
+            assert!(
+                (table.rect.x - text.rect.x).abs() <= 2,
+                "{} {scale:?}: {} vs {}",
+                metrics.width,
+                table.rect.x,
+                text.rect.x
+            );
+            assert!(fits(&screen, &metrics));
+            let rows = vec![TableRow {
+                header: false,
+                cells: vec![
+                    "A long unbroken sentence taking more than the prose measure".repeat(3),
+                    "Second cell".into(),
+                ],
+            }];
+            let screen = page_screen_with_metrics(
+                "Wide",
+                &[Piece::Table {
+                    rows,
+                    links: Vec::new(),
+                }],
+                0,
+                Some(1),
+                None,
+                &metrics,
+            )
+            .build();
+            assert!(matches!(
+                screen.nodes.first(),
+                Some(kobo_ui::Node::Table { .. })
+            ));
+        }
+    }
+}
+
+#[test]
+fn a_single_word_wider_than_the_page_is_cut_inside_the_word_without_losing_a_letter() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let word = "x".repeat(3000);
+    let document = html(&format!("<p>{word}</p>"));
+    let metrics = kobo_ui::CLARA_BW_METRICS;
+    let layout = paginate_for(&document, "Long", &metrics);
+    assert!(
+        layout.pages.len() > 1,
+        "a 3000 letter word needs several pages"
+    );
+    let kept: usize = layout
+        .pages
+        .iter()
+        .flatten()
+        .filter_map(text_of)
+        .map(|text| text.chars().filter(|c| *c == 'x').count())
+        .sum();
+    assert_eq!(kept, 3000, "no letter is dropped between pages");
+}
+
+#[test]
+fn splitting_preformatted_text_keeps_every_line_break() {
+    for text in ["a\n\nz", "a\n\n\nz", "ab\ncd\n\nef\n", "\n\nx"] {
+        let piece = Piece::Preformatted(text.to_owned());
+        for at in cut_points(&piece) {
+            let (head, tail) = split_at(&piece, at);
+            let (Piece::Preformatted(head), Piece::Preformatted(tail)) = (head, tail) else {
+                panic!("a preformatted piece splits into preformatted pieces");
+            };
+            assert_eq!(format!("{head}\n{tail}"), text, "{text:?} cut at {at}");
+        }
+    }
+}
+
+#[test]
+fn scratch_geometry_probe_preformatted_forms() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    let code = "fn main() {\n    let v = vec![1, 2, 3];\n    for x in &v {\n        println!(\"{x}\");\n    }\n\n    let very_long = \"a long unbroken string literal that is certainly wider than any panel at any text scale ................................\";\n}";
+    let panels = [("clara", kobo_ui::CLARA_BW_METRICS), ("1264x1680", DisplayMetrics { width: 1264, height: 1680, pixels_per_inch: 300, ..kobo_ui::CLARA_BW_METRICS }), ("1404x1872", DisplayMetrics { width: 1404, height: 1872, pixels_per_inch: 227, ..kobo_ui::CLARA_BW_METRICS })];
+    for (name, base) in panels {
+        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
+            let metrics = DisplayMetrics { text_scale: scale, ..base };
+            let pieces = [Piece::Preformatted(code.into())];
+            let b = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
+            let a = kobo_ui::with_reading_scale(metrics.text_scale, || ScreenBuilder::new("browser-page").top_bar("Code").text(code).build());
+            for (form, screen) in [("A_text", a), ("B_preformatted", b)] {
+                let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
+                let mut rows = Vec::new();
+                for n in &layout.nodes {
+                    if n.text_lines.iter().any(|l| l.contains("fn main") || l.contains("let ") || l.contains("for x") || l.contains("println") || l == "}" || l.contains("very_long") || l.contains("string literal") || l.contains("....")) {
+                        rows.push(format!("[x={} y={} w={} h={} lines={:?}]", n.rect.x, n.rect.y, n.rect.width, n.rect.height, n.text_lines));
+                    }
+                }
+                let maxr = layout.nodes.iter().filter(|n| !n.text_lines.is_empty()).map(|n| n.rect.x + n.rect.width).max().unwrap_or(0);
+                println!("PROBE {name} {scale:?} {form} panelw={} flow_h={} fits={} max_right={} nodes={}\n  {}", metrics.width, layout.flow_height, fits(&screen, &metrics), maxr, rows.len(), rows.join("\n  "));
+            }
+        }
+    }
+}

@@ -1,0 +1,70 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling kobo-ui v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-ui)
+   Compiling miniz_oxide v0.9.1
+   Compiling autocfg v1.5.1
+   Compiling crc32fast v1.5.1
+   Compiling num-traits v0.2.19
+   Compiling kobo-protocol v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-protocol)
+   Compiling kobo-net v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-net)
+   Compiling flate2 v1.1.10
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling zune-core v0.4.12
+   Compiling pxfm v0.1.30
+   Compiling kobo-text v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-text)
+   Compiling zune-jpeg v0.4.21
+   Compiling kobo-policy v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-policy)
+   Compiling moxcms v0.7.11
+   Compiling png v0.18.1
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-web-document` (lib) generated 1 warning
+   Compiling bytemuck v1.25.2
+   Compiling byteorder-lite v0.1.0
+   Compiling kobo-sdk v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-sdk)
+   Compiling image v0.25.8
+   Compiling kobo-image v0.3.25 (/home/sandbox/cb/cand-pre/crates/kobo-image)
+   Compiling kobo-web-layout v0.1.0 (/home/sandbox/cb/cand-pre/crates/kobo-web-layout)
+   Compiling kobo-browser-core v0.1.0 (/home/sandbox/cb/cand-pre/crates/kobo-browser)
+   Compiling kobo-browser v0.1.0 (/home/sandbox/cb/cand-pre/apps/browser)
+    Finished `release` profile [optimized] target(s) in 1m 07s
+     Running unittests src/main.rs (/home/sandbox/cb/tgt-cand/release/deps/kobo_browser-cb251d7b3cb87f70)
+
+running 1 test
+test corpus_tests::corpus_page_counts_on_every_reader_and_text_size ... FAILED
+
+failures:
+
+---- corpus_tests::corpus_page_counts_on_every_reader_and_text_size stdout ----
+
+thread 'corpus_tests::corpus_page_counts_on_every_reader_and_text_size' panicked at apps/browser/src/corpus_tests.rs:189:5:
+wikipedia-e-reader.pages differs from line 4:
+  expected: "elipsa-2e-389 Default\t29"
+  actual:   "elipsa-2e-389 Default\t30"
+wikipedia-search.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t15"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t16"
+python-tutorial-intro.pages differs from line 9:
+  expected: "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t38"
+  actual:   "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t39"
+windows-1252.pages differs from line 9:
+  expected: "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t38"
+  actual:   "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t39"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    corpus_tests::corpus_page_counts_on_every_reader_and_text_size
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 12.07s
+
+error: test failed, to rerun pass `-p kobo-browser --bin kobo-browser`
