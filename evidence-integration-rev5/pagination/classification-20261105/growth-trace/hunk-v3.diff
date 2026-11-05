@@ -1,0 +1,13 @@
+diff --git a/crates/kobo-web-layout/src/lib.rs b/crates/kobo-web-layout/src/lib.rs
+index cc03d0a1..72ecea5e 100644
+--- a/crates/kobo-web-layout/src/lib.rs
++++ b/crates/kobo-web-layout/src/lib.rs
+@@ -363,7 +363,7 @@ fn append_at_reading_scale(
+             Piece::Prose(runs) => prose(builder, runs),
+             Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
+             Piece::Preformatted(text) => preformatted(builder, text),
+-            Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
++            Piece::Table { rows, .. } => builder.table(rows.clone(), Vec::new()),
+             Piece::Note(text) => builder.secondary(text),
+             Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
+             Piece::Rule => builder.divider(),

@@ -1,0 +1,34 @@
+diff --git a/crates/kobo-web-layout/src/tests.rs b/crates/kobo-web-layout/src/tests.rs
+index 92feac4a..f59c7949 100644
+--- a/crates/kobo-web-layout/src/tests.rs
++++ b/crates/kobo-web-layout/src/tests.rs
+@@ -568,3 +568,29 @@ fn splitting_preformatted_text_keeps_every_line_break() {
+         }
+     }
+ }
++
++#[test]
++fn scratch_geometry_probe_preformatted_forms() {
++    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
++    let code = "fn main() {\n    let v = vec![1, 2, 3];\n    for x in &v {\n        println!(\"{x}\");\n    }\n\n    let very_long = \"a long unbroken string literal that is certainly wider than any panel at any text scale ................................\";\n}";
++    let panels = [("clara", kobo_ui::CLARA_BW_METRICS), ("1264x1680", DisplayMetrics { width: 1264, height: 1680, pixels_per_inch: 300, ..kobo_ui::CLARA_BW_METRICS }), ("1404x1872", DisplayMetrics { width: 1404, height: 1872, pixels_per_inch: 227, ..kobo_ui::CLARA_BW_METRICS })];
++    for (name, base) in panels {
++        for scale in [TextScale::Default, TextScale::Large, TextScale::ExtraLarge] {
++            let metrics = DisplayMetrics { text_scale: scale, ..base };
++            let pieces = [Piece::Preformatted(code.into())];
++            let b = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
++            let a = kobo_ui::with_reading_scale(metrics.text_scale, || ScreenBuilder::new("browser-page").top_bar("Code").text(code).build());
++            for (form, screen) in [("A_text", a), ("B_preformatted", b)] {
++                let layout = screen.layout_with(&metrics, &Chrome::measuring(true));
++                let mut rows = Vec::new();
++                for n in &layout.nodes {
++                    if n.text_lines.iter().any(|l| l.contains("fn main") || l.contains("let ") || l.contains("for x") || l.contains("println") || l == "}" || l.contains("very_long") || l.contains("string literal") || l.contains("....")) {
++                        rows.push(format!("[x={} y={} w={} h={} lines={:?}]", n.rect.x, n.rect.y, n.rect.width, n.rect.height, n.text_lines));
++                    }
++                }
++                let maxr = layout.nodes.iter().filter(|n| !n.text_lines.is_empty()).map(|n| n.rect.x + n.rect.width).max().unwrap_or(0);
++                println!("PROBE {name} {scale:?} {form} panelw={} flow_h={} fits={} max_right={} nodes={}\n  {}", metrics.width, layout.flow_height, fits(&screen, &metrics), maxr, rows.len(), rows.join("\n  "));
++            }
++        }
++    }
++}

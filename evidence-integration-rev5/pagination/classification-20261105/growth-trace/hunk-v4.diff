@@ -1,0 +1,27 @@
+diff --git a/crates/kobo-web-layout/src/lib.rs b/crates/kobo-web-layout/src/lib.rs
+index cc03d0a1..30ff337b 100644
+--- a/crates/kobo-web-layout/src/lib.rs
++++ b/crates/kobo-web-layout/src/lib.rs
+@@ -1159,7 +1159,7 @@ fn cut(
+     fits: &mut impl FnMut(&[Piece]) -> bool,
+ ) -> Option<(Piece, Piece)> {
+     let points = cut_points(piece);
+-    if points.is_empty() && !page.is_empty() {
++    if points.is_empty() {
+         return None;
+     }
+     let try_at = |at: usize, fits: &mut dyn FnMut(&[Piece]) -> bool| {
+@@ -1274,12 +1274,7 @@ fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
+         // head, so `head + "\n" + tail` is always the original text and a
+         // blank line at the boundary is kept as the tail's first line.
+         Piece::Preformatted(text) => (
+-            Piece::Preformatted(
+-                text[..at]
+-                    .strip_suffix('\n')
+-                    .unwrap_or(&text[..at])
+-                    .to_owned(),
+-            ),
++            Piece::Preformatted(text[..at].trim_end_matches('\n').to_owned()),
+             Piece::Preformatted(text[at..].to_owned()),
+         ),
+         // Both halves offer the quote's links: which half a link's words fell
