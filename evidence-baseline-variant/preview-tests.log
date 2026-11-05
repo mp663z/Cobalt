@@ -12,33 +12,34 @@ test core_tests::pure_core_prepares_device_face_without_sdk_dependencies ... ok
 test lazy_bold_tests::in_place_compaction_rejects_exactly_like_the_borrowing_path ... ok
 test lazy_bold_tests::in_place_compaction_is_byte_equivalent_for_all_channels_and_identities ... ok
 test lazy_bold_tests::unused_bold_loader_is_never_called_and_failure_is_cached ... ok
-test media_width_wiring::page_media_queries_see_the_same_width_the_page_is_prepared_with ... ok
 test nested_interaction_guard_tests::nested_link_never_bypasses_shipping_interaction_guard ... ok
-test normal_constructor_tests::typo_face_keeps_legacy_contract_and_explicit_css_byte_identity ... ok
+test media_width_wiring::page_media_queries_see_the_same_width_the_page_is_prepared_with ... ok
+test normal_constructor_tests::out_of_range_sizes_fall_back_to_legacy_frames_and_default_constructor_is_off ... ok
+test normal_constructor_tests::byte_constructor_activates_only_sampled_sizes_and_keeps_explicit_css_legacy ... ok
 test normal_metrics::tests::bounded_metadata_and_components_are_checked ... ok
 test normal_metrics::tests::paired_eligibility_and_disagreement_are_all_or_nothing ... ok
 test tests::bundled_device_face_paints_into_both_panel_commands ... ok
+test normal_constructor_tests::typo_face_keeps_legacy_contract_and_explicit_css_byte_identity ... ok
 test tests::complete_page_preserves_scoped_styles_and_rejects_input_truncation ... ok
-test normal_constructor_tests::byte_constructor_activates_only_sampled_sizes_and_keeps_explicit_css_legacy ... ok
-test tests::complete_page_queue_refuses_without_partial_commands ... ok
+test tests::interaction_and_overflow_refuse_without_partial_queue ... ok
 test tests::invalid_panel_metrics_refuse_before_layout_arithmetic ... ok
 test tests::invalid_surfaces_and_fonts_refuse_without_a_picture ... ok
-test tests::interaction_and_overflow_refuse_without_partial_queue ... ok
+test tests::complete_page_queue_refuses_without_partial_commands ... ok
 test tests::rgb_and_unknown_identity_use_existing_sdk_picture_commands ... ok
 test tests::slot_rejection_keeps_old_ownership_until_explicit_fallback_clear ... ok
 test tests::slot_replacement_queues_new_before_dropping_old_and_clear_is_idempotent ... ok
 test tests::native_room_preserves_controls_across_panels_and_refuses_accessibility_mismatch ... ok
-test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
      Running unittests src/main.rs (/home/sandbox/cb/tgt-t/debug/deps/cobalt_text_preview-41a3d4afe25c1dcd)
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
      Running tests/charset_media.rs (/home/sandbox/cb/tgt-t/debug/deps/charset_media-d9f33eabd9d29682)
 test unsupported_conditions_and_interaction_still_fail_whole_page ... ok
 test leading_charset_screen_media_matches_flat_preview ... ok
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
      Running tests/static_gate_probe.rs (/home/sandbox/cb/tgt-t/debug/deps/static_gate_probe-b981951d2631250e)
 test report_real_page_paint_gates ... ignored, requires the private frozen corpus under /downloads/cobalt-real-corpus
 test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
      Running tests/wrapper_structure.rs (/home/sandbox/cb/tgt-t/debug/deps/wrapper_structure-0c2dcf588c98790d)
 test normalized_structure_does_not_admit_anonymous_text_or_lists_or_interaction ... ok
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1412,6 +1412,33 @@ mod normal_constructor_tests {
         assert_eq!(ineligible.normal_line_metrics(16, true), None);
     }
     #[test]
+    fn out_of_range_sizes_fall_back_to_legacy_frames_and_default_constructor_is_off() {
+        let mut bytes =
+            include_bytes!("../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf")
+                .to_vec();
+        let os = table_offset(&bytes, *b"OS/2");
+        bytes[os + 63] &= !128;
+        let legacy = LocalFace::from_bytes(&bytes).unwrap();
+        let face = LocalFace::with_verified_normal_bytes(&bytes, None).unwrap();
+        // Default constructor never supplies paired normal metrics, at any size.
+        for size in 0..=100 {
+            assert_eq!(legacy.normal_line_metrics(size, false), None);
+        }
+        // Outside 8..=57 the variant renders byte-identically to the legacy face (full frame).
+        for size in [7_u32, 58, 64, 100] {
+            let html = format!("<!doctype html><p style='font-size:{size}px'>ab</p>");
+            assert_eq!(
+                prepare_page(html.as_bytes(), &[], 300, 200, &face, Some(true)),
+                prepare_page(html.as_bytes(), &[], 300, 200, &legacy, Some(true)),
+                "{size}"
+            );
+        }
+        // Edge sizes inside the range do activate.
+        for size in [8_u32, 57] {
+            assert!(face.normal_line_metrics(size, false).is_some(), "{size}");
+        }
+    }
+    #[test]
     fn typo_face_keeps_legacy_contract_and_explicit_css_byte_identity() {
         let bytes =
             include_bytes!("../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf");
