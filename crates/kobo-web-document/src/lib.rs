@@ -412,7 +412,7 @@ pub fn parse_style_tree(
     sheets: &[Vec<u8>],
     limits: &Limits,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false)
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false)
 }
 
 /// Like [`parse_style_tree`] but evaluates supported `@media` width queries
@@ -425,7 +425,7 @@ pub fn parse_style_tree_with_media(
     limits: &Limits,
     media: MediaContext,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false)
+    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false, false)
 }
 
 /// Like [`parse_style_tree_with_media`] with an explicit [`SupplyBudget`].
@@ -440,7 +440,7 @@ pub fn parse_style_tree_with_supply(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false)
 }
 
 /// CANDIDATE, opt-in, unadopted: like [`parse_style_tree_with_supply`], but an
@@ -457,7 +457,25 @@ pub fn parse_style_tree_with_inline_sheets(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, true)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, false)
+}
+
+/// CANDIDATE, opt-in, unadopted: [`parse_style_tree_with_inline_sheets`] plus an
+/// extended selector grammar: attribute selectors (`[a]`, `=`, `~=`, `|=`, `^=`,
+/// `$=`, `*=`, no case flags), `*`, `:first-child`, `:last-child`, `:only-child`,
+/// and the `+` and `~` combinators, matched with a backtracking, fuel-bounded
+/// matcher. State and functional pseudo-classes, pseudo-elements, namespaces and
+/// escapes are still refused as `CssSelector`; fuel exhaustion refuses as
+/// `MatchWork`. The default entries are unchanged.
+#[must_use]
+pub fn parse_style_tree_with_inline_sheets_and_selectors(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+    media: Option<MediaContext>,
+    budget: SupplyBudget,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true)
 }
 
 /// Per-href and per-document retention caps, derived from the sheet budget and sheet count.
@@ -473,6 +491,7 @@ fn parse_style_tree_in(
     media: Option<MediaContext>,
     budget: SupplyBudget,
     inline_sheets: bool,
+    ext_selectors: bool,
 ) -> style_tree::StyleTree {
     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
     let mut warnings = Vec::new();
@@ -536,7 +555,7 @@ fn parse_style_tree_in(
     if quirks != html5ever::interface::QuirksMode::NoQuirks {
         diagnostics.record(style_diagnostics::RefusalReason::Quirks);
     }
-    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget);
+    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget, ext_selectors);
     // Exact host-supply handshake, only on the fully parsed and fully claimed
     // path: the input was not cut short (a truncated DOM is a partial link
     // census, not an inventory) and the engine's own link walk met no

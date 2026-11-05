@@ -174,7 +174,7 @@ impl StyleTree {
         sheets: &[Vec<u8>],
         media: Option<crate::media_query::MediaContext>,
     ) -> Self {
-        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL)
+        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false)
     }
 
     #[allow(clippy::too_many_lines)] // One bounded tree walk retains parentage and cascade.
@@ -183,10 +183,11 @@ impl StyleTree {
         sheets: &[Vec<u8>],
         media: Option<crate::media_query::MediaContext>,
         budget: SupplyBudget,
+        ext_selectors: bool,
     ) -> Self {
         let mut tree = Self::default();
         let (rules, deferred_table, incomplete, claimed) =
-            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget);
+            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors);
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
@@ -244,7 +245,12 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                if rule.selector.matches(nodes, handle) {
+                let Some(selected) = rule.selector.matches_checked(nodes, handle) else {
+                    tree.diagnostics.record(RefusalReason::MatchWork);
+                    tree.truncated = true;
+                    break;
+                };
+                if selected {
                     if let Some(index) = rule.deferred {
                         hits.push((index, rule.important, rule.selector.specificity, rule.source_order));
                         if hits.len() + declarations.len() >= MAX_DECLARATIONS_PER_ELEMENT {
@@ -630,6 +636,7 @@ fn matched_rules(
     diagnostics: &mut StyleDiagnostics,
     media: Option<crate::media_query::MediaContext>,
     budget: SupplyBudget,
+    ext_selectors: bool,
 ) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
     let mut rules = Vec::new();
     let mut deferred_table: Vec<Deferred> = Vec::new();
@@ -814,7 +821,12 @@ fn matched_rules(
             }
             unsupported |= refused;
             for selector in selectors.by_ref().take(16) {
-                let Some(selector) = css::selector(selector.trim()) else {
+                let parsed_selector = if ext_selectors {
+                    css::selector_ext(selector.trim())
+                } else {
+                    css::selector(selector.trim())
+                };
+                let Some(selector) = parsed_selector else {
                     diagnostics.record(RefusalReason::CssSelector);
                     unsupported = true;
                     continue;

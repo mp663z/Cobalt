@@ -1,0 +1,262 @@
+[id]	5,10,37
+[id=a]	5
+[id="a"]	5
+[ id = "a" ]	5
+[ID=a]	5
+[data-k="Foo Bar"]	5
+[data-k="foo bar"]	
+[data-k~=Foo]	5
+[data-k~=foo]	7
+[data-k~=""]	
+[data-k~="Foo Bar"]	
+[data-k|=Foo]	
+[data-v|=a]	41
+[data-v|="a-b"]	41
+[data-v|=""]	
+[data-k^=Fo]	5
+[data-k^=""]	
+[data-k$=Bar]	5
+[data-k$=""]	
+[data-k*=o B]	INVALID
+[data-k*=""]	
+[data-w~=b]	41
+[data-w*="b  c"]	41
+[data-u^=日]	41
+[data-e=""]	21
+[data-e]	21
+[data-e~=x]	
+[type=text]	5,21
+[type=TEXT]	5,21
+[type="text" i]	5,21
+[type=text i]	5,21
+[type=checkbox]	20
+input[type=Checkbox]	20
+[TYPE=checkbox]	20
+[lang|=en]	0,7
+[lang|=EN]	0,7
+[lang=en-us]	0
+[lang=en-US]	0
+[rel~=nofollow]	22
+[rel~=NoFollow]	22
+[target=_blank]	22
+[target="_BLANK"]	22
+[href^="/"]	22
+[href$=".pdf"]	22
+[href*="x.org"]	23
+[href^=http]	23
+a[href]	22,23
+[title="a>b c"]	5
+div[title="a>b c"] > p	6,7
+[title^="a>"]	5
+[checked]	20
+[disabled]	20
+[value=""]	21
+[viewBox]	36
+[viewbox]	36
+[width=1]	INVALID
+[Id=g1]	37
+[id=g1]	37
+g[Id]	37
+*	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43
+* > *	1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43
+div *	6,7,8,9,11,12,13,14,15,32,33,40,42,43
+div > *	6,7,8,9,11,12,14,32,40,42,43
+*.x	5,6,9,13,18,32
+*#a	5
+*[id]	5,10,37
+p:first-child	6,12,32,35
+p:last-child	12,14,32,35
+p:only-child	12,32,35
+span:first-child	13,33
+span:last-child	9,13,33
+li:first-child	17
+li:last-child	19
+li:only-child	
+li:FIRST-CHILD	17
+:first-child	0,1,2,5,6,11,12,13,15,17,25,26,27,30,31,32,33,35,37,38,40,42
+:last-child	0,3,4,9,12,13,14,15,19,25,26,28,31,32,33,34,35,37,38,40,41,43
+:only-child	0,12,13,15,25,26,31,32,33,35,37,38,40
+html:first-child	0
+html:last-child	0
+html:only-child	0
+body:first-child	
+body:last-child	4
+head:first-child	1
+td:first-child	27
+td:last-child	28
+b:only-child	40
+i:first-child	42
+i:last-child	43
+div:first-child	5,11,31
+div:last-child	31,41
+div > p:first-child	6,12,32
+div > p:last-child	12,14,32
+div > span:last-child	9
+div.x:last-child	
+#a > :first-child	6
+#a > :last-child	9
+:root	0
+:root > body	4
+html:root	0
+:ROOT	0
+p + p	7
+p + span	8
+p + p + span	8
+span + span	9
+li + li	18,19
+li + li + li	19
+li ~ li	18,19
+li ~ li.x	18
+p ~ span	8,9
+span ~ p	
+p ~ span ~ span	9
+.x + .x	
+.x ~ .x	9
+div + div	10,41
+div ~ div	10,39,41
+div ~ ul	16
+ul + input	20
+input + input	21
+input ~ a	22,23
+a + a	23
+input + a	22
+tr > td + td	28
+td + td	28
+article + article	34
+article ~ article	34
+section > article + article > p	35
+div > p span	13,33
+div > div p span	13
+div > div > p span	13
+#b p span	13
+#b > div p span	13
+#b div p span	13
+#b div > p > span	13
+div > p > span	13,33
+section article div p span	33
+section > article div > p	32
+section > div p	
+article > div > p.x > span	33
+div  >  p	6,7,12,14,32
+div>p	6,7,12,14,32
+div> p	6,7,12,14,32
+div >p	6,7,12,14,32
+div p span.x	13
+div#a>p.x	6
+div#a > p.x:first-child	6
+div#a > p:last-child	
+div#a > p[lang]	7
+div#a > p[lang|=en]	7
+div#a > p[lang^=EN]	7
+div.x.y	5
+div.x.y > span.z	9
+div.x.y span.x.y.z	9
+.x.y.z	9
+.x:not(.y)	6,13,18,32
+a:hover	
+a:link	22,23
+a:visited	
+a:focus	
+a:active	
+input:checked	20
+input:disabled	20
+p::before	
+p:before	
+p:nth-child(2)	7,14
+p:nth-child(1)	6,12,32,35
+li:nth-of-type(2)	18
+p:first-of-type	6,12,14,32,35
+p:last-of-type	7,12,14,32,35
+p:only-of-type	12,14,32,35
+p:empty	
+:not(p)	0,1,2,3,4,5,8,9,10,11,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,36,37,38,39,40,41,42,43
+div:not(.x)	10,11,31,39,41
+:is(p, span)	6,7,8,9,12,13,14,32,33,35
+:where(p)	6,7,12,14,32,35
+:has(p)	0,4,5,10,11,29,30,31,34
+div:has(> p)	5,10,11,31
+[data-k="x" s]	INVALID
+[a|b=c]	INVALID
+[*|id]	5,10,37
+[|id]	5,10,37
+svg|rect	INVALID
+*|*	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43
+ns|a	INVALID
+[id=a]]	INVALID
+[id=a	5
+[=a]	INVALID
+[id==a]	INVALID
+[id=1]	INVALID
+[id=a b]	INVALID
+[id=-1]	INVALID
+[id=--x]	
+[id=-x]	
+[id="a\"b"]	
+[id='a']	5
+[id='a'  ]	5
+[id="a" "]	INVALID
+div[id=a][class~=x]	5
+div[id=a][class~=x][data-k]	5
+div[id=a]	5
+a[id]	
+>	INVALID
+> p	INVALID
+p >	INVALID
+p > > span	INVALID
+p +	INVALID
++ p	INVALID
+p ~	INVALID
+p,span	6,7,8,9,12,13,14,32,33,35
+p , span	6,7,8,9,12,13,14,32,33,35
+#a#b	
+.1x	INVALID
+#1a	INVALID
+.-1a	INVALID
+.--a	
+.a-	
+#a-b	
+p..x	INVALID
+p#	INVALID
+p.	INVALID
+.	INVALID
+#	INVALID
+p p	
+p	6,7,12,14,32,35
+P	6,7,12,14,32,35
+DIV > P	6,7,12,14,32
+Div	5,10,11,31,39,41
+div.X	
+.X	
+#A	
+#a	5
+div:first-child:last-child	31
+div:only-child:first-child	31
+div:first-child.only	
+.only:only-child	
+.only > :only-child	40
+b:only-child	40
+html > body	4
+html body	4
+html  body	4
+body > div:first-child	5
+body > div:last-child	41
+body > :first-child	5
+body > :last-child	41
+body > p	
+div > svg	
+svg g	37
+svg > g > rect	38
+svg rect[width]	38
+rect:only-child	38
+rect:first-child	38
+g:only-child	37
+[VIEWBOX]	36
+[viewBox]	36
+[VIEWBox]	36
+svg[viewBox]	36
+[WIDTH=1]	INVALID
+[width="1"]	38
+[ID=g1]	37
+g[ID]	37
+[Id]	5,10,37
+rect[WIDTH]	38

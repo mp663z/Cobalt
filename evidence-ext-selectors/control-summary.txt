@@ -1,0 +1,5 @@
+synth selectors 262 {'accepted, identical element set, non-empty': 169, 'accepted, identical element set, empty': 30, 'refused: chrome-invalid': 29, 'refused: chrome-valid (coverage gap)': 34}
+blog selectors 2500 {'accepted, identical element set, empty': 2080, 'accepted, identical element set, non-empty': 98, 'refused: chrome-invalid': 7, 'refused: chrome-valid (coverage gap)': 315}
+docs selectors 329 {'accepted, identical element set, empty': 155, 'accepted, identical element set, non-empty': 117, 'refused: chrome-valid (coverage gap)': 52, 'refused: chrome-invalid': 5}
+gov selectors 2926 {'accepted, identical element set, non-empty': 145, 'accepted, identical element set, empty': 1636, 'refused: chrome-valid (coverage gap)': 1096, 'refused: chrome-invalid': 49}
+news-npr selectors 4858 {'accepted, identical element set, empty': 3223, 'refused: chrome-valid (coverage gap)': 1144, 'refused: chrome-invalid': 59, 'accepted, identical element set, non-empty': 432}

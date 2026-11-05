@@ -1,0 +1,262 @@
+[id]
+[id=a]
+[id="a"]
+[ id = "a" ]
+[ID=a]
+[data-k="Foo Bar"]
+[data-k="foo bar"]
+[data-k~=Foo]
+[data-k~=foo]
+[data-k~=""]
+[data-k~="Foo Bar"]
+[data-k|=Foo]
+[data-v|=a]
+[data-v|="a-b"]
+[data-v|=""]
+[data-k^=Fo]
+[data-k^=""]
+[data-k$=Bar]
+[data-k$=""]
+[data-k*=o B]
+[data-k*=""]
+[data-w~=b]
+[data-w*="b  c"]
+[data-u^=日]
+[data-e=""]
+[data-e]
+[data-e~=x]
+[type=text]
+[type=TEXT]
+[type="text" i]
+[type=text i]
+[type=checkbox]
+input[type=Checkbox]
+[TYPE=checkbox]
+[lang|=en]
+[lang|=EN]
+[lang=en-us]
+[lang=en-US]
+[rel~=nofollow]
+[rel~=NoFollow]
+[target=_blank]
+[target="_BLANK"]
+[href^="/"]
+[href$=".pdf"]
+[href*="x.org"]
+[href^=http]
+a[href]
+[title="a>b c"]
+div[title="a>b c"] > p
+[title^="a>"]
+[checked]
+[disabled]
+[value=""]
+[viewBox]
+[viewbox]
+[width=1]
+[Id=g1]
+[id=g1]
+g[Id]
+*
+* > *
+div *
+div > *
+*.x
+*#a
+*[id]
+p:first-child
+p:last-child
+p:only-child
+span:first-child
+span:last-child
+li:first-child
+li:last-child
+li:only-child
+li:FIRST-CHILD
+:first-child
+:last-child
+:only-child
+html:first-child
+html:last-child
+html:only-child
+body:first-child
+body:last-child
+head:first-child
+td:first-child
+td:last-child
+b:only-child
+i:first-child
+i:last-child
+div:first-child
+div:last-child
+div > p:first-child
+div > p:last-child
+div > span:last-child
+div.x:last-child
+#a > :first-child
+#a > :last-child
+:root
+:root > body
+html:root
+:ROOT
+p + p
+p + span
+p + p + span
+span + span
+li + li
+li + li + li
+li ~ li
+li ~ li.x
+p ~ span
+span ~ p
+p ~ span ~ span
+.x + .x
+.x ~ .x
+div + div
+div ~ div
+div ~ ul
+ul + input
+input + input
+input ~ a
+a + a
+input + a
+tr > td + td
+td + td
+article + article
+article ~ article
+section > article + article > p
+div > p span
+div > div p span
+div > div > p span
+#b p span
+#b > div p span
+#b div p span
+#b div > p > span
+div > p > span
+section article div p span
+section > article div > p
+section > div p
+article > div > p.x > span
+div  >  p
+div>p
+div> p
+div >p
+div p span.x
+div#a>p.x
+div#a > p.x:first-child
+div#a > p:last-child
+div#a > p[lang]
+div#a > p[lang|=en]
+div#a > p[lang^=EN]
+div.x.y
+div.x.y > span.z
+div.x.y span.x.y.z
+.x.y.z
+.x:not(.y)
+a:hover
+a:link
+a:visited
+a:focus
+a:active
+input:checked
+input:disabled
+p::before
+p:before
+p:nth-child(2)
+p:nth-child(1)
+li:nth-of-type(2)
+p:first-of-type
+p:last-of-type
+p:only-of-type
+p:empty
+:not(p)
+div:not(.x)
+:is(p, span)
+:where(p)
+:has(p)
+div:has(> p)
+[data-k="x" s]
+[a|b=c]
+[*|id]
+[|id]
+svg|rect
+*|*
+ns|a
+[id=a]]
+[id=a
+[=a]
+[id==a]
+[id=1]
+[id=a b]
+[id=-1]
+[id=--x]
+[id=-x]
+[id="a\"b"]
+[id='a']
+[id='a'  ]
+[id="a" "]
+div[id=a][class~=x]
+div[id=a][class~=x][data-k]
+div[id=a]
+a[id]
+>
+> p
+p >
+p > > span
+p +
++ p
+p ~
+p,span
+p , span
+#a#b
+.1x
+#1a
+.-1a
+.--a
+.a-
+#a-b
+p..x
+p#
+p.
+.
+#
+p p
+p
+P
+DIV > P
+Div
+div.X
+.X
+#A
+#a
+div:first-child:last-child
+div:only-child:first-child
+div:first-child.only
+.only:only-child
+.only > :only-child
+b:only-child
+html > body
+html body
+html  body
+body > div:first-child
+body > div:last-child
+body > :first-child
+body > :last-child
+body > p
+div > svg
+svg g
+svg > g > rect
+svg rect[width]
+rect:only-child
+rect:first-child
+g:only-child
+[VIEWBOX]
+[viewBox]
+[VIEWBox]
+svg[viewBox]
+[WIDTH=1]
+[width="1"]
+[ID=g1]
+g[ID]
+[Id]
+rect[WIDTH]
