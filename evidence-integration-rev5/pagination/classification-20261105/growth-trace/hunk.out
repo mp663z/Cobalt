@@ -1,0 +1,2 @@
+v1: 6 differs; error: test failed, to rerun pass `-p kobo-browser --bin kobo-browser` rse: 32" py: 36"
+v2: 4 differs; error: test failed, to rerun pass `-p kobo-browser --bin kobo-browser` rse:  py: 39"

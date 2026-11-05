@@ -1,0 +1,15 @@
+diff --git a/crates/kobo-web-layout/src/lib.rs b/crates/kobo-web-layout/src/lib.rs
+index cc03d0a1..5fee5695 100644
+--- a/crates/kobo-web-layout/src/lib.rs
++++ b/crates/kobo-web-layout/src/lib.rs
+@@ -347,9 +347,7 @@ fn append_with_metrics(
+     pieces: &[Piece],
+     metrics: &DisplayMetrics,
+ ) -> ScreenBuilder {
+-    kobo_ui::with_reading_scale(metrics.text_scale, || {
+-        append_at_reading_scale(builder, pieces, metrics)
+-    })
++    append_at_reading_scale(builder, pieces, metrics)
+ }
+ 
+ fn append_at_reading_scale(

@@ -1,0 +1,60 @@
+   Compiling kobo-ui v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-ui)
+   Compiling kobo-abi v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-abi)
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-web-document` (lib) generated 1 warning
+   Compiling kobo-profile v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-profile)
+   Compiling kobo-protocol v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-protocol)
+   Compiling kobo-net v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-net)
+   Compiling kobo-policy v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-policy)
+   Compiling kobo-text v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-text)
+   Compiling kobo-sdk v0.3.25 (/home/sandbox/cb/wt-bis/crates/kobo-sdk)
+   Compiling kobo-web-layout v0.1.0 (/home/sandbox/cb/wt-bis/crates/kobo-web-layout)
+   Compiling kobo-browser v0.1.0 (/home/sandbox/cb/wt-bis/apps/browser)
+    Finished `release` profile [optimized] target(s) in 39.02s
+     Running unittests src/main.rs (/home/sandbox/cb/tgt-z/release/deps/kobo_browser-cb251d7b3cb87f70)
+
+running 1 test
+test corpus_tests::corpus_page_counts_on_every_reader_and_text_size ... FAILED
+
+failures:
+
+---- corpus_tests::corpus_page_counts_on_every_reader_and_text_size stdout ----
+
+thread 'corpus_tests::corpus_page_counts_on_every_reader_and_text_size' panicked at apps/browser/src/corpus_tests.rs:189:5:
+wikipedia-e-reader.pages differs from line 4:
+  expected: "elipsa-2e-389 Default\t29"
+  actual:   "elipsa-2e-389 Default\t30"
+wikipedia-search.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t15"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t16"
+rust-std-option.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t27"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t32"
+python-tutorial-intro.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t33"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t36"
+rust-blog-post.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t18"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t22"
+windows-1252.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t33"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t36"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    corpus_tests::corpus_page_counts_on_every_reader_and_text_size
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 13.42s
+
+error: test failed, to rerun pass `-p kobo-browser --bin kobo-browser`
