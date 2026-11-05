@@ -24,3 +24,7 @@ Not run: full workspace (kobo-cli needs an assets dir absent from these trees).
 
 ## Privacy note
 Per-selector lists and result files for the four private-corpus pages (list-/rust-/chrome-{blog,docs,gov,news-npr}) are NOT in this public branch; they ship in the private release packet. Only the synthetic document (synth.html, battery.txt) results are here, plus the summary and the scripts.
+
+## Addendum: full-tree default identity and cascade control
+- tree-identity/default-fulltree-identity.txt: Debug serialization of every retained StyledNode (tag, text, parent/children, full Computed) plus diagnostics, truncated/unsupported/quirks and host_sheets_claimed, for the plain and inline entries on the 5 corpus pages, base tree (clean4r) vs this tree: 10 of 10 byte-identical (sha256 compared). For the ext entry: gov equals inline; the other four differ, as expected. Probes: treedump.rs (both trees), casc.rs.
+- cascade-control/: 6 generated documents, each with 300 random rules drawn from the 169 ext-grammar selectors that select a non-empty set on the synthetic document (25% grouped, 15% !important, color and background-color, random order and ties), run through the ext entry. Per element, engine color and background-color vs Chrome getComputedStyle: 270 elements, 270/270 color and 270/270 background equal. Limits: synthetic document only (45 elements), two properties, no display/layout; real-page cascade is not controlled.
