@@ -330,6 +330,7 @@ fn build_page_list(
     height: u32,
     font: &impl FontProvider,
     allow_interactive: bool,
+    underline: bool,
 ) -> Result<kobo_web_document::display_list::DisplayList, &'static str> {
     // Reject invalid room before parsing markup or asking a font provider.
     let pixels = usize::try_from(width)
@@ -381,10 +382,22 @@ fn build_page_list(
     {
         return Err("interactive page needs semantic fallback");
     }
-    let tree = kobo_web_document::box_tree::BoxTree::from_style(&styled);
-    let list =
+    let list = if underline {
+        // EXPERIMENTAL measurement path: Chrome 156 / Liberation Serif Regular underline profile.
+        let tree = kobo_web_document::box_tree::BoxTree::from_style_with_text_decoration(&styled);
+        kobo_web_document::css_text_page::paint_direct_text_blocks_underline(
+            &tree,
+            width,
+            height,
+            font,
+            kobo_web_document::css_text_page::UnderlineProfile::ChromeLiberationSerif156,
+        )
+        .map_err(|_| "unsupported complete page")?
+    } else {
+        let tree = kobo_web_document::box_tree::BoxTree::from_style(&styled);
         kobo_web_document::css_text_page::paint_direct_text_blocks(&tree, width, height, font)
-            .map_err(|_| "unsupported complete page")?;
+            .map_err(|_| "unsupported complete page")?
+    };
     // This seam has no scrolling or pagination. Viewport clipping is useful
     // in the paint primitive, but cannot silently drop content on handoff.
     // Glyph ink may overhang its laid-out cell by a font bearing and is
@@ -421,7 +434,7 @@ pub fn prepare_page(
     font: &impl FontProvider,
     colour: Option<bool>,
 ) -> Result<PanelFrame, &'static str> {
-    let list = build_page_list(html, sheets, width, height, font, false)?;
+    let list = build_page_list(html, sheets, width, height, font, false, false)?;
     let rgba = list
         .rasterize(
             width,
@@ -447,8 +460,9 @@ fn prepare_page_impl(
     font: &impl FontProvider,
     colour: Option<bool>,
     allow_interactive: bool,
+    underline: bool,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
-    let list = build_page_list(html, sheets, width, height, font, allow_interactive)?;
+    let list = build_page_list(html, sheets, width, height, font, allow_interactive, underline)?;
     let bounds = list
         .commands()
         .iter()
@@ -482,7 +496,7 @@ pub fn prepare_page_masked(
     font: &impl FontProvider,
     colour: Option<bool>,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
-    prepare_page_impl(html, sheets, width, height, font, colour, false)
+    prepare_page_impl(html, sheets, width, height, font, colour, false, false)
 }
 
 /// Measurement-only static capture: interactive elements (links, controls)
@@ -499,7 +513,23 @@ pub fn prepare_page_static(
     font: &impl FontProvider,
     colour: Option<bool>,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
-    prepare_page_impl(html, sheets, width, height, font, colour, true)
+    prepare_page_impl(html, sheets, width, height, font, colour, true, false)
+}
+
+/// EXPERIMENTAL measurement entry: `prepare_page_masked` plus the restricted
+/// `text-decoration: underline` subset bound to the Chrome 156 / Liberation Serif Regular
+/// profile. The caller must pass that face; refusals of `prepare_page_masked` apply unchanged.
+/// # Errors
+/// Refuses exactly as `prepare_page_masked`, and anything outside the underline profile.
+pub fn prepare_page_underline_masked(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
+    prepare_page_impl(html, sheets, width, height, font, colour, false, true)
 }
 
 /// All-or-nothing prepare and queue, using one caller-reserved handle.

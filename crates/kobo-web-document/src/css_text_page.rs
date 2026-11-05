@@ -105,7 +105,7 @@ pub fn paint_direct_text_blocks(
     viewport_height: u32,
     font: &impl FontProvider,
 ) -> Result<DisplayList, PageError> {
-    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None)
+    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, None)
 }
 
 /// PROTOTYPE (host research, unadopted): like [`paint_direct_text_blocks`],
@@ -125,7 +125,111 @@ pub fn paint_direct_text_blocks_shaped(
     font: &impl FontProvider,
     shaping: &TextShaping,
 ) -> Result<DisplayList, PageError> {
-    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, Some(shaping))
+    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, Some(shaping), None)
+}
+
+/// EXPERIMENTAL, unadopted: like [`paint_direct_text_blocks`] but additionally paints
+/// `text-decoration: underline` for one restricted shape, bound to a named measured profile.
+/// Anything outside that shape (inline decoration, inherited decoration, wrapped lines, bold or
+/// italic, other faces or sizes, skip-ink glyphs) refuses the WHOLE page. Use only with a tree
+/// from [`BoxTree::from_style_with_text_decoration`].
+///
+/// # Errors
+/// As [`paint_direct_text_blocks`], plus `Unsupported` outside the profile.
+pub fn paint_direct_text_blocks_underline(
+    tree: &BoxTree,
+    viewport_width: u32,
+    viewport_height: u32,
+    font: &impl FontProvider,
+    profile: UnderlineProfile,
+) -> Result<DisplayList, PageError> {
+    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, Some(profile))
+}
+
+/// Named, measured underline geometry. The numbers are NOT derived from font tables: they were
+/// measured from headless Chrome 156 pixels for the default serif (Liberation Serif Regular, 100%
+/// zoom, DPR 1), `text-decoration: underline`, `text-decoration-skip-ink: auto`, line-height
+/// normal, integer font sizes in {12,14,16,20,24,32} (pixel-verified vs Chrome 156; c40 baseline disagreed by 1 row and is refused). The caller must bind the
+/// provider's face to this profile; the profile cannot verify the face.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UnderlineProfile {
+    ChromeLiberationSerif156,
+}
+
+/// (offset below baseline row, thickness) for font sizes {12,14,16,20,24,32}, measured from Chrome 156.
+fn chrome_liberation_serif_underline(size: u32) -> Option<(u32, u32)> {
+    // Measured rule: thickness = max(1, floor(size/10)); offset = ceil(size/20), min 1.
+    // Rule fits the Chrome table for 8..=57, but Cobalt-vs-Chrome pixels were verified only at the listed sizes.
+    [12u32, 14, 16, 20, 24, 32].contains(&size).then(|| ((size.div_ceil(20)).max(1), (size / 10).max(1)))
+}
+
+/// Characters whose glyph does not reach the underline band in Chrome 156 with skip-ink auto
+/// (no gap observed at 12/16/20/24/32 px). Q g j p q y , ; ( ) [ ] @ were observed to skip ink
+/// and everything not listed here was not measured: refused.
+fn underline_char_allowed(c: char) -> bool {
+    match c {
+        'A'..='Z' => c != 'Q',
+        'a'..='z' => !matches!(c, 'g' | 'j' | 'p' | 'q' | 'y'),
+        '0'..='9' | ' ' | '.' | ':' | '!' | '?' | '-' | '_' | '/' | '\\' | '\'' | '"' | '#' | '&' | '*' | '+' | '=' | '%' => true,
+        _ => false,
+    }
+}
+
+impl UnderlineProfile {
+    #[allow(clippy::too_many_arguments)]
+    fn underline_rect(
+        self,
+        tree: &BoxTree,
+        index: usize,
+        lines: &crate::inline_lines::DirectTextLines,
+        content_x: i32,
+        content_y: i32,
+        baseline: i32,
+    ) -> Result<Rect, PageError> {
+        use crate::computed_style::{TextAlign, TextDecoration};
+        let node = &tree.boxes[index];
+        // The decorating box must be this block, with only direct text children and no decorated ancestor.
+        let mut ancestor = node.parent;
+        while let Some(p) = ancestor {
+            if tree.boxes[p].style.text_decoration != TextDecoration::None {
+                return Err(PageError::Unsupported);
+            }
+            ancestor = tree.boxes[p].parent;
+        }
+        if node.style.text_decoration != TextDecoration::Underline
+            || node.kind != BoxKind::Block
+            || node.children.iter().any(|&c| tree.boxes[c].kind != BoxKind::Text)
+            || tree.boxes.iter().enumerate().any(|(i, b)| {
+                i != index
+                    && b.kind != BoxKind::Text // text leaves mirror their parent's computed style
+                    && b.style.text_decoration != TextDecoration::None
+            })
+            || !matches!(node.style.text_align, TextAlign::Initial | TextAlign::Left)
+            || node.style.font_weight != 400
+            || node.style.font_style != crate::computed_style::FontStyle::Normal
+            || lines.lines.count != 1
+            || lines.lines.glyphs.iter().any(|g| g.bold || g.line != 0)
+            || lines.lines.glyphs.is_empty()
+            || !lines.lines.glyphs.iter().all(|g| underline_char_allowed(g.character))
+        {
+            return Err(PageError::Unsupported);
+        }
+        let (offset, thickness) = match self {
+            Self::ChromeLiberationSerif156 => chrome_liberation_serif_underline(node.style.font_size),
+        }
+        .ok_or(PageError::Unsupported)?;
+        let first = lines.lines.glyphs.first().ok_or(PageError::Unsupported)?;
+        let last = lines.lines.glyphs.last().ok_or(PageError::Unsupported)?;
+        let x0 = i64::from(content_x) + i64::from(first.x);
+        let x1 = i64::from(content_x) + i64::from(last.x) + i64::from(last.advance);
+        let y = i64::from(content_y) + i64::from(baseline) + i64::from(offset);
+        Ok(Rect {
+            x: i32::try_from(x0).map_err(|_| PageError::InvalidGeometry)?,
+            y: i32::try_from(y).map_err(|_| PageError::InvalidGeometry)?,
+            width: u32::try_from(x1 - x0).map_err(|_| PageError::InvalidGeometry)?,
+            height: thickness,
+        })
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -135,6 +239,7 @@ fn paint_direct_text_blocks_inner(
     viewport_height: u32,
     font: &impl FontProvider,
     shaping: Option<&TextShaping>,
+    underline: Option<UnderlineProfile>,
 ) -> Result<DisplayList, PageError> {
     let pixels = usize::try_from(viewport_width).ok().and_then(|w| {
         usize::try_from(viewport_height)
@@ -143,6 +248,16 @@ fn paint_direct_text_blocks_inner(
     });
     if viewport_width == 0 || viewport_height == 0 || pixels.is_none_or(|n| n > MAX_PIXELS) {
         return Err(PageError::InvalidViewport);
+    }
+    // Any decorated box is refused unless the caller opted in with a profile AND the box is
+    // inside the validated one-line direct-text subset (checked per block below).
+    if underline.is_none()
+        && tree
+            .boxes
+            .iter()
+            .any(|b| b.style.text_decoration != crate::computed_style::TextDecoration::None)
+    {
+        return Err(PageError::Unsupported);
     }
     if tree.unsupported
         || tree.quirks
@@ -187,7 +302,7 @@ fn paint_direct_text_blocks_inner(
     });
     if shaping.is_some() && page_layout.is_none() {
         // Whole-page legacy fallback: no mixed metric systems.
-        return paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None);
+        return paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, underline);
     }
     let heights = if let Some(layout) = &page_layout {
         UsedHeightPass::from_boxes_with_page_text(tree, viewport_width, viewport_height, layout)
@@ -374,6 +489,7 @@ fn paint_direct_text_blocks_inner(
         return Err(PageError::Unsupported);
     }
     let mut list = DisplayList::default();
+    let mut underlined = 0usize;
     if let Some(color) = canvas {
         list.fill(
             Rect {
@@ -511,7 +627,34 @@ fn paint_direct_text_blocks_inner(
             )
             .map_err(|_| PageError::Unsupported)?;
             list.append_list(glyphs).map_err(PageError::Paint)?;
+            if node.style.text_decoration != crate::computed_style::TextDecoration::None {
+                let profile = underline.ok_or(PageError::Unsupported)?;
+                let rect = profile.underline_rect(
+                    tree,
+                    index,
+                    lines,
+                    i32::try_from(widths.content_x[index].ok_or(PageError::InvalidGeometry)?)
+                        .map_err(|_| PageError::InvalidGeometry)?,
+                    i32::try_from(vertical.content_y[index].ok_or(PageError::InvalidGeometry)?)
+                        .map_err(|_| PageError::InvalidGeometry)?,
+                    baseline,
+                )?;
+                list.fill(
+                    rect,
+                    rgb(node.style.color),
+                    Source {
+                        node: node.source,
+                        action: None,
+                    },
+                )
+                .map_err(PageError::Paint)?;
+                underlined += 1;
+            }
         }
+    }
+    // Every decorated non-text box must have been painted as a validated underline block.
+    if tree.boxes.iter().filter(|b| b.kind != BoxKind::Text && b.style.text_decoration != crate::computed_style::TextDecoration::None).count() != underlined {
+        return Err(PageError::Unsupported);
     }
     // Auto-level positioned leaves paint after normal-flow content, in tree order.
     for (index, node) in tree.boxes.iter().enumerate() {
