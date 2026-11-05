@@ -54,6 +54,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     // The optional bold face loads only when a bold glyph actually needs it.
+    if underline {
+        // Bind the measured Chrome profile to the exact measured face bytes: any other font refuses.
+        const LIBERATION_SERIF_REGULAR_SHA256: &str =
+            "29d12439831b7f59194efec85872f24f54eff05738933f9a860220d2abff88ba";
+        if kobo_net::sha256::hex_digest(&fs::read(&font_path)?) != LIBERATION_SERIF_REGULAR_SHA256 {
+            return Err("--underline-chrome156-liberation: font bytes are not the measured Liberation Serif Regular".into());
+        }
+        if bold_path.is_some() {
+            return Err("--underline-chrome156-liberation: bold face not allowed".into());
+        }
+    }
     let face = match bold_path {
         None => LocalFace::from_bytes(&fs::read(font_path)?)?,
         Some(path) => LocalFace::with_bold_loader(

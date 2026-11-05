@@ -71,3 +71,18 @@ fn other_forms_stay_refused() {
         assert!(s.unsupported, "{v}");
     }
 }
+#[test]
+fn skip_ink_chars_and_unmeasured_chars_refuse_but_plain_letters_pass() {
+    for ch in ["g", "j", "p", "q", "y", "Q", ",", ";", "(", ")", "[", "]", "@", "é", "~", "$"] {
+        assert!(ul(&format!("<p style='font-size:16px;text-decoration:underline'>A{ch}B</p>")).is_err(), "{ch}");
+    }
+    assert!(ul("<p style='font-size:16px;text-decoration:underline'>AZaz09 .:!?-_</p>").is_ok());
+}
+#[test]
+fn overflow_beyond_viewport_refuses_or_stays_inside() {
+    // 100px-wide viewport, 60 glyphs x 2px = 120px on one line: must not paint a line past the page silently.
+    let long = "A".repeat(60);
+    if let Ok(d) = ul(&format!("<p style='font-size:16px;text-decoration:underline'>{long}</p>")) {
+        assert!(fills(&d).iter().all(|r| r.0 >= 0 && r.0 + r.2 as i32 <= 100), "{:?}", fills(&d));
+    }
+}

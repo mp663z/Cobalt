@@ -47,6 +47,7 @@ name = "cobalt-text-preview"
 version = "0.1.0"
 dependencies = [
  "fontdue",
+ "kobo-net",
  "kobo-sdk",
  "kobo-ui",
  "kobo-web-document",
