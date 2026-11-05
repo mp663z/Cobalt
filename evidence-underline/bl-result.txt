@@ -1,0 +1,7 @@
+Independent Chrome 156 DOM baseline probe (bl.mjs): zero-height inline-block bottom edge = baseline, sizes 8..57, line-height normal and 2*size px. Data bl-chrome.json (100 rows).
+Liberation Serif hhea (both fonts-liberation 1.07.4 and fonts-liberation2 2.1.5 are identical): asc 1825 desc 443 gap 87 upm 2048.
+a=round(asc*s/upm) d=round(desc*s/upm) g=round(gap*s/upm).
+Chrome line box height (normal) == a+d+g: 0 mismatches / 50 sizes.
+Chrome baseline (normal) == a + floor(g/2): 0 mismatches / 50 sizes. Provider baseline_offset (= a): 22 mismatches (sizes 36..57 region, e.g. 40: Chrome 37 vs 36).
+Chrome baseline (line-height 2*s px) == floor((2s-(a+d))/2) + a: 0 mismatches / 50.
+HYPOTHESIS-level: this is a font/metric rule fit on one face; no production change made. Not tested: other faces, fallback, multiline, fractional sizes.
