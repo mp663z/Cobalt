@@ -1,0 +1,5 @@
+rows 1173 1173
+span-per-word vs single-text-node Chrome break sets differ in 9 of 1173
+LibEmb single-node Chrome vs sum model identical 386 / 391 ; vs ceilpos model identical 386 / 391
+DejaEmb single-node Chrome vs sum model identical 383 / 391 ; vs ceilpos model identical 383 / 391
+SansEmb single-node Chrome vs sum model identical 380 / 391 ; vs ceilpos model identical 381 / 391

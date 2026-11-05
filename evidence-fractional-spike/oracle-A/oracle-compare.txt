@@ -1,0 +1,2 @@
+chrome-wrap-rows-singlenode.json oracle-model identical 1173 / 1173 flips 0 []
+chrome-wrap-rows.json oracle-model identical 1164 / 1173 flips 9 [('LibEmb', 12.734375, 253.703125), ('LibEmb', 14.9375, 347.296875), ('LibEmb', 16.40625, 347.296875), ('LibEmb', 19.34375, 186.84375), ('DejaEmb', 18.609375, 307.1875), ('SansEmb', 12, 160.109375), ('SansEmb', 12.734375, 226.953125), ('SansEmb', 14.203125, 160.109375)]
