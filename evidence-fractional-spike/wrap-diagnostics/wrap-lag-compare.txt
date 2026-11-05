@@ -1,0 +1,18 @@
+model C: unrounded advance sums at used size = authored k/64, except k%16==1 -> (k-1)/64 (hypothesis from Liberation Sans H plateau at 12..15 px)
+LibEmb cases 391 identical 390 different 1
+DejaEmb cases 391 identical 385 different 6
+SansEmb cases 391 identical 382 different 9
+  LibEmb px 17.140625 k%16= 9 W 226.953125 chrome [6, 12, 16, 22] model [6, 11, 15, 21]
+  DejaEmb px 12.734375 k%16= 15 W 280.4375 chrome [8, 14, 22] model [8, 14, 21]
+  DejaEmb px 13.46875 k%16= 14 W 387.40625 chrome [11, 20] model [10, 19]
+  DejaEmb px 16.40625 k%16= 10 W 146.734375 chrome [3, 6, 9, 11, 13, 15, 18, 21] model [3, 6, 9, 11, 13, 15, 18, 21, 24]
+  DejaEmb px 17.875 k%16= 8 W 267.0625 chrome [5, 11, 14, 19, 24] model [5, 10, 14, 19, 24]
+  DejaEmb px 19.34375 k%16= 6 W 160.109375 chrome [3, 6, 9, 11, 13, 15, 18, 21, 24] model [2, 4, 7, 10, 12, 14, 16, 19, 22]
+  DejaEmb px 21.546875 k%16= 3 W 200.21875 chrome [3, 6, 10, 12, 14, 16, 20, 24] model [3, 6, 10, 12, 14, 16, 20, 23]
+  SansEmb px 12 k%16= 0 W 160.109375 chrome [5, 11, 14, 19, 24] model [5, 11, 15, 20]
+  SansEmb px 13.46875 k%16= 14 W 160.109375 chrome [5, 10, 13, 16, 21] model [4, 9, 12, 15, 20]
+  SansEmb px 14.203125 k%16= 13 W 133.375 chrome [4, 8, 11, 13, 15, 19, 23] model [4, 8, 11, 13, 15, 19, 22]
+  SansEmb px 14.203125 k%16= 13 W 333.921875 chrome [10, 18] model [10, 17]
+  SansEmb px 16.40625 k%16= 10 W 146.734375 chrome [4, 8, 11, 13, 15, 19, 22] model [3, 7, 10, 12, 14, 16, 20, 24]
+  SansEmb px 17.140625 k%16= 9 W 133.375 chrome [3, 6, 9, 11, 13, 15, 18, 21] model [3, 6, 9, 11, 13, 15, 18, 21, 24]
+sizes in grid with k%16==1: [23.015625]

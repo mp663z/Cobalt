@@ -1,0 +1,2 @@
+model: each GLYPH advance round to 1/64 then summed; identical breaks: {'LibEmb': 387, 'DejaEmb': 383, 'SansEmb': 382} of {'LibEmb': 391, 'DejaEmb': 391, 'SansEmb': 391} total differ 21
+model: each GLYPH advance ceil to 1/64 then summed; identical breaks: {'LibEmb': 384, 'DejaEmb': 377, 'SansEmb': 375} of {'LibEmb': 391, 'DejaEmb': 391, 'SansEmb': 391} total differ 37

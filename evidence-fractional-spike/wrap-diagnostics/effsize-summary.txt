@@ -1,0 +1,4 @@
+linear fit of 1000xH width vs authored px: slope 722.168175 intercept -10.5156
+max |dev| from linear (px of 1000-glyph width) 10.528
+step sizes between consecutive 1/64 authored sizes (width of 1000xH): [(11.281, 85), (11.297, 56), (11.266, 27), (0.0, 12), (22.562, 8), (22.578, 4)]
+authored sizes whose next 1/64 size gives IDENTICAL width: 12 of 192 first [12, 12.25, 12.5, 12.75, 13, 13.25]
