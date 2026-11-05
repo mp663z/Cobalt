@@ -491,6 +491,21 @@ pub fn parse_style_tree_with_text_decoration(
     parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, true)
 }
 
+/// CANDIDATE, opt-in, unadopted (EXPERIMENTAL): [`parse_style_tree_with_supply`] plus the
+/// `text-decoration: none|underline` acceptance of [`parse_style_tree_with_text_decoration`].
+/// The caller supplies the media context and supply budget exactly as for
+/// `parse_style_tree_with_supply`; no limit or default budget changes.
+#[must_use]
+pub fn parse_style_tree_with_supply_and_text_decoration(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+    media: Option<MediaContext>,
+    budget: SupplyBudget,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, true)
+}
+
 /// Per-href and per-document retention caps, derived from the sheet budget and sheet count.
 fn inline_href_caps(budget: &SupplyBudget) -> Option<(usize, usize)> {
     let per = data_stylesheet::max_href_len(budget.max_sheet_bytes)?;

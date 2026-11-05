@@ -126,3 +126,14 @@ fn default_entry_keeps_text_decoration_unrecognized_like_r1() {
     let opt = kobo_web_document::parse_style_tree_with_text_decoration(html, &[], &Limits::DEFAULT);
     assert_eq!(opt.diagnostics.count(RefusalReason::CssDeclaration), 0);
 }
+
+#[test]
+fn supply_variant_matches_plain_optin_under_canonical_budget_and_default_stays_refusing() {
+    use kobo_web_document::{parse_style_tree_with_supply, parse_style_tree_with_supply_and_text_decoration, SupplyBudget};
+    let html = b"<!doctype html><style>a{text-decoration:underline}</style><a>y</a>";
+    let a = kobo_web_document::parse_style_tree_with_text_decoration(html, &[], &Limits::DEFAULT);
+    let b = parse_style_tree_with_supply_and_text_decoration(html, &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL);
+    assert_eq!(format!("{:?}{:?}", a.nodes, a.diagnostics), format!("{:?}{:?}", b.nodes, b.diagnostics));
+    let d = parse_style_tree_with_supply(html, &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL);
+    assert!(d.unsupported);
+}
