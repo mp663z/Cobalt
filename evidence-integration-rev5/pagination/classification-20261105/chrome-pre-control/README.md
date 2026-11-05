@@ -1,0 +1,6 @@
+# Chrome 156.0.8078.47 pre control (UNREVIEWED; embedded DejaVuSans via DejaEmb css, 16px, width 400, margin 0, kerning off; ctl13.mjs; same code block as the geometry probe)
+Measured per-character client rects, rows grouped by top:
+- white-space:pre (the UA default for <pre>): no wrapping; scrollWidth 1012 > clientWidth 400 (the over-wide line overflows horizontally, 8 rows, height 152).
+- white-space:pre-wrap and break-spaces: wrapping at the box; 10 rows, height 190; row pitch 19 px EVERYWHERE (hard lines, the blank line, wrap continuation rows); leading whitespace preserved at hard line starts; wrap continuation rows start at left=0 (no hanging indent).
+- line-height normal = 19 px for this face at 16 px; no inter-line gap anywhere.
+Scope caveats: this is a pre block with one face/size; DejaVu Sans is not the engine's reading face or a monospace face (Cobalt measures code with Face::Reading); this fixes the layout contract (uniform pitch, preserved leading whitespace, blank line = one row, continuation without hanging indent under pre-wrap, overflow under pre), not pixel metrics. Which of pre / pre-wrap Cobalt should emulate is a product contract; Cobalt currently soft-wraps (pre-wrap-like). Not yet compared to Cobalt on identical construction.
