@@ -5,7 +5,7 @@ use kobo_web_document::{
     css_text_page::{paint_direct_text_blocks, paint_direct_text_blocks_underline, FontProvider, UnderlineProfile},
     display_list::{Command, DisplayList},
     inline_lines::GlyphBitmap,
-    parse_style_tree, Limits,
+    parse_style_tree_with_text_decoration, Limits,
 };
 struct Face;
 impl FontProvider for Face {
@@ -19,7 +19,7 @@ impl FontProvider for Face {
     }
 }
 fn tree(html: &str, allow: bool) -> BoxTree {
-    let s = parse_style_tree(
+    let s = parse_style_tree_with_text_decoration(
         format!("<!doctype html><style>body{{margin:0}}p{{margin:0}}</style>{html}").as_bytes(), &[], &Limits::DEFAULT);
     if allow { BoxTree::from_style_with_text_decoration(&s) } else { BoxTree::from_style(&s) }
 }
@@ -68,7 +68,7 @@ fn refusals() {
 #[test]
 fn other_forms_stay_refused() {
     for v in ["overline", "line-through", "underline overline", "underline red", "underline dotted", "none underline", "inherit x"] {
-        let s = parse_style_tree(format!("<p style='text-decoration:{v}'>A</p>").as_bytes(), &[], &Limits::DEFAULT);
+        let s = parse_style_tree_with_text_decoration(format!("<p style='text-decoration:{v}'>A</p>").as_bytes(), &[], &Limits::DEFAULT);
         assert!(s.unsupported, "{v}");
     }
 }
@@ -113,4 +113,16 @@ fn unbound_or_wrong_face_refuses_at_library_boundary() {
 #[test]
 fn underscore_refuses_as_skip_ink_unproven() {
     assert!(ul("<p style='font-size:16px;text-decoration:underline'>A_B</p>").is_err());
+}
+
+#[test]
+fn default_entry_keeps_text_decoration_unrecognized_like_r1() {
+    use kobo_web_document::style_diagnostics::RefusalReason;
+    let html = b"<!doctype html><style>a{text-decoration:underline}</style><p style='text-decoration:none'>x</p><a>y</a>";
+    let default = kobo_web_document::parse_style_tree(html, &[], &Limits::DEFAULT);
+    assert!(default.diagnostics.count(RefusalReason::CssDeclaration) >= 1, "default must refuse");
+    assert!(default.unsupported);
+    assert!(default.nodes.iter().all(|n| n.style.text_decoration == kobo_web_document::computed_style::TextDecoration::None));
+    let opt = kobo_web_document::parse_style_tree_with_text_decoration(html, &[], &Limits::DEFAULT);
+    assert_eq!(opt.diagnostics.count(RefusalReason::CssDeclaration), 0);
 }

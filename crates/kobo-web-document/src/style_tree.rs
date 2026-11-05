@@ -86,10 +86,10 @@ enum Entry {
 /// Parse one declaration block. Blocks with neither a custom property nor a
 /// `var()` take the unchanged legacy path. Other blocks are parsed
 /// declaration by declaration, preserving order.
-fn block_entries(body: &str, deferred: &mut Vec<Deferred>) -> (Vec<Entry>, bool) {
+fn block_entries(body: &str, deferred: &mut Vec<Deferred>, text_deco: bool) -> (Vec<Entry>, bool) {
     let stripped = css::strip_comments(body);
     if !stripped.contains("--") && !custom_props::has_var(&stripped) {
-        let (typed, unknown) = properties(body);
+        let (typed, unknown) = properties_with(body, text_deco);
         return (
             typed.into_iter().map(|(p, v, i)| Entry::Typed(p, v, i)).collect(),
             unknown,
@@ -136,7 +136,7 @@ fn block_entries(body: &str, deferred: &mut Vec<Deferred>) -> (Vec<Entry>, bool)
             entries.push(Entry::Deferred(u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX), important));
         } else {
             let one = format!("{name}:{raw}");
-            let (typed, bad) = properties(&one);
+            let (typed, bad) = properties_with(&one, text_deco);
             unknown |= bad;
             entries.extend(typed.into_iter().map(|(p, v, i)| Entry::Typed(p, v, i)));
         }
@@ -174,7 +174,7 @@ impl StyleTree {
         sheets: &[Vec<u8>],
         media: Option<crate::media_query::MediaContext>,
     ) -> Self {
-        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false)
+        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false, false)
     }
 
     #[allow(clippy::too_many_lines)] // One bounded tree walk retains parentage and cascade.
@@ -184,10 +184,11 @@ impl StyleTree {
         media: Option<crate::media_query::MediaContext>,
         budget: SupplyBudget,
         ext_selectors: bool,
+        text_deco: bool,
     ) -> Self {
         let mut tree = Self::default();
         let (rules, deferred_table, incomplete, claimed) =
-            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors);
+            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors, text_deco);
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
@@ -280,7 +281,7 @@ impl StyleTree {
             }
             if let Some(inline) = css::attribute(nodes, handle, "style") {
                 let mut inline_table = Vec::new();
-                let (entries, unknown) = block_entries(inline, &mut inline_table);
+                let (entries, unknown) = block_entries(inline, &mut inline_table, text_deco);
                 let mut parsed: Vec<(Property, Value, bool, u32)> = Vec::new();
                 for (offset, entry) in entries.iter().enumerate() {
                     // ONE authored offset per entry, shared by typed and deferred
@@ -451,7 +452,7 @@ impl StyleTree {
                                     break;
                                 }
                                 let text = format!("{}:{}{}", d.name, sub, if imp { " !important" } else { "" });
-                                let (typed, bad) = properties(&text);
+                                let (typed, bad) = properties_with(&text, text_deco);
                                 var_refused |= bad;
                                 for (property, value, important) in typed {
                                     declarations.push(Declaration {
@@ -637,6 +638,7 @@ fn matched_rules(
     media: Option<crate::media_query::MediaContext>,
     budget: SupplyBudget,
     ext_selectors: bool,
+    text_deco: bool,
 ) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
     let mut rules = Vec::new();
     let mut deferred_table: Vec<Deferred> = Vec::new();
@@ -814,7 +816,7 @@ fn matched_rules(
                 style_syntax::MediaFit::Skip | style_syntax::MediaFit::Unknown => continue,
             }
             let mut selectors = rule.prelude.split(',');
-            let (properties, unknown) = block_entries(rule.declarations, &mut deferred_table);
+            let (properties, unknown) = block_entries(rule.declarations, &mut deferred_table, text_deco);
             let refused = unknown || !style_syntax::declarations_complete(rule.declarations);
             if refused {
                 diagnostics.record(RefusalReason::CssDeclaration);
@@ -866,6 +868,12 @@ fn matched_rules(
 
 #[allow(clippy::too_many_lines)] // Explicit supported-property parsing rejects all unknown CSS.
 pub(crate) fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
+    properties_with(body, false)
+}
+
+/// `text_deco` is the opt-in for the EXPERIMENTAL `text-decoration` declaration. When false the
+/// name is unrecognized exactly as in the reviewed r1 base.
+pub(crate) fn properties_with(body: &str, text_deco: bool) -> (Vec<(Property, Value, bool)>, bool) {
     let mut result = Vec::new();
     let mut unsupported = false;
     for (name, raw) in style_syntax::declarations(body) {
@@ -1263,7 +1271,7 @@ pub(crate) fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                 .map(|value| (Property::PaddingRight, value)),
             // EXPERIMENTAL: exactly `none` or `underline` (no color/style/thickness/line forms, no
             // longhands). The paint path decides separately whether the page may draw it.
-            "text-decoration" => parse_keyword(value)
+            "text-decoration" if text_deco => parse_keyword(value)
                 .or(match value {
                     "none" => Some(Value::TextDecoration(crate::computed_style::TextDecoration::None)),
                     "underline" => {

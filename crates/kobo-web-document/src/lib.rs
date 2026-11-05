@@ -412,7 +412,7 @@ pub fn parse_style_tree(
     sheets: &[Vec<u8>],
     limits: &Limits,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false)
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, false)
 }
 
 /// Like [`parse_style_tree`] but evaluates supported `@media` width queries
@@ -425,7 +425,7 @@ pub fn parse_style_tree_with_media(
     limits: &Limits,
     media: MediaContext,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false, false)
+    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false, false, false)
 }
 
 /// Like [`parse_style_tree_with_media`] with an explicit [`SupplyBudget`].
@@ -440,7 +440,7 @@ pub fn parse_style_tree_with_supply(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, false)
 }
 
 /// CANDIDATE, opt-in, unadopted: like [`parse_style_tree_with_supply`], but an
@@ -457,7 +457,7 @@ pub fn parse_style_tree_with_inline_sheets(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, true, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, false, false)
 }
 
 /// CANDIDATE, opt-in, unadopted: [`parse_style_tree_with_inline_sheets`] plus an
@@ -475,7 +475,20 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true, false)
+}
+
+/// CANDIDATE, opt-in, unadopted (EXPERIMENTAL): [`parse_style_tree`] plus acceptance of
+/// `text-decoration: none|underline` (nothing else, no longhands). Every other entry,
+/// including [`parse_style_tree`], keeps `text-decoration` unrecognized exactly as in the
+/// reviewed r1 base; painting still needs `BoxTree::from_style_with_text_decoration`.
+#[must_use]
+pub fn parse_style_tree_with_text_decoration(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, true)
 }
 
 /// Per-href and per-document retention caps, derived from the sheet budget and sheet count.
@@ -492,6 +505,7 @@ fn parse_style_tree_in(
     budget: SupplyBudget,
     inline_sheets: bool,
     ext_selectors: bool,
+    text_deco: bool,
 ) -> style_tree::StyleTree {
     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
     let mut warnings = Vec::new();
@@ -555,7 +569,7 @@ fn parse_style_tree_in(
     if quirks != html5ever::interface::QuirksMode::NoQuirks {
         diagnostics.record(style_diagnostics::RefusalReason::Quirks);
     }
-    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget, ext_selectors);
+    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget, ext_selectors, text_deco);
     // Exact host-supply handshake, only on the fully parsed and fully claimed
     // path: the input was not cut short (a truncated DOM is a partial link
     // census, not an inventory) and the engine's own link walk met no
