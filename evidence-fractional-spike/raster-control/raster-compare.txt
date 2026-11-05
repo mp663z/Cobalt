@@ -1,0 +1,44 @@
+fam px | glyph | chrome cov(left0/.25/.5) bboxW,H(left0) x0 | fontdue cov w,h,xmin | ratio chrome/fontdue
+LibEmb 13 H | 24.310 24.596 24.490 bbox 9x8 x0=0 (x0 at .25:0 .5:0) | 26.761 10x9 xmin=0 | 0.908
+LibEmb 13 e | 12.016 12.000 12.004 bbox 6x6 x0=0 (x0 at .25:0 .5:1) | 13.137 6x8 xmin=0 | 0.915
+LibEmb 13.5 H | 25.506 25.545 25.463 bbox 10x8 x0=0 (x0 at .25:0 .5:0) | 28.855 10x9 xmin=0 | 0.884
+LibEmb 13.5 e | 12.541 12.635 12.557 bbox 6x6 x0=0 (x0 at .25:0 .5:1) | 14.169 6x8 xmin=0 | 0.885
+LibEmb 14 H | 32.616 32.835 32.918 bbox 10x10 x0=0 (x0 at .25:0 .5:0) | 31.024 10x10 xmin=0 | 1.051
+LibEmb 14 e | 15.310 15.392 15.333 bbox 6x7 x0=0 (x0 at .25:0 .5:1) | 15.259 6x8 xmin=0 | 1.003
+LibEmb 14.4 H | 33.659 34.078 33.796 bbox 10x10 x0=0 (x0 at .25:0 .5:0) | 32.816 10x10 xmin=0 | 1.026
+LibEmb 14.4 e | 15.737 15.800 15.702 bbox 6x7 x0=0 (x0 at .25:0 .5:1) | 16.149 6x8 xmin=0 | 0.975
+LibEmb 16 H | 42.843 42.831 42.855 bbox 12x11 x0=0 (x0 at .25:0 .5:0) | 40.451 12x11 xmin=0 | 1.059
+LibEmb 16 e | 19.380 19.333 19.310 bbox 7x8 x0=0 (x0 at .25:0 .5:1) | 19.906 7x9 xmin=0 | 0.974
+LibEmb 16.5 H | 44.537 44.322 44.353 bbox 12x11 x0=0 (x0 at .25:0 .5:0) | 43.075 12x11 xmin=0 | 1.034
+LibEmb 16.5 e | 20.020 19.929 19.949 bbox 7x8 x0=0 (x0 at .25:0 .5:1) | 21.196 7x9 xmin=0 | 0.944
+LibEmb 17.6 H | 47.243 47.047 47.451 bbox 13x11 x0=0 (x0 at .25:0 .5:1) | 49.012 13x12 xmin=0 | 0.964
+LibEmb 17.6 e | 21.306 21.286 21.192 bbox 8x8 x0=0 (x0 at .25:0 .5:1) | 24.114 8x10 xmin=0 | 0.884
+DejaEmb 13 H | 27.239 27.275 27.706 bbox 8x9 x0=1 (x0 at .25:1 .5:1) | 29.329 8x10 xmin=1 | 0.929
+DejaEmb 13 e | 21.529 21.486 21.451 bbox 8x7 x0=0 (x0 at .25:1 .5:1) | 22.914 8x9 xmin=0 | 0.940
+DejaEmb 13.5 H | 32.004 32.420 32.604 bbox 8x10 x0=1 (x0 at .25:1 .5:1) | 31.631 8x10 xmin=1 | 1.012
+DejaEmb 13.5 e | 24.345 24.251 24.306 bbox 8x8 x0=0 (x0 at .25:1 .5:1) | 24.702 8x9 xmin=0 | 0.986
+DejaEmb 14 H | 33.651 33.808 33.612 bbox 9x10 x0=1 (x0 at .25:1 .5:1) | 34.008 9x11 xmin=1 | 0.990
+DejaEmb 14 e | 25.196 25.216 25.157 bbox 8x8 x0=0 (x0 at .25:1 .5:1) | 26.588 8x9 xmin=0 | 0.948
+DejaEmb 14.4 H | 34.506 34.506 34.608 bbox 9x10 x0=1 (x0 at .25:1 .5:1) | 35.992 9x11 xmin=1 | 0.959
+DejaEmb 14.4 e | 25.925 25.894 25.816 bbox 9x8 x0=0 (x0 at .25:1 .5:1) | 28.114 9x10 xmin=0 | 0.922
+DejaEmb 16 H | 44.906 44.561 44.424 bbox 10x12 x0=1 (x0 at .25:1 .5:2) | 44.310 10x12 xmin=1 | 1.013
+DejaEmb 16 e | 34.773 34.792 34.929 bbox 9x9 x0=0 (x0 at .25:1 .5:1) | 34.729 9x10 xmin=0 | 1.001
+DejaEmb 16.5 H | 45.894 46.133 45.890 bbox 10x12 x0=1 (x0 at .25:1 .5:2) | 47.239 10x13 xmin=1 | 0.972
+DejaEmb 16.5 e | 35.827 35.875 35.918 bbox 10x9 x0=0 (x0 at .25:1 .5:1) | 36.906 10x11 xmin=0 | 0.971
+DejaEmb 17.6 H | 54.294 54.078 53.980 bbox 11x13 x0=1 (x0 at .25:1 .5:2) | 53.710 11x13 xmin=1 | 1.011
+DejaEmb 17.6 e | 39.580 39.659 39.714 bbox 9x10 x0=1 (x0 at .25:1 .5:1) | 42.024 10x11 xmin=0 | 0.942
+string H x10 coverage (left0) vs 10*single H coverage chrome / vs 10*fontdue
+LibEmb 13 H10 cov 244.055  10*Hchrome 243.098  10*Hfontdue 267.608  bboxW 94
+LibEmb 13.5 H10 cov 254.851  10*Hchrome 255.059  10*Hfontdue 288.549  bboxW 98
+LibEmb 14 H10 cov 327.518  10*Hchrome 326.157  10*Hfontdue 310.235  bboxW 101
+LibEmb 14.4 H10 cov 337.906  10*Hchrome 336.588  10*Hfontdue 328.157  bboxW 104
+LibEmb 16 H10 cov 428.839  10*Hchrome 428.431  10*Hfontdue 404.510  bboxW 116
+LibEmb 16.5 H10 cov 443.635  10*Hchrome 445.373  10*Hfontdue 430.745  bboxW 119
+LibEmb 17.6 H10 cov 473.078  10*Hchrome 472.431  10*Hfontdue 490.118  bboxW 127
+DejaEmb 13 H10 cov 274.188  10*Hchrome 272.392  10*Hfontdue 293.294  bboxW 96
+DejaEmb 13.5 H10 cov 323.012  10*Hchrome 320.039  10*Hfontdue 316.314  bboxW 100
+DejaEmb 14 H10 cov 335.945  10*Hchrome 336.510  10*Hfontdue 340.078  bboxW 103
+DejaEmb 14.4 H10 cov 345.459  10*Hchrome 345.059  10*Hfontdue 359.922  bboxW 106
+DejaEmb 16 H10 cov 446.988  10*Hchrome 449.059  10*Hfontdue 443.098  bboxW 118
+DejaEmb 16.5 H10 cov 460.290  10*Hchrome 458.941  10*Hfontdue 472.392  bboxW 122
+DejaEmb 17.6 H10 cov 541.592  10*Hchrome 542.941  10*Hfontdue 537.098  bboxW 130
