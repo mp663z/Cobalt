@@ -361,7 +361,20 @@ fn build_page_list(
     // Media queries see the same width the page is laid out with; a different
     // width means a new parse. Width is non-zero (checked above).
     let media = kobo_web_document::MediaContext::new(width).ok_or("invalid room budget")?;
-    let styled = kobo_web_document::parse_style_tree_with_media(html, sheets, &limits, media);
+    // Text-decoration parse acceptance is opt-in (rev2+): only the underline measurement path
+    // asks for it; every other path keeps the r1 parser behavior. Budget is the canonical one,
+    // exactly what parse_style_tree_with_media uses.
+    let styled = if underline {
+        kobo_web_document::parse_style_tree_with_supply_and_text_decoration(
+            html,
+            sheets,
+            &limits,
+            Some(media),
+            kobo_web_document::SupplyBudget::CANONICAL,
+        )
+    } else {
+        kobo_web_document::parse_style_tree_with_media(html, sheets, &limits, media)
+    };
     // A picture has no semantic hit targets. Refuse controls/links until
     // a shipping caller can preserve their interactions, even if styled block.
     // The measurement-only static capture renders them inert instead; the
