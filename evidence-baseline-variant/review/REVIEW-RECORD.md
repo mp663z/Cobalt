@@ -1,0 +1,6 @@
+# Baseline T2 independent review record (as relayed by the orchestrating agent at 2026-11-05 20:34 IST; full review text not preserved here)
+Verdict: PASS at candidate level only (tools-only opt-in, default path byte-unchanged). Not canonical, not a gate pass, no parity claim.
+Reviewed revision: commit d6951d971c972ae9f40eb51d72d4cdc591505dcd, tree d6b32fafc841f9d8a821e108c8dbfd4c86babb7d (packet sha256 5cc86356e1237ce29ebeb348e8f4c39e237fd23ea3c69d69fe21884c460a4fd9).
+Reviewer reproduced: packet integrity, tool suite 33 passed / 0 failed / 1 ignored, default-vs-flag byte-identical frames at sizes 7/58/64/100, hhea rule vs Chrome DOM probe on 5 faces x 50 sizes with 0 mismatches.
+Limits kept: baseline is a pixel-proxy (PageTextLayout internal baseline not inspected); Chrome font FILE not proven; explicit line-height mismatches remain; glyph raster differences remain.
+Base reconciliation: r1 source commit 5c2f419b -> evidence commit 70bc8f26 changes only evidence/inline-sheet-optin-r1/{README.md,reviewed-source-commit.txt,reviewed-source-tree.txt}; crates tree a4dd2e66b04298156fcf019b6f36ec21e1c1863e and tools tree aa8a08a8e1802be8a83c72b2f6bb4bbb6bf67ac3 are identical in both. The T branch tools differ from 5c2f419b in exactly 3 files (lib.rs, main.rs, normal_metrics.rs); crates identical.
