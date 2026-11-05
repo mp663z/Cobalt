@@ -454,7 +454,7 @@ fn code_nodes(screen: &Screen, metrics: &DisplayMetrics, marker: &str) -> Vec<Ve
 }
 
 #[test]
-fn browser_code_retains_hard_line_indents_without_changing_shared_wrapping() {
+fn browser_code_retains_hard_line_indents_and_wraps_continuations_flush() {
     kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
     for (metrics, name) in code_panels() {
         let pieces = [Piece::Preformatted(
