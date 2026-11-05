@@ -1,7 +1,9 @@
 //! Restricted single-direct-text preview with an explicit local TrueType face.
 //! Not a general browser renderer, and not substituted for the frozen
 //! background-only benchmark entry point.
-use cobalt_text_preview::{prepare_page_masked, prepare_page_static, LocalFace, PanelFrame};
+use cobalt_text_preview::{
+    prepare_page_masked, prepare_page_static, prepare_page_underline_masked, LocalFace, PanelFrame,
+};
 use kobo_web_document::{
     box_tree::BoxTree, css_text_page::paint_single_text_page, display_list::Rgb, parse_style_tree,
     Limits,
@@ -21,10 +23,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bold_path = None;
     let mut blocks = false;
     let mut static_capture = false;
+    let mut underline = false;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--blocks" if !blocks => blocks = true,
             "--static-capture" if !static_capture => static_capture = true,
+            // EXPERIMENTAL: restricted underline, Chrome 156 Liberation Serif Regular profile only.
+            "--underline-chrome156-liberation" if !underline => underline = true,
             "--mask-json" if mask_path.is_none() => {
                 mask_path = Some(args.next().ok_or("missing mask output path")?);
             }
@@ -37,6 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if mask_path.is_some() && !blocks {
         return Err("--mask-json requires --blocks".into());
     }
+    if underline && (!blocks || static_capture) {
+        return Err("--underline-chrome156-liberation requires --blocks and no --static-capture".into());
+    }
     if static_capture {
         if !blocks {
             return Err("--static-capture requires --blocks".into());
@@ -46,6 +54,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     // The optional bold face loads only when a bold glyph actually needs it.
+    if underline {
+        // Bind the measured Chrome profile to the exact measured face bytes: any other font refuses.
+        const LIBERATION_SERIF_REGULAR_SHA256: &str =
+            "29d12439831b7f59194efec85872f24f54eff05738933f9a860220d2abff88ba";
+        if kobo_net::sha256::hex_digest(&fs::read(&font_path)?) != LIBERATION_SERIF_REGULAR_SHA256 {
+            return Err("--underline-chrome156-liberation: font bytes are not the measured Liberation Serif Regular".into());
+        }
+        if bold_path.is_some() {
+            return Err("--underline-chrome156-liberation: bold face not allowed".into());
+        }
+    }
     let face = match bold_path {
         None => LocalFace::from_bytes(&fs::read(font_path)?)?,
         Some(path) => LocalFace::with_bold_loader(
@@ -63,6 +82,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let frame = if blocks {
         let (frame, bounds) = if static_capture {
             prepare_page_static(&html, &[], width, height, &face, Some(true))?
+        } else if underline {
+            prepare_page_underline_masked(&html, &[], width, height, &face, Some(true))?
         } else {
             prepare_page_masked(&html, &[], width, height, &face, Some(true))?
         };

@@ -1261,6 +1261,17 @@ pub(crate) fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
                     parse_padding(value).map(Value::Padding)
                 })
                 .map(|value| (Property::PaddingRight, value)),
+            // EXPERIMENTAL: exactly `none` or `underline` (no color/style/thickness/line forms, no
+            // longhands). The paint path decides separately whether the page may draw it.
+            "text-decoration" => parse_keyword(value)
+                .or(match value {
+                    "none" => Some(Value::TextDecoration(crate::computed_style::TextDecoration::None)),
+                    "underline" => {
+                        Some(Value::TextDecoration(crate::computed_style::TextDecoration::Underline))
+                    }
+                    _ => None,
+                })
+                .map(|v| (Property::TextDecoration, v)),
             "text-align" => parse_keyword(value)
                 .or(match value {
                     "left" => Some(Value::TextAlign(TextAlign::Left)),

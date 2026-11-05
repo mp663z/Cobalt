@@ -1,0 +1,8 @@
+a16 16px 'HELL TIME': underline rows [15] px-diff in those rows 2 (x-extent only); diff elsewhere 588 (glyph raster)
+a12 12px 'HELL TIME': underline rows [12] px-diff in those rows 1 (x-extent only); diff elsewhere 291 (glyph raster)
+a20 20px 'HELL TIME': underline rows [19, 20] px-diff in those rows 2 (x-extent only); diff elsewhere 620 (glyph raster)
+a24 24px 'HELL TIME': underline rows [23, 24] px-diff in those rows 6 (x-extent only); diff elsewhere 983 (glyph raster)
+a32 32px 'TIME FLOW 2024': underline rows [31, 32, 33] px-diff in those rows 6 (x-extent only); diff elsewhere 2103 (glyph raster)
+b16 16px 'Alert: no more fires.': underline rows [15] px-diff in those rows 4 (x-extent only); diff elsewhere 836 (glyph raster)
+b14 14px 'Welcome to Hell': underline rows [13] px-diff in those rows 2 (x-extent only); diff elsewhere 623 (glyph raster)
+c40 40px REFUSED by Cobalt (outside verified sizes)

@@ -16,6 +16,7 @@ sdk-handoff = ["dep:kobo-sdk"]
 [dependencies]
 fontdue = "=0.9.3"
 kobo-sdk = { path = "../../crates/kobo-sdk", default-features = false, optional = true }
+kobo-net = { path = "../../crates/kobo-net" }
 kobo-ui = { path = "../../crates/kobo-ui" }
 kobo-web-document = { path = "../../crates/kobo-web-document" }
 

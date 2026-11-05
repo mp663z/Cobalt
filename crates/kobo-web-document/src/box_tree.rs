@@ -1722,6 +1722,21 @@ impl BoxTree {
     #[must_use]
     #[allow(clippy::too_many_lines)] // Bounded box construction and positioned-leaf validation.
     pub fn from_style(styled: &StyleTree) -> Self {
+        Self::from_style_inner(styled, false)
+    }
+
+    /// EXPERIMENTAL: like [`BoxTree::from_style`] but a non-`none` `text-decoration` does not
+    /// by itself mark the tree unsupported. Only a painter that validates and draws the
+    /// decoration (`css_text_page::paint_direct_text_blocks_underline`) may use this tree;
+    /// every other consumer must go through `from_style`, which refuses it.
+    #[must_use]
+    pub fn from_style_with_text_decoration(styled: &StyleTree) -> Self {
+        Self::from_style_inner(styled, true)
+    }
+
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    fn from_style_inner(styled: &StyleTree, allow_text_decoration: bool) -> Self {
         let mut tree = Self {
             truncated: styled.truncated,
             unsupported: styled.unsupported,
@@ -1888,6 +1903,14 @@ impl BoxTree {
             tree.wrap_inline_run(parent, &mut run, limit);
         }
         if !tree.normalize_preorder(limit) {
+            tree.unsupported = true;
+        }
+        if !allow_text_decoration
+            && tree
+                .boxes
+                .iter()
+                .any(|b| b.style.text_decoration != crate::computed_style::TextDecoration::None)
+        {
             tree.unsupported = true;
         }
         tree

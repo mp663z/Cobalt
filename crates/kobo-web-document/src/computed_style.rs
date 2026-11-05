@@ -31,6 +31,8 @@ pub enum Property {
     MarginBottom,
     Direction,
     TextAlign,
+    /// EXPERIMENTAL: `text-decoration` underline|none only; not inherited.
+    TextDecoration,
     FontFamily,
     FontSize,
     FontWeight,
@@ -257,6 +259,7 @@ pub enum Value {
     MarginRem(i32),
     Direction(Direction),
     TextAlign(TextAlign),
+    TextDecoration(TextDecoration),
     BackgroundColor(Option<u32>),
     BorderColor(BorderColor),
     BorderStyle(BorderStyle),
@@ -371,6 +374,13 @@ pub enum TextAlign {
     Center,
 }
 
+/// EXPERIMENTAL: only `none` and `underline` exist; every other text-decoration form is refused by the parser.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextDecoration {
+    None,
+    Underline,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FontStyle {
     Normal,
@@ -438,6 +448,8 @@ pub struct Computed {
     pub margin_bottom: Margin,
     pub direction: Direction,
     pub text_align: TextAlign,
+    /// Not inherited; a decorating box paints its own and descendant text (restricted paths only).
+    pub text_decoration: TextDecoration,
     /// Computed CSS font-size in integer pixels. Relative sizes need an explicit parent.
     pub font_size: u32,
     /// Explicit generic family, retained but not admitted for rendering.
@@ -482,6 +494,7 @@ impl Computed {
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
         text_align: TextAlign::Initial,
+        text_decoration: TextDecoration::None,
         font_size: 16,
         font_family: None,
         font_weight: 400,
@@ -550,6 +563,7 @@ impl Computed {
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
             text_align: parent.unwrap_or(initial).text_align,
+            text_decoration: TextDecoration::None,
             font_size: parent.unwrap_or(initial).font_size,
             font_family: parent.unwrap_or(initial).font_family,
             font_weight: parent.unwrap_or(initial).font_weight,
@@ -588,6 +602,7 @@ impl Computed {
             Property::MarginBottom,
             Property::Direction,
             Property::TextAlign,
+            Property::TextDecoration,
             Property::FontFamily,
             Property::FontSize,
             Property::FontWeight,
@@ -636,6 +651,7 @@ impl Computed {
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
                 Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
+                Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
                 Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family),
                 Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
                 Property::FontWeight => Value::FontWeight(parent.unwrap_or(initial).font_weight),
@@ -707,6 +723,9 @@ impl Computed {
                 }
                 Value::TextAlign(align) if property == Property::TextAlign => {
                     computed.text_align = align;
+                }
+                Value::TextDecoration(d) if property == Property::TextDecoration => {
+                    computed.text_decoration = d;
                 }
                 Value::Direction(direction) if property == Property::Direction => {
                     computed.direction = direction;
@@ -872,6 +891,7 @@ fn resolve(
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
         Property::Direction => Value::Direction(initial.direction),
         Property::TextAlign => Value::TextAlign(initial.text_align),
+        Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
         Property::FontFamily => Value::FontFamily(initial.font_family),
         Property::FontSize => Value::FontSize(initial.font_size),
         Property::FontWeight => Value::FontWeight(initial.font_weight),
@@ -908,6 +928,7 @@ fn resolve(
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
         Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
+        Property::TextDecoration => Value::TextDecoration(parent.unwrap_or(initial).text_decoration),
         Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family),
         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
         Property::FontWeight => Value::FontWeight(parent.unwrap_or(initial).font_weight),
@@ -1036,6 +1057,7 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             text_align: TextAlign::Initial,
+        text_decoration: TextDecoration::None,
             font_weight: 400,
             font_style: FontStyle::Normal,
             font_size: 16,
@@ -1072,6 +1094,7 @@ mod tests {
                 margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr,
                 text_align: TextAlign::Initial,
+        text_decoration: TextDecoration::None,
                 font_weight: 400,
                 font_style: FontStyle::Normal,
                 font_size: 16,
@@ -1215,6 +1238,7 @@ mod tests {
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
             text_align: TextAlign::Initial,
+        text_decoration: TextDecoration::None,
             font_weight: 400,
             font_style: FontStyle::Normal,
             font_size: 16,
@@ -1260,6 +1284,7 @@ mod tests {
                     margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr,
                     text_align: TextAlign::Initial,
+        text_decoration: TextDecoration::None,
                     font_weight: 400,
                     font_style: FontStyle::Normal,
                     font_size: 16,
