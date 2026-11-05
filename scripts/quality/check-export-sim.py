@@ -21,9 +21,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
-    target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
-    cli = target / 'debug/kobo'
-    fixture = target / 'debug/examples/export'
+    cli = ROOT / 'target/debug/kobo'
+    fixture = ROOT / 'target/debug/examples/export'
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     results = []
     for kind in ('text', 'image'):
@@ -50,7 +49,7 @@ def main():
             with (evidence / 'simulator.log').open('w') as log:
                 try:
                     process = subprocess.Popen([str(fixture), '127.0.0.1:0', str(private/'sdk.sock'),
-                                                str(target/'debug/kobo-launcher')], cwd=ROOT, env=env,
+                                                str(ROOT/'target/debug/kobo-launcher')], cwd=ROOT, env=env,
                                                stdout=log, stderr=log, start_new_session=True)
                     deadline = time.monotonic() + 25
                     while time.monotonic() < deadline:

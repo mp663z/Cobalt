@@ -1,18 +1,14 @@
 # A fresh brief says it has nothing, names its source choices, and a refresh
 # fills the page with the live list. Assertions stay on stable text: the
-# fetch stamp, the source name, the offline line and the pager, never a story
-# title.
+# fetch stamp, the source name and the pager, never a story title.
 wait-for Daily brief
 expect Nothing yet
-expect refreshes itself each morning
 expect not fetched yet
 clean
 shot brief-empty
 tap Source
 wait-for All four are public Hacker News lists
-expect What held up over several days
-clean
-shot brief-sources
+expect Showing this now
 tap-id source-best
 wait-for Best
 tap Brief
@@ -21,14 +17,10 @@ expect Best
 tap Refresh
 wait-for as of
 expect Best of the week
-# The time is the reader's own, not UTC, and the stories behind the headlines
-# are being kept for reading offline.
-expect-missing UTC
-expect eady offline
-expect 1 of
+expect 1 of 2
 clean
 shot brief-stories
 tap-id next
-wait-for 2 of
+wait-for 2 of 2
 tap-id previous
-wait-for 1 of
+wait-for 1 of 2

@@ -2,10 +2,10 @@
   "id": "post",
   "display_name": "Post",
   "short_label": "Post",
-  "summary": "Read and reply to letters from Hermes. Needs an account.",
+  "summary": "Read and reply to letters from Hermes.",
   "page_description": "Read and reply to letters from your own Hermes Agent. The inbox and your drafts stay readable offline, and replies are sent when the gateway is back.",
-  "version": "0.2.10",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.2.4",
+  "release_notes": "Read complete letters with fixed page and reply controls, including delivery notices. Inbox rows use measured display pages independently of gateway batches. Setup keeps the login instructions visible at large text sizes.",
   "glyph": "chat",
   "capabilities": [
     "network"
@@ -13,12 +13,11 @@
   "setup": {
     "steps": [
       {
-        "text": "Set up the reader once over USB, if you have not already. Your Hermes gateway must be reachable over HTTPS.",
-        "command": "kobo setup"
+        "text": "Deploy a compatible Hermes gateway behind HTTPS and note its public URL."
       },
       {
-        "text": "Sign Post in from your computer. It asks for the gateway and its token, checks them, and sends both to the reader. Open Post, or tap Check again.",
-        "command": "kobo connect post"
+        "text": "Install the gateway bearer token under the exact name hermes-post.",
+        "command": "kobo secret set hermes-post --device <address>"
       }
     ]
   }

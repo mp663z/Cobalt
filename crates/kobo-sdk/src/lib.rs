@@ -6,16 +6,10 @@
 //! [`AppRunner::action`] from their platform event loop.
 
 #[cfg(test)]
-mod banner_pagination_tests;
-#[cfg(test)]
 mod callback_scale_tests;
 pub mod collections;
 #[cfg(test)]
-mod controls_fit_tests;
-#[cfg(test)]
 mod load_result_tests;
-#[cfg(test)]
-mod segmented_tests;
 #[cfg(test)]
 mod selected_grid_tests;
 mod suspend;
@@ -31,29 +25,19 @@ pub use kobo_protocol::{
     MAX_PICTURE_BYTES, MAX_PICTURE_CHUNK_BYTES, MAX_RADIO_DEVICES, MAX_RADIO_NAME, MAX_SHELF_CHUNK,
     MAX_SHELL_CHUNK, MAX_STORE_KEYS, MAX_STORE_VALUE, MAX_TASK_BYTES, MAX_URL_LEN,
 };
-pub use kobo_protocol::{SecretTarget, TextOutcome, TEXT_ENTRY_VERSION};
 pub use kobo_ui::QuoteRole;
 pub use kobo_ui::{
     document_preview, stamp_format_badge, terminal_grid, terminal_grid_for, typographic_cover,
-    Accent, ActionId, BandAlign, BandSlot, BannerLevel, BarAction, BarStyle, BottomAction, Caret,
-    Cell, Chip, Chrome, ControlState, DiagnosticSeverity, DisplayMetrics, Emphasis, Fold,
-    FontHandle, Freeform, Glyph, InlineFormula, LayoutIssue, LayoutIssueKind, NavBar, Node, NodeId,
+    ActionId, BandAlign, BandSlot, BannerLevel, BarAction, BarStyle, BottomAction, Caret, Cell,
+    Chip, Chrome, ControlState, DiagnosticSeverity, DisplayMetrics, Emphasis, Fold, FontHandle,
+    Freeform, Glyph, InlineFormula, LayoutIssue, LayoutIssueKind, NavBar, Node, NodeId,
     Orientation, Overlay, OverlayKind, ParagraphAlignment, ParagraphPresentation, Percent,
     PictureFormat, PictureHandle, ProseArea, RichTextSpan, Row, RowLead, RowState, Screen,
-    ScreenAccent, SlotWidth, Space, TableRow, TextHit, TextPresentation, TextSelection, Tile,
-    TilePicture, TileShape, TileState, TopBar, TransferFailure, CLARA_BW_METRICS, MAX_BAND_SLOTS,
-    MAX_CELLS, MAX_CHIPS, MAX_CHOICE_OPTIONS, MAX_COLUMNS, MAX_INLINE_FORMULAE, MAX_QUOTE_DEPTH,
-    MAX_ROWS, MAX_TABS, MAX_TERMINAL_COLUMNS, MAX_TERMINAL_ROWS, TILE_BADGE_LIMIT,
+    SlotWidth, Space, TableRow, TextHit, TextPresentation, TextSelection, Tile, TilePicture,
+    TileShape, TileState, TopBar, TransferFailure, CLARA_BW_METRICS, MAX_BAND_SLOTS, MAX_CELLS,
+    MAX_CHIPS, MAX_CHOICE_OPTIONS, MAX_COLUMNS, MAX_INLINE_FORMULAE, MAX_QUOTE_DEPTH, MAX_ROWS,
+    MAX_TABS, MAX_TERMINAL_COLUMNS, MAX_TERMINAL_ROWS, TILE_BADGE_LIMIT,
 };
-/// The runtime-drawn controls of protocol 16, and the limits that fix their
-/// footprints.
-pub use kobo_ui::{
-    options_pages, options_per_page, FieldKind, OptionRow, RowEdge, MAX_CODE_BYTES, MAX_OPTIONS,
-    MAX_OPTIONS_PER_PAGE, MAX_SELECTION_ACTIONS, MAX_STEPS,
-};
-/// Protocol 17's type and spacing, and the way to measure part of a screen
-/// built round a board as that screen will be laid out.
-pub use kobo_ui::{with_room_given_up, Typography};
 pub use kobo_ui::{PencilBoard, PencilEdge, PencilMark, PencilMarkKind};
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
@@ -74,9 +58,7 @@ mod builder;
 pub mod credentials;
 pub mod entropy;
 pub mod exports;
-pub mod failure;
 pub mod feedback;
-pub mod game;
 pub mod imports;
 /// Common application and builder types.
 pub mod keyboard;
@@ -478,9 +460,6 @@ pub struct ScreenBuilder {
     overlay: Option<Box<Overlay>>,
     reading: bool,
     reading_font: Option<FontHandle>,
-    /// Left to the application unless the screen decides; see
-    /// [`ScreenBuilder::accent`] and [`ScreenBuilder::without_accent`].
-    accent: ScreenAccent,
     actions: Vec<(String, ActionId)>,
     warnings: Vec<LayoutIssue>,
 }
@@ -493,18 +472,6 @@ pub fn action_id(name: &str) -> ActionId {
 
 fn stable_id(value: &str) -> u32 {
     ActionId::from_name(value).0
-}
-
-/// Words from somewhere else, as an ordinary screen can draw them.
-///
-/// A book's title, a feed's headline, a name typed on another device: the
-/// application did not choose their letters, so [`Context::set_screen`]
-/// refusing one the face cannot draw only stops the application. Each such
-/// character comes back as a box the interface face can draw, the way a
-/// reading page draws it.
-#[must_use]
-pub fn drawable(text: &str) -> std::borrow::Cow<'_, str> {
-    kobo_ui::drawable_in(text, kobo_ui::Face::Text)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -559,10 +526,6 @@ pub struct Context {
     next_task: u32,
     in_flight: usize,
     metrics: DisplayMetrics,
-    /// Whether the reader's panel shows colour, as the runtime said when this
-    /// application connected. False under a runner that never connected, so
-    /// an application's own tests see a greyscale reader unless they ask.
-    colour_panel: bool,
     /// Work the runner should try once more if it comes back retryable.
     ///
     /// Collected here and drained by the runner, because a context is built
@@ -590,41 +553,6 @@ impl Context {
     #[must_use]
     pub const fn metrics(&self) -> DisplayMetrics {
         self.metrics
-    }
-
-    /// Whether the reader's panel shows colour.
-    ///
-    /// For the one decision an application makes about colour: whether to
-    /// read a picture in colour and send it that way, which costs three times
-    /// the bytes and buys nothing on a greyscale reader. Everything else that
-    /// is coloured on a colour panel, the accent and the controls, is the
-    /// runtime's doing and needs no asking.
-    #[must_use]
-    pub const fn panel_shows_colour(&self) -> bool {
-        self.colour_panel
-    }
-
-    /// [`Self::put_picture`] or [`Self::put_colour_picture`], whichever the
-    /// panel can show.
-    ///
-    /// The grey plane is always needed, because it is what a greyscale
-    /// reader draws and what the runtime plans refreshes from; the colour
-    /// plane is sent only when it exists and the panel has a filter to show
-    /// it through. One call, so an application that reads with
-    /// `kobo_image::decode_colour` on a colour reader and `decode` elsewhere
-    /// has nothing else to decide.
-    pub fn put_picture_shown(
-        &mut self,
-        handle: PictureHandle,
-        width: u32,
-        height: u32,
-        grey: Vec<u8>,
-        colour: Option<Vec<u8>>,
-    ) -> Option<TilePicture> {
-        match colour {
-            Some(rgb) if self.colour_panel => self.put_colour_picture(handle, width, height, rgb),
-            _ => self.put_picture(handle, width, height, grey),
-        }
     }
 
     /// The same panel, measured at a different text size.
@@ -915,10 +843,6 @@ impl Context {
 
     /// Paginates rows below an attention banner, reserving its measured height.
     /// Use `nav_bar` when a fixed bottom action is also present.
-    ///
-    /// Measures the words of an info or attention banner. A banner with an
-    /// action, or a success or error banner with its mark, is taller: use
-    /// [`Self::paginate_rows_below_banner`] for those.
     #[must_use]
     pub fn paginate_rows_below_notice(
         &self,
@@ -926,13 +850,20 @@ impl Context {
         nav_bar: bool,
         notice: Option<&str>,
     ) -> Vec<Vec<usize>> {
-        self.paginate_rows_below_banner(rows, nav_bar, notice.map(BannerShape::from))
+        kobo_ui::with_text_scale(self.metrics.text_scale, || {
+            let mut area = self.paged_area(nav_bar);
+            if let Some(notice) = notice {
+                area.height = area
+                    .height
+                    .saturating_sub(kobo_ui::banner_height(notice, area.width, &self.metrics))
+                    .saturating_sub(area.gap)
+                    .max(1);
+            }
+            kobo_ui::paginate_rows(rows, &self.metrics, area)
+        })
     }
 
     /// Paginates rows with overflow menus beneath a measured notice.
-    ///
-    /// As [`Self::paginate_rows_below_notice`]; for a banner with an action
-    /// or a mark use [`Self::paginate_rows_with_menu_below_banner`].
     #[must_use]
     pub fn paginate_rows_with_menu_below_notice(
         &self,
@@ -940,116 +871,17 @@ impl Context {
         nav_bar: bool,
         notice: Option<&str>,
     ) -> Vec<Vec<usize>> {
-        self.paginate_rows_with_menu_below_banner(rows, nav_bar, notice.map(BannerShape::from))
-    }
-
-    /// Paginates rows below a banner, reserving all of its height: the words,
-    /// the mark a success or an error banner sets ahead of them, and the line
-    /// its action takes. Use `nav_bar` when a fixed bottom action is also
-    /// present.
-    ///
-    /// This is what lets a retry sit on the banner that explains the failure
-    /// over a list that pages.
-    #[must_use]
-    pub fn paginate_rows_below_banner(
-        &self,
-        rows: &[(&str, &str)],
-        nav_bar: bool,
-        banner: Option<BannerShape<'_>>,
-    ) -> Vec<Vec<usize>> {
         kobo_ui::with_text_scale(self.metrics.text_scale, || {
-            kobo_ui::paginate_rows(rows, &self.metrics, self.area_below(nav_bar, banner))
+            let mut area = self.paged_area(nav_bar);
+            if let Some(notice) = notice {
+                area.height = area
+                    .height
+                    .saturating_sub(kobo_ui::banner_height(notice, area.width, &self.metrics))
+                    .saturating_sub(area.gap)
+                    .max(1);
+            }
+            kobo_ui::paginate_rows_with_menu(rows, &self.metrics, area)
         })
-    }
-
-    /// The same, for rows that carry an overflow mark.
-    #[must_use]
-    pub fn paginate_rows_with_menu_below_banner(
-        &self,
-        rows: &[(&str, &str)],
-        nav_bar: bool,
-        banner: Option<BannerShape<'_>>,
-    ) -> Vec<Vec<usize>> {
-        kobo_ui::with_text_scale(self.metrics.text_scale, || {
-            kobo_ui::paginate_rows_with_menu(rows, &self.metrics, self.area_below(nav_bar, banner))
-        })
-    }
-
-    /// The same, for rows that carry a button, a count, a menu or a value at
-    /// their right edge, each described by its own [`RowEdge`].
-    ///
-    /// A row button and a badge each keep a column the title cannot use, so a
-    /// list measured as though they were not there packs a row too many and
-    /// draws it under the bar. Rows without anything at the edge pass
-    /// `RowEdge::new()`.
-    #[must_use]
-    pub fn paginate_rows_with_edges_below_banner(
-        &self,
-        rows: &[(&str, &str, RowEdge<'_>)],
-        nav_bar: bool,
-        banner: Option<BannerShape<'_>>,
-    ) -> Vec<Vec<usize>> {
-        kobo_ui::with_text_scale(self.metrics.text_scale, || {
-            kobo_ui::paginate_rows_with_edges(rows, &self.metrics, self.area_below(nav_bar, banner))
-        })
-    }
-
-    /// The same, under a built prefix rather than a banner, as
-    /// [`Self::paginate_rows_under`] measures it.
-    #[must_use]
-    pub fn paginate_rows_with_edges_under(
-        &self,
-        rows: &[(&str, &str, RowEdge<'_>)],
-        nav_bar: bool,
-        position: Position,
-        placed: &Screen,
-    ) -> Vec<Vec<usize>> {
-        kobo_ui::with_text_scale(self.metrics.text_scale, || {
-            let used = placed
-                .layout_with(&self.metrics, &Chrome::measuring(true))
-                .content_used();
-            let mut area = self.area_for(nav_bar, position);
-            area.height = area
-                .height
-                .saturating_sub(used.saturating_add(area.gap))
-                .max(0);
-            kobo_ui::paginate_rows_with_edges(rows, &self.metrics, area)
-        })
-    }
-
-    /// `text` cut to at most `lines` lines of a row with `edge` at its right
-    /// edge, measured at the width the title will really have there.
-    #[must_use]
-    pub fn clamped_row_with_edge(
-        &self,
-        text: &str,
-        lines: usize,
-        nav_bar: bool,
-        edge: RowEdge<'_>,
-    ) -> String {
-        kobo_ui::with_text_scale(self.metrics.text_scale, || {
-            let area = self.metrics.prose_area(true, nav_bar);
-            kobo_ui::clamp_lines(
-                text,
-                kobo_ui::row_title_width_at_edge(&self.metrics, area, edge),
-                kobo_ui::FontSize::Body,
-                lines,
-            )
-        })
-    }
-
-    /// The page a list gets under `banner`, less the banner and the gap after
-    /// it.
-    fn area_below(&self, nav_bar: bool, banner: Option<BannerShape<'_>>) -> ProseArea {
-        let mut area = self.paged_area(nav_bar);
-        if let Some(banner) = banner {
-            area.height = area
-                .height
-                .saturating_sub(banner.height(area.width, &self.metrics))
-                .saturating_sub(area.gap)
-                .max(1);
-        }
-        area
     }
 
     /// The content area a screen that pages actually gets.
@@ -1420,9 +1252,7 @@ impl Context {
     ///
     /// In debug builds only, on a screen the wire would refuse or one carrying
     /// a character the installed face cannot draw. Both are defects that are
-    /// silent on the panel and obvious here. A reading screen is exempt from
-    /// the second: its words are a book's, not the application's, and words
-    /// from elsewhere on an ordinary screen go through [`drawable`].
+    /// silent on the panel and obvious here.
     pub fn set_screen(&mut self, screen: Screen) {
         // A screen the wire refuses is not a rendering problem, it is a dead
         // connection: the runtime's reader stops at the malformed frame and
@@ -1450,29 +1280,27 @@ impl Context {
         // broken renderer rather than as a missing character. Checked against
         // what will actually be drawn, so an application that marks its own
         // state with a symbol fails its own tests instead of shipping.
-        //
-        // Not on a reading screen. Its words are a book's, and a letter no
-        // installed face carries is drawn as the box every reader draws for
-        // one. Stopping here was the application closing on Moby-Dick's
-        // Etymology page, over a Hebrew word its author put there.
         #[cfg(debug_assertions)]
-        if !screen.reading {
+        {
             let layout = screen.layout_for(&self.metrics);
             for node in &layout.nodes {
                 for line in &node.text_lines {
-                    if let Some(character) = kobo_ui::undrawable_in(line, kobo_ui::Face::Text) {
-                        panic!(
-                            "this screen carries {character:?}, which the installed face cannot draw: {line:?}"
-                        );
-                    }
+                    let Some(character) = kobo_ui::undrawable_in(line, kobo_ui::Face::Text) else {
+                        continue;
+                    };
+                    // Reading prose is drawn in the publisher face, not the
+                    // system face, so a character the system face lacks is
+                    // still fine when the screen's reading face has it.
+                    let readable = screen.reading
+                        && kobo_ui::with_reading_font(screen.reading_font, || {
+                            kobo_ui::undrawable_in(line, kobo_ui::Face::Reading).is_none()
+                        });
+                    assert!(
+                        readable,
+                        "this screen carries {character:?}, which the installed face cannot draw: {line:?}"
+                    );
                 }
             }
-        }
-        // A text field drawn open on this screen is asked for ahead of it, so
-        // the runtime puts its keyboard up without first painting the screen
-        // underneath that the keyboard is about to cover.
-        if let Some(request) = keyboard::runtime::take_drawn() {
-            self.commands.push(Command::Device(request));
         }
         self.commands.push(Command::SetScreen(screen));
     }
@@ -2089,57 +1917,6 @@ pub enum Position {
     AtTheFoot,
     /// Anywhere but there, so no strip is reserved.
     Elsewhere,
-}
-
-/// A banner as the paginators measure it: its level, its words, and whether
-/// it carries an action.
-///
-/// The height of a banner is more than its words. A success or an error
-/// banner sets a mark ahead of them, so they wrap narrower, and an action
-/// from [`ScreenBuilder::banner_action`] takes a line of its own underneath.
-/// A list paged under the words alone came out a line too long for each, and
-/// its last row went under the bar, which is why retries were left off the
-/// banners that explain them. Describe the banner the way the screen builds
-/// it, and pass the same words.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BannerShape<'a> {
-    level: BannerLevel,
-    text: &'a str,
-    action: bool,
-}
-
-impl<'a> BannerShape<'a> {
-    /// A banner of `level` saying `text`, with no action.
-    #[must_use]
-    pub const fn new(level: BannerLevel, text: &'a str) -> Self {
-        Self {
-            level,
-            text,
-            action: false,
-        }
-    }
-
-    /// The same banner, carrying an action on the line under its words.
-    ///
-    /// The label is not needed: the line is a finger high whatever it says.
-    #[must_use]
-    pub const fn with_action(mut self) -> Self {
-        self.action = true;
-        self
-    }
-
-    /// The height this banner takes on a page `width` wide.
-    fn height(&self, width: i32, metrics: &DisplayMetrics) -> i32 {
-        kobo_ui::banner_height_with(self.text, self.level, self.action, width, metrics)
-    }
-}
-
-/// Plain words, measured as the `_below_notice` paginators always measured
-/// them: an info or attention banner with no action.
-impl<'a> From<&'a str> for BannerShape<'a> {
-    fn from(text: &'a str) -> Self {
-        Self::new(BannerLevel::Info, text)
-    }
 }
 
 /// Written out rather than derived, because a derived one would tick every
@@ -2860,19 +2637,6 @@ pub trait KoboApp {
     fn on_start(&mut self, context: &mut Context);
     fn on_action(&mut self, context: &mut Context, action: ActionId);
 
-    /// The application's colour, for readers whose panel can show one.
-    ///
-    /// Given, as each screen is sent, to every screen that has not chosen for
-    /// itself with [`ScreenBuilder::accent`] or
-    /// [`ScreenBuilder::without_accent`], so an application that is orange
-    /// says so once, here, and every one of its screens agrees. The default
-    /// is none: the bar stays paper and the controls take the platform's own
-    /// colour, which is what most applications should want. A greyscale
-    /// reader draws the same screen whatever this answers.
-    fn accent(&self) -> Option<Accent> {
-        None
-    }
-
     /// Receives a held word in stable application text coordinates.
     /// Applications that have not opted into selection retain the historical
     /// hold action behavior.
@@ -3009,15 +2773,8 @@ pub const RETRY_DELAY_SECONDS: u32 = 3;
 pub struct AppRunner<A> {
     app: A,
     metrics: DisplayMetrics,
-    /// What the runtime said about the panel at the handshake; see
-    /// [`Context::panel_shows_colour`].
-    colour_panel: bool,
     started: bool,
     pending: VecDeque<DeviceRequest>,
-    /// Text fields the runtime is holding open for this application. Kept
-    /// out of `pending` because their answers do not arrive in turn: see
-    /// [`Self::device_result`].
-    pending_text: usize,
     /// Store requests sent but not yet answered. Every request is answered
     /// exactly once, in request order. Save keys are retained because denied
     /// results carry no key. Payloads are never copied into this queue.
@@ -3075,10 +2832,8 @@ impl<A: KoboApp> AppRunner<A> {
         Self {
             app,
             metrics: DisplayMetrics::default(),
-            colour_panel: false,
             started: false,
             pending: VecDeque::new(),
-            pending_text: 0,
             pending_stores: VecDeque::new(),
             next_task: 0,
             in_flight: 0,
@@ -3129,17 +2884,8 @@ impl<A: KoboApp> AppRunner<A> {
             next_task: self.next_task,
             in_flight: self.in_flight,
             metrics: self.metrics,
-            colour_panel: self.colour_panel,
             retrying: Vec::new(),
         }
-    }
-
-    /// Tells the runner what the runtime said about the panel, so every
-    /// context it builds can answer [`Context::panel_shows_colour`].
-    #[must_use]
-    pub const fn showing_colour(mut self, colour_panel: bool) -> Self {
-        self.colour_panel = colour_panel;
-        self
     }
 
     pub fn start(&mut self) -> Vec<Command> {
@@ -3202,68 +2948,10 @@ impl<A: KoboApp> AppRunner<A> {
     /// Answers arrive in request order on a single ordered stream. An answer
     /// with nothing outstanding is ignored rather than mismatched.
     pub fn device_result(&mut self, result: DeviceResult) -> Vec<Command> {
-        // A text field's answer is matched by its shape, not its place in the
-        // queue: the field stays open for as long as the owner takes, and the
-        // answers to everything asked meanwhile arrive before it.
-        if let DeviceResult::Text(outcome) = result {
-            if self.pending_text == 0 {
-                return Vec::new();
-            }
-            self.pending_text -= 1;
-            keyboard::runtime::answer(outcome);
-            // The runtime was showing its field, not this application's
-            // screen, so the next screen is sent even if it is the same one.
-            self.displayed = None;
-            return self.dispatch(|app, context| app.on_action(context, keyboard::answered()));
-        }
         let Some(request) = self.pending.pop_front() else {
             return Vec::new();
         };
         self.dispatch(|app, context| app.on_device_result(context, request, result))
-    }
-
-    /// Answers the text field the application has open, as if the owner had
-    /// typed `text` on the runtime's keyboard and submitted it.
-    ///
-    /// For an application's tests, which have no runtime to draw the field.
-    /// See [`keyboard::testing`] for one that drives the application
-    /// directly rather than through a runner.
-    ///
-    /// # Panics
-    ///
-    /// When the application has no field open.
-    pub fn type_text(&mut self, text: &str) -> Vec<Command> {
-        self.answer_text(kobo_protocol::TextOutcome::Typed(text.to_owned()))
-    }
-
-    /// Backs out of the text field the application has open, as if the owner
-    /// had tapped Back on the runtime's keyboard.
-    ///
-    /// # Panics
-    ///
-    /// When the application has no field open.
-    pub fn cancel_text(&mut self) -> Vec<Command> {
-        self.answer_text(kobo_protocol::TextOutcome::Cancelled)
-    }
-
-    /// Answers the newest text field the application has open with
-    /// `outcome`, cancelling any older one first, which is the order the
-    /// runtime answers in.
-    ///
-    /// # Panics
-    ///
-    /// When the application has no field open, which is a test that typed
-    /// before tapping whatever opens one.
-    pub fn answer_text(&mut self, outcome: kobo_protocol::TextOutcome) -> Vec<Command> {
-        assert!(self.pending_text > 0, "no text field is open to answer");
-        let mut commands = Vec::new();
-        for _ in 1..self.pending_text {
-            commands.extend(
-                self.device_result(DeviceResult::Text(kobo_protocol::TextOutcome::Cancelled)),
-            );
-        }
-        commands.extend(self.device_result(DeviceResult::Text(outcome)));
-        commands
     }
 
     /// Delivers the outcome of one task.
@@ -3377,7 +3065,7 @@ impl<A: KoboApp> AppRunner<A> {
     /// The device requests still awaiting an answer, oldest first.
     #[must_use]
     pub fn outstanding_requests(&self) -> usize {
-        self.pending.len() + self.pending_text
+        self.pending.len()
     }
 
     /// Every answer the runtime still owes this application.
@@ -3387,7 +3075,7 @@ impl<A: KoboApp> AppRunner<A> {
     /// the runtime rather than the clean shutdown it looks like from here.
     #[must_use]
     pub fn outstanding_answers(&self) -> usize {
-        self.pending.len() + self.pending_text + self.pending_stores.len()
+        self.pending.len() + self.pending_stores.len()
     }
 
     #[must_use]
@@ -3401,7 +3089,6 @@ impl<A: KoboApp> AppRunner<A> {
             next_task: self.next_task,
             in_flight: self.in_flight,
             metrics: self.metrics,
-            colour_panel: self.colour_panel,
             retrying: Vec::new(),
         };
         if std::mem::take(&mut self.settled) {
@@ -3462,7 +3149,6 @@ impl<A: KoboApp> AppRunner<A> {
         });
         for command in &commands {
             match command {
-                Command::Device(DeviceRequest::TypeText { .. }) => self.pending_text += 1,
                 Command::Device(request) => self.pending.push_back(request.clone()),
                 Command::Store(request) => {
                     self.pending_stores.push_back(match request {
@@ -3562,12 +3248,6 @@ pub struct Client {
     next_request: u32,
     metrics: DisplayMetrics,
     simulator_callbacks: bool,
-    colour_panel: bool,
-    /// The application's accent, given to every screen that left the choice
-    /// to it as the screen goes out. Resolved here rather than in the runner
-    /// so a screen an application's own tests see is the screen it built,
-    /// and comparing it with one built again stays an equality.
-    app_accent: Option<Accent>,
 }
 
 impl Client {
@@ -3605,7 +3285,6 @@ impl Client {
             height,
             pixels_per_inch,
             text_scale,
-            colour_panel,
         } = response.message
         else {
             return Err(ClientError::UnexpectedMessage);
@@ -3620,20 +3299,7 @@ impl Client {
                 pixels_per_inch: i32::from(pixels_per_inch),
                 text_scale,
             },
-            colour_panel,
-            app_accent: None,
         })
-    }
-
-    /// Whether the runtime said its panel shows colour.
-    #[must_use]
-    pub const fn colour_panel(&self) -> bool {
-        self.colour_panel
-    }
-
-    /// The accent to give screens that left the choice to the application.
-    pub fn set_app_accent(&mut self, accent: Option<Accent>) {
-        self.app_accent = accent;
     }
 
     /// The panel this application is running on.
@@ -3699,9 +3365,7 @@ impl Client {
                 other => other,
             };
             let message = match command {
-                Command::SetScreen(screen) => {
-                    Message::SetScreen(decided_for(self.app_accent, screen))
-                }
+                Command::SetScreen(screen) => Message::SetScreen(screen),
                 Command::SetOrientation(orientation) => Message::SetOrientation(orientation),
                 Command::SuspendReady { generation, ready } => {
                     Message::SuspendReady { generation, ready }
@@ -4167,7 +3831,6 @@ mod tests {
             next_task: 1,
             in_flight: 0,
             metrics: DisplayMetrics::default(),
-            colour_panel: false,
             retrying: Vec::new(),
         }
     }
@@ -4814,7 +4477,6 @@ mod tests {
                     version: kobo_protocol::VERSION,
                     request_id: hello.request_id,
                     message: Message::Welcome {
-                        colour_panel: false,
                         width: 1072,
                         height: 1448,
                         pixels_per_inch: 300,
@@ -4847,7 +4509,6 @@ mod tests {
                     version: kobo_protocol::VERSION,
                     request_id: hello.request_id,
                     message: Message::Welcome {
-                        colour_panel: false,
                         width: 1072,
                         height: 1448,
                         pixels_per_inch: 300,
@@ -4915,7 +4576,6 @@ mod tests {
             next_task: 1,
             in_flight: 0,
             metrics: CLARA_BW_METRICS,
-            colour_panel: false,
             retrying: Vec::new(),
         };
         assert!(context
@@ -5410,20 +5070,14 @@ pub fn run<A: KoboApp>(name: &str, app: A) -> Result<(), ClientError> {
 ///
 /// Returns the first transport error.
 pub fn run_on<A: KoboApp>(name: &str, app: A, socket: &Path) -> Result<(), ClientError> {
-    // Asked once, before the application is handed to the runner: every
-    // screen that leaves its colour to the application gets this as it is
-    // sent. See [`KoboApp::accent`].
-    let accent = app.accent();
     let mut client = Client::connect(socket, name)?;
-    client.set_app_accent(accent);
     // The same typeface the runtime lays out with, so an application that
     // measures its own text agrees with what will actually be drawn. Failure
     // is not fatal: both sides then fall back to the built-in bitmap, which is
     // still one shared answer rather than two different ones.
     #[cfg(feature = "text")]
     let _ = kobo_text::install(client.metrics());
-    let mut runner =
-        AppRunner::with_metrics(app, client.metrics()).showing_colour(client.colour_panel());
+    let mut runner = AppRunner::with_metrics(app, client.metrics());
     client.send_commands(runner.start())?;
 
     // A test harness needs the application to settle and leave rather than wait
@@ -5499,95 +5153,5 @@ pub fn run_on<A: KoboApp>(name: &str, app: A, socket: &Path) -> Result<(), Clien
         if leaving {
             return Ok(());
         }
-    }
-}
-
-/// The screen as the runtime will see it: a screen that left its colour to
-/// the application takes the application's accent, or none, and a screen that
-/// decided for itself is sent as it was.
-fn decided_for(app_accent: Option<Accent>, mut screen: Screen) -> Screen {
-    if screen.accent == ScreenAccent::Inherit {
-        screen.accent = ScreenAccent::decided(app_accent);
-    }
-    screen
-}
-
-#[cfg(test)]
-mod accent_tests {
-    use super::*;
-
-    /// An orange application that shows three screens at once: one that
-    /// leaves the colour to the application, one with a colour of its own,
-    /// and a reader's page that asked for none.
-    struct Orange;
-
-    impl KoboApp for Orange {
-        fn accent(&self) -> Option<Accent> {
-            Some(Accent::Orange)
-        }
-
-        fn on_start(&mut self, context: &mut Context) {
-            context.set_screen(ScreenBuilder::new("list").top_bar("List").build());
-            context.set_screen(
-                ScreenBuilder::new("teal")
-                    .top_bar("Teal")
-                    .accent(Accent::Teal)
-                    .build(),
-            );
-            context.set_screen(
-                ScreenBuilder::new("page")
-                    .top_bar("Page")
-                    .without_accent()
-                    .build(),
-            );
-        }
-
-        fn on_action(&mut self, _: &mut Context, _: ActionId) {}
-    }
-
-    fn screens_shown() -> Vec<Screen> {
-        AppRunner::new(Orange)
-            .start()
-            .into_iter()
-            .filter_map(|command| match command {
-                Command::SetScreen(screen) => Some(screen),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_runner_leaves_the_choice_as_the_application_made_it() {
-        // An application's own tests compare the screen the runner emitted
-        // with one built again, so the runner must not decide on its behalf.
-        let accents: Vec<ScreenAccent> = screens_shown().iter().map(|s| s.accent).collect();
-        assert_eq!(
-            accents,
-            [
-                ScreenAccent::Inherit,
-                ScreenAccent::Own(Accent::Teal),
-                ScreenAccent::Plain
-            ]
-        );
-    }
-
-    #[test]
-    fn a_screen_inherits_the_apps_accent_as_it_is_sent_unless_it_decided_for_itself() {
-        let sent: Vec<ScreenAccent> = screens_shown()
-            .into_iter()
-            .map(|screen| decided_for(Orange.accent(), screen).accent)
-            .collect();
-        assert_eq!(
-            sent,
-            [
-                ScreenAccent::Own(Accent::Orange),
-                ScreenAccent::Own(Accent::Teal),
-                ScreenAccent::Plain
-            ],
-            "inherit, own colour, explicitly none"
-        );
-        // Without an application accent, inheriting means plain.
-        let plain = decided_for(None, ScreenBuilder::new("list").build());
-        assert_eq!(plain.accent, ScreenAccent::Plain);
     }
 }

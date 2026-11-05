@@ -12,6 +12,15 @@ pub enum Rules {
     International,
 }
 
+impl Rules {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::AngloAmerican => "Anglo-American (8×8)",
+            Self::International => "International (10×10)",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reversi {
     pub board: [i8; 64],
@@ -650,18 +659,6 @@ impl Kalah {
         self.own_pits().filter(|&p| self.pits[p] > 0).collect()
     }
     pub fn apply_move(&self, pit: usize) -> Self {
-        self.sow(pit).0
-    }
-
-    /// The position after sowing `pit`, and how many stones it took from the
-    /// other side's pit opposite.
-    ///
-    /// The count is reported here rather than worked out from the two
-    /// positions afterwards, because the same sowing can also sweep the last
-    /// stones into the stores, and a store that grew by nine says nothing
-    /// about which of those nine were won.
-    pub fn sow(&self, pit: usize) -> (Self, u8) {
-        let mut captured = 0;
         let mut next = self.clone();
         let mut seeds = next.pits[pit];
         next.pits[pit] = 0;
@@ -680,7 +677,6 @@ impl Kalah {
         if own_range.contains(&at) && next.pits[at] == 1 {
             let opposite = 12 - at;
             if next.pits[opposite] > 0 {
-                captured = next.pits[opposite];
                 next.pits[own_store] += next.pits[opposite] + 1;
                 next.pits[opposite] = 0;
                 next.pits[at] = 0;
@@ -699,7 +695,7 @@ impl Kalah {
             next.pits[0..6].fill(0);
             next.pits[7..13].fill(0);
         }
-        (next, captured)
+        next
     }
 }
 

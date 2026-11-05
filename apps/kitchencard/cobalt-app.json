@@ -2,10 +2,10 @@
   "id": "kitchencard",
   "display_name": "Kitchen Card",
   "short_label": "Kitchen",
-  "summary": "Keep Mealie recipes handy in a counter-friendly cooking view. Needs an account.",
+  "summary": "Keep Mealie recipes handy in a counter-friendly cooking view.",
   "page_description": "A read-only Mealie companion. Pick tonight's recipe and cook one large step at a time, with the screen kept on and the recipe available offline.",
-  "version": "0.1.12",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.1.6",
+  "release_notes": "Page through every recipe and ingredient, and keep your cooking step when switching between Steps and Ingredients.",
   "glyph": "reader",
   "capabilities": [
     "network",
@@ -14,15 +14,11 @@
   "setup": {
     "steps": [
       {
-        "text": "Set up the reader once over USB, if you have not already. Mealie must be reachable over HTTPS.",
-        "command": "kobo setup"
+        "text": "Make the Mealie API available to the Kobo at https://mealie.local."
       },
       {
-        "text": "In Mealie, create an API token (your profile, API Tokens)."
-      },
-      {
-        "text": "Connect Kitchen Card from your computer. It asks for the address and the token, checks them, and sets the app up. Open Kitchen Card, or tap Check again.",
-        "command": "kobo connect kitchencard"
+        "text": "Create a long-lived Mealie API token and install it under the exact name mealie.",
+        "command": "kobo secret set mealie --device <address>"
       }
     ]
   }

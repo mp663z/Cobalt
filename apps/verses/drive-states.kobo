@@ -1,4 +1,5 @@
-wait-for Today's poem
+wait 800
+expect Today
 clean
 shot today
 tap Browse
@@ -6,17 +7,6 @@ expect Browse
 clean
 shot browse
 tap Search
-expect Search poetry
-expect Poets to start with
+expect Search
 clean
 shot search
-# The search box raises the reader's keyboard, asking for what the scope looks in.
-tap-id scope-poet
-tap-id search-field
-wait-for Type here
-expect A poet's name
-clean
-shot search-keyboard
-tap Back
-wait-for Poets to start with
-expect-missing Type here

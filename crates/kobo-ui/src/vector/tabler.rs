@@ -55,9 +55,7 @@ pub(super) fn outline(glyph: Glyph) -> &'static [&'static [Cmd]] {
         Glyph::Globe => GLOBE,
         Glyph::Refresh => REFRESH,
         Glyph::More => MORE,
-        // Headphones rather than the Bluetooth rune, which is a registered
-        // figure mark. See `Glyph::Bluetooth`.
-        Glyph::Bluetooth => HEADPHONES,
+        Glyph::Bluetooth => BLUETOOTH,
         Glyph::Key => KEY,
         Glyph::Magnet => MAGNET,
         Glyph::Play => PLAY,
@@ -661,6 +659,16 @@ static MORE: &[&[Cmd]] = &[
         Cmd::Cubic(769, 458, 750, 477, 750, 500),
     ],
 ];
+
+/// `bluetooth` from Tabler Icons.
+static BLUETOOTH: &[&[Cmd]] = &[&[
+    Cmd::Move(292, 333),
+    Cmd::Line(708, 667),
+    Cmd::Line(500, 833),
+    Cmd::Line(500, 167),
+    Cmd::Line(708, 333),
+    Cmd::Line(292, 667),
+]];
 
 /// `key` from Tabler Icons.
 static KEY: &[&[Cmd]] = &[

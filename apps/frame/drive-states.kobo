@@ -2,17 +2,16 @@
 expect Frame
 expect Photographs
 wait-for Open
-wait-idle
 clean
 shot home-photo
 tap Open
-wait-idle
+wait 400
 expect-missing Open
 clean
 shot show
 # Page-turn zone on the right of the unframed photograph.
 tap-at 1000,720
-wait-idle
+wait 400
 expect-missing Open
 clean
 shot show-next

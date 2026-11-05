@@ -1,0 +1,20 @@
+[package]
+name = "kobo-web-layout"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Pages a web document model against the panel it will be drawn on."
+
+[dependencies]
+kobo-sdk = { path = "../kobo-sdk" }
+kobo-ui = { path = "../kobo-ui" }
+kobo-web-document = { path = "../kobo-web-document" }
+
+[dev-dependencies]
+kobo-text = { path = "../kobo-text" }
+kobo-profile = { path = "../kobo-profile" }
+
+[lints]
+workspace = true

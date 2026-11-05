@@ -1,0 +1,1292 @@
+use kobo_web_document::{
+    box_tree::BoxTree,
+    css_text_page::{paint_direct_text_blocks, paint_single_text_page, FontProvider, PageError},
+    display_list::{Command, Rgb},
+    inline_lines::GlyphBitmap,
+    parse_style_tree, Limits,
+};
+
+struct TestFace;
+impl FontProvider for TestFace {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, character: char, _: u32, _: bool) -> Option<GlyphBitmap> {
+        Some(if character == ' ' {
+            GlyphBitmap {
+                left: 0,
+                top: 0,
+                width: 0,
+                height: 0,
+                coverage: vec![],
+            }
+        } else {
+            GlyphBitmap {
+                left: 0,
+                top: -3,
+                width: 1,
+                height: 2,
+                coverage: vec![255, 255],
+            }
+        })
+    }
+}
+fn tree(html: &str) -> BoxTree {
+    BoxTree::from_style(&parse_style_tree(
+        format!("<!doctype html><style>body{{margin:0}} p{{margin:0}}</style>{html}").as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+    ))
+}
+
+#[test]
+fn single_text_paint_refuses_quirks() {
+    let boxes = BoxTree::from_style(&parse_style_tree(
+        b"<html style='height:100px'><body style='height:80px'><p style='height:20px'>ab</p></body></html>",
+        &[],
+        &Limits::DEFAULT,
+    ));
+    assert!(boxes.quirks);
+    assert_eq!(
+        paint_single_text_page(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn whole_single_text_page_paints_background_before_measured_glyph() {
+    let boxes = tree("<html style='height:100px'><body style='padding-top:2px'><p style='padding-left:5px;padding-top:3px;background-color:#abcdef'>ab</p></body></html>");
+    let list = paint_single_text_page(&boxes, 100, 100, &TestFace).unwrap();
+    assert_eq!(list.commands().len(), 3);
+    assert!(matches!(
+        &list.commands()[0],
+        Command::Fill {
+            color: Rgb(0xab, 0xcd, 0xef),
+            ..
+        }
+    ));
+    assert!(matches!(&list.commands()[1], Command::GlyphRun { .. }));
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..(y * 100 + x) * 4 + 4];
+    assert_eq!(at(5, 9), &[0, 0, 0, 255]);
+    assert_eq!(at(6, 9), &[0xab, 0xcd, 0xef, 255]);
+    assert_eq!(at(5, 4), &[0xab, 0xcd, 0xef, 255]);
+    assert_eq!(at(0, 0), &[255, 255, 255, 255]);
+}
+
+struct Missing;
+impl FontProvider for Missing {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        None
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, _: char, _: u32, _: bool) -> Option<GlyphBitmap> {
+        None
+    }
+}
+
+#[test]
+fn refuses_branches_unknown_css_and_provider_failure_without_partial_page() {
+    let face = TestFace;
+    for html in [
+        "<html style='height:100px'><body><p>first</p><p>second</p></body></html>",
+        "<html style='height:100px'><body><p>hi <em>there</em></p></body></html>",
+        "<html style='height:100px'><body><p style='border:1px dashed red'>hi</p></body></html>",
+        "<html style='height:100px'><body><p>emoji🙂</p></body></html>",
+        "<html style='height:100px;background-color:#123456'><body><p style='border:1px dashed red'>hi</p></body></html>",
+    ] {
+        assert_eq!(
+            paint_single_text_page(&tree(html), 100, 100, &face).err(),
+            Some(PageError::Unsupported),
+            "{html}"
+        );
+    }
+    assert_eq!(
+        paint_single_text_page(
+            &tree(
+                "<html style='height:100px;background-color:#123456'><body><p>hi</p></body></html>"
+            ),
+            100,
+            100,
+            &Missing
+        )
+        .err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn direct_text_canvas_background_propagation_and_paint_order() {
+    for (root_style, body_style, canvas, body_fill) in [
+        ("background-color:#123456", "", Rgb(18, 52, 86), false),
+        ("", "background-color:#abcdef", Rgb(171, 205, 239), false),
+        (
+            "background-color:#123456",
+            "background-color:#abcdef",
+            Rgb(18, 52, 86),
+            true,
+        ),
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;{root_style}'><body style='{body_style}'><p style='background-color:#fedcba;color:#010203'>ab</p></body></html>"));
+        let list = paint_single_text_page(&boxes, 100, 100, &TestFace).unwrap();
+        assert!(
+            matches!(list.commands()[0], Command::Fill { color, rect, .. }
+            if color == canvas && rect.width == 100 && rect.height == 100)
+        );
+        assert_eq!(list.commands().len(), if body_fill { 5 } else { 4 });
+        let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+        assert_eq!(
+            &pixels[(99 * 100 + 99) * 4..][..3],
+            &[canvas.0, canvas.1, canvas.2]
+        );
+        assert_eq!(&pixels[0..3], &[254, 220, 186]);
+        // TestFace glyph begins four pixels below the content origin.
+        assert_eq!(&pixels[(4 * 100) * 4..][..3], &[1, 2, 3]);
+    }
+}
+
+#[test]
+fn malformed_arena_is_refused_before_geometry_passes() {
+    for defect in 0..7 {
+        let mut boxes = tree("<html style='height:100px'><body><p>hi</p></body></html>");
+        match defect {
+            0 => boxes.boxes[0].children = vec![usize::MAX],
+            1 => boxes.boxes[1].parent = Some(usize::MAX),
+            2 => boxes.boxes[1].children.push(0),
+            3 => {
+                let child = boxes.boxes[0].children[0];
+                boxes.boxes[0].children.push(child);
+            }
+            4 => boxes.boxes[0].children.clear(),
+            5 => boxes.boxes[0].source = None,
+            _ => boxes.roots[0] = usize::MAX,
+        }
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+        assert!(
+            paint_single_text_page(&boxes, 100, 100, &TestFace).is_err(),
+            "defect {defect}"
+        );
+    }
+}
+
+#[test]
+fn multiple_direct_text_blocks_stack_and_paint_in_document_order() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='background-color:#abcdef;color:#010203'>ab</p><section style='padding-top:2px'><p style='background-color:#fedcba;color:#040506'>cd</p></section></body></html>");
+    assert!(paint_single_text_page(&boxes, 100, 100, &TestFace).is_err());
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert_eq!(list.commands().len(), 7);
+    assert!(matches!(
+        list.commands()[1],
+        Command::Fill {
+            color: Rgb(171, 205, 239),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[2],
+        Command::Fill {
+            color: Rgb(254, 220, 186),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[3],
+        Command::GlyphRun {
+            color: Rgb(1, 2, 3),
+            ..
+        }
+    ));
+    assert!(matches!(
+        list.commands()[5],
+        Command::GlyphRun {
+            color: Rgb(4, 5, 6),
+            ..
+        }
+    ));
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |y: usize| &pixels[y * 100 * 4..][..3];
+    assert_eq!(at(4), &[1, 2, 3]);
+    assert_eq!(at(10), &[18, 52, 86]);
+    assert_eq!(at(12), &[254, 220, 186]);
+    assert_eq!(at(16), &[4, 5, 6]);
+}
+
+#[test]
+fn multiple_text_blocks_refuse_unsupported_sibling_without_partial_page() {
+    for tail in [
+        "<p>emoji🙂</p>",
+        "<p>hi <em>there</em></p>",
+        "<p style='border:1px dashed red'>hi</p>",
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p>ab</p>{tail}</body></html>"));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+    }
+}
+
+#[test]
+fn block_indentation_and_trailing_newline_do_not_create_inline_boxes() {
+    let compact = tree("<html style='height:100px;background-color:#123456'><body><p>ab</p><p>cd</p></body></html>");
+    let spaced = tree("<html style='height:100px;background-color:#123456'>\n<body> \t<p>ab</p>\r\n<p>cd</p>\n</body></html>\n");
+    let first = paint_direct_text_blocks(&compact, 100, 100, &TestFace).unwrap();
+    let second = paint_direct_text_blocks(&spaced, 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        first.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        second.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+    assert_eq!(compact.boxes.len(), spaced.boxes.len());
+    for ink in ["&nbsp;", "words", "<em>inline</em>", "&#12;"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p>ab</p>{ink}<p>cd</p></body></html>"
+        ));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{ink}"
+        );
+    }
+    let pre = tree("<html style='height:100px'><body style='white-space:pre'><p>ab</p>\n<p>cd</p></body></html>");
+    assert!(paint_direct_text_blocks(&pre, 100, 100, &TestFace).is_err());
+}
+
+#[test]
+fn horizontal_margins_position_background_and_text_together() {
+    for (style, x, width) in [
+        ("width:20px;margin-left:auto;margin-right:auto", 40, 20),
+        ("width:20px;margin-left:7px", 7, 20),
+        ("margin-left:10px;margin-right:15px", 10, 75),
+        ("width:20px;margin-left:10%", 10, 20),
+    ] {
+        let boxes = tree(&format!("<html style='height:100px;background-color:#123456'><body><p style='{style};background-color:#abcdef;color:#010203'>ab</p></body></html>"));
+        let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+        assert!(
+            matches!(list.commands()[1], Command::Fill { rect, .. } if rect.x == x && rect.width == width)
+        );
+        assert!(matches!(list.commands()[2], Command::GlyphRun { bounds, .. } if bounds.x == x));
+        let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+        let offset = (4 * 100 + usize::try_from(x).unwrap()) * 4;
+        assert_eq!(&pixels[offset..][..3], &[1, 2, 3]);
+    }
+}
+
+#[test]
+fn direction_and_visible_list_markers_are_not_silently_omitted() {
+    for html in [
+        "<html style='height:100px'><body><p style='direction:rtl'>ab</p></body></html>",
+        "<html style='height:100px;direction:rtl'><body><p>ab</p></body></html>",
+        "<html style='height:100px'><body><ul><li>ab</li></ul></body></html>",
+        "<html style='height:100px'><body><p>ab</p><li style='height:10px'></li></body></html>",
+    ] {
+        let boxes = tree(html);
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{html}"
+        );
+    }
+    // A child explicitly resetting to LTR has left-origin line placement.
+    let boxes = tree("<html style='height:100px;direction:rtl'><body><p style='direction:ltr'>ab</p></body></html>");
+    assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_ok());
+}
+
+#[test]
+fn currentcolor_reaches_canvas_and_local_background_pixels() {
+    let boxes = tree("<html style='height:100px;background:currentcolor;color:#123456'><body><p style='color:#abcdef;background:currentcolor'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[0..3], &[171, 205, 239]);
+    assert_eq!(&pixels[99 * 100 * 4..][..3], &[18, 52, 86]);
+}
+
+#[test]
+fn foreground_currentcolor_reaches_glyph_pixels() {
+    let boxes = tree("<html style='height:100px;color:#123456'><body><p style='color:red;color:currentcolor;background:white'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[4 * 100 * 4..][..3], &[18, 52, 86]);
+}
+
+#[test]
+fn terminal_sentence_punctuation_wraps_but_internal_punctuation_refuses() {
+    let boxes =
+        tree("<html style='height:100px'><body><p style='color:#123456'>Hi, ab.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert_eq!(list.commands().len(), 6);
+    let narrow =
+        tree("<html style='height:100px'><body><p style='width:10px'>Hi, ab.</p></body></html>");
+    let wrapped = paint_direct_text_blocks(&narrow, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = wrapped
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 4, 14, 14, 14]);
+    let unsupported = tree("<html><body><p style='width:10px'>Hi, a.b</p></body></html>");
+    assert!(paint_direct_text_blocks(&unsupported, 100, 100, &TestFace).is_err());
+}
+
+#[test]
+fn explicit_pixel_line_height_sets_geometry_and_half_leading() {
+    let boxes = tree("<html style='height:100px'><body style='line-height:14px'><p style='width:6px'>ab cd</p><p>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [6, 20, 34] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+    for value in ["9px", "11px"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='line-height:{value}'>ab</p></body></html>"
+        ));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+    }
+}
+
+#[test]
+fn unitless_line_height_paints_and_refuses_fractional_used_values() {
+    let boxes = tree("<html style='height:100px'><body style='line-height:1.5'><p style='font-size:12px'>ab</p><p style='font-size:16px'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [8, 29] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+    let boxes = tree("<html style='height:100px'><body><p style='font-size:13px;line-height:1.5'>ab</p></body></html>");
+    assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+}
+
+#[test]
+fn percent_line_height_inherits_as_length_not_multiplier() {
+    let boxes = tree("<html style='height:100px'><body style='font-size:20px;line-height:150%'><p style='font-size:12px'>ab</p><p style='font-size:16px'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [14, 44] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+}
+
+#[test]
+fn em_and_percent_line_height_produce_same_complete_raster() {
+    let page = |height: &str| {
+        tree(&format!("<html style='height:100px'><body style='font-size:20px;line-height:{height}'><p style='font-size:12px'>ab</p><p style='font-size:16px'>cd</p></body></html>"))
+    };
+    let em = paint_direct_text_blocks(&page("1.5em"), 100, 100, &TestFace).unwrap();
+    let percent = paint_direct_text_blocks(&page("150%"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        em.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn percentage_font_size_and_explicit_pixels_paint_the_same_page() {
+    let page = |size: &str| {
+        tree(&format!("<html style='height:100px'><body style='font-size:20px'><p style='font-size:{size};line-height:120%'>ab</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("150%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("30px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn shorter_even_line_height_uses_negative_half_leading_when_ink_fits() {
+    let boxes = tree("<html style='height:100px'><body style='line-height:8px'><p style='width:6px'>ab cd</p><p>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in [3, 11, 19] {
+        assert_eq!(&pixels[y * 100 * 4..][..3], &[0, 0, 0]);
+    }
+    // Fractional half-leading and zero line heights still refuse.
+    for value in ["9px", "0px"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='line-height:{value}'>ab</p></body></html>"
+        ));
+        assert!(paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err());
+    }
+}
+
+#[test]
+fn definite_text_block_height_keeps_extra_room_before_the_next_sibling() {
+    let boxes = tree("<html style='height:100px'><body><p style='height:30px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 29), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 30), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 34), &[0, 0, 0]);
+}
+
+#[test]
+fn zero_and_indefinite_text_heights_remain_refused() {
+    for style in ["height:0px", "height:50%"] {
+        let boxes = tree(&format!(
+            "<html style='height:100px'><body><p style='{style}'>ab cd</p></body></html>"
+        ));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{style}"
+        );
+    }
+}
+
+#[test]
+fn positive_adjoining_sibling_margins_collapse_to_the_larger_gap() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='margin-bottom:7px;background-color:#abcdef'>ab</p><p style='margin-top:4px;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |y: usize| &pixels[(y * 100 + 1) * 4..][..3];
+    assert_eq!(at(9), &[0xab, 0xcd, 0xef]);
+    for y in 10..17 {
+        assert_eq!(at(y), &[0x12, 0x34, 0x56]);
+    }
+    assert_eq!(at(17), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(21 * 100) * 4..][..3], &[0, 0, 0]);
+}
+
+#[test]
+fn parent_edge_vertical_margins_collapse_and_paint() {
+    let ink_row = |html: &str| {
+        let list = paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).unwrap();
+        let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+        (0..100)
+            .find(|&y| pixels[(y * 100) * 4] == 0)
+            .expect("expected text ink")
+    };
+    // Baseline sits 7px below the content top and glyph ink starts 3px above
+    // it, so the first ink row is content_y + 4.
+    assert_eq!(
+        ink_row("<html style='height:100px'><body><p style='margin-top:4px'>ab</p></body></html>"),
+        8
+    );
+    assert_eq!(
+        ink_row(
+            "<html style='height:100px'><body><p style='margin-bottom:4px'>ab</p></body></html>"
+        ),
+        4
+    );
+    // A negative escaped top margin lifts the block off-canvas; the raster
+    // clips the overflow instead of refusing the page.
+    assert_eq!(
+        ink_row("<html style='height:100px'><body><p style='margin-top:-4px'>ab</p></body></html>"),
+        0
+    );
+    assert_eq!(
+        ink_row(
+            "<html style='height:100px'><body><p style='margin-bottom:-4px'>ab</p></body></html>"
+        ),
+        4
+    );
+}
+
+#[test]
+fn negative_sibling_margins_overlap_backgrounds_but_keep_text_on_top() {
+    // First block paints rows 0..10; the -6px gap pulls the second block's
+    // background up to row 4, covering the first block's lower background.
+    // CSS paints inline content above later block backgrounds, so the first
+    // block's ink at rows 4..6 stays visible inside the overlap.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body><p style='margin-bottom:-6px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let commands = list.commands();
+    let last_fill = commands
+        .iter()
+        .rposition(|command| matches!(command, Command::Fill { .. }))
+        .unwrap();
+    let first_glyph = commands
+        .iter()
+        .position(|command| matches!(command, Command::GlyphRun { .. }))
+        .unwrap();
+    assert!(last_fill < first_glyph);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 2), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 5), &[0, 0, 0]);
+    assert_eq!(at(1, 4), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 12), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 14), &[0x12, 0x34, 0x56]);
+    assert_eq!(at(0, 8), &[0, 0, 0]);
+}
+
+#[test]
+fn large_negative_sibling_margin_clips_above_the_canvas() {
+    // A -12px gap pulls the second block's background up to row -2, partly
+    // above the canvas; the rasterizer clips it and painting still succeeds.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='height:100px'><p style='background-color:#abcdef'>ab</p><p style='margin-top:-12px;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 0), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 7), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(1, 8), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+}
+
+#[test]
+fn sibling_percentage_gaps_use_containing_width_not_height_or_child_width() {
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='width:80px'><p style='width:20px;margin-bottom:10%;background-color:#abcdef'>ab</p><p style='margin-top:5%;background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    for y in 10..18 {
+        assert_eq!(&pixels[(y * 100 + 1) * 4..][..3], &[0x12, 0x34, 0x56]);
+    }
+    assert_eq!(&pixels[(18 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    // An exact negative percentage gap is supported: -10% of the 80px body
+    // width pulls the second block's background up 8px over the first.
+    let boxes = tree("<html style='height:100px;background-color:#123456'><body style='width:80px'><p style='margin-bottom:-10%;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[(2 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(11 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+    assert_eq!(&pixels[(12 * 100 + 1) * 4..][..3], &[0x12, 0x34, 0x56]);
+    for value in ["3%", "-3%", "auto"] {
+        let boxes = tree(&format!("<html style='height:100px'><body style='width:80px'><p style='margin-bottom:{value}'>ab</p><p>cd</p></body></html>"));
+        assert!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).is_err(),
+            "{value}"
+        );
+    }
+}
+
+struct OverhangFace;
+impl FontProvider for OverhangFace {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, character: char, _: u32, _: bool) -> Option<GlyphBitmap> {
+        Some(if character == ' ' {
+            GlyphBitmap {
+                left: 0,
+                top: 0,
+                width: 0,
+                height: 0,
+                coverage: vec![],
+            }
+        } else {
+            GlyphBitmap {
+                left: -1,
+                top: -3,
+                width: 5,
+                height: 2,
+                coverage: vec![255; 10],
+            }
+        })
+    }
+}
+
+#[test]
+fn horizontal_ink_overflows_content_without_changing_wrapped_geometry() {
+    let boxes = tree("<html><body style='padding-left:4px'><p style='width:3px;background-color:#abcdef'>T T</p><p style='width:3px;background-color:#fedcba'>T</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 20, 40, &OverhangFace).unwrap();
+    let glyph_bounds: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some((bounds.x, bounds.y, bounds.width)),
+            _ => None,
+        })
+        .collect();
+    // Advances fit the width and create two lines. Ink overhangs both edges;
+    // it does not expand the line box or move the following block down.
+    assert_eq!(glyph_bounds, [(3, 4, 5), (3, 14, 5), (3, 24, 5)]);
+    let pixels = list.rasterize(20, 40, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 20 + x) * 4..(y * 20 + x) * 4 + 4];
+    assert_eq!(at(3, 4), [0, 0, 0, 255]);
+    assert_eq!(at(7, 4), [0, 0, 0, 255]);
+    assert_eq!(at(8, 4), [255, 255, 255, 255]);
+    assert_eq!(at(4, 20), [254, 220, 186, 255]);
+}
+
+#[test]
+fn horizontal_ink_at_viewport_edge_clips_only_when_rasterized() {
+    let boxes = tree("<html><body><p style='width:3px'>T</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 3, 20, &OverhangFace).unwrap();
+    assert!(
+        matches!(&list.commands()[0], Command::GlyphRun { bounds, .. } if bounds.x == -1 && bounds.width == 5)
+    );
+    let pixels = list.rasterize(3, 20, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[4 * 3 * 4..5 * 3 * 4], &[0, 0, 0, 255].repeat(3));
+}
+
+#[test]
+fn horizontal_overhang_does_not_permit_unbreakable_words_or_hidden_overflow() {
+    for html in [
+        "<html><body><p style='width:3px'>TT</p></body></html>",
+        "<html><body><p style='width:3px;overflow:hidden'>T</p></body></html>",
+    ] {
+        assert_eq!(
+            paint_direct_text_blocks(&tree(html), 20, 40, &OverhangFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn short_definite_height_keeps_background_and_following_sibling_in_flow() {
+    let boxes = tree("<html><body><p style='height:3px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 2), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 3), &[0xfe, 0xdc, 0xba]);
+    // Earlier text overflows its short box and stays above later backgrounds.
+    assert_eq!(at(0, 4), &[0, 0, 0]);
+    assert_eq!(at(0, 7), &[0, 0, 0]);
+    assert_eq!(at(1, 13), &[255, 255, 255]);
+}
+
+#[test]
+fn wrapped_text_overflows_definite_height_without_inflating_ancestor_height() {
+    let boxes = tree("<html><body style='background-color:#123456'><div style='width:6px;background-color:#abcdef'><p style='height:5px'>ab cd</p></div><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 14, 14, 9, 9]);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 4), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 5), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 14), &[0, 0, 0]);
+    assert_eq!(at(1, 15), &[0x12, 0x34, 0x56]);
+}
+
+#[test]
+fn definite_height_overflow_does_not_enable_unproven_clipping() {
+    for overflow in ["hidden", "scroll", "auto"] {
+        let boxes = tree(&format!(
+            "<html><body><p style='height:3px;overflow:{overflow}'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn short_line_height_keeps_measured_lines_while_ink_overflows() {
+    let boxes = tree("<html><body style='padding-top:4px;line-height:2px'><p style='width:6px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [4, 4, 6, 6, 8, 8]);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 7), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 8), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 9), &[0, 0, 0]);
+}
+
+struct TallInkFace;
+impl FontProvider for TallInkFace {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(1)
+    }
+    fn raster(&self, _: char, _: u32, _: bool) -> Option<GlyphBitmap> {
+        Some(GlyphBitmap {
+            left: 0,
+            top: -2,
+            width: 1,
+            height: 8,
+            coverage: vec![255; 8],
+        })
+    }
+}
+
+#[test]
+fn negative_adjusted_baseline_and_top_ink_clip_at_viewport_not_line() {
+    let boxes = tree("<html><body><p style='line-height:2px'>a</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 10, 20, &TallInkFace).unwrap();
+    assert!(
+        matches!(&list.commands()[0], Command::GlyphRun { bounds, .. } if bounds.y == -5 && bounds.height == 8)
+    );
+    let pixels = list.rasterize(10, 20, Rgb(255, 255, 255)).unwrap();
+    for y in 0..3 {
+        assert_eq!(&pixels[y * 10 * 4..][..3], &[0, 0, 0]);
+    }
+    assert_eq!(&pixels[3 * 10 * 4..][..3], &[255, 255, 255]);
+}
+
+struct InvalidBaselineFace(i32);
+impl FontProvider for InvalidBaselineFace {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(self.0)
+    }
+    fn raster(&self, ch: char, size: u32, bold: bool) -> Option<GlyphBitmap> {
+        TestFace.raster(ch, size, bold)
+    }
+}
+
+#[test]
+fn invalid_natural_baselines_still_refuse_before_adjustment() {
+    let boxes = tree("<html><body><p style='line-height:2px'>ab</p></body></html>");
+    for baseline in [-1, 10, i32::MAX] {
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &InvalidBaselineFace(baseline)).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn padded_zero_content_height_paints_padding_and_visible_text_overflow() {
+    let boxes = tree("<html><body><p style='height:0px;padding-top:2px;padding-bottom:3px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(1, 0), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 4), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 5), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 6), &[0, 0, 0]);
+    assert_eq!(at(0, 9), &[0, 0, 0]);
+}
+
+#[test]
+fn padded_zero_height_ancestor_does_not_expand_to_child_text() {
+    let boxes = tree("<html><body><div style='height:0px;padding-top:2px;padding-bottom:3px;background-color:#abcdef'><p>ab</p></div><p style='background-color:#fedcba'>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyph_y, [6, 6, 9, 9]);
+}
+
+#[test]
+fn zero_height_without_vertical_padding_still_refuses_through_collapse() {
+    for style in [
+        "height:0px",
+        "height:0px;padding-left:4px",
+        "height:0px;padding-top:0px;padding-bottom:0px",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style}'>ab</p><p>cd</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn wrapped_sentence_marks_keep_next_sibling_after_measured_lines() {
+    let boxes = tree("<html><body><p style='width:9px;background-color:#abcdef'>ab. cd!</p><p style='background-color:#fedcba'>ef?</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(6, 4), &[0, 0, 0]);
+    assert_eq!(at(6, 14), &[0, 0, 0]);
+    assert_eq!(at(1, 19), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 20), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(6, 24), &[0, 0, 0]);
+}
+
+#[test]
+fn contractions_and_possessives_wrap_with_terminal_punctuation() {
+    let boxes = tree("<html><body><p style='width:21px;background-color:#abcdef'>Alice's book. Don't stop!</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(15, 4), &[0, 0, 0]);
+    assert_eq!(at(9, 24), &[0, 0, 0]);
+    assert_eq!(at(1, 39), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 40), &[0xfe, 0xdc, 0xba]);
+    assert_eq!(at(0, 44), &[0, 0, 0]);
+}
+
+#[test]
+fn border_box_and_equivalent_content_box_have_identical_complete_rasters() {
+    let page = |sizing: &str, width: u32, height: u32| {
+        tree(&format!("<html><body><p style='box-sizing:{sizing};width:{width}px;height:{height}px;padding:2px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>"))
+    };
+    let border =
+        paint_direct_text_blocks(&page("border-box", 10, 24), 100, 100, &TestFace).unwrap();
+    let content =
+        paint_direct_text_blocks(&page("content-box", 6, 20), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        border.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        content.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn auto_border_box_height_uses_wrapped_content_and_padding() {
+    let boxes = tree("<html><body><p style='box-sizing:border-box;width:10px;padding:2px;background-color:#abcdef'>ab cd</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(2, 6), &[0, 0, 0]);
+    assert_eq!(at(2, 16), &[0, 0, 0]);
+    assert_eq!(at(1, 23), &[0xab, 0xcd, 0xef]);
+    assert_eq!(at(1, 24), &[0xfe, 0xdc, 0xba]);
+}
+
+#[test]
+fn border_box_height_clamps_to_zero_content_when_padding_exceeds_declaration() {
+    let boxes = tree("<html><body><p style='box-sizing:border-box;width:10px;height:1px;padding:2px;background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>ef</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&pixels[(3 * 100 + 1) * 4..][..3], &[0xab, 0xcd, 0xef]);
+    assert_eq!(&pixels[(4 * 100 + 1) * 4..][..3], &[0xfe, 0xdc, 0xba]);
+}
+
+#[test]
+fn zero_content_width_and_unsupported_borders_still_refuse() {
+    for style in [
+        "box-sizing:border-box;width:4px;padding:2px",
+        "box-sizing:border-box;width:10px;border:1px dashed black",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style}'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported)
+        );
+    }
+}
+
+#[test]
+fn nonbreaking_html_entity_preserves_word_group_during_page_wrap() {
+    let boxes = tree("<html><body><p style='width:9px;background-color:#abcdef'>a&nbsp;b cd.</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(&glyph_y[..6], &[4, 4, 4, 14, 14, 14]);
+    assert_eq!(glyph_y[6], 24);
+    let narrow = tree("<html><body><p style='width:6px'>a&nbsp;b</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&narrow, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn fractional_percentage_width_refuses_before_rounding_text_geometry() {
+    for html in [
+        "<html><body><p style='width:33.33%;background-color:#abcdef'>ab cd</p></body></html>",
+        "<html><body style='width:99px'><p style='width:50%;background-color:#abcdef'>ab cd</p></body></html>",
+        "<html><body><p style='box-sizing:border-box;width:33.33%;padding:2px'>ab cd</p></body></html>",
+    ] {
+        assert_eq!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).err(), Some(PageError::Unsupported));
+    }
+}
+
+#[test]
+fn exact_nested_percentage_width_matches_equivalent_pixels() {
+    let page = |width: &str| {
+        tree(&format!("<html><body style='width:60px'><p style='width:{width};padding:2px;background-color:#abcdef'>ab cd ef gh ij</p><p>Next.</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("50%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("30px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn exact_border_box_percentage_width_subtracts_padding_after_resolution() {
+    let page = |width: &str| {
+        tree(&format!("<html><body style='width:40px'><p style='box-sizing:border-box;width:{width};padding:2px;background-color:#abcdef'>ab cd ef</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("25%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("10px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn fractional_percentage_heights_refuse_instead_of_flooring_backgrounds() {
+    for html in [
+        "<html style='height:99px'><body style='height:50%'><p>ab</p></body></html>",
+        "<html style='height:100px'><body style='height:50px'><p style='height:33.33%;background-color:#abcdef'>ab</p></body></html>",
+        "<html style='height:100px'><body style='box-sizing:border-box;height:50px;padding-top:1px'><p style='height:50%'>ab</p></body></html>",
+    ] {
+        assert_eq!(paint_direct_text_blocks(&tree(html), 100, 100, &TestFace).err(), Some(PageError::Unsupported));
+    }
+}
+
+#[test]
+fn exact_nested_percentage_height_matches_equivalent_pixel_geometry() {
+    let page = |height: &str| {
+        tree(&format!("<html style='height:100px'><body style='box-sizing:border-box;height:60px;padding:10px'><p style='height:{height};background-color:#abcdef'>ab</p><p style='background-color:#fedcba'>cd</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("50%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("20px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn measured_auto_height_does_not_make_percentage_descendant_definite() {
+    let boxes = tree("<html style='height:100px'><body><p style='height:50%'>ab</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn fractional_horizontal_margins_and_half_pixel_centering_refuse() {
+    for style in [
+        "width:20px;margin-left:33.33%",
+        "margin-right:33.33%",
+        "width:19px;margin-left:auto;margin-right:auto",
+        "box-sizing:border-box;width:19px;padding:2px;margin-left:auto;margin-right:auto",
+    ] {
+        let boxes = tree(&format!(
+            "<html><body><p style='{style};background-color:#abcdef'>ab</p></body></html>"
+        ));
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported),
+            "{style}"
+        );
+    }
+}
+
+#[test]
+fn exact_horizontal_percentage_margins_match_pixels() {
+    let page = |margin: &str| {
+        tree(&format!("<html><body style='width:60px'><p style='margin-left:{margin};margin-right:{margin};background-color:#abcdef'>ab cd</p></body></html>"))
+    };
+    let percent = paint_direct_text_blocks(&page("25%"), 100, 100, &TestFace).unwrap();
+    let pixels = paint_direct_text_blocks(&page("15px"), 100, 100, &TestFace).unwrap();
+    assert_eq!(
+        percent.rasterize(100, 100, Rgb(255, 255, 255)).unwrap(),
+        pixels.rasterize(100, 100, Rgb(255, 255, 255)).unwrap()
+    );
+}
+
+#[test]
+fn overconstrained_auto_margins_use_zero_not_fractional_centering() {
+    let boxes = tree("<html><body><p style='width:101px;margin-left:auto;margin-right:auto;background-color:#abcdef'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    assert!(
+        matches!(list.commands()[0], Command::Fill { rect, .. } if rect.x == 0 && rect.width == 101)
+    );
+}
+
+#[test]
+fn paired_single_word_brackets_wrap_without_detaching_marks() {
+    let boxes = tree("<html><body><p style='width:18px;background-color:#abcdef'>(ab)! [cd] {ef}</p><p style='background-color:#fedcba'>Next.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyph_y: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, .. } => Some(bounds.y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(&glyph_y[..5], &[4; 5]);
+    assert_eq!(&glyph_y[5..9], &[14; 4]);
+    assert_eq!(&glyph_y[9..13], &[24; 4]);
+    assert_eq!(glyph_y[13], 34);
+}
+
+fn ua_tree(html: &str) -> BoxTree {
+    BoxTree::from_style(&parse_style_tree(
+        format!("<!doctype html>{html}").as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+    ))
+}
+
+#[test]
+fn ua_body_margin_offsets_direct_text_page() {
+    let boxes = ua_tree("<p>ab</p>");
+    let list = paint_single_text_page(&boxes, 200, 80, &TestFace).unwrap();
+    let pixels = list.rasterize(200, 80, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 200 + x) * 4..(y * 200 + x) * 4 + 4];
+    // UA body margin 8px collapses with the paragraph's UA 1em (16px) top
+    // margin: first ink row = 16 + (baseline 7 + glyph top -3).
+    assert_eq!(at(8, 20), &[0, 0, 0, 255]);
+    assert_eq!(at(8, 19), &[255, 255, 255, 255]);
+    assert_eq!(at(7, 20), &[255, 255, 255, 255]);
+}
+
+#[test]
+fn nested_edge_margins_collapse_through_to_the_largest() {
+    let boxes = ua_tree("<div style='margin-top:20px'><p style='margin-top:30px'>ab</p></div>");
+    let list = paint_single_text_page(&boxes, 200, 80, &TestFace).unwrap();
+    let pixels = list.rasterize(200, 80, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 200 + x) * 4..(y * 200 + x) * 4 + 4];
+    // collapse(body 8, div 20, p 30) = 30; first ink row = 30 + 4.
+    assert_eq!(at(8, 34), &[0, 0, 0, 255]);
+    assert_eq!(at(8, 33), &[255, 255, 255, 255]);
+}
+
+#[test]
+fn last_child_bottom_margin_escapes_auto_height_parent() {
+    let boxes = tree(
+        "<div style='margin-bottom:25px'><p style='margin-bottom:15px'>ab</p></div><section>cd</section>",
+    );
+    let list = paint_direct_text_blocks(&boxes, 200, 80, &TestFace).unwrap();
+    let pixels = list.rasterize(200, 80, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 200 + x) * 4..(y * 200 + x) * 4 + 4];
+    // div at y=0, height 10; gap = collapse(25, section 0) = 25; section ink row 35 + 4.
+    assert_eq!(at(0, 39), &[0, 0, 0, 255]);
+    assert_eq!(at(0, 38), &[255, 255, 255, 255]);
+}
+
+struct MissingBoldFace;
+impl FontProvider for MissingBoldFace {
+    fn advance(&self, _: char, _: u32, bold: bool) -> Option<u32> {
+        (!bold).then_some(3)
+    }
+    fn line_height(&self, _: u32, bold: bool) -> Option<u32> {
+        (!bold).then_some(10)
+    }
+    fn baseline_offset(&self, _: u32, bold: bool) -> Option<i32> {
+        (!bold).then_some(7)
+    }
+    fn raster(&self, character: char, size: u32, bold: bool) -> Option<GlyphBitmap> {
+        if bold {
+            None
+        } else {
+            TestFace.raster(character, size, false)
+        }
+    }
+}
+
+struct MismatchedBoldFace;
+impl FontProvider for MismatchedBoldFace {
+    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+        Some(3)
+    }
+    fn line_height(&self, _: u32, bold: bool) -> Option<u32> {
+        Some(if bold { 12 } else { 10 })
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, character: char, size: u32, _: bool) -> Option<GlyphBitmap> {
+        TestFace.raster(character, size, false)
+    }
+}
+
+#[test]
+fn mixed_inline_strong_paints_with_per_run_faces() {
+    let boxes = tree("<html><body><p>Test <strong>no red</strong>.</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let glyphs = list
+        .commands()
+        .iter()
+        .filter(|command| {
+            matches!(
+                command,
+                kobo_web_document::display_list::Command::GlyphRun { .. }
+            )
+        })
+        .count();
+    // "Test no red." = 10 non-space glyphs, each its own proven run.
+    assert_eq!(glyphs, 10);
+}
+
+#[test]
+fn bold_runs_refuse_without_a_matching_bold_face() {
+    let boxes = tree("<html><body><p>Test <strong>no red</strong>.</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&boxes, 100, 100, &MissingBoldFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn bold_runs_refuse_mismatched_bold_line_metrics() {
+    let boxes = tree("<html><body><p>Test <strong>no red</strong>.</p></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&boxes, 100, 100, &MismatchedBoldFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+#[test]
+fn italic_and_unsupported_weight_runs_still_refuse_the_page() {
+    for html in [
+        "<html><body><p>one <em>two</em></p></body></html>",
+        "<html><body><p>one <span style='font-weight:600'>two</span></p></body></html>",
+    ] {
+        let boxes = tree(html);
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+            Some(PageError::Unsupported),
+            "{html}"
+        );
+    }
+}
+
+#[test]
+fn background_clipped_to_an_empty_area_paints_nothing() {
+    // background-clip-008/010 shape: the red background must not paint.
+    for html in [
+        "<html><body><p>ab</p><div style='background-clip:padding-box;background-color:red;border:transparent solid 50px;padding:0'></div></body></html>",
+        "<html><body><p>ab</p><div style='background-clip:content-box;background-color:red;border:transparent solid 20px;padding:30px'></div></body></html>",
+    ] {
+        let boxes = tree(html);
+        let list = paint_direct_text_blocks(&boxes, 800, 600, &TestFace).unwrap();
+        let red_fills = list
+            .commands()
+            .iter()
+            .filter(|command| {
+                matches!(command, kobo_web_document::display_list::Command::Fill { color, .. } if *color == kobo_web_document::display_list::Rgb(255, 0, 0))
+            })
+            .count();
+        assert_eq!(red_fills, 0, "{html}");
+    }
+}
+
+#[test]
+fn visible_borders_paint_before_text() {
+    let boxes = tree("<html><body><p style='padding:2px;background:red;border:2px solid blue'>ab</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 100 + x) * 4..][..3];
+    assert_eq!(at(0, 0), [0, 0, 255]);
+    assert_eq!(at(2, 2), [255, 0, 0]);
+    assert_eq!(at(4, 8), [0, 0, 0]);
+    let glyph = list
+        .commands()
+        .iter()
+        .position(|cmd| matches!(cmd, Command::GlyphRun { .. }))
+        .unwrap();
+    assert_eq!(glyph, 5); // background, four strips, then glyphs
+}
+
+#[test]
+fn unsupported_border_join_does_not_return_partial_text_page() {
+    let boxes=tree("<html><body><p>ab</p><div style='border:2px solid blue;border-left-color:red'>cd</div></body></html>");
+    assert_eq!(
+        paint_direct_text_blocks(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+}
+
+struct DistinctFaces;
+impl FontProvider for DistinctFaces {
+    fn advance(&self, _: char, _: u32, bold: bool) -> Option<u32> {
+        Some(if bold { 7 } else { 3 })
+    }
+    fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+        Some(10)
+    }
+    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+        Some(7)
+    }
+    fn raster(&self, ch: char, _: u32, bold: bool) -> Option<GlyphBitmap> {
+        let width = if ch == ' ' {
+            0
+        } else if bold {
+            2
+        } else {
+            1
+        };
+        Some(GlyphBitmap {
+            left: 0,
+            top: -3,
+            width,
+            height: 1,
+            coverage: vec![255; width as usize],
+        })
+    }
+}
+#[test]
+fn bold_advance_layout_and_bitmap_use_the_same_face_key() {
+    use kobo_web_document::display_list::{Command, Rgb};
+    let boxes = tree("<html><body><p>a <b>b</b> c</p></body></html>");
+    let list = paint_direct_text_blocks(&boxes, 100, 100, &DistinctFaces).unwrap();
+    let glyphs: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            Command::GlyphRun { bounds, layout, .. } => Some((*bounds, *layout)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(glyphs.len(), 3);
+    assert_eq!(
+        (glyphs[1].0.x, glyphs[1].0.width, glyphs[1].1.width),
+        (6, 2, 7)
+    );
+    assert_eq!(glyphs[2].0.x, 16);
+    let pixels = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize| &pixels[(4 * 100 + x) * 4..(4 * 100 + x) * 4 + 3];
+    assert_eq!(at(6), &[0, 0, 0]);
+    assert_eq!(at(7), &[0, 0, 0]);
+    assert_eq!(at(8), &[255, 255, 255]);
+}
+
+#[test]
+fn positioned_leaf_paints_after_glyphs_and_does_not_push_next_block() {
+    let t=tree("<html><body><p>ab</p><div style='position:absolute;left:0px;top:0px;width:10px;height:10px;background:blue'></div><p>cd</p></body></html>");
+    let list = paint_direct_text_blocks(&t, 100, 100, &TestFace).unwrap();
+    let p = list.rasterize(100, 100, Rgb(255, 255, 255)).unwrap();
+    assert_eq!(&p[(4 * 100) * 4..][..3], [0, 0, 255]);
+    assert_eq!(&p[(14 * 100) * 4..][..3], [0, 0, 0]);
+    assert!(matches!(
+        list.commands().last(),
+        Some(Command::Fill {
+            color: Rgb(0, 0, 255),
+            ..
+        })
+    ));
+}

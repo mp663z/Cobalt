@@ -2,30 +2,21 @@
   "id": "birds",
   "display_name": "Birds",
   "short_label": "Birds",
-  "summary": "Show the birds heard by BirdNET-Go on your Mac or Linux computer. Needs your computer.",
+  "summary": "Show the birds heard by BirdNET-Go on your Mac or Linux computer.",
   "page_description": "See the birds BirdNET-Go hears on your computer, drawn as Fugleramme's labelled plates and sent to your Kobo. The last collage stays on screen offline.",
-  "version": "0.1.12",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.1.5",
+  "release_notes": "Repeated Refresh taps now share the active snapshot/image transfer instead of interrupting valid image chunks. Failed updates still preserve the last complete view and can be retried.",
   "glyph": "app",
-  "capabilities": [
-    "keep-awake"
-  ],
+  "capabilities": [],
   "setup": {
     "steps": [
       {
-        "text": "Birds needs BirdNET-Go and Fugleramme running on a Mac or Linux computer with a microphone. Install and start both first, as the Birds README describes.",
-        "link": {
-          "label": "Birds README",
-          "url": "https://github.com/BandarLabs/Cobalt/tree/main/apps/birds"
-        }
+        "text": "Run BirdNET-Go and Fugleramme on a Mac or Linux computer with a microphone.",
+        "command": "See apps/birds/README.md"
       },
       {
-        "text": "Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
-      },
-      {
-        "text": "Start sending what BirdNET-Go hears to the reader. It checks the station and the reader first, and says what to fix if either does not answer.",
-        "command": "kobo birds listen --source http://localhost:8080"
+        "text": "Enable SSH with kobo setup --enable-ssh, then start the companion on the computer.",
+        "command": "kobo birds listen --source http://<host>:8080 --device <reader>"
       }
     ]
   }

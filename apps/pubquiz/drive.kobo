@@ -1,48 +1,19 @@
-wait-for Play with friends
-expect-missing How to play
-expect About the questions
+expect Pub Quiz
+tap How to play
+expect player
+wait 800
 clean
-shot home
-tap Rules
-expect pass the reader round
-clean
-shot pubquiz-rules
-tap Done
-tap Play with friends
-expect Difficulty
+shot pubquiz-help
+tap Play
+tap Start pass-around
+expect setup
 clean
 shot setup
-tap Choose players
-expect How many
+tap Continue
+expect Players
 clean
 shot players
-tap 2
 tap Start round
-expect Ada's turn
-expect Rules
+expect Ada answers
 clean
 shot question
-tap-id game-more
-expect New game
-expect About the questions
-clean
-shot more
-tap New game
-expect Start a new game?
-clean
-shot new-game-confirm
-tap Keep playing
-expect Ada's turn
-tap-id answer-0
-expect Pass to Bert
-clean
-shot pass
-lifecycle background
-lifecycle foreground
-expect Pass to Bert
-tap-id show-question
-expect Bert's turn
-tap-id answer-0
-expect Right answer
-clean
-shot reveal

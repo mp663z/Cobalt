@@ -13,28 +13,13 @@ use std::time::Duration;
 const ROOT: &str = "/mnt/onboard/.adds/cobalt/data/frame";
 const KOBOD: &str = "/mnt/onboard/.adds/cobalt/bin/kobod";
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(300);
-const USAGE: &str = concat!(
-    "usage: kobo frame preview INPUT --out DIRECTORY [--profile PROFILE]\n\
-                     \x20      kobo frame init ",
-    crate::targets::target_choice!(),
-    "\n\
-                     \x20      kobo frame push INPUT ",
-    crate::targets::target_choice!(),
-    " [--fit crop|pad] [--album NAME] [--replace]\n\
-                     \x20      kobo frame plan INPUT ",
-    crate::targets::target_choice!(),
-    " [--fit crop|pad] [--album NAME] [--replace]\n\
-                     \x20      kobo frame restore ",
-    crate::targets::target_choice!(),
-    "\n\
-                     \x20      kobo frame ls ",
-    crate::targets::target_choice!(),
-    "\n\
-                     \x20      kobo frame rm ID ",
-    crate::targets::target_choice!(),
-    "\n",
-    crate::targets::saved_reader_note!(),
-);
+const USAGE: &str = "usage: kobo frame preview INPUT --out DIRECTORY [--profile PROFILE]\n\
+                     \x20      kobo frame init (--sim | --device IP)\n\
+                     \x20      kobo frame push INPUT (--sim | --device IP) [--fit crop|pad] [--album NAME] [--delete]\n\
+                     \x20      kobo frame plan INPUT (--sim | --device IP) [--fit crop|pad] [--album NAME] [--delete]\n\
+                     \x20      kobo frame restore (--sim | --device IP)\n\
+                     \x20      kobo frame ls (--sim | --device IP)\n\
+                     \x20      kobo frame rm ID (--sim | --device IP)";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Target {
@@ -158,35 +143,15 @@ fn push(arguments: &[String], plan_only: bool) -> Result<(), String> {
         }
     }
     println!(
-        "Frame transfer verified: {} new, {} removed.",
+        "Frame transfer verified: {} photo(s), {} new, {} removed",
+        push.manifest.photos.len(),
         push.photos
             .iter()
             .filter(|photo| photo.png.is_some())
             .count(),
         push.removed.len()
     );
-    print!("{}", on_the_reader(&push.manifest));
     Ok(())
-}
-
-/// What the frame now holds, album by album, so a push ends by saying what
-/// the reader will show rather than only what moved.
-fn on_the_reader(manifest: &Manifest) -> String {
-    let mut albums: BTreeMap<&str, usize> = BTreeMap::new();
-    for photo in &manifest.photos {
-        *albums.entry(photo.album.as_str()).or_default() += 1;
-    }
-    let photos = manifest.photos.len();
-    let mut text = format!(
-        "Now on the reader: {photos} photo{} in {} album{}.\n",
-        if photos == 1 { "" } else { "s" },
-        albums.len(),
-        if albums.len() == 1 { "" } else { "s" }
-    );
-    for (album, count) in albums {
-        let _ = writeln!(text, "  {album}: {count}");
-    }
-    text
 }
 
 fn verify_published(
@@ -229,7 +194,6 @@ fn reader_panel(host: &str) -> Result<Panel, String> {
     Ok(Panel {
         width: profile.width,
         height: profile.height,
-        colour: profile.colour_panel,
     })
 }
 
@@ -418,9 +382,7 @@ fn parse_push(arguments: &[String]) -> Result<PushOptions<'_>, String> {
                 album = Some(name.as_str());
                 index += 2;
             }
-            // `--delete` was the first name for this and still works, so a
-            // script written against it keeps doing what it did.
-            "--replace" | "--delete" => {
+            "--delete" => {
                 delete = true;
                 index += 1;
             }
@@ -472,7 +434,6 @@ fn sim_panel() -> Panel {
     Panel {
         width: profile.width,
         height: profile.height,
-        colour: profile.colour_panel,
     }
 }
 
@@ -821,7 +782,7 @@ fn remote(host: &str, script: &str) -> Result<super::RemoteShellOutput, String> 
     }
 }
 
-pub(crate) fn base64_decode(text: &str) -> Result<Vec<u8>, String> {
+fn base64_decode(text: &str) -> Result<Vec<u8>, String> {
     let cleaned = text
         .bytes()
         .filter(|byte| !byte.is_ascii_whitespace())
@@ -871,8 +832,8 @@ fn base64_value(byte: u8) -> Result<u8, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        base64_decode, capacity_bytes, merge_fit_map, on_the_reader, parse_push, parse_remove,
-        parse_target, transfer_script, Target, MANIFEST,
+        base64_decode, capacity_bytes, merge_fit_map, parse_push, parse_remove, parse_target,
+        transfer_script, Target, MANIFEST,
     };
     use kobo_frame_host::{Fit, Manifest, Photo, PreparedPhoto, Push, FIT_MANIFEST};
     use std::collections::BTreeMap;
@@ -896,27 +857,6 @@ mod tests {
                 delete: true,
                 album: None
             }
-        );
-    }
-
-    #[test]
-    fn a_push_adds_unless_it_is_asked_to_replace() {
-        let adding: Vec<String> = vec!["family".into(), "--sim".into()];
-        assert!(!parse_push(&adding).expect("parse").delete);
-        let replacing: Vec<String> = vec!["family".into(), "--replace".into(), "--sim".into()];
-        assert!(parse_push(&replacing).expect("parse").delete);
-    }
-
-    #[test]
-    fn a_push_ends_by_naming_every_album_now_on_the_reader() {
-        let mut summer = photo("photo-summer");
-        summer.album = "Summer holiday".to_owned();
-        let manifest = Manifest {
-            photos: vec![photo("photo-one"), photo("photo-two"), summer],
-        };
-        assert_eq!(
-            on_the_reader(&manifest),
-            "Now on the reader: 3 photos in 2 albums.\n  Album: 2\n  Summer holiday: 1\n"
         );
     }
 

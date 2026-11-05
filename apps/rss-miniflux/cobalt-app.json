@@ -2,10 +2,10 @@
   "id": "rss-miniflux",
   "display_name": "Digest",
   "short_label": "Digest",
-  "summary": "Read your Miniflux feeds anywhere. Needs an account.",
+  "summary": "Read your Miniflux feeds anywhere.",
   "page_description": "Bring unread Miniflux articles to your Kobo and keep reading without Wi-Fi. Digest is an unofficial client and is not affiliated with or endorsed by the Miniflux project.",
-  "version": "0.1.12",
-  "release_notes": "Notes and links in an article now turn in pages when they run long, and tapping a note goes to its passage.",
+  "version": "0.1.4",
+  "release_notes": "Suggested feeds returns to the screen it was opened from. Leaving settings keeps your place in the article list, with one consistent Back control.",
   "glyph": "rss",
   "capabilities": [
     "network"
@@ -13,19 +13,11 @@
   "setup": {
     "steps": [
       {
-        "text": "Set up the reader once over USB, if you have not already. Miniflux must be reachable over HTTPS.",
-        "command": "kobo setup"
+        "text": "Have an HTTPS Miniflux instance, either self-hosted or hosted, and create an API token."
       },
       {
-        "text": "In Miniflux, create an API key (Settings, API Keys)."
-      },
-      {
-        "text": "Connect Digest from your computer. It asks for the server and the key, checks them, ties the key to your server, and fills in the address. Open Digest, or tap Check again.",
-        "command": "kobo connect rss-miniflux"
-      },
-      {
-        "text": "With the key in a file instead, the same setup is one command.",
-        "command": "kobo secret set miniflux --app rss-miniflux --server https://miniflux.example --from key.txt"
+        "text": "Install the token under the exact name miniflux; the runtime sends it as X-Auth-Token.",
+        "command": "kobo secret set miniflux --device <address>"
       }
     ]
   }

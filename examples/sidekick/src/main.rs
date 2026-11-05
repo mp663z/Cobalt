@@ -18,10 +18,10 @@
 //! them, and the connection is TLS against a root the owner installed with
 //! `kobo trust set`.
 
-use kobo_sdk::keyboard::{TextEntry, Typing};
+use kobo_sdk::keyboard::{Keyboard, Pressed};
 use kobo_sdk::{
-    action_id, ActionId, BannerLevel, Context, Failure, FieldKind, Glyph, KoboApp, Position,
-    RowState, Screen, ScreenBuilder, Space, StoreResult, Task, TaskError, TaskId, TaskOutcome,
+    action_id, ActionId, BannerLevel, Context, ControlState, Failure, Glyph, KoboApp, Position,
+    Screen, ScreenBuilder, Space, StoreResult, Task, TaskId, TaskOutcome,
 };
 use std::process::ExitCode;
 
@@ -35,8 +35,6 @@ const IGNORE: &str = "pass";
 /// Sends the ticked answers to a question that takes more than one.
 const SEND: &str = "send";
 const REPAIR: &str = "repair";
-/// The address field on the pairing screen, which opens the keyboard.
-const ADDRESS_FIELD: &str = "address.box";
 const PREVIOUS: &str = "previous-page";
 const NEXT: &str = "next-page";
 
@@ -44,8 +42,8 @@ const NEXT: &str = "next-page";
 /// bare address, so the common case is typing one thing instead of two.
 const DEFAULT_PORT: &str = "9331";
 
-/// How many characters `kobo-sidekickd init` puts in a pairing code. A code
-/// of any other length is asked for again before anything is saved.
+/// How many characters `kobo-sidekickd init` puts in a pairing code. The
+/// code screen draws this many boxes and refuses a seventh character.
 const CODE_LENGTH: usize = 6;
 
 /// How long the daemon holds an empty poll before answering "nothing yet".
@@ -135,15 +133,7 @@ struct QuestionPage {
 #[derive(Default)]
 struct Sidekick {
     view: View,
-    /// The daemon's address, typed on the reader's keyboard.
-    address_entry: TextEntry,
-    /// The pairing code. Plain text rather than a secret field: the code
-    /// rides in the address of every request, so this application has to
-    /// hold it, and a secret field hands back only that it was saved.
-    code_entry: TextEntry,
-    /// The address as last typed, kept on the pairing screen after a
-    /// refusal so it can be corrected rather than typed again.
-    draft: String,
+    keyboard: Keyboard,
     /// The daemon, as `host:port`.
     address: String,
     /// The pairing code, sent as the token on every request.
@@ -164,20 +154,13 @@ struct Sidekick {
     last: Option<String>,
     trouble: Option<String>,
     page: usize,
-    /// Whether the computer answered the last poll: `None` before the first
-    /// answer of this pairing. The splash used to say "Watching" whatever
-    /// happened, so a reader whose computer was off looked ready for
-    /// questions that were going straight to the terminal instead.
-    connected: Option<bool>,
 }
 
 impl Sidekick {
     fn show(&self, context: &mut Context) {
         // Back retreats one step inside the flow -- code to address, and a
         // question to "leave it for the terminal" -- rather than leaving.
-        // From the keyboard it only puts the keyboard away.
-        let owns_back =
-            matches!(self.view, View::Code | View::Asking) || self.address_entry.is_open();
+        let owns_back = matches!(self.view, View::Code | View::Asking);
         context.set_screen(self.screen(context).with_own_back(owns_back));
     }
 
@@ -200,61 +183,54 @@ impl Sidekick {
     }
 
     /// Step one of pairing: where the daemon is.
-    ///
-    /// The field opens the reader's keyboard when it is tapped rather than
-    /// with the screen, so the command that pairs everything without typing
-    /// is the first thing read, and a pairing `kobo sidekick init` writes
-    /// while this screen is up can still take its place.
     fn address_screen(&self) -> Screen {
-        // The command, by name. "Open Sidekick in the Cobalt desktop app" is
-        // true and useless: the thing that has to happen is that a daemon is
-        // running on the computer, and this is what starts it and prints the
-        // two things this screen is about to ask for.
-        const COMMAND: &str =
-            "Run kobo sidekick init on your computer. It pairs this reader for you.";
-        let screen = ScreenBuilder::new("sidekick-address").top_bar(TITLE);
-        if self.address_entry.is_open() {
-            return screen
-                .text_entry_with_hint(
-                    &self.address_entry,
-                    "Pair with your computer",
-                    COMMAND,
-                    "Next",
-                )
-                .build();
-        }
-        let mut screen = screen
-            // A step's heading rather than a screen's: the display size
-            // wrapped to two lines at the largest text setting.
-            .heading_at_level(2, "Pair with your computer")
-            .text(COMMAND)
-            .field(ADDRESS_FIELD, &self.draft, "192.168.1.20:9331")
-            .field_label("Or type the address it shows")
-            .field_kind(FieldKind::Address);
-        // The refusal sits under the field it is about, in the place the
-        // field's hint would take, rather than in a banner above the
-        // instructions.
+        let mut screen = ScreenBuilder::new("sidekick-address")
+            .top_bar(TITLE)
+            .heading("Pair with your computer")
+            // The command, by name. "Open Sidekick in the Cobalt desktop app"
+            // is true and useless: the thing that has to happen is that a
+            // daemon is running on the computer, and this is what starts it
+            // and prints the two things this screen is about to ask for.
+            .text(
+                "On your computer, run kobo-sidekickd init. It prints an address and a \
+                 six-character code.",
+            );
         if let Some(trouble) = &self.trouble {
-            screen = screen.field_error(trouble.clone());
+            screen = screen.banner(BannerLevel::Attention, trouble.clone());
         }
-        screen.build()
+        screen
+            .field("address.box", self.keyboard.text(), "192.168.1.20:9331")
+            .spacer(Space::Small)
+            .keyboard(&self.keyboard, "Next")
+            .build()
     }
 
     /// Step two: the code that proves the reader is the owner's.
-    ///
-    /// Asked for on the reader's keyboard straight after the address, with
-    /// what is wrong with the last attempt in the hint's place.
     fn code_screen(&self) -> Screen {
-        ScreenBuilder::new("sidekick-code")
+        let mut screen = ScreenBuilder::new("sidekick-code")
             .top_bar(TITLE)
-            .text_entry_with_hint(
-                &self.code_entry,
-                "Now the pairing code",
-                self.trouble
-                    .as_deref()
-                    .unwrap_or("The six characters shown beside the address."),
-                "Pair",
+            .heading("Now the pairing code")
+            // Short on purpose. The address is as long as somebody's network
+            // makes it, and a sentence built around it ran off the panel at
+            // the larger text sizes with a keyboard already taking the bottom
+            // half: the renderer refused the screen and pairing stopped dead.
+            ;
+        screen = if let Some(trouble) = &self.trouble {
+            screen.banner(BannerLevel::Attention, trouble.clone())
+        } else {
+            screen.text("The six characters shown beside the address.")
+        };
+        let typed: Vec<char> = self.keyboard.text().trim().chars().collect();
+        let boxes = (0..CODE_LENGTH).map(|slot| {
+            (
+                format!("code.{slot}"),
+                typed.get(slot).map(char::to_string).unwrap_or_default(),
             )
+        });
+        screen
+            .grid(6, true, boxes)
+            .spacer(Space::Small)
+            .keyboard(&self.keyboard, "Pair")
             .build()
     }
 
@@ -265,30 +241,15 @@ impl Sidekick {
         // of subtitle at 170% left the rest of the panel with less room than
         // its own words needed, and the renderer refused the screen: a reader
         // who had just answered a question saw nothing at all.
-        let (glyph, title, sentence) = match self.connected {
-            Some(true) => (
-                Glyph::Circle,
-                "Watching",
-                "Questions from your coding agents appear here the moment they ask.",
-            ),
-            Some(false) => (
-                Glyph::Close,
-                "Not connected",
-                "Until this reconnects, your agents ask at their terminals as usual.",
-            ),
-            None => (Glyph::Refresh, "Connecting", "Reaching your computer."),
-        };
         let mut screen = ScreenBuilder::new("sidekick-watching")
             .top_bar(TITLE)
             .splash(
-                Some(glyph),
-                title,
-                // The banner says why when there is trouble, and the splash
-                // repeating it pushed the rest off the panel at 170%.
-                if self.last.is_some() || self.trouble.is_some() {
+                Some(Glyph::Circle),
+                "Watching",
+                if self.last.is_some() {
                     String::new()
                 } else {
-                    sentence.to_owned()
+                    "Questions from your coding agents appear here the moment they ask.".to_owned()
                 },
             );
         if let Some(trouble) = &self.trouble {
@@ -391,10 +352,9 @@ impl Sidekick {
             screen = screen.quote(0, content.detail.clone());
         }
         if !content.choices.is_empty() {
-            let rows = content.choices.iter().map(|&index| {
+            screen = screen.rows(content.choices.iter().map(|&index| {
                 let choice = &ask.choices[index];
                 (
-                    index,
                     chosen_action(index),
                     if content.choice_text.is_some() {
                         format!("Option {}", index + 1)
@@ -405,41 +365,27 @@ impl Sidekick {
                         .choice_text
                         .clone()
                         .unwrap_or_else(|| choice.description.clone()),
-                )
-            });
-            // A question that takes several answers ticks them in the
-            // runtime's own boxes; one that takes a single answer sends it on
-            // the tap, so its rows carry nothing to tick.
-            screen = if ask.multi {
-                screen.checked_rows(rows.map(|(index, name, title, summary)| {
-                    let state = if self.is_ticked(index) {
-                        RowState::Checked
+                    if self.is_ticked(index) {
+                        Glyph::Check
                     } else {
-                        RowState::Unchecked
-                    };
-                    (name, title, summary, Glyph::Circle, state)
-                }))
-            } else {
-                screen.rows(
-                    rows.map(|(_, name, title, summary)| (name, title, summary, Glyph::Circle)),
+                        Glyph::Circle
+                    },
                 )
-            };
+            }));
         }
         screen = screen.fill();
         if ask.multi {
-            // The bar says how many answers are ticked across every page,
-            // and offers Send only once there is something to send.
-            let ticked = self.ticked.iter().filter(|ticked| **ticked).count();
-            let send = (ticked > 0).then_some((SEND, "Send"));
-            screen = screen.selection_bar(u32::try_from(ticked).unwrap_or(u32::MAX), send);
+            let state = if self.ticked.iter().any(|ticked| *ticked) {
+                ControlState::Enabled
+            } else {
+                ControlState::Disabled
+            };
+            screen = screen.button_with_state(SEND, "Send these answers", state);
         }
         if ask.permission {
             screen = screen.buttons([(ALLOW, "Allow"), (DENY, "Deny")]);
         }
-        // Pinned rather than in the flow, so it is in the same place on every
-        // page of a long question: a page packed to the last line used to
-        // push it a few pixels lower than the page after it.
-        screen = screen.bottom_action(IGNORE, "Leave it for the terminal");
+        screen = screen.button(IGNORE, "Leave it for the terminal");
         Self::page_controls(screen, page, pages).build()
     }
 
@@ -587,14 +533,11 @@ impl Sidekick {
             return;
         };
         let sentence = if labels.is_empty() {
-            // Who asked comes before what they asked, because the detail is
-            // often a sentence of its own and "Allowed This is a test" read
-            // as one run-on line.
             format!(
-                "{} for {}: {}",
+                "{} {} for {}.",
                 decided(choice),
-                agent_name(&ask.source),
-                trimmed_to(&ask.detail, 60)
+                trimmed_to(&ask.detail, 60),
+                agent_name(&ask.source)
             )
         } else {
             format!(
@@ -648,8 +591,7 @@ impl Sidekick {
         }
         match outcome {
             TaskOutcome::Completed(bytes) => {
-                let repaint =
-                    self.trouble.take().is_some() | (self.connected.replace(true) != Some(true));
+                let repaint = self.trouble.take().is_some();
                 let asks = read_asks(&bytes);
                 if asks.len() == 1 {
                     let ask = asks.into_iter().next().expect("one ask");
@@ -687,15 +629,8 @@ impl Sidekick {
                 });
             }
             TaskOutcome::Failed(error) => {
-                let trouble = Some(poll_trouble(error, &self.address));
-                // Repainted when something changed, not every ten seconds
-                // while the computer stays away.
-                let changed =
-                    (self.trouble != trouble) | (self.connected.replace(false) != Some(false));
-                self.trouble = trouble;
-                if changed {
-                    self.show(context);
-                }
+                self.trouble = Some(Failure::of(error).advice.to_owned());
+                self.show(context);
                 self.nap = context.spawn(Task::Sleep {
                     seconds: NAP_SECONDS,
                 });
@@ -762,78 +697,61 @@ impl Sidekick {
         }
     }
 
-    /// Whether the first-run pairing screen is up with nothing typed on it,
-    /// so a pairing `kobo sidekick init` writes meanwhile may take its place.
-    fn waiting_for_a_pairing(&self) -> bool {
-        self.view == View::Address
-            && self.code.is_empty()
-            && self.draft.is_empty()
-            && !self.address_entry.is_open()
-    }
-
-    /// Handles the answers from the reader's keyboard. Returns whether the
-    /// action was one.
+    /// Handles a tap while a keyboard is up. Returns whether it was one.
     fn typing(&mut self, context: &mut Context, action: ActionId) -> bool {
-        if let Some(typing) = self.address_entry.handle(action) {
-            if let Typing::Submitted(typed) = typing {
-                self.draft.clone_from(&typed);
-                if let Some(address) = self.accept_address(&typed) {
-                    self.address = address;
-                    self.view = View::Code;
-                    self.code_entry.open();
-                }
-            }
-            self.show(context);
-            return true;
-        }
-        let Some(typing) = self.code_entry.handle(action) else {
+        let Some(pressed) = self.keyboard.press(action) else {
             return false;
         };
-        match typing {
-            Typing::Submitted(code) if code.chars().count() != CODE_LENGTH => {
-                // Asked for again with what was typed, so a slip is one
-                // correction rather than six characters from the start.
-                self.trouble = Some("Enter all six characters.".to_owned());
-                self.code_entry.open_with(code);
+        match pressed {
+            Pressed::Edited | Pressed::Shifted => {
+                // A seventh character has nowhere to be drawn, and a code
+                // longer than the boxes would be an entry the panel disagrees
+                // with. Refused at the keyboard, not trimmed at submission.
+                if self.view == View::Code && self.keyboard.text().chars().count() > CODE_LENGTH {
+                    let kept: String = self.keyboard.text().chars().take(CODE_LENGTH).collect();
+                    self.keyboard = Keyboard::with_text(kept);
+                }
+                if self.view == View::Code
+                    && self.keyboard.text().trim().chars().count() == CODE_LENGTH
+                {
+                    self.trouble = None;
+                }
                 self.show(context);
             }
-            Typing::Submitted(code) => {
-                self.code = code;
-                let record = format!("{}\n{}", self.address, self.code);
-                context.store().save(PAIRED, record.into_bytes());
-                self.view = View::Watching;
-                self.trouble = None;
-                self.connected = None;
-                // A poll still in flight belongs to the old pairing.
-                // Forgetting its id makes whatever it brings back land on
-                // nothing, and clears the way for this pairing's poll.
-                self.poll = None;
-                self.show(context);
-                self.poll(context);
-            }
-            Typing::Changed => self.show(context),
-            Typing::Cancelled | Typing::Saved | Typing::Refused(_) => {
-                self.back_to_address();
-                self.show(context);
-            }
+            Pressed::Submitted => match self.view {
+                View::Address => {
+                    let typed = self.keyboard.text().to_owned();
+                    if let Some(address) = self.accept_address(&typed) {
+                        self.address = address;
+                        self.keyboard.clear();
+                        self.view = View::Code;
+                    }
+                    self.show(context);
+                }
+                View::Code => {
+                    let code = self.keyboard.text().trim().to_owned();
+                    if code.chars().count() != CODE_LENGTH {
+                        self.trouble = Some("Enter all six characters.".to_owned());
+                        self.show(context);
+                        return true;
+                    }
+                    self.code = code;
+                    self.keyboard.clear();
+                    let record = format!("{}\n{}", self.address, self.code);
+                    context.store().save(PAIRED, record.into_bytes());
+                    self.view = View::Watching;
+                    self.trouble = None;
+                    // A poll still in flight belongs to the old pairing.
+                    // Forgetting its id makes whatever it brings back land on
+                    // nothing, and clears the way for this pairing's poll.
+                    self.poll = None;
+                    self.show(context);
+                    self.poll(context);
+                }
+                _ => {}
+            },
         }
         true
-    }
-
-    /// Opens the reader's keyboard on the address, holding what was typed
-    /// last.
-    fn edit_address(&mut self) {
-        self.address_entry = TextEntry::new().address();
-        self.address_entry.open_with(self.draft.clone());
-    }
-
-    /// Back from the code to the address it was asked for, with that
-    /// address still in the field.
-    fn back_to_address(&mut self) {
-        self.code_entry.close();
-        self.draft.clone_from(&self.address);
-        self.view = View::Address;
-        self.trouble = None;
     }
 }
 
@@ -869,21 +787,6 @@ fn fitting_prefix(text: &str, mut fits: impl FnMut(&str) -> bool) -> usize {
     end
 }
 
-/// What a failed poll means, in words that name the fix.
-///
-/// The generic advice said "The service did not answer. Try again." for a
-/// helper that was not started, a code that was wrong and a reader that had
-/// lost its network alike, and only one of those is fixed by trying again.
-fn poll_trouble(error: TaskError, address: &str) -> String {
-    match error {
-        TaskError::Unauthorized => "Your computer did not accept this pairing code. Run kobo sidekick init on it, or choose Change pairing.".to_owned(),
-        TaskError::Unreachable => "Your computer is not answering. Start kobo sidekick run on it. After a first pairing, reopen Cobalt once.".to_owned(),
-        TaskError::TimedOut => "Your computer took too long to answer. It may be asleep.".to_owned(),
-        TaskError::NotFound => format!("Something other than Sidekick answered at {address}. Check the address kobo sidekick init printed."),
-        other => Failure::of(other).advice.to_owned(),
-    }
-}
-
 /// The agent's name as a person says it, not as its process does.
 fn agent_name(source: &str) -> &str {
     match source {
@@ -898,7 +801,7 @@ fn decided(choice: &str) -> &'static str {
     match choice {
         ALLOW => "Allowed",
         DENY => "Denied",
-        _ => "Left at the terminal",
+        _ => "Left at the terminal:",
     }
 }
 
@@ -1026,10 +929,7 @@ impl KoboApp for Sidekick {
         let StoreResult::Loaded { key, value } = result else {
             return;
         };
-        // A first-run pairing screen with nothing typed yet also takes a
-        // pairing, because `kobo sidekick init` writes one while it is up.
-        let waiting_for_one = self.waiting_for_a_pairing();
-        if key != PAIRED || !(self.view == View::Opening || waiting_for_one) {
+        if key != PAIRED || self.view != View::Opening {
             return;
         }
         let remembered = value
@@ -1050,10 +950,9 @@ impl KoboApp for Sidekick {
             self.address = address;
             self.code = code;
             self.view = View::Watching;
-            self.connected = None;
             self.show(context);
             self.poll(context);
-        } else if self.view == View::Opening {
+        } else {
             self.view = View::Address;
             self.show(context);
         }
@@ -1066,11 +965,9 @@ impl KoboApp for Sidekick {
                 // said out loud rather than left dangling on the daemon.
                 View::Asking => self.decide(context, IGNORE),
                 View::Code => {
-                    self.back_to_address();
-                    self.show(context);
-                }
-                View::Address if self.address_entry.is_open() => {
-                    self.address_entry.close();
+                    self.keyboard = Keyboard::with_text(&self.address);
+                    self.view = View::Address;
+                    self.trouble = None;
                     self.show(context);
                 }
                 _ => {}
@@ -1080,14 +977,8 @@ impl KoboApp for Sidekick {
         if matches!(self.view, View::Address | View::Code) && self.typing(context, action) {
             return;
         }
-        if action == action_id(ADDRESS_FIELD) && self.view == View::Address {
-            self.edit_address();
-            self.show(context);
-            return;
-        }
         if action == action_id(REPAIR) && self.view == View::Watching {
-            self.draft.clone_from(&self.address);
-            self.trouble = None;
+            self.keyboard = Keyboard::with_text(&self.address);
             self.view = View::Address;
             self.show(context);
             return;
@@ -1184,9 +1075,6 @@ impl KoboApp for Sidekick {
         if self.view == View::Watching && self.poll.is_none() && self.nap.is_none() {
             self.poll(context);
         }
-        if self.waiting_for_a_pairing() {
-            context.store().load(PAIRED);
-        }
     }
 }
 
@@ -1203,7 +1091,7 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{Sidekick, View, ALLOW, DENY, IGNORE, PAIRED, REPAIR, SEND};
-    use kobo_sdk::keyboard::testing::type_text;
+    use kobo_sdk::keyboard::Keyboard;
     use kobo_sdk::{
         action_id, ActionId, Command, Context, KoboApp, Screen, StoreRequest, StoreResult, Task,
         TaskId, TaskOutcome,
@@ -1213,16 +1101,7 @@ mod tests {
     /// Every screen this application draws, with something on each of them.
     fn every_screen(context: &Context) -> Vec<(String, Screen)> {
         let (mut app, _) = paired();
-        let mut screens = vec![("connecting".to_owned(), app.screen(context))];
-        app.connected = Some(false);
-        app.trouble = Some(super::poll_trouble(
-            kobo_sdk::TaskError::Unreachable,
-            &app.address,
-        ));
-        screens.push(("not-connected".to_owned(), app.screen(context)));
-        app.trouble = None;
-        app.connected = Some(true);
-        screens.push(("watching".to_owned(), app.screen(context)));
+        let mut screens = vec![("watching".to_owned(), app.screen(context))];
         // And the same screen after an answer, which is the one that has
         // something under the splash as well as beside it.
         app.last = Some("Allowed rm -rf target && cargo build --release for Claude Code.".into());
@@ -1232,10 +1111,6 @@ mod tests {
         app.address = "192.168.100.199:29331".to_owned();
         app.view = View::Address;
         screens.push(("address".to_owned(), app.screen(context)));
-        app.draft = "what even is this?".to_owned();
-        app.trouble = Some("Enter the address shown on your computer.".to_owned());
-        screens.push(("address-refused".to_owned(), app.screen(context)));
-        app.trouble = None;
         app.view = View::Code;
         screens.push(("code".to_owned(), app.screen(context)));
         app.view = View::Sending;
@@ -1262,10 +1137,10 @@ mod tests {
 
     #[test]
     fn every_screen_fits_the_panel_at_every_text_size() {
-        // The pairing screens are the ones at risk: a heading, a paragraph, a
-        // labelled field and its refusal fit at the default size and could be
-        // refused outright at the largest, which leaves a reader who has
-        // turned the type up with a blank panel and no way to pair at all.
+        // The pairing screens are the ones at risk: a heading, a paragraph and
+        // a raised keyboard fit at the default size and are refused outright
+        // at the largest, which leaves a reader who has turned the type up
+        // with a blank panel and no way to pair at all.
         let mut failures = Vec::new();
         for scale in TextScale::STEPS {
             let metrics = DisplayMetrics {
@@ -1451,49 +1326,6 @@ mod tests {
     }
 
     #[test]
-    fn ticked_answers_are_drawn_in_the_runtime_s_boxes_and_counted_in_the_bar() {
-        let (mut app, poll) = paired();
-        app.on_task(&mut Context::default(), poll, multi_select(3));
-        let bar = |commands: &[Command]| {
-            painted(commands)
-                .expect("a repaint")
-                .nodes
-                .into_iter()
-                .find_map(|node| match node {
-                    kobo_sdk::Node::SelectionBar { count, actions, .. } => Some((count, actions)),
-                    _ => None,
-                })
-                .expect("a selection bar")
-        };
-        let commands = act(&mut app, action_id("choice.1"));
-        let (count, actions) = bar(&commands);
-        assert_eq!(count, 1);
-        assert_eq!(actions.len(), 1);
-        let screen = painted(&commands).expect("a repaint");
-        let states: Vec<_> = screen
-            .nodes
-            .iter()
-            .find_map(|node| match node {
-                kobo_sdk::Node::Rows { rows, .. } => {
-                    Some(rows.iter().map(|row| row.state).collect())
-                }
-                _ => None,
-            })
-            .expect("the answers");
-        assert_eq!(
-            states,
-            [
-                kobo_sdk::RowState::Unchecked,
-                kobo_sdk::RowState::Checked,
-                kobo_sdk::RowState::Unchecked
-            ]
-        );
-        let (count, actions) = bar(&act(&mut app, action_id("choice.1")));
-        assert_eq!(count, 0);
-        assert!(actions.is_empty(), "Send was offered with nothing to send");
-    }
-
-    #[test]
     fn a_question_taking_several_answers_ticks_rather_than_sending_at_a_tap() {
         let (mut app, poll) = paired();
         let mut context = Context::default();
@@ -1637,7 +1469,9 @@ mod tests {
         assert!(fetched(&commands).is_none(), "polled before pairing");
         let lines = shown(&painted(&commands).expect("a screen"));
         assert!(
-            lines.iter().any(|line| line.contains("kobo sidekick init")),
+            lines
+                .iter()
+                .any(|line| line.contains("kobo-sidekickd init")),
             "the screen never says what to run to get an address: {lines:?}"
         );
     }
@@ -1717,11 +1551,12 @@ mod tests {
         );
         let _ = context.take_commands();
         // A bare host gets the daemon's port; the reader types one thing.
-        act(&mut app, action_id(super::ADDRESS_FIELD));
-        type_text(&mut app, &mut Context::default(), "192.168.1.9");
+        app.keyboard = Keyboard::with_text("192.168.1.9");
+        act(&mut app, action_id("kb.enter"));
         assert_eq!(app.view, View::Code);
+        app.keyboard = Keyboard::with_text("qk3mzp");
         let mut context = Context::default();
-        type_text(&mut app, &mut context, "qk3mzp");
+        app.on_action(&mut context, action_id("kb.enter"));
         let commands = context.take_commands();
         let saved = commands.iter().find_map(|command| match command {
             Command::Store(StoreRequest::Save { key, value }) => Some((key.clone(), value.clone())),
@@ -1736,7 +1571,7 @@ mod tests {
     }
 
     #[test]
-    fn a_code_of_the_wrong_length_is_asked_for_again_with_what_was_typed() {
+    fn a_seventh_code_character_is_refused_at_the_keyboard() {
         let mut app = Sidekick::default();
         let mut context = Context::default();
         app.on_start(&mut context);
@@ -1747,51 +1582,31 @@ mod tests {
                 value: None,
             },
         );
-        act(&mut app, action_id(super::ADDRESS_FIELD));
-        type_text(&mut app, &mut Context::default(), "192.168.1.9");
-        let mut context = Context::default();
-        type_text(&mut app, &mut context, "qk3mzpx");
-        let commands = context.take_commands();
+        app.keyboard = Keyboard::with_text("192.168.1.9");
+        act(&mut app, action_id("kb.enter"));
         assert_eq!(app.view, View::Code);
-        assert!(
-            app.code_entry.is_open(),
-            "the keyboard was not raised again"
-        );
-        assert_eq!(app.code_entry.text(), "qk3mzpx");
-        assert!(!commands
-            .iter()
-            .any(|c| matches!(c, Command::Store(StoreRequest::Save { .. }))));
-        let Some(kobo_sdk::DeviceRequest::TypeText { hint, initial, .. }) =
-            kobo_sdk::keyboard::testing::asked(&commands)
-        else {
-            panic!("the code was not asked for again")
-        };
-        assert_eq!(hint, "Enter all six characters.");
-        assert_eq!(initial, "qk3mzpx");
+        app.keyboard = Keyboard::with_text("qk3mzp");
+        // The panel draws six boxes; a seventh character has no box to be
+        // drawn in, so the key does nothing.
+        act(&mut app, action_id("kb.r0c0"));
+        assert_eq!(app.keyboard.text(), "qk3mzp");
     }
 
     #[test]
     fn an_address_that_could_not_be_one_is_refused_with_a_reason() {
         let mut app = Sidekick {
             view: View::Address,
+            keyboard: Keyboard::with_text("what even is this?"),
             ..Sidekick::default()
         };
-        act(&mut app, action_id(super::ADDRESS_FIELD));
-        let mut context = Context::default();
-        type_text(&mut app, &mut context, "what even is this?");
-        let commands = context.take_commands();
+        let commands = act(&mut app, action_id("kb.enter"));
         assert_eq!(app.view, View::Address, "a nonsense address moved on");
-        let screen = painted(&commands).expect("a repaint with the reason");
-        let lines = shown(&screen);
+        let lines = shown(&painted(&commands).expect("a repaint with the reason"));
         assert!(
             lines
                 .iter()
                 .any(|line| line.contains("address shown on your computer")),
             "no reason shown: {lines:?}"
-        );
-        assert!(
-            lines.iter().any(|line| line.contains("what even is this?")),
-            "what was typed is gone: {lines:?}"
         );
     }
 
@@ -1823,9 +1638,6 @@ mod tests {
     #[test]
     fn an_empty_poll_asks_again_without_repainting() {
         let (mut app, poll) = paired();
-        // The first answer turns "Connecting" into "Watching", which is a
-        // change worth one repaint; the empty polls after it are not.
-        app.connected = Some(true);
         let mut context = Context::default();
         app.on_task(&mut context, poll, TaskOutcome::Completed(b"{}".to_vec()));
         let commands = context.take_commands();
@@ -1894,12 +1706,8 @@ mod tests {
             TaskOutcome::Failed(kobo_sdk::TaskError::Unreachable),
         );
         let commands = context.take_commands();
-        let advice = "Your computer is not answering.";
+        let advice = kobo_sdk::Failure::of(kobo_sdk::TaskError::Unreachable).advice;
         let lines = shown(&painted(&commands).expect("the trouble was stated"));
-        assert!(
-            lines.iter().any(|line| line.contains("Not connected")),
-            "the splash still claims to be watching: {lines:?}"
-        );
         assert!(
             lines.iter().any(|line| line.contains(advice)),
             "no advice on the panel: {lines:?}"
@@ -1919,85 +1727,6 @@ mod tests {
         assert!(
             !lines.iter().any(|line| line.contains(advice)),
             "the trouble outlived it: {lines:?}"
-        );
-    }
-
-    #[test]
-    fn the_splash_says_connecting_then_watching_only_once_the_computer_answers() {
-        let (mut app, poll) = paired();
-        let lines = shown(&app.screen(&Context::default()));
-        assert!(lines.iter().any(|line| line == "Connecting"), "{lines:?}");
-        let mut context = Context::default();
-        app.on_task(&mut context, poll, TaskOutcome::Completed(b"{}".to_vec()));
-        let lines = shown(&painted(&context.take_commands()).expect("a repaint"));
-        assert!(lines.iter().any(|line| line == "Watching"), "{lines:?}");
-    }
-
-    #[test]
-    fn a_refused_code_is_not_blamed_on_the_network() {
-        let (mut app, poll) = paired();
-        let mut context = Context::default();
-        app.on_task(
-            &mut context,
-            poll,
-            TaskOutcome::Failed(kobo_sdk::TaskError::Unauthorized),
-        );
-        let trouble = app.trouble.clone().unwrap_or_default();
-        assert!(trouble.contains("pairing code"), "{trouble}");
-        assert!(!trouble.contains("Wi-Fi") && !trouble.contains("not answering"));
-    }
-
-    #[test]
-    fn the_same_failure_again_does_not_repaint_the_panel() {
-        let (mut app, poll) = paired();
-        let mut context = Context::default();
-        app.on_task(
-            &mut context,
-            poll,
-            TaskOutcome::Failed(kobo_sdk::TaskError::Unreachable),
-        );
-        let nap = slept(&context.take_commands()).expect("a nap");
-        let mut context = Context::default();
-        app.on_task(&mut context, nap, TaskOutcome::Completed(Vec::new()));
-        let poll = fetched(&context.take_commands()).expect("polled again").0;
-        let mut context = Context::default();
-        app.on_task(
-            &mut context,
-            poll,
-            TaskOutcome::Failed(kobo_sdk::TaskError::Unreachable),
-        );
-        assert!(
-            painted(&context.take_commands()).is_none(),
-            "an unchanged failure repainted"
-        );
-    }
-
-    #[test]
-    fn a_pairing_written_by_the_computer_is_picked_up_on_the_first_run_screen() {
-        let mut app = Sidekick::default();
-        let mut context = Context::default();
-        app.on_start(&mut context);
-        app.on_store(
-            &mut context,
-            StoreResult::Loaded {
-                key: PAIRED.to_owned(),
-                value: None,
-            },
-        );
-        assert_eq!(app.view, View::Address);
-        let mut context = Context::default();
-        app.on_foreground(&mut context);
-        app.on_store(
-            &mut context,
-            StoreResult::Loaded {
-                key: PAIRED.to_owned(),
-                value: Some(b"192.168.1.10:9331\nabc234".to_vec()),
-            },
-        );
-        assert_eq!(app.view, View::Watching);
-        assert!(
-            fetched(&context.take_commands()).is_some(),
-            "it did not poll"
         );
     }
 
@@ -2089,15 +1818,16 @@ mod tests {
     fn a_poll_from_the_old_pairing_cannot_answer_into_the_new() {
         let (mut app, old_poll) = paired();
         let _ = act(&mut app, action_id(REPAIR));
-        let _ = act(&mut app, action_id(super::ADDRESS_FIELD));
-        type_text(&mut app, &mut Context::default(), "192.168.1.77");
+        app.keyboard = Keyboard::with_text("192.168.1.77");
+        let _ = act(&mut app, action_id("kb.enter"));
+        app.keyboard = Keyboard::with_text("zzzzzz");
         let mut context = Context::default();
         // Real task numbers never repeat; a fresh test context restarts
         // them, so spend a few keeping the new poll's id off the old one's.
         for _ in 0..3 {
             let _ = context.spawn(Task::Sleep { seconds: 1 });
         }
-        type_text(&mut app, &mut context, "zzzzzz");
+        app.on_action(&mut context, action_id("kb.enter"));
         let commands = context.take_commands();
         let (new_poll, url) = fetched(&commands).expect("the new pairing polls");
         assert_ne!(new_poll, old_poll, "the old poll still speaks");
@@ -2192,15 +1922,12 @@ mod tests {
         let mut app = Sidekick {
             view: View::Code,
             address: "example:9331".into(),
+            keyboard: Keyboard::with_text("abc"),
             ..Sidekick::default()
         };
-        app.code_entry.open();
-        app.show(&mut Context::default());
-        let mut context = Context::default();
-        type_text(&mut app, &mut context, "abc");
-        let commands = context.take_commands();
+        let commands = act(&mut app, action_id("kb.enter"));
         assert_eq!(app.view, View::Code);
-        assert_eq!(app.code_entry.text(), "abc");
+        assert_eq!(app.keyboard.text(), "abc");
         assert!(fetched(&commands).is_none());
         assert!(!commands
             .iter()
@@ -2430,15 +2157,12 @@ mod tests {
             let mut runner = kobo_sdk::AppRunner::with_metrics(
                 Sidekick {
                     view: View::Code,
+                    keyboard: Keyboard::with_text("abc"),
                     ..Sidekick::default()
                 },
                 metrics,
             );
-            let mut context = runner.context();
-            runner.app_mut().code_entry.open();
-            runner.app().show(&mut context);
-            type_text(runner.app_mut(), &mut context, "abc");
-            let screen = painted(&context.take_commands()).expect("validation screen");
+            let screen = painted(&runner.action(action_id("kb.enter"))).expect("validation screen");
             let diagnostics = screen.diagnostics(&metrics, &Chrome::measuring(true));
             assert!(
                 !diagnostics.has_errors(),

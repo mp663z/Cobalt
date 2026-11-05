@@ -93,10 +93,6 @@ impl Statuses {
         }
     }
 
-    /// When the feed was last refreshed, and whether the last try failed.
-    ///
-    /// The unread count is not in it: the shelf draws that as the row's
-    /// badge, at the right edge where an eye scanning for what is new looks.
     pub fn summary(&self, url: &str) -> Option<String> {
         let record = self
             .records
@@ -106,20 +102,15 @@ impl Statuses {
         } else {
             format!("Updated {}", record.success)
         };
+        let refreshed = match record.unread {
+            Some((unread, _)) => format!("{unread} unread · {refreshed}"),
+            None => refreshed,
+        };
         Some(if record.failure.is_empty() {
             refreshed
         } else {
             format!("Refresh failed · {refreshed}")
         })
-    }
-
-    /// How many of the feed's saved articles have not been read, once it
-    /// has been counted.
-    pub fn unread_of(&self, url: &str) -> Option<u32> {
-        self.records
-            .get(&kobo_net::sha256::hex_digest(url.as_bytes()))?
-            .unread
-            .map(|(unread, _)| u32::from(unread))
     }
 
     pub fn detail(&self, url: &str) -> Option<&str> {
@@ -249,19 +240,11 @@ fn decode(bytes: &[u8]) -> Option<BTreeMap<String, Record>> {
     Some(records)
 }
 
-/// When a feed was refreshed, on the reader's own clock.
-///
-/// It used to be written in UTC, which put an evening refresh on tomorrow's
-/// date for half the world and made "Updated 06:00" mean nothing to somebody
-/// who refreshed at breakfast in another time zone.
 pub fn timestamp() -> Option<String> {
     use kobo_sdk::clock::{Clock, SystemClock};
-    stamp(SystemClock::reader().now().ok()?)
-}
-
-fn stamp(now: kobo_sdk::clock::Snapshot) -> Option<String> {
+    let now = SystemClock::new(0).ok()?.now().ok()?;
     let (hour, minute) = now.hour_minute()?;
-    Some(format!("{} {hour:02}:{minute:02}", now.date()?))
+    Some(format!("{} {hour:02}:{minute:02} UTC", now.date()?))
 }
 
 #[cfg(test)]
@@ -380,29 +363,11 @@ mod tests {
                 value: Some(bytes),
             },
         );
-        assert_eq!(restored.unread_of(URL), Some(3));
-        assert!(!restored.summary(URL).unwrap().contains("unread"));
+        assert!(restored.summary(URL).unwrap().starts_with("3 unread"));
         assert!(restored.summary(URL).unwrap().contains("2026-09-09"));
         restored.unread(&mut context, URL, 6, 5);
         assert!(restored.failed);
-        assert_eq!(restored.unread_of(URL), Some(3));
-    }
-
-    #[test]
-    fn a_refresh_is_stamped_with_the_readers_own_time_rather_than_utc() {
-        let evening_in_new_york = kobo_sdk::clock::Snapshot {
-            unix_millis: 1_793_221_200_000,
-            monotonic_millis: 0,
-            utc_offset_minutes: -240,
-        };
-        let stamped = stamp(evening_in_new_york).unwrap();
-        assert!(!stamped.contains("UTC"), "{stamped}");
-        let utc = stamp(kobo_sdk::clock::Snapshot {
-            utc_offset_minutes: 0,
-            ..evening_in_new_york
-        })
-        .unwrap();
-        assert_ne!(stamped, utc);
+        assert!(restored.summary(URL).unwrap().starts_with("3 unread"));
     }
 
     #[test]

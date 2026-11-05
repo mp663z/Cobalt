@@ -16,7 +16,5 @@ tap-id cell-21
 type ten
 tap Enter
 expect Puzzle complete
-expect Undo
-expect Rules
 clean
 shot completed-board

@@ -8,7 +8,7 @@ Home Assistant controls on a Kobo, for a desk or a wall.
 <td width="50%" valign="top"><img width="300" src="screenshots/climate.png" alt="Climate controls"><br>Climate controls</td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img width="300" src="screenshots/edit.png" alt="The grid after removing a tile"><br>The grid after removing a tile</td>
+<td width="50%" valign="top"><img width="300" src="screenshots/edit.png" alt="Editing tiles"><br>Editing tiles</td>
 <td width="50%" valign="top"><img width="300" src="screenshots/wall.png" alt="The one-column wall layout"><br>The one-column wall layout</td>
 </tr>
 <tr>
@@ -34,22 +34,16 @@ Home Assistant controls on a Kobo, for a desk or a wall.
 
 ## Setup
 
-Home Assistant must be reachable over **HTTPS**: Nabu Casa, a reverse proxy
-with a real certificate, or a private certificate authority whose root you
-install with `kobo trust set homeassistant --from ROOT.pem`. Plain `http://`
-addresses do not work.
-
-1. Set up the reader once over USB, if you have not already: `kobo setup`.
-2. In Home Assistant, create a long-lived access token on your profile page.
-3. Connect from your computer:
+1. Enter your Home Assistant address in the app. It must use HTTPS: Nabu
+   Casa, a reverse proxy with a real certificate, or a private certificate
+   authority whose root you install with
+   `kobo trust set homeassistant --from ROOT.pem --device <ip>`.
+2. In Home Assistant, create a long-lived access token and install it on the
+   reader:
 
    ```sh
-   kobo connect homepanel
+   kobo secret set homeassistant --from TOKEN_FILE --device <ip>
    ```
-
-   It asks for the address and the token, checks them, and sets the panel up.
-   Open Home Panel, or tap **Check again** on its setup screen, which shows
-   this command from the start.
 
 The token never appears in a URL, request body, log or the app's storage.
 

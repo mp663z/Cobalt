@@ -106,22 +106,14 @@ find_rust_lld() {
 
 if [ -x "$HOME/.cargo/bin/rustup" ]; then
   RUSTUP="$HOME/.cargo/bin/rustup"
-  # The device workspace builds with the compiler its tracked
-  # rust-toolchain.toml names. A rustup directory override outranks that
-  # file and would build the reader with a compiler nobody reviewed.
+  default_toolchain=$("$RUSTUP" default)
   active_toolchain=$(CDPATH= cd -- "$repo" && "$RUSTUP" show active-toolchain)
-  case $active_toolchain in
-    *" (overridden by '$repo/rust-toolchain.toml')") ;;
-    *)
-      echo "repository toolchain does not come from its rust-toolchain.toml" >&2
-      exit 1
-      ;;
-  esac
-  toolchain_name=${active_toolchain%% *}
+  if [ "$active_toolchain" != "$default_toolchain" ]; then
+    echo "repository inherits a non-default rustup toolchain override" >&2
+    exit 1
+  fi
+  toolchain_name=${default_toolchain%% *}
   rust_sysroot=$("$RUSTUP" run "$toolchain_name" rustc --print sysroot)
-  # The standalone importer requires Rust 1.88, newer than the device pin,
-  # and the pin applies in the importer's directory too.
-  importer_sysroot=$("$RUSTUP" run 1.88.0 rustc --print sysroot)
 else
   rust_driver=
   for candidate in /usr/bin/rustc /opt/homebrew/bin/rustc; do
@@ -135,15 +127,11 @@ else
     exit 1
   fi
   rust_sysroot=$(CDPATH= cd -- "$repo" && "$rust_driver" --print sysroot)
-  importer_sysroot=$rust_sysroot
 fi
 RUSTC="$rust_sysroot/bin/rustc"
 CARGO="$rust_sysroot/bin/cargo"
-IMPORTER_RUSTC="$importer_sysroot/bin/rustc"
-IMPORTER_CARGO="$importer_sysroot/bin/cargo"
-if [ ! -x "$RUSTC" ] || [ ! -x "$CARGO" ] ||
-  [ ! -x "$IMPORTER_RUSTC" ] || [ ! -x "$IMPORTER_CARGO" ]; then
-  echo "a selected Rust sysroot lacks rustc or cargo" >&2
+if [ ! -x "$RUSTC" ] || [ ! -x "$CARGO" ]; then
+  echo "the active Rust sysroot lacks rustc or cargo" >&2
   exit 1
 fi
 PATH="$rust_sysroot/bin:$PATH"
@@ -246,9 +234,7 @@ export \
     --target armv7-unknown-linux-musleabihf -p kobo-flashcards
   COBALT_SOURCE_COMMIT="$source_commit" \
   CARGO_TARGET_DIR="$target_root/host-target" \
-  RUSTC="$IMPORTER_RUSTC" \
-  PATH="$importer_sysroot/bin:$PATH" \
-    "$IMPORTER_CARGO" build --locked --release \
+    "$CARGO" build --locked --release \
       --manifest-path "$repo/crates/kobo-flashcards-import/Cargo.toml"
   CARGO_TARGET_DIR="$target_root/host-tools" \
     "$CARGO" build --locked --release -p kobo-cli

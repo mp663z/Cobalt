@@ -2,11 +2,11 @@
   "id": "crossword",
   "display_name": "Crossword",
   "short_label": "Crossword",
-  "summary": "Sixty-one offline crosswords with clue navigation and saved progress.",
-  "page_description": "Solve sixty-one original 5 by 5 and 7 by 7 crosswords offline. Tap a square or a clue, type an answer, and check or reveal letters when you want help. Undo is always under the grid, and each puzzle keeps its own progress.",
+  "summary": "Four offline mini crosswords with clue navigation and saved progress.",
+  "page_description": "Solve four original mini crosswords offline. Tap a square or a clue, type an answer, and check or reveal letters when you want help. Each puzzle keeps its progress and undo history.",
   "minimum_cobalt_version": "0.3.14",
-  "version": "0.1.13",
-  "release_notes": "Headings are a step smaller, small print such as hints and dates a step larger, and there is more room under the top bar.",
+  "version": "0.1.7",
+  "release_notes": "Clearer description in the Store. No change to how the app works.",
   "glyph": "grid",
   "capabilities": []
 }

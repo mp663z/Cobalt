@@ -1,0 +1,100 @@
+{
+  "upstream_commit": "7efa3ab5de117cfd01ac23b65a7ab58d43397238",
+  "cases": [
+    {
+      "name": "background-color-body-propagation-001",
+      "test_path": "css/css-backgrounds/background-color-body-propagation-001.html",
+      "reference_path": "css/css-backgrounds/background-color-body-propagation-ref.html",
+      "test_sha256": "a8dc4109725be4e521485a11cc43181fb63bd0172f960ca960a724604c18dc48",
+      "reference_sha256": "cc8442ca41870460498fcffb8eecf3ba7435167b7f6231af74a46ce716de3839",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-color-body-propagation-002",
+      "test_path": "css/css-backgrounds/background-color-body-propagation-002.html",
+      "reference_path": "css/css-backgrounds/background-color-body-propagation-ref.html",
+      "test_sha256": "f6edeaea62f5ea9e8cb807c89d598d3db5dab6d43924cce46e9051f7066f49d0",
+      "reference_sha256": "cc8442ca41870460498fcffb8eecf3ba7435167b7f6231af74a46ce716de3839",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-color-root-propagation-001",
+      "test_path": "css/css-backgrounds/background-color-root-propagation-001.html",
+      "reference_path": "css/reference/blank.html",
+      "test_sha256": "2d57e90421d58599ffab76ebb69d3273ca42daeea9e7b9ea91b4a1bea94acba5",
+      "reference_sha256": "e6a6d3340b0b940e028c760c75a092acd2e375f268715fcd8b1c6a64bbc56570",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip-008",
+      "test_path": "css/css-backgrounds/background-clip-008.html",
+      "reference_path": "css/css-backgrounds/reference/ref-if-there-is-no-red.xht",
+      "test_sha256": "43da68861b498fb87d26a62296e099aceeafdb99fed0962fd14e7fcc30099548",
+      "reference_sha256": "ceb49218754d1072a8f989d0566cc63eb0e048660c658f632d821780940cf655",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip-009",
+      "test_path": "css/css-backgrounds/background-clip-009.html",
+      "reference_path": "css/css-backgrounds/reference/ref-filled-black-96px-square.xht",
+      "test_sha256": "1a52f4f76eada2518f48e9d9bd9f7a3d39b58964bedbff3ae5684d4e5cce5f7a",
+      "reference_sha256": "a7c48a337d6e339e096720f42fed2e35157302cf56866b26980ede5ed1560b62",
+      "viewport": "800x600",
+      "reference_assets": [
+        {
+          "source_path": "css/css-backgrounds/support/black96x96.png",
+          "local_path": "../support/black96x96.png",
+          "sha256": "4b4360c511aaeb81f6b614589d77fac8a28b2b7fdcc3c96857473dac834d8661"
+        }
+      ]
+    },
+    {
+      "name": "background-clip-010",
+      "test_path": "css/css-backgrounds/background-clip-010.html",
+      "reference_path": "css/css-backgrounds/reference/ref-if-there-is-no-red.xht",
+      "test_sha256": "5df2ac42c290d5993d01938f248bc17af00f0a2d43afbb0e9ee1d751cb876181",
+      "reference_sha256": "ceb49218754d1072a8f989d0566cc63eb0e048660c658f632d821780940cf655",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-color-clip",
+      "test_path": "css/css-backgrounds/background-color-clip.html",
+      "reference_path": "css/css-backgrounds/reference/background-color-clip.html",
+      "test_sha256": "7cc0b8e319eba3333afd5ad064e393e61973c767dd4a3a26a813741aa7ab7e41",
+      "reference_sha256": "251e5e6af1573d49faf142041c031450a232e95fe2cecf3ab6b080f193aec296",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip-color",
+      "test_path": "css/css-backgrounds/background-clip-color.html",
+      "reference_path": "css/css-backgrounds/background-clip-color-ref.html",
+      "test_sha256": "582e177caf53c77d8ea16311848b86b83cc99d4a502715e70ac739a8c6dabeb2",
+      "reference_sha256": "e8c33e9745d8a7496c536dcc9bd9972236efeebe87b6a940ea55d78dc5978551",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip-content-box-001",
+      "test_path": "css/css-backgrounds/background-clip-content-box-001.html",
+      "reference_path": "css/css-backgrounds/reference/background-clip-content-box-ref.html",
+      "test_sha256": "ecdf23588dc60d486a349b8d4826e574c2682e119061b96736188d3bcf883435",
+      "reference_sha256": "27e0d1ed3f3b56901ac95942c2ef67621a7142b42368b4ff0395b5470b171712",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip-padding-box-001",
+      "test_path": "css/css-backgrounds/background-clip-padding-box-001.html",
+      "reference_path": "css/reference/ref-filled-green-100px-square-only.html",
+      "test_sha256": "5d2d27d42269942d598df2eb7748cd8173602fd0bf84343e56e183833c44be98",
+      "reference_sha256": "16374b3cb3d9ecd468a0a6bd73977b8613a71623c556a556cb15b555dedfe95b",
+      "viewport": "800x600"
+    },
+    {
+      "name": "background-clip_padding-box",
+      "test_path": "css/css-backgrounds/background-clip_padding-box.html",
+      "reference_path": "css/css-backgrounds/reference/background_clip_padding-box.html",
+      "test_sha256": "8031a9a5729475aa71ee3baa904fb636937cb58b0401ec962df2f3a6c45be7ad",
+      "reference_sha256": "1c1b7cca225bbdc3c8b5641d304ddf1c21916a0c5dcdc7b9c8e7a0a651c66755",
+      "viewport": "800x600"
+    }
+  ]
+}

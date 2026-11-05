@@ -2,10 +2,10 @@
   "id": "deck",
   "display_name": "Deck",
   "short_label": "Deck",
-  "summary": "Turn your Kobo into a remote control for your computer. Needs your computer.",
+  "summary": "Turn your Kobo into a remote control for your computer.",
   "page_description": "Pair with your computer and run favorite actions from large, clear controls.",
-  "version": "0.2.12",
-  "release_notes": "The pairing commands are set on grey panels in a fixed-width face, the pads are drawn in a lighter outline, and headings are a step smaller.",
+  "version": "0.2.6",
+  "release_notes": "Read long command output page by page without clipped lines, and return to the deck with the reader Back control.",
   "glyph": "grid",
   "capabilities": [
     "network"
@@ -13,20 +13,15 @@
   "setup": {
     "steps": [
       {
-        "text": "Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
+        "text": "Create ~/.config/kobo/sidekick/deck.toml with the pages and controls you want on the reader."
       },
       {
-        "text": "In your project folder on the computer, lay out your first pads. Change them later with kobo deck set.",
-        "command": "kobo deck init --preset build"
+        "text": "Initialize the companion daemon to obtain its address, certificate, and pairing code.",
+        "command": "kobo-sidekickd init"
       },
       {
-        "text": "Pair this computer with the reader. There is nothing to type on the reader. The first time, close Cobalt and open it again afterwards.",
-        "command": "kobo sidekick init"
-      },
-      {
-        "text": "Start the helper and leave it running, then open Deck on the reader.",
-        "command": "kobo sidekick run"
+        "text": "Install the daemon certificate on the Kobo before pairing.",
+        "command": "kobo trust set sidekick --device <address>"
       }
     ]
   }

@@ -16,3 +16,8 @@ unicode-segmentation = "1.12"
 
 [lints]
 workspace = true
+
+[features]
+# TEST/DIAGNOSTIC ONLY: native font session for the paint-proof lane.
+# Off in the normal production graph; see the 114 contract.
+diagnostic-font-session = []

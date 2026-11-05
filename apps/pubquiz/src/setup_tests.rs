@@ -69,17 +69,13 @@ fn every_visible_category_selects_itself_at_every_text_size_and_pose() {
 fn long_category_names_are_measured_and_keep_their_exact_selection() {
     let mut runner = AppRunner::new(Quiz {
         view: View::Setup,
-        questions: (0..3)
-            .map(|index| {
-                question(
-                    "Entertainment: Science Fiction and Fantasy",
-                    Difficulty::Easy,
-                    &format!("Fixture question {index}?"),
-                    ["A", "B", "C", "D"],
-                    0,
-                )
-            })
-            .collect(),
+        questions: vec![question(
+            "Entertainment: Science Fiction and Fantasy",
+            Difficulty::Easy,
+            "A fixture question?",
+            ["A", "B", "C", "D"],
+            0,
+        )],
         ..Quiz::default()
     });
     let context = runner.context();
@@ -100,7 +96,7 @@ fn long_category_names_are_measured_and_keep_their_exact_selection() {
     runner.app_mut().setup_party = false;
     runner.action(action_id("continue-setup"));
     assert_eq!(runner.app().view, View::Question);
-    assert_eq!(runner.app().round_questions.len(), 3);
+    assert_eq!(runner.app().round_questions.len(), 1);
 }
 
 #[test]
@@ -152,12 +148,8 @@ fn setup_page_edges_and_empty_question_sets_remain_safe() {
         .is_empty());
     quiz.setup_party = false;
     quiz.setup_action(action_id("continue-setup"), &context);
-    assert_eq!(quiz.view, View::Setup);
-    assert!(quiz
-        .setup_note
-        .as_deref()
-        .unwrap()
-        .contains("No questions match"));
+    assert_eq!(quiz.view, View::Home);
+    assert!(quiz.note.as_deref().unwrap().contains("No questions match"));
 }
 
 #[test]
@@ -166,7 +158,7 @@ fn physical_page_turns_preserve_selection_and_the_round_uses_that_category() {
     runner.start();
     runner.action(action_id("party"));
     runner.action(action_id("cat-2"));
-    assert_eq!(runner.app().setup_category.as_deref(), Some("History"));
+    assert_eq!(runner.app().setup_category.as_deref(), Some("Geography"));
     runner.page_turn(true);
     assert_eq!(runner.app().setup_page, 1);
     runner.page_turn(false);
@@ -179,7 +171,7 @@ fn physical_page_turns_preserve_selection_and_the_round_uses_that_category() {
         .app()
         .round_questions
         .iter()
-        .all(|question| question.category == "History"));
+        .all(|question| question.category == "Geography"));
 }
 
 #[test]

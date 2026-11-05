@@ -41,11 +41,6 @@ make_release() {
 printf '%s\n' '$marker'
 EOF
     chmod 755 "$directory/package/kobo"
-    cat > "$directory/package/kobo-sidekickd" <<EOF
-#!/bin/sh
-printf '%s\n' '$marker sidekick helper'
-EOF
-    chmod 755 "$directory/package/kobo-sidekickd"
     cat > "$directory/package/flashcards-import" <<EOF
 #!/bin/sh
 printf '%s\n' '$marker importer'

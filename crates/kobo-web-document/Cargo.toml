@@ -1,0 +1,17 @@
+[package]
+name = "kobo-web-document"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Untrusted HTML into a small, bounded document model for an e-ink reader browser."
+
+[dependencies]
+# The HTML5 tree builder Servo uses. Malformed markup is the normal case on
+# the web, and recovering from it the way browsers do is the hard part of a
+# parser. Measured on armv7 in the browser measurement spike before adoption.
+html5ever = "=0.39.0"
+
+[lints]
+workspace = true

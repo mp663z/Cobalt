@@ -2,10 +2,10 @@
   "id": "syncthing",
   "display_name": "Sync",
   "short_label": "Sync",
-  "summary": "Sync folders between your computer and your Kobo with Syncthing. Needs your computer.",
-  "page_description": "Sync notes, photos and books from your computer to your Kobo with Syncthing. Sync when you tap Sync now, or on a schedule while Cobalt is open on Wi-Fi.",
-  "version": "0.3.9",
-  "release_notes": "Headings are a step smaller, small print such as hints and dates a step larger, and there is more room under the top bar.",
+  "summary": "Sync folders between your computer and Kobo with Syncthing, on a schedule.",
+  "page_description": "Sync notes, photos and books from your computer to your Kobo with Syncthing, and choose when the Kobo wakes to sync so Wi-Fi does not drain the battery.",
+  "version": "0.3.2",
+  "release_notes": "The reader Back control returns from setup, folders and About to Sync status without changing the running transfer or schedule.",
   "glyph": "refresh",
   "capabilities": [
     "scheduled-wake"
@@ -13,19 +13,15 @@
   "setup": {
     "steps": [
       {
-        "text": "Set up the reader once over USB, if you have not already. Sync also needs Syncthing on this computer, installed with its package manager.",
-        "command": "kobo setup"
+        "text": "The first time Sync runs it downloads its engine over Wi-Fi and checks it against the digest the runtime requires, so the Kobo needs to be online once. Your computer needs a package-manager-installed Syncthing binary."
       },
       {
-        "text": "With the reader awake on Wi-Fi, pair one folder on this computer with a folder on the reader. The first time, the reader downloads the Syncthing engine.",
-        "command": "kobo sync setup ~/Documents/notes --folder vault"
+        "text": "Pair exactly one local directory to a fixed safe folder while the Kobo is awake on Wi-Fi.",
+        "command": "kobo sync setup LOCAL_DIR --folder vault --device <address>"
       },
       {
-        "text": "Start this computer's side of Sync and leave it running.",
+        "text": "Resume Sync on the Kobo, then start the private host peer. It does not modify another Syncthing installation.",
         "command": "kobo sync run"
-      },
-      {
-        "text": "On the reader, open Sync and tap Turn on Sync. The first sync starts at once and takes up to five minutes."
       }
     ]
   }

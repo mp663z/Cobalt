@@ -131,10 +131,9 @@ def main():
                 result["checks"].append("frame mode holds the wake lock for the interval")
 
                 assert has("menu"), "settings entry missing"
-                assert has("settings"), "settings are not in the top bar"
-                drive("tap Settings", "wait-for-id mode-slow", "wait-idle")
+                drive("tap-id menu", "wait-for-id mode", "wait-idle")
                 capture("02-settings-frame-mode")
-                drive("tap-id mode-slow", "wait-idle")
+                drive("tap-id mode", "wait-idle")
                 state = power()
                 assert state["wakeHeld"] is False, state
                 assert (int(state["scheduledWake"]) - int(state["monotonicMillis"])
@@ -154,7 +153,7 @@ def main():
                 result["checks"].append(
                     "a clock crossing fires the scheduled wake, advances the photo and reschedules")
 
-                drive("tap-id menu", "wait-for-id mode-frame", "tap-id mode-frame",
+                drive("tap-id menu", "wait-for-id mode", "tap-id mode",
                       "tap Back", "wait-idle")
                 state = power()
                 assert state["wakeHeld"] is True, state

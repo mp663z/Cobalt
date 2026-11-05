@@ -1,0 +1,60 @@
+[package]
+name = "kobo-browser-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Built on its own with `cargo +nightly fuzz`, outside the main workspace.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kobo-browser-core = { path = ".." }
+kobo-image = { path = "../../kobo-image" }
+kobo-web-document = { path = "../../kobo-web-document" }
+kobo-web-layout = { path = "../../kobo-web-layout" }
+
+[[bin]]
+name = "parse_html"
+path = "fuzz_targets/parse_html.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paginate_document"
+path = "fuzz_targets/paginate_document.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_image"
+path = "fuzz_targets/decode_image.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cache_metadata"
+path = "fuzz_targets/cache_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resolve_url"
+path = "fuzz_targets/resolve_url.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sniff_body"
+path = "fuzz_targets/sniff_body.rs"
+test = false
+doc = false
+bench = false

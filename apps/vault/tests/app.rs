@@ -1,7 +1,3 @@
-#[allow(
-    dead_code,
-    reason = "only the renderer is exercised here; the note blocks the app reads are tested beside them in the app itself"
-)]
 #[path = "../src/md.rs"]
 mod md;
 #[path = "../src/model.rs"]

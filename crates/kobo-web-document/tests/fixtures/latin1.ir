@@ -1,0 +1,26 @@
+title: Some("Café menu")
+base: Some("https://fixtures.example/page.html")
+warnings: [NotUtf8]
+links:
+blocks:
+[
+    Paragraph {
+        content: [
+            Text(
+                "Crème brûlée – 4 euros",
+            ),
+        ],
+        anchor: None,
+    },
+    Paragraph {
+        content: [
+            Text(
+                "Plain ASCII line.",
+            ),
+        ],
+        anchor: None,
+    },
+]
+text:
+Crème brûlée – 4 euros
+Plain ASCII line.

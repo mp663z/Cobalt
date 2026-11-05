@@ -4,9 +4,7 @@ use std::io::{BufRead, Write};
 pub const COMPACT_HELP: &str = "Cobalt - tools for your reader
 
   kobo setup
-    Set up a reader over USB and save it
-  kobo send FILE
-    Send a file to the app that opens it
+    Set up a reader connected by USB
   kobo apps
     Find apps and read setup guides
   kobo frame --help
@@ -110,12 +108,8 @@ pub fn choose(
 }
 
 /// The "send a file" choice: an explicitly typed path (the plain-terminal
-/// picker: the file is named, not browsed), then a numbered pick of where
+/// picker - the file is named, not browsed), then a numbered pick of where
 /// it goes. Blank answers cancel, as everywhere in this menu.
-///
-/// The reader `kobo setup` saved comes first, because it is where nearly
-/// every send goes. The menu used to offer only an address, a name or the
-/// simulator, which asked the owner for something setup already knew.
 fn send_choice(
     input: &mut impl BufRead,
     output: &mut impl Write,
@@ -123,16 +117,15 @@ fn send_choice(
     let Some(file) = answer(
         input,
         output,
-        "File or folder to send: a photo, score, note, comic or story (blank cancels): ",
+        "File to send - photo, subscriptions, comic or story (blank cancels): ",
     )?
     else {
         return Ok(None);
     };
     let destinations = [
-        "the reader kobo setup saved".to_owned(),
-        "another saved reader, by name".to_owned(),
-        "a reader at an address".to_owned(),
         "the simulator on this computer".to_owned(),
+        "a reader at an address".to_owned(),
+        "a saved reader by name".to_owned(),
     ];
     let Some(index) =
         crate::console::choose_numbered(input, output, &destinations, "Send to (blank cancels): ")?
@@ -141,22 +134,21 @@ fn send_choice(
     };
     let mut command = vec!["send".into(), file];
     match index {
-        0 => {}
+        0 => command.push("--sim".into()),
         1 => {
-            let Some(name) = answer(input, output, "Reader name (blank cancels): ")? else {
-                return Ok(None);
-            };
-            command.push("--reader".into());
-            command.push(name);
-        }
-        2 => {
             let Some(host) = answer(input, output, "Reader address (blank cancels): ")? else {
                 return Ok(None);
             };
             command.push("--device".into());
             command.push(host);
         }
-        _ => command.push("--sim".into()),
+        _ => {
+            let Some(name) = answer(input, output, "Reader name (blank cancels): ")? else {
+                return Ok(None);
+            };
+            command.push("--reader".into());
+            command.push(name);
+        }
     }
     Ok(Some(command))
 }
@@ -248,25 +240,6 @@ mod tests {
                 .unwrap()
                 .is_none());
         }
-    }
-
-    #[test]
-    fn a_send_goes_to_the_saved_reader_unless_another_is_chosen() {
-        let send = |answers: &str| {
-            choose(&mut answers.as_bytes(), &mut Vec::new())
-                .unwrap()
-                .unwrap()
-        };
-        assert_eq!(send("7\n/notes/today.md\n1\n"), ["send", "/notes/today.md"]);
-        assert_eq!(
-            send("7\n/a.jpg\n2\nstudy\n"),
-            ["send", "/a.jpg", "--reader", "study"]
-        );
-        assert_eq!(
-            send("7\n/a.jpg\n3\n192.0.2.4\n"),
-            ["send", "/a.jpg", "--device", "192.0.2.4"]
-        );
-        assert_eq!(send("7\n/a.jpg\n4\n"), ["send", "/a.jpg", "--sim"]);
     }
 
     #[test]

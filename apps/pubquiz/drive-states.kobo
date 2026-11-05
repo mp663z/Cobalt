@@ -1,31 +1,22 @@
-wait-for Play with friends
-# A failed download is said on Home at its level, with the control that
-# fixes it, rather than in the same grey as a fresh pack.
-scenario offline
-tap Get more questions
-wait-for not on Wi-Fi
-clean
-shot home-offline
-scenario normal
-tap About the questions
+wait 800
+expect Question packs
+tap About
 expect opentdb.com
 clean
 shot about
 tap Back to packs
-tap Play with friends
-tap Choose players
-tap 2
+tap Start pass-around
+expect setup
+tap Continue
 tap Start round
-expect Ada's turn
+expect Ada answers
 clean
 shot question
-tap-id answer-0
-expect Pass to Bert
+tap Mercury
+expect Hand to
 clean
 shot pass
-tap-id show-question
-expect Bert's turn
-tap-id answer-0
-expect Right answer
+tap Show result
+expect Question result
 clean
 shot reveal

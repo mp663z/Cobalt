@@ -4,7 +4,7 @@ A shell on your Kobo, with a touch keyboard.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img width="300" src="screenshots/shell.png" alt="A shell listing the books on the reader"><br>A shell listing the books on the reader</td>
+<td width="50%" valign="top"><img width="300" src="screenshots/shell.png" alt="A shell listing the reader's files"><br>A shell listing the reader's files</td>
 </tr>
 </table>
 
@@ -17,9 +17,6 @@ A shell on your Kobo, with a touch keyboard.
   them wrap.
 - Leaving the app does not end the shell. A long command keeps running, and
   its output is there when you come back.
-- **Earlier** shows output that scrolled off the top, and **Latest** or any
-  key brings back the newest line. The page buttons do the same.
-- When the shell closes, the top bar says so in words and offers **Restart**.
 
 The shell is provided by the runtime, not the app. Only the Terminal app is
 allowed to use it.

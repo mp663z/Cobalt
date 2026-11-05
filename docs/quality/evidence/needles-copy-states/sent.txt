@@ -1,2 +1,0 @@
-Sent to simulator: /tmp/needles-state-side-by-side/state/cobalt-sim-data/needles/pattern.md
-Available offline in Needles.

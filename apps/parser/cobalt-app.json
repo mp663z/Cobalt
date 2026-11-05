@@ -4,23 +4,8 @@
   "short_label": "Parser",
   "summary": "Play an original interactive story without Wi-Fi.",
   "page_description": "Play text adventures offline. Parser runs Z-machine stories you send from your computer, with tap shortcuts for common commands and an original tutorial story.",
-  "version": "0.1.18",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.1.12",
+  "release_notes": "Every library story is reachable on measured pages. Back closes keys, resumes stories and cancels restore. Save and restore slots fit guidance and messages at large text sizes.",
   "glyph": "book",
-  "capabilities": [],
-  "setup": {
-    "steps": [
-      {
-        "text": "First Light is bundled and plays offline. To add a story of your own:"
-      },
-      {
-        "text": "Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
-      },
-      {
-        "text": "Check the story, then send it. It appears in the library when the reader wakes.",
-        "command": "kobo parser push story.z5"
-      }
-    ]
-  }
+  "capabilities": []
 }

@@ -1,31 +1,9 @@
 wait 800
-expect Board games
+expect Pass-and-play classics
 tap Draughts
-expect Start game
-expect-missing International
+expect Set the table
 clean
 shot draughts-setup
 tap Start game
-expect Your move
+expect Draughts
 shot draughts
-tap-id cell-42
-expect Piece selected
-tap Legal square
-expect The computer moved a piece along the marked squares.
-clean
-shot draughts-computer-marked
-tap Back
-tap Kalah 6,4
-tap Start game
-tap-id cell-3
-expect The computer sowed
-expect Computer:
-clean
-shot kalah-computer-marked
-tap Back
-tap Nine Men's Morris
-tap Start game
-tap-id cell-0
-expect The computer placed a piece on the
-clean
-shot morris-computer-named

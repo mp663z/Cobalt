@@ -115,10 +115,10 @@ impl View<'_> {
                     .set("format", if self.rgb { "rgb24" } else { "grey8" })
                     .set(
                         "colourAppearance",
-                        match (self.rgb, self.ideal) {
-                            (true, true) => "renderer RGB; physical panel appearance uncalibrated",
-                            (true, false) => super::kaleido::APPEARANCE,
-                            (false, _) => "luminance",
+                        if self.rgb {
+                            "renderer RGB; physical panel appearance uncalibrated"
+                        } else {
+                            "luminance"
                         },
                     )
                     .set(

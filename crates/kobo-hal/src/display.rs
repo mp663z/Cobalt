@@ -301,13 +301,12 @@ fn resolve_profile(
         let claims_this_reader = identity.device_code == Some(profile.device_code)
             && identity.serial_prefix.as_deref() == Some(profile.serial_prefix);
         if claims_this_reader {
-            let standing = if !profile.write_identity_blockers(snapshot).is_empty() {
-                Standing::UntestedFirmware
-            } else if profile.write_ready {
-                Standing::Measured
-            } else {
-                Standing::AwaitingReview
-            };
+            let standing =
+                if profile.write_ready && profile.write_identity_blockers(snapshot).is_empty() {
+                    Standing::Measured
+                } else {
+                    Standing::UntestedFirmware
+                };
             return Ok((profile, standing));
         }
     }
@@ -366,9 +365,7 @@ impl DisplaySession {
         let (profile, standing) = resolve_profile(&snapshot, touch_transform)?;
         let policy = match standing {
             Standing::Measured => WritePolicy::ReadyOnly,
-            Standing::AwaitingReview | Standing::UntestedFirmware | Standing::Unmeasured => {
-                WritePolicy::OwnerAccepted
-            }
+            Standing::UntestedFirmware | Standing::Unmeasured => WritePolicy::OwnerAccepted,
         };
         let session = Self::open_verified(profile, snapshot, Path::new("/dev/fb0"), policy)?;
         Ok((session, standing))

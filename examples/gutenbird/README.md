@@ -4,8 +4,8 @@ Browse free book libraries and read their books on your Kobo.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img width="300" src="screenshots/shelf.png" alt="Popular Project Gutenberg books with their covers"><br>Popular Project Gutenberg books with their covers</td>
-<td width="50%" valign="top"><img width="300" src="screenshots/book.png" alt="A book with its cover, edition and description"><br>A book with its cover, edition and description</td>
+<td width="50%" valign="top"><img width="300" src="screenshots/shelf.png" alt="A shelf of covers from a library"><br>A shelf of covers from a library</td>
+<td width="50%" valign="top"><img width="300" src="screenshots/book.png" alt="A book, ready to read"><br>A book, ready to read</td>
 </tr>
 </table>
 
@@ -14,15 +14,8 @@ Browse free book libraries and read their books on your Kobo.
 - Works with Project Gutenberg, Standard Ebooks, Open Library and any other
   OPDS catalog you add by its address.
 - Search and browse catalogs, with covers.
-- **On this device** lists every book you have downloaded, with its author and
-  size, and opens it without a connection. The first screen says how many
-  books are ready offline. Remove a book from its menu.
-- Come back to Gutenbird and it opens the book you were reading, at your
-  place.
-- One tap on **Read** downloads a book. EPUB is used when available, with
-  progress on screen, and plain text otherwise. When Project Gutenberg offers
-  a book with and without its pictures, the illustrated edition is used if it
-  fits on the reader; **Choose download** still offers the other.
+- Downloads EPUB when available, with progress on screen, and falls back to
+  plain text. **Choose download** picks the format when a book offers several.
 - Books open in the shared reader, with text size, front light, bookmarks and
   highlights.
 - OPDS 1.2 and 2.0 catalogs look and behave the same.

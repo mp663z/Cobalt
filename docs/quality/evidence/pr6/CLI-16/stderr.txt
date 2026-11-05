@@ -1,2 +1,0 @@
-preparing /tmp/send-photo2.png for frame
-sent to sim

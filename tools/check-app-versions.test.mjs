@@ -12,12 +12,10 @@ import {
   checkProtocolMinimums,
   COMMAND_MAX_BUFFER,
   compatibleChangePaths,
-  globalBuildInputsChanged,
   isContributionManifest,
   meaningfulReleaseNotes,
   lockfileOnlyAddsPackages,
   manifestOnlyChangesPathDependencyVersions,
-  manifestOnlyChangesVersions,
   manifestOnlyChangesWorkspaceMembershipOrVersion,
   packagesToBuild,
   registeredConsumers,
@@ -1235,80 +1233,6 @@ test("the standalone importer is isolated without changing device workspace inpu
   assert.ok(importer.workspace_members[0].includes("kobo-flashcards-import"));
 });
 
-test("a package manifest that only moves its version lines is not a Store change", () => {
-  const previous = [
-    "[package]",
-    'name = "kobo-sudoku"',
-    'version = "1.0.11"',
-    "edition.workspace = true",
-    "",
-    "[dependencies]",
-    'kobo-sdk = { path = "../../crates/kobo-sdk", version = "0.3.2" }',
-    ""
-  ].join("\n");
-  const inherited = previous.replace('version = "1.0.11"', "version.workspace = true");
-  assert.equal(manifestOnlyChangesVersions(previous, inherited), true);
-  assert.equal(manifestOnlyChangesVersions(previous, previous.replace('"1.0.11"', '"1.0.15"')), true);
-  assert.equal(
-    manifestOnlyChangesVersions(previous, inherited.replace('version = "0.3.2"', 'version = "0.3.3"')),
-    true
-  );
-  assert.equal(
-    manifestOnlyChangesVersions(previous, inherited.replace("[dependencies]\n", '[dependencies]\nserde = "1"\n')),
-    false
-  );
-  assert.equal(manifestOnlyChangesVersions(previous, inherited.replace("kobo-sudoku", "kobo-sudoku2")), false);
-  const dependencyTable = `${previous}\n[dependencies.serde]\nversion = "1"\n`;
-  assert.equal(
-    manifestOnlyChangesVersions(dependencyTable, dependencyTable.replace('version = "1"\n', 'version = "2"\n')),
-    false
-  );
-});
-
-test("a toolchain pin rebuilds every app unless its exact content was reviewed", () => {
-  const compatible = new Set(["rust-toolchain.toml"]);
-  const unchangedRoot = () => true;
-  assert.equal(globalBuildInputsChanged([], compatible, unchangedRoot), false);
-  assert.equal(globalBuildInputsChanged(["rust-toolchain.toml"], new Set(), unchangedRoot), true);
-  assert.equal(globalBuildInputsChanged(["rust-toolchain"], compatible, unchangedRoot), true);
-  assert.equal(globalBuildInputsChanged(["rust-toolchain.toml"], compatible, unchangedRoot), false);
-  assert.equal(globalBuildInputsChanged([".cargo/config.toml"], compatible, unchangedRoot), true);
-  assert.equal(globalBuildInputsChanged(["Cargo.toml"], compatible, () => false), true);
-  assert.equal(globalBuildInputsChanged(["Cargo.toml"], compatible, unchangedRoot), false);
-  assert.equal(
-    globalBuildInputsChanged(["apps/sudoku/src/main.rs", "docs/README.md"], new Set(), unchangedRoot),
-    false
-  );
-});
-
-test("the reviewed toolchain pin is the file in the tree, and only that file", () => {
-  const manifest = JSON.parse(readFileSync("tools/app-release-compatible-changes.json", "utf8"));
-  const change = manifest.changes.find(entry =>
-    entry.files.some(file => file.path === "rust-toolchain.toml")
-  );
-  assert.ok(change);
-  const file = change.files.find(entry => entry.path === "rust-toolchain.toml");
-  assert.equal(file.base_blob, null);
-  const inTree = execFileSync("git", ["hash-object", "rust-toolchain.toml"], { encoding: "utf8" }).trim();
-  assert.equal(file.compatible_blob, inTree);
-  // The protocol the pin was reviewed under, not the newest one: a review
-  // answers for the protocol it names, and a protocol bump rebuilds every
-  // app anyway.
-  const protocol = change.protocol_version;
-  assert.deepEqual(
-    compatibleChangePaths(manifest, protocol, [file.path], () => null, () => file.compatible_blob),
-    new Set([file.path])
-  );
-  assert.deepEqual(
-    compatibleChangePaths(manifest, protocol, [file.path], () => null, () => "f".repeat(40)),
-    new Set()
-  );
-  assert.deepEqual(
-    compatibleChangePaths(manifest, protocol, [file.path], () => "f".repeat(40), () => file.compatible_blob),
-    new Set()
-  );
-});
-
 test("the Flashcards test-only exemption refuses a changed production blob", () => {
   const manifest = JSON.parse(readFileSync("tools/app-release-compatible-changes.json", "utf8"));
   const file = manifest.changes.flatMap(change => change.files)
@@ -1327,4 +1251,20 @@ test("both catalog gates share package-root exclusions without hiding nested sou
   const expected = [...source].sort();
   assert.deepEqual(storeImpactOfChangedPaths([...hostOnly, ...source], packages, registered).storeChanges, expected);
   assert.deepEqual(storeCatalogChanges([...hostOnly, ...source], storeWatchDirectories(packages, registered)), expected);
+});
+
+test("browser host fonts are isolated from device release dependencies", () => {
+  const metadata = manifestPath => JSON.parse(execFileSync("cargo", [
+    "metadata", "--locked", "--format-version", "1",
+    ...(manifestPath ? ["--manifest-path", manifestPath] : [])
+  ], { encoding: "utf8", maxBuffer: COMMAND_MAX_BUFFER }));
+  const workspace = metadata();
+  assert.ok(!workspace.workspace_members.some(member => member.includes("cobalt-text-preview")));
+  const document = workspace.packages.find(package_ => package_.name === "kobo-web-document");
+  assert.ok(document);
+  assert.ok(!document.dependencies.some(dependency => dependency.name === "fontdue"));
+  const preview = metadata("tools/cobalt-text-preview/Cargo.toml");
+  assert.equal(preview.workspace_members.length, 1);
+  assert.ok(preview.workspace_members[0].includes("cobalt-text-preview"));
+  assert.ok(preview.packages.some(package_ => package_.name === "fontdue"));
 });

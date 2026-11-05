@@ -1,6 +1,9 @@
 [workspace]
 members = [
     "crates/kobo-abi",
+    "crates/kobo-web-document",
+    "crates/kobo-web-layout",
+    "crates/kobo-browser",
     "crates/kobo-app-store",
     "crates/kobo-bookview",
     "crates/kobo-cli",
@@ -11,7 +14,6 @@ members = [
     "crates/kobo-dict",
     "crates/kobo-flashcards-format",
     "crates/kobo-frame-host",
-    "crates/kobo-frame-plan",
     "crates/kobo-music-host",
     "crates/kobo-vault-host",
     "crates/kobo-hal",
@@ -87,7 +89,7 @@ members = [
     "apps/post",
     "apps/pubquiz",
     "apps/readlater",
-    "apps/readeck",
+    "apps/browser",
     "apps/rss-miniflux",
     "apps/sudoku",
     "apps/syncthing",
@@ -99,7 +101,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.3.32"
+version = "0.3.25"
 edition = "2021"
 rust-version = "1.85.1"
 license = "AGPL-3.0-only"

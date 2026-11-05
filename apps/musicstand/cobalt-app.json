@@ -2,28 +2,12 @@
   "id": "musicstand",
   "display_name": "Music Stand",
   "short_label": "Music",
-  "summary": "Read music scores with setlists and half-page turns. Needs your computer.",
+  "summary": "Read music scores with setlists and half-page turns.",
   "page_description": "A Kobo score reader with stable stand mode, setlists, and two-stage half-page turns.",
-  "version": "0.1.12",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.1.6",
+  "release_notes": "Music libraries, setlists, and their scores now page to fit the reader. Navigation and collection controls stay reachable, and Back returns through the collection views.",
   "glyph": "note",
   "capabilities": [
     "keep-awake"
-  ],
-  "setup": {
-    "steps": [
-      {
-        "text": "To send PDF scores, install Poppler on your Mac or Linux computer first: brew install poppler on a Mac, or sudo apt install poppler-utils on Debian or Ubuntu.",
-        "command": "brew install poppler"
-      },
-      {
-        "text": "Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
-      },
-      {
-        "text": "Send PDF scores, page images, or a folder of them. Each push adds to your library.",
-        "command": "kobo musicstand push ~/Scores"
-      }
-    ]
-  }
+  ]
 }

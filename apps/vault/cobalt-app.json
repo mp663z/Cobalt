@@ -2,22 +2,10 @@
   "id": "vault",
   "display_name": "Vault",
   "short_label": "Vault",
-  "summary": "Browse your notes by folder, tag, link, and backlink. Needs your computer.",
+  "summary": "Browse your notes by folder, tag, link, and backlink.",
   "page_description": "Keep a searchable copy of your note library ready to read on your Kobo.",
-  "version": "0.1.10",
-  "release_notes": "Commands to run on your computer are set on a grey panel in a fixed-width face and break only at spaces. Headings are a step smaller and hints a step larger.",
+  "version": "0.1.4",
+  "release_notes": "Page through every import problem and open its full explanation. List page turns stop at the ends so Previous responds immediately after repeated Next taps.",
   "glyph": "note",
-  "capabilities": [],
-  "setup": {
-    "steps": [
-      {
-        "text": "Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
-      },
-      {
-        "text": "Send a folder of Markdown notes. Push again whenever your notes change: only changed notes are sent.",
-        "command": "kobo vault push ~/Notes"
-      }
-    ]
-  }
+  "capabilities": []
 }

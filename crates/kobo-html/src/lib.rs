@@ -22,9 +22,6 @@
 //!   control characters are dropped instead of being handed to a renderer that
 //!   would have to decide what a `\u{7}` looks like.
 
-/// Finding the article inside a web page.
-pub mod article;
-
 /// Reading `MathML` as a line of text.
 pub mod math;
 

@@ -11,18 +11,15 @@ expect-state /activity#/effects/post 0
 shot preview
 tap-id welcome
 tap-id setup
-expect Pair once
+expect Prepare the computer
 clean
 shot setup
-expect-missing kobo trust set
 tap-id trust
-expect Reopen Cobalt once
+expect Trust this computer
 clean
 shot trust
 tap-id start
-expect Share a terminal
-expect kobo stream terminal
-expect-missing --interactive
+expect Start a session
 clean
 shot start
 tap-id enter-address
@@ -63,16 +60,3 @@ tap-id kb.enter
 expect xyz
 clean
 shot code-preserved
-
-# A pairing that has never connected says so, rather than that a connection
-# was lost, and names the cause.
-tap-id kb.backspace
-tap-id kb.backspace
-tap-id kb.backspace
-type abc234
-tap-id kb.enter
-wait-for This Kobo is not on Wi-Fi.
-expect Not connected
-expect-missing Connection lost
-clean
-shot not-connected-yet

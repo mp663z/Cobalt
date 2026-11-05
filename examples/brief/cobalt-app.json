@@ -2,12 +2,11 @@
   "id": "brief",
   "display_name": "Daily Brief",
   "short_label": "Daily Brief",
-  "summary": "A daily news brief that fetches a fresh one when you open it and keeps every story for offline reading.",
-  "version": "1.0.14",
+  "summary": "Build a daily news brief in the background while you use other apps.",
+  "version": "1.0.9",
   "glyph": "clock",
   "capabilities": [
-    "network",
-    "scheduled-wake"
+    "network"
   ],
-  "release_notes": "Notes and links in an article now turn in pages when they run long, and tapping a note goes to its passage."
+  "release_notes": "Rebuilt on a renderer that keeps every control reachable at the largest text sizes, and on a keyboard that can type every character this app asks for."
 }

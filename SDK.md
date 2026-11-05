@@ -52,10 +52,8 @@ Cobalt is tested on the Clara BW, Clara Colour, Elipsa 2E, Clara HD, Libra 2,
 Libra Colour and Libra H2O at the firmware in the
 [device support matrix](docs/DEVICES.md#device-support-matrix). Other models
 run after the owner accepts a notice listing what is untested, and developer
-write tools require an exact match. Cobalt, including the SDK an application
-links, is AGPL-3.0-only with no linking exception, so an application built with
-it carries the same licence; it comes with no warranty. To help support another
-model, start with
+write tools require an exact match. Cobalt is AGPL-3.0 licensed and comes with
+no warranty. To help support another model, start with
 [Porting to another Kobo](docs/PORTING.md).
 
 Six steps from nothing to a tile on the reader's launcher.
@@ -276,8 +274,6 @@ the actual E Ink renderer and is the quickest visual reference.
 | `top_bar(title)` | The fixed bar at the top. Back is added by the runtime. |
 | `top_bar_action(name, label)` | One trailing control in the top bar. |
 | `top_bar_glyph(name, label, glyph)` | A trailing top-bar control drawn with a built-in glyph. |
-| `accent(accent)` | This screen's colour on a colour reader, one of a closed set. Usually set once with `KoboApp::accent` instead. |
-| `without_accent()` | Keeps this screen's bar on paper although the application has an accent: for a reader's page, a photograph, a letter. |
 | `owns_back(bool)` | Ask for Back as an action before it leaves the app. |
 | `nav_bar(selected, [(name, label), ...])` | The pinned bottom bar of *destinations*. At least two. |
 | `action_bar([(name, label), ...])` | The same slot, carrying *verbs* instead. At most three. |
@@ -309,7 +305,6 @@ the actual E Ink renderer and is the quickest visual reference.
 | `section(title)` / `section_with_value(title, value)` | A labelled group, optionally with a count or total. |
 | `facts([(label, value), ...])` | Labelled values with one shared, measured label column. |
 | `quote(depth, text)` / `byline(depth, text)` | Thread body text and its smaller, muted author line. |
-| `command(text)` | Something the owner types on a computer. Protocol 17 sets it in the fixed-pitch face on a grey panel the width of the column and wraps it only at its spaces; an earlier runtime draws it as a quotation. |
 | `folding_byline(...)` | A tappable byline that represents a collapsed reply subtree. |
 | `table(rows, weights)` | Tabular document content with columns measured across all rows. |
 | `picture(picture, max_height_mm)` | A framed picture fitted to a physical height. |
@@ -326,20 +321,14 @@ the actual E Ink renderer and is the quickest visual reference.
 | `button_with_state(name, label, state)` | A button with explicit semantic enabled state. |
 | `field(name, value, placeholder)` | A tappable field showing its current value; the app routes it to a keyboard screen. |
 | `field_clear(name)` | Adds a clear control to the field just declared when it has a value. |
-| `field_label(label)` / `field_hint(hint)` / `field_error(error)` | Protocol 16. A name on one line above the field just declared, and a hint on up to two lines under it, with the error drawn in the hint's place. |
-| `field_kind(kind)` | Protocol 16. `Text`, `Secret`, `Number` or `Address`. A secret is drawn as one dot per character. |
-| `toggle(name, label, summary, on)` | Protocol 16. A setting drawn as a row with a switch; the whole row is the target and the app applies the change on the tap. One row high. |
-| `toggle_with_state(name, label, summary, on, state)` | The same, for a setting that may not be able to change right now. |
-| `option_list(prompt, page, previous, next, [(name, label, summary), ...])` | Protocol 16. One answer from a long list, a page of rows at a time with its own pager. `options_per_page(metrics, summaries)` says how many rows a page holds. |
-| `segmented(selected, [(name, label), ...])` | Two to five values of one setting side by side, the current one filled. Each value is its own action. Falls back to wrapping chips when a label will not fit its share. |
 | `chips([(name, label, selected), ...])` | Wrapping filters, tags or recent searches with selected state. |
 | `choose(prompt, [(name, label), ...])` | A question with tappable answers. |
-| `chosen(index)` | Marks which answer of the preceding `choose` or `option_list` is already given. |
+| `chosen(index)` | Marks which answer of the preceding `choose` is already given. |
 | `or_type(name, placeholder)` | A freeform row on the end of a `choose`. |
 | `stepper(label, less, less_glyph, more, more_glyph)` | A setting that moves one notch at a time. |
 | `stepper_ends(less, more)` / `stepper_track(percent)` | Configures enabled ends and the optional position track of the preceding stepper. |
-| `keyboard(&keyboard, submit)` | Keys drawn by the app itself, pinned under the thumbs, for a terminal or keypad that needs every key. |
-| `text_entry(&entry, prompt, submit)` | Asks the runtime's keyboard for an open `TextEntry`; draws the prompt under it. `text_entry_with_hint` adds one line of guidance. |
+| `keyboard(&keyboard, submit)` | The on-screen text keyboard, pinned under the thumbs. |
+| `text_entry(&entry, prompt, submit)` | A complete prompt, typed value, keyboard and cancel action. |
 | `typed(&keyboard, placeholder)` | The text accumulated by a keyboard, or its placeholder. |
 
 ### Collections, grids and media
@@ -350,9 +339,6 @@ the actual E Ink renderer and is the quickest visual reference.
 | `checklist([(name, title, summary, done), ...])` | The same list, where a finished row is struck through. |
 | `rows_with_menu([(name, title, summary, glyph, menu), ...])` | The same list, where each row carries an overflow mark naming an action of its own. |
 | `rows_with_trailing([(name, title, summary, lead, value), ...])` | Rows with a short score, date, size or count at the trailing edge. |
-| `checked_rows([(name, title, summary, lead, state), ...])` | Protocol 16. Rows that can be ticked: `Checked`, `Unchecked` or `Mixed`, drawn as a box in place of the lead. |
-| `selection_bar(count, [(name, label), ...])` | Protocol 16. How many rows are ticked and up to three verbs for all of them, one bar high. |
-| `row_button(row, name, label)` / `row_badge(row, count)` | Protocol 16. A small button, or a count of fixed width, against the trailing edge of a row in the list just added. |
 | `row_overflow(anchor, open, [(name, label, glyph), ...])` | The menu behind that mark. |
 | `paged_list(page, items)` | A pre-paged list of plain strings. |
 | `tiles([(name, label, glyph), ...])` | A grid of square destinations. |
@@ -368,11 +354,7 @@ the actual E Ink renderer and is the quickest visual reference.
 
 | Method | What it is |
 |---|---|
-| `banner(level, text)` | `Info` or `Attention`, and from protocol 16 `Success` or `Error`, which carry a mark ahead of the words. Pick the level by meaning; see *Banners: which level, and where the retry goes*. |
-| `problem_banner_with(&problem, retry, sign_in)` | A task failure from `kobo_sdk::failure` at its own level, carrying Join Wi-Fi, Sign in or Try again as its action. |
-| `banner_action(name, label)` | Protocol 16. The one action a banner may carry, on a line of its own under the words. |
-| `steps(current, total, labels)` | Protocol 16. "Step 2 of 4" and a mark per step, on one line. |
-| `code(payload, caption)` | Protocol 16. Text drawn by the runtime as a QR code, up to `MAX_CODE_BYTES` (213) bytes, in a square up to 50 mm wide. |
+| `banner(level, text)` | `Info` or `Attention`. Attention is drawn inverted. |
 | `progress(percent)` | A determinate bar. |
 | `activity(label, progress)` | Work in flight, indeterminate with `None` or coarse determinate progress with `Some(percent)`. |
 | `cancellable(name, label)` | Adds a cancel control to the preceding activity. |
@@ -402,8 +384,8 @@ the actual E Ink renderer and is the quickest visual reference.
 | `text_scale(scale)` / `reading(reading)` / `reading_font(font)` | Reader-only typography configuration; ordinary app UI follows the user's scale. |
 | `build_checked()` | Builds only when screen diagnostics contain no errors. |
 
-There is no free-form drawing, no colour of your own, no font choice and no
-pixel positioning. Every size comes from the panel's *physical* dimensions, so a
+There is no free-form drawing, no colour, no font choice and no pixel
+positioning. Every size comes from the panel's *physical* dimensions, so a
 control that is comfortable under a thumb on a six inch panel is comfortable on
 a ten inch one, and a line of text holds roughly the same number of words on
 both.
@@ -489,19 +471,6 @@ reader came here to do, and at most one region of supporting detail. If two
 actions are equally important, neither is primary and both are ordinary
 buttons.
 
-**Space is the runtime's.** There is no margin or padding to set, and a
-`spacer` is for the rare gap the content itself calls for. On protocol 17 the
-runtime leaves three millimetres under the top bar, four above a heading that
-follows other content, and two above the first button after anything that is
-not a button; everything else stays one millimetre apart. A screen that would
-not fit with that room is laid out again without it before a line is lost, and
-a screen built round a board, a grid of squares or a terminal never gets it,
-because a board is sized to every millimetre it is given. Protocol 17 also sets
-headings a step smaller (4.6 mm and 3.8 mm) and a `secondary` line a step
-larger (2.7 mm), so an instruction set in one reads as a sentence rather than a
-footnote. Screens from applications built against an earlier protocol keep the
-type and spacing they were measured in.
-
 **Two secondary actions go side by side, not stacked.** Use `buttons`. Stacked,
 each one takes the full width of the panel to say a single word and the bottom
 of the screen reads as a form. `buttons` is `band` underneath, so a narrow
@@ -565,61 +534,6 @@ panel that takes a second to turn, the reader has a whole second to look at it.
 **One way out.** The runtime's Back plus `owns_back` is already the way back.
 A screen that also offers "Back to the results" has three controls
 meaning one thing and no way for the reader to tell which is which.
-
-### Choosing a control for a setting
-
-One kind of choice, one control, in every app, so an owner reads the shape
-before the words:
-
-- **`toggle`** for something on or off that applies on the tap. Its summary
-  says what is true now ("Wakes when the cover opens"), not what a tap will do.
-  A choice that waits for a Start or Save button is not a toggle.
-- **`segmented`** for two to five short values of one setting, all worth seeing
-  at once: a difficulty, a side, a clock.
-- **`option_list`** plus `chosen` when the list is long, pages, or each answer
-  needs a sentence. **`choose`** plus `chosen` for a short question on a screen
-  of its own.
-- **`chips`** only for filters, tags and suggestions, where several can be on
-  at once or none. A lone chip used as a switch reads as a tag.
-- **A button that cycles** only where the order is the meaning, such as a sweep
-  round the edges of a panel. Otherwise an overshoot means going all the way
-  round again.
-
-Where a switch cannot go, in a bar or a menu, a two-state label names what the
-tap does: "Turn light off", "Show mistakes". "Light: on" reads as an order as
-easily as a report.
-
-### Banners: which level, and where the retry goes
-
-A banner's level says what happened, so an owner can tell a save from a
-failure before reading a word:
-
-- **`Success`**: something the owner asked for finished. Saved, sent, signed in.
-- **`Error`**: something failed and the owner has to act. A refused key, a write
-  that did not happen, a file that could not be opened.
-- **`Attention`**: something that may come right by itself, or by walking back
-  into Wi-Fi. Offline, a server not answering, a write that is tried again.
-- **`Info`**: neutral news and nudges. "Last page.", "3 new questions."
-
-Carry the level with the notice, rather than keeping one string drawn at one
-level. For a task's failure use `Problem::level`, which `problem_banner` and
-`problem_banner_with` already do.
-
-**The retry sits on the banner it answers.** `banner_action(name, label)` puts
-it on a line under the words; a loose button further down, a bottom action, a
-glyph in the top bar or a row in a menu makes the owner find the fix somewhere
-the reason is not. Then drop the other control, since the banner now carries it.
-Use one label per job: "Try again" for something fetched, "Retry saving" for
-something written. The action line costs a line of the page, so a list under
-the banner pages with `paginate_rows_below_banner` or the `_under` helpers (see
-*Clamped labels*).
-
-A connect screen follows the same order: the banner first, under the top bar;
-then what to run and the `command`; then `primary_button("check-again", "Check
-again")` directly under the command. Once a check has found nothing, Check
-again is that banner's action instead. A screen that waits for something pushed
-from a computer is a `splash`, `section("On your computer")`, the `command`, and
-its Check button directly under it.
 
 ### The words
 
@@ -789,26 +703,6 @@ the built screen that precedes the list and reserve exactly its measured height.
 Build that prefix with the same function the screen itself uses, and leave the
 list and the page-position strip out of it.
 
-A banner is taller than its words when it carries a mark or an action: a
-`Success` or `Error` banner sets a mark ahead of the words, so they wrap
-narrower, and `banner_action` adds a line under them. Describe it with a
-`BannerShape` and page with `paginate_rows_below_banner(rows, nav_bar,
-Some(BannerShape::new(level, &text).with_action()))`, or
-`paginate_rows_with_menu_below_banner(…)` for rows with a mark. For a task's
-failure, `problem.banner_shape(sign_in)` is the shape `problem_banner_with`
-draws. The older `paginate_rows_below_notice(rows, nav_bar, Some(text))`
-measures a plain banner with no action, as it always has.
-
-A `row_button` or a `row_badge` keeps a column of its own at the row's edge,
-beside the mark and any trailing value. Describe each row's edge the way the row
-is built, `RowEdge::new().with_menu().with_badge()` or
-`RowEdge::new().with_button("Install")`, and measure with
-`clamped_row_with_edge(text, lines, nav_bar, edge)` and
-`paginate_rows_with_edges_below_banner(&[(title, summary, edge), …], nav_bar,
-banner)`, or `paginate_rows_with_edges_under(…, &prefix)`. A badge is the same
-width whatever count it shows, so a row's edge does not change when the count
-does.
-
 Two other things a page's measure has to be told, because both cost whole rows
 rather than a few pixels:
 
@@ -891,79 +785,6 @@ inline and automatically streams large or full-panel images in bounded chunks.
 The runtime publishes a picture to the cache only after the final complete,
 ordered chunk commits, so a partially transferred photograph can never flash
 onto the panel. The application API is the same at either size.
-
-### Colour
-
-The Clara Colour and the Libra Colour have a Kaleido 3 panel: sixteen greys
-under a printed colour filter, 4096 colours, and colour at half the resolution
-of the greys. Everything Cobalt draws was designed in grey first, and on these
-readers a few of its roles are painted in colour on top of exactly the same
-layout. Nothing moves, so a page an application paginated for a Clara BW is the
-same page on a Clara Colour.
-
-An application never names a colour value. It names an **accent**, one of a
-closed set, usually once for the whole application:
-
-```rust
-impl KoboApp for Hn {
-    fn accent(&self) -> Option<Accent> {
-        Some(Accent::Orange)
-    }
-    // ...
-}
-```
-
-The set is `Cobalt`, `Red`, `Orange`, `Amber`, `Green`, `Teal`, `Blue`,
-`Purple` and `Brown`. Each carries two shades chosen against the panel: a
-*tint* that carries ink text and a *strong* shade that carries paper text, both
-at seven to one contrast or better before the filter takes its share, and both
-among the 4096 colours the panel resolves so what is sent is what is shown. On a
-colour reader an accent does one thing with several parts:
-
-- the top bar is filled with the tint, its title and controls still in ink;
-- the primary button is filled with the strong shade, its label in paper;
-- the mark under the current destination, a selected chip or tab, a switch
-  that is on, a ticked box, a chosen option, the filled part of a progress bar,
-  the steps already taken and the selected cell of a pencil puzzle all take
-  the strong shade;
-- the square in hand on a chess or draughts board, and the word a crossword
-  is solving, take the tint.
-
-An application with no accent keeps a paper bar and has its controls drawn in
-the platform's own cobalt. Some colours are the platform's whatever the
-application's accent is, the way every phone draws its own red for an error:
-banners are green for success, red for an error and amber for attention, and
-keep their mark and outline; a text field whose value was refused is tinted
-red under the note that says why; the dark squares of a chess or draughts board
-and the shaded points of a backgammon table are brown, because a board should
-look like a board whatever the application's colour; and in the status band the battery
-turns red at twenty percent and green while charging, and the radio turns
-amber when it is on but nothing gets through. Colour is never the only signal,
-so a reader who cannot tell red from green loses nothing. Text is never
-coloured. Colour on this panel is drawn at half the resolution of the greys, so
-a coloured word is a soft word, and the tone of every run of text is decided
-by what it sits on.
-
-Pictures are the one place an application decides about colour itself, because
-only it holds the bytes. `context.panel_shows_colour()` says whether the
-reader can show colour; read the picture with `kobo_image::decode_colour` when
-it can and `decode` when it cannot, and hand both planes to
-`context.put_picture_shown(handle, width, height, grey, colour)`, which sends
-the colour only where it will be seen. A colour picture costs three times the
-bytes of a grey one on the wire and twice the memory to read, which is why it
-is asked for and not assumed. Frame, Fieldbook, Flashcards, Gutenbird and every
-reader built on `kobo-bookview` do this.
-
-Set an accent for the reasons a phone platform would call a tint: a brand the
-reader already knows (Hacker News is orange), or a subject that has a colour
-of its own. Most utilities are better left with none. A greyscale reader
-ignores the accent entirely and draws what it always drew; the SDK's tests
-hold that the greyscale frame is byte for byte the one drawn before accents
-existed. A screen that should differ from the rest can name its own with
-`ScreenBuilder::accent`, and a reading page can decline the application's with
-`without_accent()`. Accents travel on protocol 17
-and need Cobalt 0.3.32 or later on the reader; an older runtime draws the
-screen without one.
 
 ---
 
@@ -1170,9 +991,6 @@ private namespace first. A file installed by `kobo secret set` remains a
 global owner credential at `secrets/<name>` and is used only when the calling
 app has no private value. Thus Chat and Audiobook may hold different `openai`
 credentials, while existing CLI-installed credentials continue to work.
-Setting or removing a secret with `kobo secret` also deletes the values apps
-saved under that name, so the owner's latest choice from a computer is the one
-used, and a rejected token typed on the reader can be replaced from a computer.
 Applications cannot name or write another app's namespace, and secret paths
 and symbolic links are refused rather than followed.
 
@@ -1253,50 +1071,24 @@ command is rarely needed by hand: `kobo setup` carries everything in
 ## 6. Typing, where it is unavoidable
 
 Tapping beats typing on this panel, so a screen asks a question with `choose`
-wherever it can. When words are required, the runtime draws the keyboard
-(protocol 16 and later). A `TextEntry` that is open when its screen is drawn
-with `text_entry` asks for it with `DeviceRequest::TypeText`; the runtime takes
-the panel, keeps the app's top bar title, draws the prompt, the field and the
-keys in its own type, and answers once. The answer comes back through
-`TextEntry::handle`, which an app already calls for every action:
+wherever it can. When words are required, the keyboard is a composite
+rather than a node: rows of ordinary tappable cells and a small state machine.
 
 ```rust
 use kobo_sdk::keyboard::{TextEntry, Typing};
 
 match self.entry.handle(action) {
+    Some(Typing::Changed)      => self.show(context), // repaint the field
     Some(Typing::Submitted(s)) => self.search(&s, context),
-    Some(_)                    => self.show(context), // opened, or backed out
-    None => {}                                        // not this field's
+    Some(Typing::Cancelled)    => self.show(context),
+    None => {}                                        // not a keyboard tap
 }
 ```
-
-`TextEntry::numeric` opens on the digits and `TextEntry::address` puts `@`, `/`
-and `.` where the space bar would be. A field made with
-`TextEntry::saved_as(SecretTarget::named("lichess"))` is a secret: the runtime
-writes what is typed into the app's own secret namespace and answers
-`Typing::Saved`, so the app never holds the value. `CredentialSetup` does this
-for account keys and passwords. A keyboard fix now ships with the platform, not
-with each app.
-
-Tests answer the field without a runtime: `AppRunner::type_text` and
-`cancel_text`, or `kobo_sdk::keyboard::testing::type_text` for a test that calls
-the app directly.
-
-Only a screen that must see every key as it is tapped draws its own:
-`ScreenBuilder::keyboard` with a `Keyboard`, as the terminal and game keypads
-do. Those keys come from the same rows the runtime uses.
 
 Keys are addressed **positionally**: `kb.r1c2` is the third key of the middle
 row, whatever it currently says. Shift and the symbol layer change every label
 without moving a single cell, so a finger already resting on a key does not
 have to be lifted and re-aimed.
-
-Shift works on the symbol layer as it does on a computer: shift then 5 types
-`%`. The shifted page also holds `$ ^ * [ ] { } < > \ | ~` and the backtick, so
-every printable ASCII character can be typed, which a Wi-Fi password or a shell
-command may need. An app that arranges its own keys reads the current rows
-from `Keyboard::rows` instead of copying them. A field always opens unshifted,
-on the page its kind starts on.
 
 ---
 
@@ -1581,7 +1373,7 @@ player.start(context);
 
 // In on_action:
 if player.press(context, action) {
-    context.set_screen(player.screen_for(context));
+    context.set_screen(player.screen());
 }
 
 // Forward on_device_result and on_task in the same way. The latter owns only
@@ -1605,13 +1397,6 @@ tapping a book is a one way door. With it the application receives
 
 The author is the hero's byline and is stated exactly once. It is
 not repeated as a fact row two lines below.
-
-`screen_for(context)` shapes the player for the panel and text size. Where the
-full player would run off the panel, the cover gives way first, then the
-volume buttons join the transport row and the level becomes a fact, and held
-sideways the book and its controls stand side by side. Every control stays.
-The headphones/speaker picker pages its devices by what the panel holds.
-`screen()` draws the full player and is only right where it is known to fit.
 
 ---
 
@@ -1729,23 +1514,10 @@ The default simulator profile is the 1072x1448 Clara BW. Set
 ```sh
 KOBO_SIM_PROFILE=libra-2-388 kobo dev
 KOBO_SIM_PROFILE=elipsa-2e-389 kobo dev
-KOBO_SIM_PROFILE=clara-colour-393 kobo dev
 ```
 
 The selected profile controls the framebuffer dimensions, density, touch
 transform and runtime layout metrics together; it is not a browser-only scale.
-
-On a colour profile (`clara-colour-393`, `libra-colour-390`) the simulator
-draws the accents and pictures in colour, and its captures are three bytes a
-pixel. The panel view puts the frame through a model of the Kaleido 3 filter,
-sixteen levels per channel, colour averaged over two by two pixels and
-saturation reduced, on top of the usual residue; `--ideal` gives the renderer's
-own RGB. Each capture's metadata names which it is. Neither is a measured
-panel: the quantisation and the colour resolution are the panel's published
-figures, the saturation is a stated approximation chosen to err towards the
-reader, so a colour that is legible in the simulator is legible on the device.
-An application should be checked on both a grey and a colour profile, because
-the grey one is what most readers have.
 
 ## Driving it, and photographing the result
 
@@ -1892,9 +1664,7 @@ identity, denied child-process creation and runtime brokers. The host simulator
 is a development tool running as the developer's own user; it exercises the
 protocol and policies but is not an operating-system security boundary.
 
-- **You cannot draw.** No pixels, no colour values, no fonts, no coordinates.
-  An accent is a name from a closed set, and the runtime decides what it
-  means on the panel in front of it.
+- **You cannot draw.** No pixels, no colour, no fonts, no coordinates.
 - **You cannot block the panel.** Long work is a task or it does not happen.
 - **You cannot read a stored credential.** You may name one. During attended
   in-app setup you may briefly hold what the owner is typing solely to submit
@@ -1985,10 +1755,10 @@ existing grid label is interpreted as an embedded numbering format.
 Short keyboard labels fit their physical key rectangles, including compact
 landscape rows at large text settings. Top-bar text actions use caption size
 when body text cannot fit the bar's height; measurement and drawing agree.
-Touch targets are not reduced. `kobo drive` typing first resolves visible
-standard keyboard actions, the runtime's or an app's, preventing an existing
-crossword letter from stealing a tap. It still taps actual screen coordinates,
-and custom keyboards retain label matching when no standard keyboard is present.
+Touch targets are not reduced. `kobo drive` typing first resolves visible SDK
+keyboard actions, preventing an existing crossword letter from stealing a tap.
+It still taps actual screen coordinates, and custom keyboards retain label
+matching when no SDK keyboard is present.
 
 ### Root-relative article images
 
@@ -2009,8 +1779,6 @@ For lists with a recovery notice, use
 `Context::paginate_rows_below_notice(rows, bottom_action_present, notice)` and
 render the same notice text. It reserves the banner's measured height and the
 fixed bottom action, preventing long lists from clipping rows during failures.
-A banner with an action or a mark is taller than its words: use
-`paginate_rows_below_banner` with a `BannerShape` for it.
 
 Reader quotes use the reading face and scale for both layout and rendering,
 including when the interface text is larger. `Reader::report` reserves space
@@ -2020,8 +1788,7 @@ the warning restores the available reading area.
 For rows with overflow menus, `Context::clamped_row_with_menu(text, lines,
 nav_bar)` measures the width left by the menu. Use
 `paginate_rows_with_menu_below_notice(rows, nav_bar, notice)` when the same list
-has a banner; it reserves both the menu column and the measured banner height,
-or `paginate_rows_with_menu_below_banner` when that banner carries an action.
+has a banner; it reserves both the menu column and the measured banner height.
 
 ### Verified offline snapshots
 

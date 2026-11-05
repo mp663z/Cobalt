@@ -3,8 +3,9 @@
   "display_name": "Lichess",
   "short_label": "Lichess",
   "summary": "Play Lichess games, challenge players, solve puzzles, or play offline.",
-  "version": "1.0.21",
-  "release_notes": "Headings are a step smaller, small print such as hints and dates a step larger, and there is more room under the top bar.",
+  "version": "1.0.14",
+  "release_notes": "Setup steps now name the Cobalt version this app needs. No change to play.",
+  "minimum_cobalt_version": "0.3.5",
   "glyph": "grid",
   "capabilities": [
     "network",
@@ -14,27 +15,20 @@
   "setup": {
     "steps": [
       {
-        "text": "Computer games and puzzles need no account. To play people, create a Lichess Personal Access Token granting only board:play.",
+        "text": "Create a Lichess Personal Access Token granting only board:play.",
         "link": {
           "label": "Create a Lichess API token",
           "url": "https://lichess.org/account/oauth/token/create?scopes[]=board:play&description=Cobalt"
         }
       },
       {
-        "text": "On the reader, open Lichess, tap Account/Games, then Connect Lichess, and type the token."
-      },
-      {
-        "text": "Or install the token from a computer. Set up the reader once over USB, if you have not already.",
-        "command": "kobo setup"
-      },
-      {
         "text": "Save the token in a private local file, then install it under the exact secret name lichess.",
-        "command": "kobo secret set lichess --from token.txt"
+        "command": "kobo secret set lichess --from <token-file> --device <address>"
       },
       {
         "text": "Use Cobalt 0.3.18 or newer."
       }
     ]
   },
-  "page_description": "An unofficial Lichess client for Kobo. Play rated or casual games at rapid and classical time controls, accept or send challenges, solve puzzles, or play the computer offline, with or without a clock."
+  "page_description": "An unofficial Lichess client for Kobo. Play rated games at rapid and classical time controls, accept or send challenges, solve puzzles, or play the computer offline."
 }

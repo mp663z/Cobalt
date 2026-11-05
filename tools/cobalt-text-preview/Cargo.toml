@@ -1,0 +1,27 @@
+[package]
+name = "cobalt-text-preview"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.1"
+license = "AGPL-3.0-only"
+publish = false
+
+# Host-only fonts must not change the device workspace's release lock graph.
+[workspace]
+
+[features]
+default = ["sdk-handoff"]
+sdk-handoff = ["dep:kobo-sdk"]
+
+[dependencies]
+fontdue = "=0.9.3"
+kobo-sdk = { path = "../../crates/kobo-sdk", default-features = false, optional = true }
+kobo-ui = { path = "../../crates/kobo-ui" }
+kobo-web-document = { path = "../../crates/kobo-web-document" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

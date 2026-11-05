@@ -10,7 +10,7 @@ built from the SRD.
 </tr>
 <tr>
 <td width="50%" valign="top"><img width="300" src="screenshots/magic-items.png" alt="Magic items by category and rarity"><br>Magic items by category and rarity</td>
-<td width="50%" valign="top"><img width="300" src="screenshots/party-member.png" alt="A party member at 0 hit points, with death saves and hit point steps"><br>A party member at 0 hit points, with death saves and hit point steps</td>
+<td width="50%" valign="top"><img width="300" src="screenshots/party-member.png" alt="A party member's health and death saves"><br>A party member's health and death saves</td>
 </tr>
 <tr>
 <td width="50%" valign="top"><img width="300" src="screenshots/spell-filters.png" alt="Spells filtered by class, level and school"><br>Spells filtered by class, level and school</td>
@@ -21,22 +21,19 @@ built from the SRD.
 
 - 1,349 SRD records: spells, monsters, conditions, rules, rule sections and
   magic items. **About** shows exactly what the build contains.
-- Search by the start of a name, bookmarks and an edition switch between the
-  2014 and 2024 SRD.
+- Prefix search, bookmarks and an edition switch between the 2014 and 2024
+  SRD.
 - Filter spells by class, level, school, ritual and concentration. Filter
   monsters by challenge rating and type.
 - Stat blocks and rules open in the document reader, with abilities and
   headings intact. Tables are written out row by row so they stay readable at
   large text sizes.
-- **Initiative**: add combatants by name or from the monster reference. A
-  monster brings its hit points from its stat block; a typed name can be
-  given some. It sorts the order, tracks the active turn and round, and
-  **Previous** takes back a turn passed by mistake. Tap a combatant to hand
-  them the turn, change their hit points, fix their roll or remove them.
-- **Party**: up to six members, each with health, death saves and spell
-  slots. Hit points move in steps of 1, 5 or 10. Each spell level holds up to
-  four slots: **Set up** says how many, **Spend** and **Regain** count them,
-  and **Long rest** gives them all back.
+- **Initiative**: add combatants by name or from the monster reference. It
+  sorts the order, tracks the active turn and round, and **Previous** takes
+  back a turn passed by mistake. Tap a combatant to hand them the turn, fix
+  their roll or remove them.
+- **Party**: up to six members, each with health, death saves and nine spell
+  slot levels.
 - Initiative, party and bookmarks are saved after every change.
 
 ## Limits
