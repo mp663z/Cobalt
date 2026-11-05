@@ -97,8 +97,8 @@ fn block_entries(body: &str, deferred: &mut Vec<Deferred>) -> (Vec<Entry>, bool)
     }
     let mut entries = Vec::new();
     let mut unknown = false;
-    for (name, raw) in style_syntax::declarations(body) {
-        let name = css::strip_comments(name).trim().to_owned();
+    for (raw_name, raw) in style_syntax::declarations(body) {
+        let name = css::strip_comments(raw_name).trim().to_owned();
         let cleaned = css::strip_comments(raw);
         let trimmed = cleaned.trim();
         let lower_tail = trimmed.to_ascii_lowercase();
@@ -108,6 +108,14 @@ fn block_entries(body: &str, deferred: &mut Vec<Deferred>) -> (Vec<Entry>, bool)
         } else {
             trimmed
         };
+        // A comment separates tokens in CSS (`b/**/lue` is two tokens), but the
+        // shared comment stripper deletes it. For custom properties and var()
+        // values that would merge tokens, so any raw comment there refuses.
+        let raw_comment = raw.contains("/*") || raw_name.contains("/*");
+        if (name.starts_with("--") || custom_props::has_var(value)) && raw_comment {
+            unknown = true;
+            continue;
+        }
         if name.starts_with("--") {
             if !custom_props::valid_name(&name) || !custom_props::valid_definition(value) {
                 unknown = true;
@@ -267,10 +275,14 @@ impl StyleTree {
             if let Some(inline) = css::attribute(nodes, handle, "style") {
                 let mut inline_table = Vec::new();
                 let (entries, unknown) = block_entries(inline, &mut inline_table);
-                let mut parsed = Vec::new();
+                let mut parsed: Vec<(Property, Value, bool, u32)> = Vec::new();
                 for (offset, entry) in entries.iter().enumerate() {
+                    // ONE authored offset per entry, shared by typed and deferred
+                    // inline declarations, so same-specificity ties follow source order.
                     match *entry {
-                        Entry::Typed(p, v, i) => parsed.push((p, v, i)),
+                        Entry::Typed(p, v, i) => {
+                            parsed.push((p, v, i, u32::try_from(offset).unwrap_or(u32::MAX)));
+                        }
                         Entry::Deferred(index, important) => {
                             // Inline deferred entries join the same per-element
                             // resolution with inline specificity and order.
@@ -294,14 +306,14 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                declarations.extend(parsed.into_iter().enumerate().map(
-                    |(offset, (property, value, important))| Declaration {
+                declarations.extend(parsed.into_iter().map(
+                    |(property, value, important, offset)| Declaration {
                         property,
                         value,
                         origin: Origin::Author,
                         important,
                         specificity: INLINE_SPECIFICITY,
-                        source_order: u32::try_from(offset).unwrap_or(u32::MAX),
+                        source_order: offset,
                     },
                 ));
             }
@@ -3167,6 +3179,78 @@ mod custom_property_tests {
         let before = get("<!doctype html><style>html{--m:5px}p{margin:var(--m);margin-top:9px}</style><p>x</p>");
         let lit_before = get("<!doctype html><style>p{margin:5px;margin-top:9px}</style><p>x</p>");
         assert_eq!(before, lit_before);
+    }
+
+    #[test]
+    fn inline_declaration_order_ties_follow_authored_order_both_directions() {
+        // Later inline declaration wins whether typed or var(); Chrome-probed.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}</style><p style='color:var(--c);color:#00f'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#00f}</style><p style='color:#f00;color:var(--c)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00;--d:#00f}</style><p style='color:var(--c);color:var(--d)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        // !important: the important declaration wins regardless of order.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}</style><p style='color:var(--c) !important;color:#00f'>x</p>"),
+            Some(0xff_00_00)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#00f}</style><p style='color:#f00 !important;color:var(--c)'>x</p>"),
+            Some(0xff_00_00)
+        );
+        let get = |html: &str| {
+            let t = style(html);
+            assert!(!t.unsupported, "{html}");
+            t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap()
+        };
+        // Shorthand via var() vs typed longhand, inline, both orders.
+        assert_eq!(
+            get("<!doctype html><style>html{--m:5px}</style><p style='margin:var(--m);margin-top:9px'>x</p>"),
+            get("<!doctype html><p style='margin:5px;margin-top:9px'>x</p>")
+        );
+        assert_eq!(
+            get("<!doctype html><style>html{--m:5px}</style><p style='margin-top:9px;margin:var(--m)'>x</p>"),
+            get("<!doctype html><p style='margin-top:9px;margin:5px'>x</p>")
+        );
+        // Inline typed order unchanged by the offset fix (no custom property involved).
+        assert_eq!(
+            get("<!doctype html><p style='margin-top:9px;margin:5px'>x</p>"),
+            get("<!doctype html><p style='margin:5px'>x</p>")
+        );
+    }
+
+    #[test]
+    fn raw_comments_in_custom_or_var_values_refuse_instead_of_merging_tokens() {
+        for html in [
+            "<!doctype html><style>p{--x:b/**/lue;color:var(--x)}</style><p>x</p>",
+            "<!doctype html><style>p{--x:1p/**/x;margin-top:var(--x)}</style><p>x</p>",
+            "<!doctype html><style>html{--x:red}p{color:var(--x)/**/}</style><p>x</p>",
+            "<!doctype html><style>html{--x:1}p{margin-top:var(--x)/**/px}</style><p>x</p>",
+            "<!doctype html><style>p{color:var(--nope,b/**/lue)}</style><p>x</p>",
+            "<!doctype html><style>p{color:va/**/r(--x,red)}</style><p>x</p>",
+            "<!doctype html><style>p{-/**/-x:red}p{color:red}</style><p>x</p>",
+            "<!doctype html><style>html{--a:red}</style><p style='--x:b/**/lue;color:var(--x)'>x</p>",
+            "<!doctype html><style>html{--a:red}</style><p style='color:var(--a,b/**/lue)'>x</p>",
+            "<!doctype html><style>html{--a:red /* c */}p{color:var(--a)}</style><p>x</p>",
+        ] {
+            assert!(refused(html), "{html}");
+        }
+        // Comments outside custom/var values keep the legacy behavior.
+        assert_eq!(
+            p_color("<!doctype html><style>p{color:/*c*/#f00;/*x*/margin:1px}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#f00;/* note */}p{color:var(--a)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
     }
 
     #[test]
