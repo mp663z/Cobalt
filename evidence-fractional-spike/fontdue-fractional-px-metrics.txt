@@ -1,0 +1,18 @@
+FONT /usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf
+px=    13 ascent=11.5845 descent=-2.8120 line_gap=0.5522 new_line=14.9487 | H adv=9.3882 w=10 h=9 xmin=0 ymin=0 cov_sum=6824 | e adv=5.7700
+px=  13.5 ascent=12.0300 descent=-2.9202 line_gap=0.5735 new_line=15.5237 | H adv=9.7493 w=10 h=9 xmin=0 ymin=0 cov_sum=7358 | e adv=5.9919
+px= 13.99 ascent=12.4667 descent=-3.0262 line_gap=0.5943 new_line=16.0871 | H adv=10.1031 w=10 h=10 xmin=0 ymin=0 cov_sum=7895 | e adv=6.2094
+px=    14 ascent=12.4756 descent=-3.0283 line_gap=0.5947 new_line=16.0986 | H adv=10.1104 w=10 h=10 xmin=0 ymin=0 cov_sum=7911 | e adv=6.2139
+px=  14.4 ascent=12.8320 descent=-3.1148 line_gap=0.6117 new_line=16.5586 | H adv=10.3992 w=10 h=10 xmin=0 ymin=0 cov_sum=8368 | e adv=6.3914
+px=    16 ascent=14.2578 descent=-3.4609 line_gap=0.6797 new_line=18.3984 | H adv=11.5547 w=12 h=11 xmin=0 ymin=0 cov_sum=10315 | e adv=7.1016
+px=  16.5 ascent=14.7034 descent=-3.5691 line_gap=0.7009 new_line=18.9734 | H adv=11.9158 w=12 h=11 xmin=0 ymin=0 cov_sum=10984 | e adv=7.3235
+px=  17.6 ascent=15.6836 descent=-3.8070 line_gap=0.7477 new_line=20.2383 | H adv=12.7102 w=13 h=12 xmin=0 ymin=0 cov_sum=12498 | e adv=7.8117
+FONT /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+px=    13 ascent=12.0669 descent=-3.0659 line_gap=0.0000 new_line=15.1328 | H adv=9.7754 w=8 h=10 xmin=1 ymin=0 cov_sum=7479 | e adv=7.9980
+px=  13.5 ascent=12.5310 descent=-3.1838 line_gap=0.0000 new_line=15.7148 | H adv=10.1514 w=8 h=10 xmin=1 ymin=0 cov_sum=8066 | e adv=8.3057
+px= 13.99 ascent=12.9858 descent=-3.2994 line_gap=0.0000 new_line=16.2852 | H adv=10.5198 w=9 h=11 xmin=1 ymin=0 cov_sum=8648 | e adv=8.6071
+px=    14 ascent=12.9951 descent=-3.3018 line_gap=0.0000 new_line=16.2969 | H adv=10.5273 w=9 h=11 xmin=1 ymin=0 cov_sum=8672 | e adv=8.6133
+px=  14.4 ascent=13.3664 descent=-3.3961 line_gap=0.0000 new_line=16.7625 | H adv=10.8281 w=9 h=11 xmin=1 ymin=0 cov_sum=9178 | e adv=8.8594
+px=    16 ascent=14.8516 descent=-3.7734 line_gap=0.0000 new_line=18.6250 | H adv=12.0312 w=10 h=12 xmin=1 ymin=0 cov_sum=11299 | e adv=9.8438
+px=  16.5 ascent=15.3157 descent=-3.8914 line_gap=0.0000 new_line=19.2070 | H adv=12.4072 w=10 h=13 xmin=1 ymin=0 cov_sum=12046 | e adv=10.1514
+px=  17.6 ascent=16.3367 descent=-4.1508 line_gap=0.0000 new_line=20.4875 | H adv=13.2344 w=11 h=13 xmin=1 ymin=0 cov_sum=13696 | e adv=10.8281
