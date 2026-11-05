@@ -1,0 +1,138 @@
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-web-document` (lib) generated 1 warning
+   Compiling kobo-web-layout v0.1.0 (/home/sandbox/cb/wt-bis/crates/kobo-web-layout)
+    Finished `release` profile [optimized] target(s) in 14.58s
+     Running unittests src/lib.rs (/home/sandbox/cb/tgt-z/release/deps/kobo_web_layout-d4f72961cb1419aa)
+
+running 1 test
+ISSUES-NOBLANK clara Default A_text: []
+PROBE clara Default A_text panelw=1072 flow_h=495 fits=true max_right=1072 nodes=1
+  [x=47 y=175 w=978 h=495 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that is", "certainly wider than any panel at any text", "scale ................................\";", "}"]]
+ISSUES-NOBLANK clara Default B_preformatted: []
+PROBE clara Default B_preformatted panelw=1072 flow_h=567 fits=true max_right=1072 nodes=8
+  [x=47 y=175 w=167 h=55 lines=["fn main() {"]]
+  [x=87 y=242 w=299 h=55 lines=["let v = vec![1, 2, 3];"]]
+  [x=87 y=309 w=188 h=55 lines=["for x in &v {"]]
+  [x=129 y=376 w=208 h=55 lines=["println!(\"{x}\");"]]
+  [x=87 y=443 w=12 h=55 lines=["}"]]
+  [x=87 y=510 w=835 h=55 lines=["let very_long = \"a long unbroken string literal that is"]]
+  [x=47 y=620 w=356 h=55 lines=["scale ................................\";"]]
+  [x=47 y=687 w=12 h=55 lines=["}"]]
+ISSUES-NOBLANK clara Large A_text: []
+PROBE clara Large A_text panelw=1072 flow_h=594 fits=true max_right=1072 nodes=1
+  [x=47 y=175 w=978 h=594 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that", "is certainly wider than any panel at any text", "scale ................................\";", "}"]]
+ISSUES-NOBLANK clara Large B_preformatted: []
+PROBE clara Large B_preformatted panelw=1072 flow_h=666 fits=true max_right=1072 nodes=8
+  [x=47 y=175 w=199 h=66 lines=["fn main() {"]]
+  [x=95 y=253 w=355 h=66 lines=["let v = vec![1, 2, 3];"]]
+  [x=95 y=331 w=223 h=66 lines=["for x in &v {"]]
+  [x=146 y=409 w=248 h=66 lines=["println!(\"{x}\");"]]
+  [x=95 y=487 w=14 h=66 lines=["}"]]
+  [x=95 y=565 w=860 h=66 lines=["let very_long = \"a long unbroken string literal"]]
+  [x=47 y=697 w=423 h=66 lines=["scale ................................\";"]]
+  [x=47 y=775 w=14 h=66 lines=["}"]]
+ISSUES-NOBLANK clara ExtraLarge A_text: []
+PROBE clara ExtraLarge A_text panelw=1072 flow_h=684 fits=true max_right=1072 nodes=1
+  [x=47 y=175 w=978 h=684 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string", "literal that is certainly wider than any panel", "at any text scale ................................\";", "}"]]
+ISSUES-NOBLANK clara ExtraLarge B_preformatted: []
+PROBE clara ExtraLarge B_preformatted panelw=1072 flow_h=756 fits=true max_right=1072 nodes=8
+  [x=47 y=175 w=231 h=76 lines=["fn main() {"]]
+  [x=103 y=263 w=412 h=76 lines=["let v = vec![1, 2, 3];"]]
+  [x=103 y=351 w=259 h=76 lines=["for x in &v {"]]
+  [x=160 y=439 w=287 h=76 lines=["println!(\"{x}\");"]]
+  [x=103 y=527 w=16 h=76 lines=["}"]]
+  [x=103 y=615 w=856 h=76 lines=["let very_long = \"a long unbroken string"]]
+  [x=47 y=767 w=875 h=76 lines=["panel at any text scale ................................\";"]]
+  [x=47 y=855 w=16 h=76 lines=["}"]]
+ISSUES-NOBLANK 1264x1680 Default A_text: []
+PROBE 1264x1680 Default A_text panelw=1264 flow_h=440 fits=true max_right=1264 nodes=1
+  [x=47 y=175 w=1170 h=440 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that is certainly wider than", "any panel at any text scale ................................\";", "}"]]
+ISSUES-NOBLANK 1264x1680 Default B_preformatted: []
+PROBE 1264x1680 Default B_preformatted panelw=1264 flow_h=512 fits=true max_right=1264 nodes=8
+  [x=47 y=175 w=167 h=55 lines=["fn main() {"]]
+  [x=87 y=242 w=299 h=55 lines=["let v = vec![1, 2, 3];"]]
+  [x=87 y=309 w=188 h=55 lines=["for x in &v {"]]
+  [x=129 y=376 w=208 h=55 lines=["println!(\"{x}\");"]]
+  [x=87 y=443 w=12 h=55 lines=["}"]]
+  [x=87 y=510 w=1082 h=55 lines=["let very_long = \"a long unbroken string literal that is certainly wider"]]
+  [x=47 y=565 w=783 h=55 lines=["than any panel at any text scale ................................\";"]]
+  [x=47 y=632 w=12 h=55 lines=["}"]]
+ISSUES-NOBLANK 1264x1680 Large A_text: []
+PROBE 1264x1680 Large A_text panelw=1264 flow_h=528 fits=true max_right=1264 nodes=1
+  [x=47 y=175 w=1170 h=528 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that is certainly", "wider than any panel at any text scale ................................\";", "}"]]
+ISSUES-NOBLANK 1264x1680 Large B_preformatted: []
+PROBE 1264x1680 Large B_preformatted panelw=1264 flow_h=666 fits=true max_right=1264 nodes=8
+  [x=47 y=175 w=199 h=66 lines=["fn main() {"]]
+  [x=95 y=253 w=355 h=66 lines=["let v = vec![1, 2, 3];"]]
+  [x=95 y=331 w=223 h=66 lines=["for x in &v {"]]
+  [x=146 y=409 w=248 h=66 lines=["println!(\"{x}\");"]]
+  [x=95 y=487 w=14 h=66 lines=["}"]]
+  [x=95 y=565 w=993 h=66 lines=["let very_long = \"a long unbroken string literal that is"]]
+  [x=47 y=697 w=423 h=66 lines=["scale ................................\";"]]
+  [x=47 y=775 w=14 h=66 lines=["}"]]
+ISSUES-NOBLANK 1264x1680 ExtraLarge A_text: []
+PROBE 1264x1680 ExtraLarge A_text panelw=1264 flow_h=684 fits=true max_right=1264 nodes=1
+  [x=47 y=175 w=1170 h=684 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that is", "certainly wider than any panel at any text", "scale ................................\";", "}"]]
+ISSUES-NOBLANK 1264x1680 ExtraLarge B_preformatted: []
+PROBE 1264x1680 ExtraLarge B_preformatted panelw=1264 flow_h=756 fits=true max_right=1264 nodes=8
+  [x=47 y=175 w=231 h=76 lines=["fn main() {"]]
+  [x=103 y=263 w=412 h=76 lines=["let v = vec![1, 2, 3];"]]
+  [x=103 y=351 w=259 h=76 lines=["for x in &v {"]]
+  [x=160 y=439 w=287 h=76 lines=["println!(\"{x}\");"]]
+  [x=103 y=527 w=16 h=76 lines=["}"]]
+  [x=103 y=615 w=1099 h=76 lines=["let very_long = \"a long unbroken string literal that"]]
+  [x=47 y=767 w=491 h=76 lines=["scale ................................\";"]]
+  [x=47 y=855 w=16 h=76 lines=["}"]]
+ISSUES-NOBLANK 1404x1872 Default A_text: []
+PROBE 1404x1872 Default A_text panelw=1404 flow_h=495 fits=true max_right=1404 nodes=1
+  [x=233 y=133 w=938 h=495 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal that is", "certainly wider than any panel at any text", "scale ................................\";", "}"]]
+ISSUES-NOBLANK 1404x1872 Default B_preformatted: []
+PROBE 1404x1872 Default B_preformatted panelw=1404 flow_h=549 fits=true max_right=1404 nodes=8
+  [x=233 y=133 w=167 h=55 lines=["fn main() {"]]
+  [x=273 y=197 w=299 h=55 lines=["let v = vec![1, 2, 3];"]]
+  [x=273 y=261 w=188 h=55 lines=["for x in &v {"]]
+  [x=315 y=325 w=208 h=55 lines=["println!(\"{x}\");"]]
+  [x=273 y=389 w=12 h=55 lines=["}"]]
+  [x=273 y=453 w=835 h=55 lines=["let very_long = \"a long unbroken string literal that is"]]
+  [x=233 y=563 w=356 h=55 lines=["scale ................................\";"]]
+  [x=233 y=627 w=12 h=55 lines=["}"]]
+ISSUES-NOBLANK 1404x1872 Large A_text: []
+PROBE 1404x1872 Large A_text panelw=1404 flow_h=594 fits=true max_right=1404 nodes=1
+  [x=233 y=133 w=938 h=594 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string literal", "that is certainly wider than any panel at any text", "scale ................................\";", "}"]]
+ISSUES-NOBLANK 1404x1872 Large B_preformatted: []
+PROBE 1404x1872 Large B_preformatted panelw=1404 flow_h=648 fits=true max_right=1404 nodes=8
+  [x=233 y=133 w=199 h=66 lines=["fn main() {"]]
+  [x=281 y=208 w=355 h=66 lines=["let v = vec![1, 2, 3];"]]
+  [x=281 y=283 w=223 h=66 lines=["for x in &v {"]]
+  [x=332 y=358 w=248 h=66 lines=["println!(\"{x}\");"]]
+  [x=281 y=433 w=14 h=66 lines=["}"]]
+  [x=281 y=508 w=860 h=66 lines=["let very_long = \"a long unbroken string literal"]]
+  [x=233 y=640 w=508 h=66 lines=["text scale ................................\";"]]
+  [x=233 y=715 w=14 h=66 lines=["}"]]
+ISSUES-NOBLANK 1404x1872 ExtraLarge A_text: []
+PROBE 1404x1872 ExtraLarge A_text panelw=1404 flow_h=684 fits=true max_right=1404 nodes=1
+  [x=233 y=133 w=938 h=684 lines=["fn main() {", "let v = vec![1, 2, 3];", "for x in &v {", "println!(\"{x}\");", "}", "let very_long = \"a long unbroken string", "literal that is certainly wider than any", "panel at any text scale ................................\";", "}"]]
+ISSUES-NOBLANK 1404x1872 ExtraLarge B_preformatted: []
+PROBE 1404x1872 ExtraLarge B_preformatted panelw=1404 flow_h=738 fits=true max_right=1404 nodes=8
+  [x=233 y=133 w=231 h=76 lines=["fn main() {"]]
+  [x=289 y=218 w=412 h=76 lines=["let v = vec![1, 2, 3];"]]
+  [x=289 y=303 w=259 h=76 lines=["for x in &v {"]]
+  [x=346 y=388 w=287 h=76 lines=["println!(\"{x}\");"]]
+  [x=289 y=473 w=16 h=76 lines=["}"]]
+  [x=289 y=558 w=856 h=76 lines=["let very_long = \"a long unbroken string"]]
+  [x=233 y=710 w=875 h=76 lines=["panel at any text scale ................................\";"]]
+  [x=233 y=795 w=16 h=76 lines=["}"]]
+test tests::scratch_geometry_probe_preformatted_forms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.03s
+
