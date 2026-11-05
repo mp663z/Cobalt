@@ -1,0 +1,9 @@
+info: syncing channel updates for 1.85.1-x86_64-unknown-linux-gnu
+info: latest update on 2025-03-18 for version 1.85.1 (4eb161250 2025-03-15)
+info: downloading 3 components
+ Downloading crates ...
+  Downloaded rustls-webpki v0.103.16
+  Downloaded pulldown-cmark v0.13.5
+  Downloaded webpki-roots v1.0.11
+  Downloaded rustls v0.23.46
+error: package ID specification `kobo-browser` did not match any packages
