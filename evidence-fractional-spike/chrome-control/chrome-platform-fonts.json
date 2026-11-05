@@ -1,0 +1,28 @@
+[
+ {
+  "fam": "LibCtl",
+  "fonts": [
+   {
+    "familyName": "Liberation Serif",
+    "postScriptName": "LiberationSerif",
+    "isCustomFont": true,
+    "glyphCount": 3
+   }
+  ]
+ },
+ {
+  "fam": "DejaCtl",
+  "fonts": [
+   {
+    "familyName": "DejaVu Sans",
+    "postScriptName": "DejaVuSans",
+    "isCustomFont": true,
+    "glyphCount": 3
+   }
+  ]
+ },
+ {
+  "fam": "NoSuchFontXyz",
+  "fonts": []
+ }
+]

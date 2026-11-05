@@ -1,0 +1,38 @@
+[
+ {
+  "m": "Network.requestWillBeSent",
+  "u": "file:///home/sandbox/cb/fctl/page.html"
+ },
+ {
+  "m": "Network.responseReceived",
+  "u": "file:///home/sandbox/cb/fctl/page.html",
+  "s": 200
+ },
+ {
+  "m": "Network.loadingFinished"
+ },
+ {
+  "m": "Network.requestWillBeSent",
+  "u": "file:///home/sandbox/cb/fctl/LiberationSerif-Regular.ttf"
+ },
+ {
+  "m": "Network.responseReceived",
+  "u": "file:///home/sandbox/cb/fctl/LiberationSerif-Regular.ttf",
+  "s": 200
+ },
+ {
+  "m": "Network.loadingFinished"
+ },
+ {
+  "m": "Network.requestWillBeSent",
+  "u": "file:///home/sandbox/cb/fctl/DejaVuSans.ttf"
+ },
+ {
+  "m": "Network.responseReceived",
+  "u": "file:///home/sandbox/cb/fctl/DejaVuSans.ttf",
+  "s": 200
+ },
+ {
+  "m": "Network.loadingFinished"
+ }
+]

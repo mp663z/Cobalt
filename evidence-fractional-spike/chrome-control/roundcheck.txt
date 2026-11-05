@@ -1,0 +1,17 @@
+LibCtl 13 chrome blockH 16 asc 12 below 4 | round(asc)+round(desc)+round(gap)= 12 3 1 16 blockH match
+LibCtl 13.5 chrome blockH 16 asc 12 below 4 | round(asc)+round(desc)+round(gap)= 12 3 1 16 blockH match
+LibCtl 13.99 chrome blockH 16 asc 12 below 4 | round(asc)+round(desc)+round(gap)= 12 3 1 16 blockH match
+LibCtl 14 chrome blockH 16 asc 12 below 4 | round(asc)+round(desc)+round(gap)= 12 3 1 16 blockH match
+LibCtl 14.4 chrome blockH 17 asc 13 below 4 | round(asc)+round(desc)+round(gap)= 13 3 1 17 blockH match
+LibCtl 16 chrome blockH 18 asc 14 below 4 | round(asc)+round(desc)+round(gap)= 14 3 1 18 blockH match
+LibCtl 16.5 chrome blockH 20 asc 15 below 5 | round(asc)+round(desc)+round(gap)= 15 4 1 20 blockH match
+LibCtl 17.6 chrome blockH 21 asc 16 below 5 | round(asc)+round(desc)+round(gap)= 16 4 1 21 blockH match
+DejaCtl 13 chrome blockH 15 asc 12 below 3 | round(asc)+round(desc)+round(gap)= 12 3 0 15 blockH match
+DejaCtl 13.5 chrome blockH 16 asc 13 below 3 | round(asc)+round(desc)+round(gap)= 13 3 0 16 blockH match
+DejaCtl 13.99 chrome blockH 16 asc 13 below 3 | round(asc)+round(desc)+round(gap)= 13 3 0 16 blockH match
+DejaCtl 14 chrome blockH 16 asc 13 below 3 | round(asc)+round(desc)+round(gap)= 13 3 0 16 blockH match
+DejaCtl 14.4 chrome blockH 16 asc 13 below 3 | round(asc)+round(desc)+round(gap)= 13 3 0 16 blockH match
+DejaCtl 16 chrome blockH 19 asc 15 below 4 | round(asc)+round(desc)+round(gap)= 15 4 0 19 blockH match
+DejaCtl 16.5 chrome blockH 19 asc 15 below 4 | round(asc)+round(desc)+round(gap)= 15 4 0 19 blockH match
+DejaCtl 17.6 chrome blockH 20 asc 16 below 4 | round(asc)+round(desc)+round(gap)= 16 4 0 20 blockH match
+blockH matches 16 of 16 (hypothesis consistency only; ascent split not equal to round(asc) where gap is placed above)
