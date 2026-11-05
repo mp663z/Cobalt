@@ -1,0 +1,5 @@
+rule: flag a case when ANY word-fit decision in the model has |decision_slack| < T (all words, not only the first differing one). Empirical on this 1173-case grid only; no bound claimed.
+T=0.10 flagged 26 of 1173 (2.2%), flips caught 14 of 17, correct cases flagged (over-refusal) 12 (1.0% of correct)
+T=0.25 flagged 61 of 1173 (5.2%), flips caught 17 of 17, correct cases flagged (over-refusal) 44 (3.8% of correct)
+T=0.50 flagged 118 of 1173 (10.1%), flips caught 17 of 17, correct cases flagged (over-refusal) 101 (8.7% of correct)
+T=1.00 flagged 245 of 1173 (20.9%), flips caught 17 of 17, correct cases flagged (over-refusal) 228 (19.7% of correct)

@@ -1,0 +1,21 @@
+APPROXIMATE model comparison (measurement only)
+LibEmb cases 391 identical 390 flips 1
+  px 17.140625 W 226.953125 |model decision margin| px 0.0848  | first differing decision at word 11: model breaks, chrome fits
+DejaEmb cases 391 identical 384 flips 7
+  px 12.734375 W 280.4375 |model decision margin| px 0.1975  | first differing decision at word 21: model breaks, chrome fits
+  px 13.46875 W 387.40625 |model decision margin| px 0.2215  | first differing decision at word 10: model breaks, chrome fits
+  px 16.40625 W 146.734375 |model decision margin| px 0.0807  | first differing decision at word 24: model breaks, chrome fits
+  px 17.875 W 267.0625 |model decision margin| px 0.1461  | first differing decision at word 10: model breaks, chrome fits
+  px 19.34375 W 160.109375 |model decision margin| px 0.0622  | first differing decision at word 2: model breaks, chrome fits
+  px 21.546875 W 200.21875 |model decision margin| px 0.0472  | first differing decision at word 23: model breaks, chrome fits
+  px 23.015625 W 173.484375 |model decision margin| px 0.088  | first differing decision at word 12: model breaks, chrome fits
+SansEmb cases 391 identical 382 flips 9
+  px 12 W 160.109375 |model decision margin| px 0.0254  | first differing decision at word 14: chrome breaks, model fits
+  px 13.46875 W 160.109375 |model decision margin| px 0.0885  | first differing decision at word 4: model breaks, chrome fits
+  px 14.203125 W 133.375 |model decision margin| px 0.0775  | first differing decision at word 22: model breaks, chrome fits
+  px 14.203125 W 333.921875 |model decision margin| px 0.0388  | first differing decision at word 17: model breaks, chrome fits
+  px 16.40625 W 146.734375 |model decision margin| px 0.0807  | first differing decision at word 3: model breaks, chrome fits
+  px 17.140625 W 133.375 |model decision margin| px 0.0591  | first differing decision at word 24: model breaks, chrome fits
+  px 19.34375 W 253.703125 |model decision margin| px 0.0608  | first differing decision at word 10: model breaks, chrome fits
+  px 20.8125 W 293.8125 |model decision margin| px 0.0015  | first differing decision at word 5: model breaks, chrome fits
+  px 22.28125 W 240.328125 |model decision margin| px 0.0004  | first differing decision at word 23: model breaks, chrome fits

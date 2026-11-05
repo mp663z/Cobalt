@@ -1,0 +1,12 @@
+[package]
+name = "cobalt-fractional-diag"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "UNREVIEWED measurement-only diagnostic: unrounded fontdue advance-sum wrap model for comparison with Chrome rows. Not an engine feature."
+
+[dependencies]
+fontdue = "=0.9.3"
+
+# standalone: not a member of the repository workspace, touches no engine crate
+[workspace]
