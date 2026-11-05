@@ -83,7 +83,8 @@ fn unsupported_forms_still_refuse_before_paint() {
         "border:3px solid rgb(10, 20, 30",
         "border:3px solid rgb(10, 20, 30))",
         "border:3px solid rgba(10, 20, 30, 0.5)",
-        "border:3px solid var(--x, red)",
+        // var() with an undefined name and no fallback is invalid at computed-value time; the candidate refuses it.
+        "border:3px solid var(--x)",
         "border:3px solid rgb(10 20 30)",
         "border-color:rgb(1, 2, 3) rgb(4, 5, 6) rgb(7, 8, 9) rgb(1, 2, 3)",
     ] {
@@ -95,5 +96,10 @@ fn unsupported_forms_still_refuse_before_paint() {
             "{bad}"
         );
     }
+    // CANDIDATE: a var() fallback now resolves like the literal it contains (Chrome-probed).
+    assert_eq!(
+        paint("border-style:solid;border-width:3px;border:3px solid var(--x, red)").is_some(),
+        paint("border-style:solid;border-width:3px;border:3px solid red").is_some()
+    );
     assert!(paint("border-style:solid;border-width:3px;border-color:rgb(1, 2, 3) rgb(4, 5, 6) rgb(7, 8, 9) rgb(1, 2, 3)").is_none());
 }

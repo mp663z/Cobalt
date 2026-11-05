@@ -91,7 +91,9 @@ fn known_false_blocks_hide_nothing_else_and_true_blocks_keep_declaration_policy(
     // members were re-probed against this tree.
     for body in [
         "p{flex-direction:row}",
-        ":root{--x:1}",
+        // CANDIDATE: a plain custom property is supported now (asserted clean below);
+        // a custom value with a url() token is not representable and still refuses.
+        ":root{--x:url(a)}",
         "p{display:grid}",
         "p{margin-top:calc(1px + 2px)}",
     ] {
@@ -103,6 +105,8 @@ fn known_false_blocks_hide_nothing_else_and_true_blocks_keep_declaration_policy(
             "{body}"
         );
     }
+    let tree = at(&page("@media (min-width:641px){:root{--x:1}}"), 700);
+    assert!(!tree.unsupported, "plain custom property definition");
     // The gov values: margin-right:20px is supported, so a true block is clean.
     let tree = at(
         &page("@media (min-width: 40.0625em){p{margin-right:20px}}"),

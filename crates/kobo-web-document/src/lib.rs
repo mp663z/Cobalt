@@ -21,6 +21,7 @@ pub mod box_tree;
 pub mod computed_style;
 mod convert;
 mod css;
+mod custom_props;
 pub mod css_background;
 mod css_border;
 pub mod css_paint_bridge;

@@ -11,11 +11,21 @@ use crate::computed_style::{
 use crate::css;
 use crate::dom::{Data, Node, DOCUMENT};
 use crate::style_diagnostics::{RefusalReason, StyleDiagnostics};
+use crate::custom_props::{self, Def, Map};
 use crate::style_syntax;
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
 const MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
 const MAX_RULES: usize = 4096;
 const MAX_MATCH_WORK: usize = 4_000_000;
+/// CANDIDATE: an element's style attribute outranks every selector of the same
+/// importance (CSS Cascade 4: style attribute beats any selector specificity).
+/// The legacy value (1,0,0) tied with `#id` rules and lost on source order.
+const INLINE_SPECIFICITY: (u16, u16, u16) = (u16::MAX, u16::MAX, u16::MAX);
+/// Tree-wide budgets for custom property work.
+const MAX_VAR_MAP_BYTES_TOTAL: usize = 16 * 1024 * 1024;
+const MAX_SUBSTITUTED_BYTES_PER_ELEMENT: usize = 64 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StyledNode {
@@ -53,6 +63,77 @@ struct MatchedRule {
     value: Value,
     important: bool,
     source_order: u32,
+    /// Index into the deferred table: a custom property definition or a
+    /// declaration whose value contains `var()`. `property`/`value` are
+    /// placeholders then and never reach the cascade directly.
+    deferred: Option<u32>,
+}
+
+/// A declaration resolved per element after the cascade of custom properties.
+struct Deferred {
+    /// Custom property: exact (case-sensitive) name. Otherwise the lowercased
+    /// property name.
+    name: String,
+    value: String,
+    custom: bool,
+}
+
+enum Entry {
+    Typed(Property, Value, bool),
+    Deferred(u32, bool),
+}
+
+/// Parse one declaration block. Blocks with neither a custom property nor a
+/// `var()` take the unchanged legacy path. Other blocks are parsed
+/// declaration by declaration, preserving order.
+fn block_entries(body: &str, deferred: &mut Vec<Deferred>) -> (Vec<Entry>, bool) {
+    let stripped = css::strip_comments(body);
+    if !stripped.contains("--") && !custom_props::has_var(&stripped) {
+        let (typed, unknown) = properties(body);
+        return (
+            typed.into_iter().map(|(p, v, i)| Entry::Typed(p, v, i)).collect(),
+            unknown,
+        );
+    }
+    let mut entries = Vec::new();
+    let mut unknown = false;
+    for (name, raw) in style_syntax::declarations(body) {
+        let name = css::strip_comments(name).trim().to_owned();
+        let cleaned = css::strip_comments(raw);
+        let trimmed = cleaned.trim();
+        let lower_tail = trimmed.to_ascii_lowercase();
+        let important = lower_tail.ends_with("!important");
+        let value = if important {
+            trimmed[..trimmed.len() - "!important".len()].trim()
+        } else {
+            trimmed
+        };
+        if name.starts_with("--") {
+            if !custom_props::valid_name(&name) || !custom_props::valid_definition(value) {
+                unknown = true;
+                continue;
+            }
+            deferred.push(Deferred { name, value: value.to_owned(), custom: true });
+            entries.push(Entry::Deferred(u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX), important));
+        } else if custom_props::has_var(value) {
+            if custom_props::find_vars(value).is_none() {
+                unknown = true;
+                continue;
+            }
+            deferred.push(Deferred {
+                name: name.to_ascii_lowercase(),
+                value: value.to_owned(),
+                custom: false,
+            });
+            entries.push(Entry::Deferred(u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX), important));
+        } else {
+            let one = format!("{name}:{raw}");
+            let (typed, bad) = properties(&one);
+            unknown |= bad;
+            entries.extend(typed.into_iter().map(|(p, v, i)| Entry::Typed(p, v, i)));
+        }
+    }
+    (entries, unknown)
 }
 
 /// Stylesheet supply budget for the style-tree entries. `CANONICAL` equals the
@@ -96,15 +177,16 @@ impl StyleTree {
         budget: SupplyBudget,
     ) -> Self {
         let mut tree = Self::default();
-        let (rules, incomplete, claimed) =
+        let (rules, deferred_table, incomplete, claimed) =
             matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget);
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
-        let mut stack = vec![(DOCUMENT, None::<usize>, Computed::INITIAL)];
+        let mut stack = vec![(DOCUMENT, None::<usize>, Computed::INITIAL, Rc::new(Map::new()))];
         let mut match_work = 0_usize;
+        let mut var_map_bytes = 0_usize;
         let mut root_font_px: u32 = 16;
-        while let Some((handle, parent, inherited)) = stack.pop() {
+        while let Some((handle, parent, inherited, inherited_vars)) = stack.pop() {
             if let Data::Text(text) = &nodes[handle].data {
                 if tree.nodes.len() >= nodes.len() {
                     tree.truncated = true;
@@ -128,7 +210,7 @@ impl StyleTree {
             }
             let Data::Element { name, attrs, .. } = &nodes[handle].data else {
                 for &child in nodes[handle].children.iter().rev() {
-                    stack.push((child, parent, inherited));
+                    stack.push((child, parent, inherited, Rc::clone(&inherited_vars)));
                 }
                 continue;
             };
@@ -142,6 +224,11 @@ impl StyleTree {
                 break;
             }
             let mut declarations = Vec::new();
+            let mut local_deferred: Vec<Deferred> = Vec::new();
+            let mut inline_hits: Vec<(u32, bool, (u16, u16, u16), u32)> = Vec::new();
+            // (deferred index, important, specificity, source order) of matched
+            // custom property definitions and var()-bearing declarations.
+            let mut hits: Vec<(u32, bool, (u16, u16, u16), u32)> = Vec::new();
             for rule in &rules {
                 match_work += 1;
                 if match_work > MAX_MATCH_WORK {
@@ -150,6 +237,15 @@ impl StyleTree {
                     break;
                 }
                 if rule.selector.matches(nodes, handle) {
+                    if let Some(index) = rule.deferred {
+                        hits.push((index, rule.important, rule.selector.specificity, rule.source_order));
+                        if hits.len() + declarations.len() >= MAX_DECLARATIONS_PER_ELEMENT {
+                            tree.diagnostics.record(RefusalReason::MatchedDeclarations);
+                            tree.truncated = true;
+                            break;
+                        }
+                        continue;
+                    }
                     declarations.push(Declaration {
                         property: rule.property,
                         value: rule.value,
@@ -169,7 +265,25 @@ impl StyleTree {
                 break;
             }
             if let Some(inline) = css::attribute(nodes, handle, "style") {
-                let (parsed, unknown) = properties(inline);
+                let mut inline_table = Vec::new();
+                let (entries, unknown) = block_entries(inline, &mut inline_table);
+                let mut parsed = Vec::new();
+                for (offset, entry) in entries.iter().enumerate() {
+                    match *entry {
+                        Entry::Typed(p, v, i) => parsed.push((p, v, i)),
+                        Entry::Deferred(index, important) => {
+                            // Inline deferred entries join the same per-element
+                            // resolution with inline specificity and order.
+                            let slot = u32::try_from(local_deferred.len()).unwrap_or(u32::MAX);
+                            local_deferred.push(Deferred {
+                                name: inline_table[index as usize].name.clone(),
+                                value: inline_table[index as usize].value.clone(),
+                                custom: inline_table[index as usize].custom,
+                            });
+                            inline_hits.push((slot, important, INLINE_SPECIFICITY, u32::try_from(offset).unwrap_or(u32::MAX)));
+                        }
+                    }
+                }
                 let refused = unknown || !style_syntax::declarations_complete(inline);
                 if refused {
                     tree.diagnostics.record(RefusalReason::CssDeclaration);
@@ -186,7 +300,7 @@ impl StyleTree {
                         value,
                         origin: Origin::Author,
                         important,
-                        specificity: (1, 0, 0),
+                        specificity: INLINE_SPECIFICITY,
                         source_order: u32::try_from(offset).unwrap_or(u32::MAX),
                     },
                 ));
@@ -256,6 +370,90 @@ impl StyleTree {
                         source_order: 0,
                     });
                 }
+            }
+            // Custom properties: cascade the winning definitions, compute this
+            // element's map from the parent's, then substitute var() in every
+            // matched declaration with the SAME cascade key it was authored
+            // with. Anything not implemented refuses.
+            let mut vars_now = Rc::clone(&inherited_vars);
+            let mut var_refused = false;
+            if !hits.is_empty() || !inline_hits.is_empty() {
+                let mut all: Vec<(&Deferred, bool, (u16, u16, u16), u32)> = Vec::new();
+                for &(i, imp, sp, ord) in &hits {
+                    all.push((&deferred_table[i as usize], imp, sp, ord));
+                }
+                for &(i, imp, sp, ord) in &inline_hits {
+                    all.push((&local_deferred[i as usize], imp, sp, ord));
+                }
+                type Key = (bool, (u16, u16, u16), u32);
+                let mut winners: BTreeMap<&str, (Key, &str)> = BTreeMap::new();
+                for &(d, imp, sp, ord) in &all {
+                    if !d.custom {
+                        continue;
+                    }
+                    let key: Key = (imp, sp, ord);
+                    if winners.get(d.name.as_str()).is_none_or(|(k, _)| *k < key) {
+                        winners.insert(d.name.as_str(), (key, d.value.as_str()));
+                    }
+                }
+                let mut local = BTreeMap::new();
+                for (name, (_, value)) in &winners {
+                    match custom_props::classify(value) {
+                        Ok(def) => {
+                            local.insert((*name).to_owned(), def);
+                        }
+                        Err(_) => var_refused = true,
+                    }
+                }
+                if !var_refused {
+                    match custom_props::compute_map(&inherited_vars, &local) {
+                        Ok(map) => {
+                            var_map_bytes = var_map_bytes.saturating_add(custom_props::map_bytes(&map));
+                            if var_map_bytes > MAX_VAR_MAP_BYTES_TOTAL {
+                                var_refused = true;
+                            }
+                            vars_now = Rc::new(map);
+                        }
+                        Err(_) => var_refused = true,
+                    }
+                }
+                let _: Option<&Def> = None;
+                let mut substituted_total = 0_usize;
+                if !var_refused {
+                    for &(d, imp, sp, ord) in &all {
+                        if d.custom {
+                            continue;
+                        }
+                        let mut lookup = |n: &str| Ok(vars_now.get(n).cloned());
+                        match custom_props::substitute(&d.value, &mut lookup, 0) {
+                            Ok(sub) => {
+                                substituted_total = substituted_total.saturating_add(sub.len());
+                                if substituted_total > MAX_SUBSTITUTED_BYTES_PER_ELEMENT {
+                                    var_refused = true;
+                                    break;
+                                }
+                                let text = format!("{}:{}{}", d.name, sub, if imp { " !important" } else { "" });
+                                let (typed, bad) = properties(&text);
+                                var_refused |= bad;
+                                for (property, value, important) in typed {
+                                    declarations.push(Declaration {
+                                        property,
+                                        value,
+                                        origin: Origin::Author,
+                                        important,
+                                        specificity: sp,
+                                        source_order: ord,
+                                    });
+                                }
+                            }
+                            Err(_) => var_refused = true,
+                        }
+                    }
+                }
+            }
+            if var_refused {
+                tree.diagnostics.record(RefusalReason::ComputedValue);
+                tree.unsupported = true;
             }
             let mut rem_refused = false;
             for declaration in &mut declarations {
@@ -339,7 +537,7 @@ impl StyleTree {
                 tree.nodes[parent].children.push(index);
             }
             for &child in nodes[handle].children.iter().rev() {
-                stack.push((child, Some(index), style));
+                stack.push((child, Some(index), style, Rc::clone(&vars_now)));
             }
         }
         tree.diagnostics.retained_nodes = tree.nodes.len();
@@ -420,8 +618,9 @@ fn matched_rules(
     diagnostics: &mut StyleDiagnostics,
     media: Option<crate::media_query::MediaContext>,
     budget: SupplyBudget,
-) -> (Vec<MatchedRule>, bool, usize) {
+) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
     let mut rules = Vec::new();
+    let mut deferred_table: Vec<Deferred> = Vec::new();
     let mut unsupported = false;
     let mut aggregate = 0_usize;
     let mut linked = 0;
@@ -589,14 +788,14 @@ fn matched_rules(
         for rule in parsed.rules {
             if rules.len() >= MAX_RULES {
                 diagnostics.record(RefusalReason::ExpandedRules);
-                return (rules, true, supplied);
+                return (rules, deferred_table, true, supplied);
             }
             match style_syntax::conditions_fit(&rule.conditions, media) {
                 style_syntax::MediaFit::Screen => {}
                 style_syntax::MediaFit::Skip | style_syntax::MediaFit::Unknown => continue,
             }
             let mut selectors = rule.prelude.split(',');
-            let (properties, unknown) = properties(rule.declarations);
+            let (properties, unknown) = block_entries(rule.declarations, &mut deferred_table);
             let refused = unknown || !style_syntax::declarations_complete(rule.declarations);
             if refused {
                 diagnostics.record(RefusalReason::CssDeclaration);
@@ -608,17 +807,24 @@ fn matched_rules(
                     unsupported = true;
                     continue;
                 };
-                for &(property, value, important) in &properties {
+                for entry in &properties {
+                    let (property, value, important, deferred) = match *entry {
+                        Entry::Typed(p, v, i) => (p, v, i, None),
+                        Entry::Deferred(index, i) => {
+                            (Property::Display, Value::Display(Display::Block), i, Some(index))
+                        }
+                    };
                     rules.push(MatchedRule {
                         selector: selector.clone(),
                         property,
                         value,
                         important,
                         source_order: u32::try_from(rules.len()).unwrap_or(u32::MAX),
+                        deferred,
                     });
                     if rules.len() >= MAX_RULES {
                         diagnostics.record(RefusalReason::ExpandedRules);
-                        return (rules, true, supplied);
+                        return (rules, deferred_table, true, supplied);
                     }
                 }
             }
@@ -631,7 +837,7 @@ fn matched_rules(
             unsupported |= refused;
         }
     }
-    (rules, unsupported, supplied)
+    (rules, deferred_table, unsupported, supplied)
 }
 
 #[allow(clippy::too_many_lines)] // Explicit supported-property parsing rejects all unknown CSS.
@@ -2595,7 +2801,6 @@ mod border_functional_colour_tests {
             "border:1px solid rgb (255, 0, 0)",
             "border:1px solid rgb(255 0 0)",
             "border:1px solid rgba(255, 0, 0, 0.5)",
-            "border:1px solid var(--x, red)",
             "border:1px solid calc(1px + 1px)",
             "border-color:rgb(0, 0, 0) rgb(1,1,1) red blue green",
             "border:1px solid rgb((1), 0, 0)",
@@ -2829,4 +3034,272 @@ fn parse_margin_value(value: &str) -> Option<Value> {
         return Some(Value::MarginRem(if negative { tt.checked_neg()? } else { tt }));
     }
     parse_margin(value).map(Value::Margin)
+}
+
+#[cfg(test)]
+mod custom_property_tests {
+    //! CANDIDATE: custom properties and var(). Expected values follow CSS
+    //! Custom Properties Level 1; the same cases must also be probed in real Chrome.
+    use super::*;
+    use crate::{parse_style_tree, Limits};
+
+    fn style(html: &str) -> StyleTree {
+        parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT)
+    }
+    fn p_color(html: &str) -> Option<u32> {
+        let t = style(html);
+        if t.unsupported {
+            return None;
+        }
+        t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style.color)
+    }
+    fn refused(html: &str) -> bool {
+        style(html).unsupported
+    }
+
+    #[test]
+    fn defined_on_root_and_used_below_inherits() {
+        let html = "<!doctype html><style>html{--c:#ff0000}p{color:var(--c)}</style><p>x</p>";
+        assert_eq!(p_color(html), Some(0xff_00_00));
+    }
+
+    #[test]
+    fn names_are_case_sensitive() {
+        assert!(refused("<!doctype html><style>html{--Foo:red}p{color:var(--foo)}</style><p>x</p>"));
+        assert_eq!(
+            p_color("<!doctype html><style>html{--Foo:#00ff00;--foo:#0000ff}p{color:var(--Foo)}</style><p>x</p>"),
+            Some(0x00_ff_00)
+        );
+    }
+
+    #[test]
+    fn fallback_used_only_when_undefined_and_may_nest() {
+        assert_eq!(p_color("<!doctype html><style>p{color:var(--x,#00f)}</style><p>x</p>"), Some(0x00_00_ff));
+        assert_eq!(
+            p_color("<!doctype html><style>p{color:var(--x,var(--y,#00f))}</style><p>x</p>"),
+            Some(0x00_00_ff)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--x:#f00}p{color:var(--x,#00f)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+    }
+
+    #[test]
+    fn cascade_uses_specificity_order_and_important() {
+        // Later equal-specificity rule wins.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}html{--c:#00f}p{color:var(--c)}</style><p>x</p>"),
+            Some(0x00_00_ff)
+        );
+        // Higher specificity beats a later rule.
+        assert_eq!(
+            p_color("<!doctype html><style>p{--c:#f00}html p{--c:#0f0}p{--c:#00f}p{color:var(--c)}</style><p>x</p>"),
+            Some(0x00_ff_00)
+        );
+        // !important beats a later, more specific normal declaration.
+        assert_eq!(
+            p_color("<!doctype html><style>p{--c:#f00 !important}html p{--c:#0f0}p{color:var(--c)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+    }
+
+    #[test]
+    fn child_override_does_not_reresolve_parent_computed_tokens() {
+        // --b was computed at html as red; body redefining --a must not change it.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#f00;--b:var(--a)}body{--a:#00f}p{color:var(--b)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+        // A child that redefines --b itself resolves against its own --a.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#f00}body{--a:#00f}p{--b:var(--a);color:var(--b)}</style><p>x</p>"),
+            Some(0x00_00_ff)
+        );
+    }
+
+    #[test]
+    fn invalid_winning_var_never_falls_back_to_a_lower_declaration() {
+        // Chrome: the winner is invalid at computed-value time -> unset (inherited black), not red.
+        assert!(refused("<!doctype html><style>p{color:#f00}p{color:var(--nope)}</style><p>x</p>"));
+        // Even when the invalid var() declaration would lose, the page refuses (stricter).
+        assert!(refused("<!doctype html><style>p{color:var(--nope)}p{color:#00f}</style><p>x</p>"));
+    }
+
+    #[test]
+    fn inline_style_outranks_id_selector_for_custom_properties_and_typed_values() {
+        // Normal: inline beats #id regardless of order (Chrome-probed).
+        assert_eq!(
+            p_color("<!doctype html><style>#i{--c:#f00}</style><p id=i style='--c:#00f;color:var(--c)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>#i{color:#f00}</style><p id=i style='color:#00f'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        // Author !important beats inline normal; inline !important beats author !important.
+        assert_eq!(
+            p_color("<!doctype html><style>#i{--c:#f00 !important}</style><p id=i style='--c:#00f;color:var(--c)'>x</p>"),
+            Some(0xff_00_00)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>#i{--c:#f00 !important}</style><p id=i style='--c:#00f !important;color:var(--c)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+        // var() in an inline declaration versus an #id rule.
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#00f}#i{color:#f00}</style><p id=i style='color:var(--a)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+    }
+
+    #[test]
+    fn var_shorthand_keeps_authored_cascade_position_against_longhands() {
+        let get = |html: &str| {
+            let t = style(html);
+            assert!(!t.unsupported, "{html}");
+            t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap()
+        };
+        // Shorthand authored AFTER the longhand overrides it; before it, loses.
+        let after = get("<!doctype html><style>html{--m:5px}p{margin-top:9px;margin:var(--m)}</style><p>x</p>");
+        let lit_after = get("<!doctype html><style>p{margin-top:9px;margin:5px}</style><p>x</p>");
+        assert_eq!(after, lit_after);
+        let before = get("<!doctype html><style>html{--m:5px}p{margin:var(--m);margin-top:9px}</style><p>x</p>");
+        let lit_before = get("<!doctype html><style>p{margin:5px;margin-top:9px}</style><p>x</p>");
+        assert_eq!(before, lit_before);
+    }
+
+    #[test]
+    fn custom_property_work_is_bounded() {
+        // 300 distinct definitions in one element refuse (rule/declaration caps) rather than allocate unboundedly.
+        let defs: String = (0..300).map(|i| format!("--v{i}:1;")).collect();
+        assert!(refused(&format!("<!doctype html><style>html{{{defs}}}</style><p>x</p>")));
+        // Over-long value refuses.
+        let long = "a".repeat(2000);
+        assert!(refused(&format!("<!doctype html><style>html{{--l:{long}}}</style><p>x</p>")));
+    }
+
+    #[test]
+    fn tree_wide_custom_property_budget_trips_without_unbounded_allocation() {
+        let v = "a".repeat(1000);
+        let defs: String = (0..200).map(|i| format!("--v{i}:{v};")).collect();
+        let divs: String = (0..2000).map(|_| "<div style='--z:1'>x</div>").collect();
+        let html = format!("<!doctype html><style>html{{{defs}}}</style><body>{divs}");
+        let t = style(&html);
+        assert!(t.unsupported);
+        assert!(t.diagnostics.count(RefusalReason::ComputedValue) >= 1);
+        // The same page with a few elements is within budget.
+        let few = format!("<!doctype html><style>html{{{defs}}}</style><body><div style='--z:1'>x</div>");
+        assert!(!style(&few).unsupported);
+    }
+
+    #[test]
+    fn invalid_custom_property_names_and_tokens_refuse() {
+        for decl in [
+            "--:1",
+            "--a b:1",
+            "--a:(1",
+            "--a:1)",
+            "--a:[1)",
+            "--a:\"x",
+            "--a:1\\",
+            "--a:{}",
+            "--a:1 !foo",
+            "-x:1",
+        ] {
+            assert!(
+                refused(&format!("<!doctype html><style>html{{{decl}}}</style><p>x</p>")),
+                "{decl}"
+            );
+        }
+        // Empty and whitespace values are valid (spec: --foo: ; is an empty value).
+        // KNOWN LIMITATION (measured): `--e:;` and `--e: ;` are valid empty values per the
+        // spec (Chrome accepts them) but the existing declaration splitter rejects an empty
+        // value, so the page refuses. Stricter than Chrome, never a wrong accept.
+        for (css, expect_refused) in [("html{--e: ;color:#f00}", true), ("html{--e:;color:#f00}", true)] {
+            assert_eq!(refused(&format!("<!doctype html><style>{css}</style><p>x</p>")), expect_refused, "{css}");
+        }
+    }
+
+    #[test]
+    fn closer_definition_overrides_inherited_and_initial_resets() {
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}body{--c:#00f}p{color:var(--c)}</style><p>x</p>"),
+            Some(0x00_00_ff)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}p{--c:initial;color:var(--c,#0f0)}</style><p>x</p>"),
+            Some(0x00_ff_00)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--c:#f00}p{--c:inherit;color:var(--c)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+    }
+
+    #[test]
+    fn shorthand_and_multi_token_values_substitute_before_parsing() {
+        let html = "<!doctype html><style>html{--b:2px solid #00f}p{border:var(--b)}</style><p>x</p>";
+        assert!(!refused(html));
+        let plain = style("<!doctype html><style>p{border:2px solid #00f}</style><p>x</p>");
+        let var = style(html);
+        let get = |t: &StyleTree| t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap();
+        assert_eq!(get(&plain), get(&var));
+    }
+
+    #[test]
+    fn custom_values_can_reference_each_other_and_inline_style_works() {
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#f00;--b:var(--a)}p{color:var(--b)}</style><p>x</p>"),
+            Some(0xff_00_00)
+        );
+        assert_eq!(
+            p_color("<!doctype html><style>html{--a:#f00}</style><p style='--a:#00f;color:var(--a)'>x</p>"),
+            Some(0x00_00_ff)
+        );
+    }
+
+    #[test]
+    fn unimplemented_or_invalid_forms_refuse() {
+        for html in [
+            // cycle, self reference, undefined without fallback
+            "<!doctype html><style>html{--a:var(--b);--b:var(--a)}p{color:var(--a,red)}</style><p>x</p>",
+            "<!doctype html><style>html{--a:var(--a,red)}p{color:var(--a)}</style><p>x</p>",
+            "<!doctype html><style>p{color:var(--nope)}</style><p>x</p>",
+            // glued tokens, CSS-wide keyword through var, malformed var
+            "<!doctype html><style>html{--n:10}p{margin-top:var(--n)px}</style><p>x</p>",
+            "<!doctype html><style>html{--k:inherit}p{color:var(--k)}</style><p>x</p>",
+            "<!doctype html><style>p{color:var(--x}</style><p>x</p>",
+            // strings, url, escapes, revert in a custom value
+            "<!doctype html><style>html{--s:\"a\"}p{color:red}</style><p>x</p>",
+            "<!doctype html><style>html{--u:url(x)}p{color:red}</style><p>x</p>",
+            "<!doctype html><style>html{--r:revert}p{color:red}</style><p>x</p>",
+            // substituted value is still an unsupported property/value
+            "<!doctype html><style>html{--f:left}p{float:var(--f)}</style><p>x</p>",
+            "<!doctype html><style>html{--i:url(x)}p{background-image:var(--i)}</style><p>x</p>",
+        ] {
+            assert!(refused(html), "{html}");
+        }
+    }
+
+    #[test]
+    fn blocks_without_custom_properties_are_unchanged_by_the_new_path() {
+        // Adding an unused custom property switches the block to the
+        // per-declaration path. Every computed style must stay identical.
+        for body in [
+            "color:#112233;margin:1px 2px 3px 4px;padding:2px;font-size:20px",
+            "border:2px solid #ff0000;background:#00ff00;line-height:1.5",
+            "width:50%;height:30px;box-sizing:border-box;display:block",
+            "background-color:red;background-color:blue",
+        ] {
+            let a = style(&format!("<!doctype html><style>p{{{body}}}</style><p>x</p>"));
+            let b = style(&format!("<!doctype html><style>p{{{body};--unused:1}}</style><p>x</p>"));
+            assert_eq!(a.unsupported, b.unsupported, "{body}");
+            assert_eq!(
+                a.nodes.iter().map(|n| n.style).collect::<Vec<_>>(),
+                b.nodes.iter().map(|n| n.style).collect::<Vec<_>>(),
+                "{body}"
+            );
+        }
+    }
 }
