@@ -1,0 +1,63 @@
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kobo-web-document` (lib) generated 1 warning
+   Compiling kobo-web-layout v0.1.0 (/tmp/candidate-review/crates/kobo-web-layout)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running unittests src/lib.rs (/tmp/it/target/debug/deps/kobo_web_layout-8690b4dfd37056c4)
+
+running 4 tests
+test tests::browser_code_retains_hard_line_indents_without_changing_shared_wrapping ... FAILED
+test tests::browser_code_keeps_a_blank_line_as_one_line_and_still_fits ... FAILED
+test tests::browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame ... FAILED
+test tests::browser_code_wrap_continuations_do_not_inherit_the_indent ... FAILED
+
+failures:
+
+---- tests::browser_code_retains_hard_line_indents_without_changing_shared_wrapping stdout ----
+
+thread 'tests::browser_code_retains_hard_line_indents_without_changing_shared_wrapping' (145383) panicked at crates/kobo-web-layout/src/tests.rs:468:9:
+assertion `left == right` failed: 1072x1448 Default
+  left: ["fn turn() {"]
+ right: ["fn turn() {", "    *page += 1;", "        deeper();", "}"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- tests::browser_code_keeps_a_blank_line_as_one_line_and_still_fits stdout ----
+
+thread 'tests::browser_code_keeps_a_blank_line_as_one_line_and_still_fits' (145382) panicked at crates/kobo-web-layout/src/tests.rs:485:9:
+assertion `left == right` failed: 1072x1448 Default: blank line kept
+  left: ["a();"]
+ right: ["a();", "", "b();"]
+
+---- tests::browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame stdout ----
+
+thread 'tests::browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame' (145384) panicked at crates/kobo-web-layout/src/tests.rs:536:9:
+assertion `left == right` failed: 1072x1448 Default: no per-line spacing
+  left: 402
+ right: 385
+
+---- tests::browser_code_wrap_continuations_do_not_inherit_the_indent stdout ----
+
+thread 'tests::browser_code_wrap_continuations_do_not_inherit_the_indent' (145385) panicked at crates/kobo-web-layout/src/tests.rs:505:9:
+assertion `left == right` failed: 1072x1448 Default
+  left: 8
+ right: 1
+
+
+failures:
+    tests::browser_code_keeps_a_blank_line_as_one_line_and_still_fits
+    tests::browser_code_retains_hard_line_indents_without_changing_shared_wrapping
+    tests::browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame
+    tests::browser_code_wrap_continuations_do_not_inherit_the_indent
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.30s
+
+error: test failed, to rerun pass `-p kobo-web-layout --lib`

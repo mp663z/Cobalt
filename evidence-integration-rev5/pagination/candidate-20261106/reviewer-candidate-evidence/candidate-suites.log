@@ -1,0 +1,358 @@
+   Compiling kobo-ui v0.3.25 (/tmp/candidate-review/crates/kobo-ui)
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kobo-web-document` (lib) generated 1 warning
+   Compiling kobo-protocol v0.3.25 (/tmp/candidate-review/crates/kobo-protocol)
+   Compiling kobo-net v0.3.25 (/tmp/candidate-review/crates/kobo-net)
+   Compiling kobo-policy v0.3.25 (/tmp/candidate-review/crates/kobo-policy)
+   Compiling kobo-text v0.3.25 (/tmp/candidate-review/crates/kobo-text)
+   Compiling kobo-sdk v0.3.25 (/tmp/candidate-review/crates/kobo-sdk)
+   Compiling kobo-web-layout v0.1.0 (/tmp/candidate-review/crates/kobo-web-layout)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.97s
+     Running unittests src/lib.rs (/tmp/it/target/debug/deps/kobo_ui-c4e241c354cc29c0)
+
+running 290 tests
+test board::tests::a_three_number_column_clue_is_complete_and_longer_clues_show_ellipsis ... ok
+test board::tests::narrow_square_grids_keep_their_original_coordinates ... ok
+test board::tests::selected_square_highlights_only_its_matching_clue_targets ... ok
+test choice_tests::a_single_row_can_be_patched_without_repainting_the_screen ... ok
+test choice_tests::an_answer_beyond_the_options_marks_nothing_rather_than_panicking ... ok
+test choice_tests::every_option_is_a_full_width_finger_sized_row ... ok
+test choice_tests::options_beyond_the_cap_are_dropped_rather_than_shrunk ... ok
+test choice_tests::options_do_not_overlap_and_each_reports_its_own_action ... ok
+test choice_tests::the_answer_already_given_is_the_only_one_marked ... ok
+test choice_tests::the_freeform_row_comes_last ... ok
+test chrome_tests::a_title_that_would_wrap_is_truncated_rather_than_growing_the_bar ... ok
+test chrome_tests::back_is_absent_until_the_runtime_supplies_it ... ok
+test chrome_tests::back_is_reachable_by_touch_and_reports_the_reserved_action ... ok
+test chrome_tests::content_stops_above_the_nav_bar_rather_than_flowing_under_it ... ok
+test chrome_tests::destinations_are_never_narrower_than_a_finger_on_any_panel ... ok
+test chrome_tests::exactly_one_destination_reads_as_selected ... ok
+test chrome_tests::the_back_control_is_never_smaller_than_a_finger_on_any_panel ... ok
+test chrome_tests::the_back_control_stays_inside_the_bar_it_belongs_to ... ok
+test chrome_tests::the_bar_names_the_screen_without_shouting_over_it ... ok
+test chrome_tests::the_nav_bar_sits_on_the_bottom_edge_and_spans_the_panel ... ok
+test colour_orientation_tests::landscape_rotates_rgb_and_luminance_together_and_clears_old_colour ... ok
+test environment::tests::nested_environment_restores_both_scales_even_after_unwind ... ok
+test environment::tests::render_and_layout_use_explicit_metrics_without_ambient_setup ... ok
+test figure_tests::a_clock_is_the_same_width_at_every_minute_of_the_day ... ok
+test figure_tests::a_figure_on_a_fixed_advance_is_wider_than_the_face_would_set_it ... ok
+test figure_tests::landscape_rotation_maps_each_logical_corner_to_its_physical_corner ... ok
+test figure_tests::landscape_swaps_the_logical_viewport_and_inverts_touch_clockwise ... ok
+test figure_tests::no_rank_is_wider_than_the_column_it_was_measured_for ... ok
+test figure_tests::only_the_digits_are_put_on_a_cell ... ok
+test figure_tests::the_box_the_clock_claims_does_not_change_as_it_counts ... ok
+test folio_tests::a_screen_that_hides_its_bar_still_gets_one_back_when_it_is_asked_for ... ok
+test folio_tests::folio_card_tile_keeps_its_body_label_caption_and_live_value ... ok
+test folio_tests::folio_page_rail_is_passive_and_absent_for_one_page ... ok
+test folio_tests::folio_section_link_is_a_caption_sized_control ... ok
+test folio_tests::legacy_nav_glyph_is_half_a_touch_target ... ok
+test folio_tests::legacy_screens_keep_pre_folio_button_and_tile_geometry ... ok
+test folio_tests::legacy_section_values_keep_the_full_pre_folio_measure ... ok
+test folio_tests::legacy_two_line_tile_labels_render_with_caption_metrics ... ok
+test folio_tests::ordinary_buttons_are_centered_content_width_on_supported_panels_and_scales ... ok
+test folio_tests::page_rail_reserves_a_gutter_for_the_collection_it_precedes ... ok
+test folio_tests::primary_and_narrow_button_fallbacks_remain_full_width ... ok
+test folio_tests::row_holds_accelerate_the_visible_overflow_without_replacing_taps ... ok
+test folio_tests::short_section_links_stay_in_bounds_and_reserve_their_touch_height ... ok
+test folio_tests::the_band_that_brings_the_bar_back_is_where_the_bar_would_be ... ok
+test folio_tests::the_way_back_the_shell_draws_can_actually_be_reached_by_a_finger ... ok
+test folio_tests::tile_holds_share_a_visible_details_action_and_leave_taps_immediate ... ok
+test loading_tests::a_skeleton_occupies_the_space_the_real_rows_will ... ok
+test loading_tests::activity_offers_cancel_as_a_finger_sized_target ... ok
+test loading_tests::an_attention_banner_is_at_least_finger_tall_on_every_panel ... ok
+test loading_tests::every_tappable_rectangle_is_reachable_by_a_tap_at_its_centre ... ok
+test loading_tests::indeterminate_activity_draws_no_bar ... ok
+test loading_tests::no_node_kind_lets_the_next_one_land_on_top_of_it ... ok
+test loading_tests::progress_snaps_to_coarse_steps_so_a_download_cannot_flood_the_panel ... ok
+test loading_tests::skeleton_line_counts_are_clamped_rather_than_trusted ... ok
+test orientation_tests::landscape_swaps_metrics_and_maps_both_physical_sides ... ok
+test orientation_tests::software_rotation_places_every_corner_for_both_landscape_sides ... ok
+test page_turn_tests::a_control_always_beats_the_zone_underneath_it ... ok
+test page_turn_tests::a_screen_that_did_not_ask_for_them_has_none ... ok
+test page_turn_tests::the_bars_are_never_page_turns ... ok
+test page_turn_tests::the_left_of_the_page_goes_back_and_the_rest_goes_on ... ok
+test pencil::tests::ambiguous_or_out_of_bounds_geometry_is_invalid ... ok
+test pencil::tests::candidates_and_peers_are_bounded ... ok
+test pencil::tests::clues_are_fixed_and_edges_have_distinct_physical_targets ... ok
+test pencil::tests::continuous_edges_and_double_bridges_use_ink_geometry_and_obey_dirty_clip ... ok
+test pencil::tests::sudoku_boards_rule_boxes_and_expand_candidates ... ok
+test press_feedback_tests::a_button_has_its_corners_taken_off ... ok
+test press_feedback_tests::a_buttons_outline_is_heavier_than_a_rule ... ok
+test press_feedback_tests::a_failed_transfer_keeps_what_was_around_it ... ok
+test press_feedback_tests::a_finger_on_a_button_finds_the_button_and_not_the_page ... ok
+test press_feedback_tests::a_finger_on_bare_text_has_nothing_to_invert ... ok
+test press_feedback_tests::a_press_mark_has_its_corners_taken_off ... ok
+test press_feedback_tests::a_press_mark_stays_inside_the_control_it_marks ... ok
+test press_feedback_tests::a_press_mark_undoes_itself_exactly ... ok
+test press_feedback_tests::a_ranked_list_pages_with_the_column_its_digits_really_take ... ok
+test press_feedback_tests::a_screen_that_spends_every_ink_is_caught ... ok
+test press_feedback_tests::a_second_primary_action_is_caught ... ok
+test press_feedback_tests::a_second_way_back_is_caught ... ok
+test press_feedback_tests::a_section_header_never_ends_a_page_without_its_first_row ... ok
+test press_feedback_tests::a_section_header_with_nothing_under_it_is_caught ... ok
+test press_feedback_tests::a_small_control_still_shows_it_was_touched ... ok
+test press_feedback_tests::a_spinner_that_knows_its_own_total_is_caught ... ok
+test press_feedback_tests::a_transfer_with_a_total_says_how_far_through_it_is ... ok
+test press_feedback_tests::a_transfer_without_a_total_reports_bytes_and_draws_no_bar ... ok
+test press_feedback_tests::an_action_bar_marks_nothing_and_a_nav_bar_is_asked_to ... ok
+test press_feedback_tests::an_action_bar_stops_at_three_verbs ... ok
+test press_feedback_tests::an_outlined_button_is_not_filled_in ... ok
+test press_feedback_tests::byte_counts_read_the_way_a_person_says_them ... ok
+test press_feedback_tests::control_sheet ... ignored, writes a sheet to look at rather than asserting anything
+test press_feedback_tests::inverting_a_rectangle_twice_leaves_the_picture_as_it_was ... ok
+test press_feedback_tests::inverting_off_the_edge_touches_nothing_outside_the_surface ... ok
+test press_feedback_tests::state_written_into_a_label_is_caught_where_a_state_field_exists ... ok
+test prose_tests::a_badge_is_clamped_rather_than_allowed_to_become_a_label ... ok
+test prose_tests::a_band_puts_its_slots_beside_each_other ... ok
+test prose_tests::a_band_slot_can_be_centred_against_a_taller_neighbour ... ok
+test prose_tests::a_band_too_narrow_for_its_slots_stacks_itself ... ok
+test prose_tests::a_book_is_not_drawn_with_a_clock_on_it ... ok
+test prose_tests::a_book_with_windows_line_endings_still_has_paragraphs ... ok
+test prose_tests::a_button_is_as_tall_as_the_words_on_it ... ok
+test prose_tests::a_byline_is_set_apart_from_what_it_introduces ... ok
+test prose_tests::a_byline_is_set_on_a_tint_and_the_words_underneath_it_are_not ... ok
+test prose_tests::a_colour_picture_is_held_with_its_grey_and_drawn_in_colour ... ok
+test prose_tests::a_colour_upload_is_committed_in_its_format ... ok
+test prose_tests::a_cover_on_a_shelf_keeps_its_edge ... ok
+test prose_tests::a_cover_stays_centred_on_the_row_because_it_is_the_row ... ok
+test prose_tests::a_cover_still_fills_the_column_it_leads_with ... ok
+test prose_tests::a_deck_place_with_nothing_on_it_is_drawn_lighter_than_a_key ... ok
+test prose_tests::a_dialogue_asks_its_whole_question_however_large_the_type_is ... ok
+test prose_tests::a_document_preview_is_a_page_of_lines_with_a_format_chip ... ok
+test prose_tests::a_field_cross_never_overlaps_the_text_it_would_clear ... ok
+test prose_tests::a_fold_does_not_move_the_words_when_it_opens_and_shuts ... ok
+test prose_tests::a_hold_is_the_content_area_and_never_a_control ... ok
+test prose_tests::a_list_of_marks_starts_its_text_at_the_mark_column ... ok
+test prose_tests::a_list_with_a_cover_in_it_keeps_one_text_margin ... ok
+test prose_tests::a_long_comment_fills_the_page_it_starts_on ... ok
+test prose_tests::a_mark_fills_the_column_a_list_of_marks_is_given ... ok
+test prose_tests::a_menu_of_buttons_is_wide_enough_for_the_words_on_them ... ok
+test prose_tests::a_modal_always_carries_a_way_out ... ok
+test prose_tests::a_modal_still_takes_the_room_a_dialogue_needs ... ok
+test prose_tests::a_natural_slot_takes_only_what_it_measures ... ok
+test prose_tests::a_page_of_dialogue_holds_less_than_a_page_of_description ... ok
+test prose_tests::a_page_position_is_drawn_and_takes_its_room_from_the_content ... ok
+test prose_tests::a_page_position_nobody_can_compute_is_left_unsaid ... ok
+test prose_tests::a_page_that_opens_mid_comment_says_whose_it_is ... ok
+test prose_tests::a_paragraph_longer_than_a_page_is_split_rather_than_dropped ... ok
+test prose_tests::a_picture_is_drawn_where_it_was_placed_and_nowhere_else ... ok
+test prose_tests::a_picture_is_never_enlarged_to_fill_its_space ... ok
+test prose_tests::a_picture_too_wide_and_too_tall_keeps_its_proportions ... ok
+test prose_tests::a_popover_carries_no_cross ... ok
+test prose_tests::a_popover_hung_off_a_picture_control_finds_it_and_leaves_it_pressable ... ok
+test prose_tests::a_popover_is_only_as_wide_as_what_is_in_it ... ok
+test prose_tests::a_popover_never_gets_narrower_than_a_finger ... ok
+test prose_tests::a_popover_never_gets_wider_than_a_modal ... ok
+test prose_tests::a_popover_points_at_the_control_that_opened_it ... ok
+test prose_tests::a_popover_too_tall_for_either_side_draws_no_caret ... ok
+test prose_tests::a_portrait_tile_is_taller_than_a_square_one ... ok
+test prose_tests::a_rank_sits_on_the_first_line_of_its_title ... ok
+test prose_tests::a_reply_is_set_in_from_what_it_answers_and_stops_at_the_cap ... ok
+test prose_tests::a_row_cover_falls_back_to_its_glyph_until_the_picture_arrives ... ok
+test prose_tests::a_row_mark_sits_against_the_title_it_marks ... ok
+test prose_tests::a_row_menu_takes_its_room_from_the_title ... ok
+test prose_tests::a_row_menu_takes_the_tap_before_the_row_it_sits_in ... ok
+test prose_tests::a_row_without_a_menu_reserves_no_column_for_one ... ok
+test prose_tests::a_rows_trailing_value_keeps_its_room_and_the_title_gives_up_its_own ... ok
+test prose_tests::a_screen_with_no_bottom_bar_still_keeps_the_bezel_margin ... ok
+test board::tests::all_marks_selection_and_given_ink_are_distinct_and_confined ... ok
+test prose_tests::a_section_is_quieter_than_the_heading_it_sits_under ... ok
+test prose_tests::a_sections_value_is_measured_before_its_title_is_clamped ... ok
+test prose_tests::a_shut_fold_says_how_much_is_behind_it_and_an_open_one_does_not ... ok
+test prose_tests::a_source_line_break_does_not_become_a_short_line_on_the_panel ... ok
+test prose_tests::a_state_and_a_badge_take_opposite_corners_of_their_own_tile ... ok
+test prose_tests::a_tab_selection_nobody_named_falls_back_to_the_first ... ok
+test prose_tests::a_tab_strip_fills_the_panel_exactly_and_marks_one_tab ... ok
+test prose_tests::a_tap_beside_a_modal_answers_nothing ... ok
+test prose_tests::a_tap_beside_a_popover_puts_it_away ... ok
+test prose_tests::a_section_draws_a_rule_in_the_room_its_title_leaves ... ok
+test prose_tests::a_tile_with_nothing_extra_to_say_emits_no_chips_at_all ... ok
+test prose_tests::a_tile_without_its_picture_yet_still_shows_its_glyph ... ok
+test prose_tests::an_area_too_small_for_a_line_produces_no_pages_rather_than_panicking ... ok
+test prose_tests::a_thread_holds_less_per_page_than_the_same_words_unindented ... ok
+test prose_tests::an_empty_field_shows_its_placeholder_muted_and_a_filled_one_shows_ink ... ok
+test prose_tests::an_empty_trailing_value_draws_nothing_at_all ... ok
+test prose_tests::an_icon_leading_a_row_is_drawn_at_the_size_of_the_type ... ok
+test prose_tests::an_attention_banner_marks_its_edge_rather_than_blacking_out_the_panel ... ok
+test prose_tests::an_ordinary_control_is_outlined_and_only_the_primary_one_is_filled ... ok
+test prose_tests::an_out_of_order_chunk_cancels_the_upload ... ok
+test prose_tests::an_ordinary_control_still_reads_as_available_next_to_a_disabled_one ... ok
+test prose_tests::an_overlay_takes_the_hold_away ... ok
+test prose_tests::an_overlay_takes_the_page_turns_away ... ok
+test prose_tests::an_overlay_with_nothing_to_point_at_is_still_shown ... ok
+test prose_tests::an_unavailable_square_tile_still_shows_its_mark ... ok
+test prose_tests::an_unavailable_tile_keeps_its_place_and_stops_answering_taps ... ok
+test prose_tests::an_unreadable_battery_is_drawn_as_nothing_rather_than_as_empty ... ok
+test prose_tests::cache_evictions_are_reported_to_the_runtime ... ok
+test prose_tests::chips_past_the_cap_are_reported_rather_than_quietly_clipped ... ok
+test prose_tests::chips_wrap_onto_another_row_rather_than_off_the_panel ... ok
+test prose_tests::chunked_picture_becomes_live_only_after_a_complete_commit ... ok
+test prose_tests::content_starts_below_the_band_rather_than_under_the_title ... ok
+test prose_tests::an_overlay_leaves_the_screen_it_covers_alone ... ok
+test prose_tests::each_page_turn_is_offered_only_where_there_is_a_page_to_turn_to ... ok
+test prose_tests::every_fact_value_starts_in_the_same_column ... ok
+test prose_tests::every_page_is_drawn_whole_on_every_panel ... ok
+test prose_tests::every_page_of_a_thread_is_drawn_whole_on_every_panel ... ok
+test prose_tests::facts_past_the_cap_are_reported_rather_than_quietly_clipped ... ok
+test prose_tests::facts_that_run_out_of_panel_drop_whole_entries_instead_of_clipping ... ok
+test prose_tests::metadata_is_lighter_and_smaller_than_what_it_describes ... ok
+test prose_tests::no_radio_is_a_different_mark_from_a_weak_one ... ok
+test prose_tests::no_words_are_lost_between_pages ... ok
+test prose_tests::one_long_label_cannot_squeeze_every_value_into_a_gutter ... ok
+test prose_tests::one_subtitle_gives_every_tile_in_the_grid_the_same_extra_room ... ok
+test prose_tests::only_a_card_is_outlined_and_a_square_tile_is_not ... ok
+test prose_tests::pagination_leaves_room_for_a_trailing_value_it_will_have_to_draw ... ok
+test prose_tests::pagination_reserves_the_overflow_column ... ok
+test prose_tests::replacing_a_picture_does_not_double_count_it ... ok
+test prose_tests::shrinking_a_picture_averages_rather_than_drops_pixels ... ok
+test prose_tests::text_that_wraps_above_a_control_moves_that_control ... ok
+test prose_tests::the_band_sits_above_the_bar_rather_than_over_it ... ok
+test prose_tests::the_battery_is_drawn_at_the_level_it_was_read_at ... ok
+test prose_tests::the_cache_evicts_what_was_drawn_longest_ago ... ok
+test prose_tests::the_cache_refuses_a_picture_whose_size_does_not_match_its_bytes ... ok
+test prose_tests::the_fallback_typesetter_treats_crlf_as_one_separator ... ok
+test prose_tests::the_interface_is_not_set_larger_than_the_books_beside_it ... ok
+test prose_tests::the_large_text_setting_lands_where_the_default_used_to_be ... ok
+test prose_tests::the_repeated_byline_is_paid_for_out_of_the_page_it_opens ... ok
+test prose_tests::the_strength_thresholds_are_the_ones_the_stock_reader_uses ... ok
+test prose_tests::the_whole_byline_is_the_handle_not_just_the_mark ... ok
+test prose_tests::depth_is_counted_in_rules_rather_than_left_to_the_indent ... ok
+test responsive_profile_tests::a_glyph_in_a_chosen_cell_is_still_drawn_in_ink ... ok
+test responsive_profile_tests::legacy_flow_keeps_the_uncapped_panel_width ... ok
+test responsive_profile_tests::long_document_regions_yield_to_trailing_controls ... ok
+test responsive_profile_tests::rich_document_overflow_is_reported_without_sacrificing_controls ... ok
+test responsive_profile_tests::section_action_labels_have_one_render_source_on_every_panel ... ok
+test responsive_profile_tests::square_boards_keep_their_geometry_and_trailing_controls_at_larger_sizes ... ok
+test responsive_profile_tests::tile_columns_follow_the_allocated_width_on_every_profile ... ok
+test row_tests::a_rule_between_rows_starts_where_the_text_does ... ok
+test row_tests::a_tap_anywhere_in_a_row_chooses_that_row ... ok
+test row_tests::an_entry_without_a_summary_still_lays_out ... ok
+test row_tests::every_row_is_large_enough_to_tap_on_every_panel ... ok
+test row_tests::no_rule_is_drawn_after_the_last_row ... ok
+test row_tests::rows_never_overlap_each_other ... ok
+test row_tests::the_list_length_is_bounded ... ok
+test row_tests::the_summary_is_actually_shown ... ok
+test row_tests::tiles_pack_more_entries_than_rows_and_rows_say_more_about_each ... ok
+test tests::a_box_smaller_than_its_own_border_is_still_a_box ... ok
+test tests::a_cell_glyph_and_a_bottom_action_glyph_both_reach_the_layout ... ok
+test tests::a_cleaning_refresh_over_colour_is_planned_in_colour ... ok
+test tests::a_colour_picture_plans_a_colour_update_and_grey_over_it_does_not ... ok
+test tests::a_disabled_button_absorbs_the_tap_rather_than_turning_the_page ... ok
+test tests::a_disabled_button_is_visible_but_not_tappable ... ok
+test tests::a_formula_in_a_sentence_is_drawn_in_place_of_the_words_it_stands_for ... ok
+test tests::a_formula_offset_inside_a_character_does_not_take_the_page_down ... ok
+test tests::a_held_unicode_word_resolves_to_stable_document_offsets ... ok
+test tests::a_keyboard_key_never_becomes_a_board_mark_however_narrow_its_row ... ok
+test tests::a_line_the_text_begins_keeps_its_indentation ... ok
+test tests::a_link_after_a_formula_is_where_the_formula_leaves_it ... ok
+test tests::a_mark_on_a_board_still_grows_to_heading_size ... ok
+test tests::a_narrow_column_is_never_squeezed_under_what_it_asked_for ... ok
+test tests::a_percentage_can_never_exceed_a_hundred ... ok
+test tests::a_picture_asked_for_without_a_frame_lays_out_without_one ... ok
+test tests::a_row_of_numbers_is_not_mistaken_for_a_row_of_headings ... ok
+test tests::a_stacked_value_keeps_the_heading_it_sat_under ... ok
+test tests::a_table_stacks_only_when_the_least_widths_do_not_fit ... ok
+test tests::a_touch_target_is_seven_millimetres_on_every_panel ... ok
+test tests::a_wide_formula_pushes_the_line_it_will_not_fit_on ... ok
+test tests::an_empty_game_grid_is_not_hidden_content ... ok
+test tests::an_empty_terminal_waiting_for_output_is_not_hidden_content ... ok
+test tests::an_outlined_box_is_drawn_at_the_panel_rule_thickness ... ok
+test tests::board_labels_use_the_largest_semantic_size_that_fits_the_square ... ok
+test tests::button_hit_testing_respects_touch_target ... ok
+test tests::colour_and_grey_planes_describe_one_picture ... ok
+test tests::column_counts_follow_physical_width_rather_than_resolution ... ok
+test tests::dirty_render_leaves_other_pixels_untouched ... ok
+test tests::every_panel_gets_a_usable_navigation_bar_and_visible_rules ... ok
+test tests::extreme_layout_values_are_bounded ... ok
+test tests::frame_planner_cleans_after_eight_panels_worth_of_repainting ... ok
+test tests::frame_planner_matches_the_panel_waveform_rules ... ok
+test tests::large_pictures_fit_remaining_space_without_hiding_controls ... ok
+test tests::publisher_styled_text_keeps_alignment_and_inline_emphasis ... ok
+test tests::reading_quotes_validate_in_their_reading_face_and_scale ... ok
+test tests::renderer_writes_grayscale_pixels ... ok
+test tests::short_board_marks_can_fit_below_the_current_caption_scale_without_shrinking_words ... ok
+test tests::text_scale_has_stable_names_and_wire_values ... ok
+test tests::the_budget_is_spent_on_pixels_that_moved_not_on_the_box_around_them ... ok
+test tests::the_spacing_scale_is_ordered_and_never_negative ... ok
+test tests::the_spare_room_goes_to_the_widest_column ... ok
+test tests::typing_does_not_flash_the_panel_every_few_keystrokes ... ok
+test tests::validation_can_distinguish_a_missing_picture_from_layout ... ok
+test tests::validation_reports_content_that_layout_would_hide ... ok
+test tests::validation_reports_truncation_and_clamps_grid_targets ... ok
+test tests::wrapping_and_measurement_are_deterministic ... ok
+test tile_tests::a_grid_stays_inside_the_screen_margins ... ok
+test tile_tests::a_tile_name_is_drawn_no_wider_than_the_width_it_was_wrapped_to ... ok
+test tile_tests::an_empty_grid_occupies_no_space ... ok
+test tile_tests::every_tile_is_large_enough_to_tap_on_every_panel ... ok
+test tile_tests::tapping_a_tile_returns_that_tiles_action ... ok
+test tile_tests::tile_rows_sit_no_further_apart_than_the_grid_sits_below_the_bar ... ok
+test tile_tests::tiles_do_not_overlap_each_other ... ok
+test tile_tests::tiles_never_exceed_the_panels_column_budget ... ok
+test vector::sheet::contact_sheet ... ignored, writes a sheet to look at rather than asserting anything
+test vector::tests::a_stroke_corner_is_solid_rather_than_holed ... ok
+test vector::tests::a_zero_sized_box_is_empty_rather_than_a_panic ... ok
+test responsive_profile_tests::every_supported_profile_and_orientation_has_safe_responsive_primitives ... ok
+test vector::tests::black_chess_pieces_carry_more_ink_than_white_pieces ... ok
+test vector::tests::chess_pieces_are_vector_art_with_distinct_sides ... ok
+test vector::tests::edges_are_grey_rather_than_stepped ... ok
+test vector::tests::an_icon_grows_with_the_box_rather_than_staying_the_same_size ... ok
+test vector::tests::nothing_is_drawn_outside_the_box ... ok
+test vector::tests::the_back_arrow_is_cut_like_every_other_mark ... ok
+test vector::tests::the_design_box_is_the_one_the_geometry_uses ... ok
+test vector::tests::the_status_marks_sit_on_one_line ... ok
+test vector::tests::every_glyph_draws_something_at_every_size_a_panel_asks_for ... ok
+
+test result: ok. 288 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.87s
+
+     Running unittests src/lib.rs (/tmp/it/target/debug/deps/kobo_web_layout-8690b4dfd37056c4)
+
+running 24 tests
+test tests::a_page_is_found_again_by_its_place_in_the_text ... ok
+test tests::a_paragraph_with_many_links_is_carried_as_several_pieces ... ok
+test tests::a_page_that_can_never_fit_is_drawn_alone_rather_than_looping ... ok
+test tests::a_single_word_wider_than_the_page_is_cut_inside_the_word_without_losing_a_letter ... ok
+test tests::a_word_wider_than_any_page_is_cut_and_packing_ends ... ok
+test tests::an_image_with_a_declared_size_gets_room_and_keeps_its_description ... ok
+test tests::anchors_name_the_page_their_block_starts_on ... ok
+test tests::browser_code_keeps_a_blank_line_as_one_line_and_still_fits ... ok
+test tests::browser_code_retains_hard_line_indents_without_changing_shared_wrapping ... ok
+test tests::browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame ... ok
+test tests::browser_code_wrap_continuations_do_not_inherit_the_indent ... ok
+test tests::browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room ... ok
+test tests::every_link_in_the_document_is_offered_on_some_page ... ok
+test tests::every_link_is_reachable_in_reading_order ... ok
+test tests::a_picture_is_never_squeezed_into_the_foot_of_a_page ... ok
+test tests::larger_text_takes_more_pages ... ok
+test tests::link_actions_round_trip ... ok
+test tests::no_page_ends_on_a_heading_it_could_have_carried ... ok
+test tests::packing_is_deterministic ... ok
+test tests::packing_keeps_every_word_in_order ... ok
+test tests::page_count_is_capped ... ok
+test tests::pages_made_one_at_a_time_match_pages_made_at_once ... ok
+test tests::splitting_preformatted_text_keeps_every_line_break ... ok
+test tests::fixture_pages_fit_every_supported_panel_at_every_text_size ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.70s
+
+   Doc-tests kobo_ui
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_web_layout
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

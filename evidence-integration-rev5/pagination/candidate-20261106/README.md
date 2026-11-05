@@ -5,3 +5,8 @@ Candidate 1ae1bee7 (branch agent/cand-pre-indent-UNREVIEWED-20261106), UNREVIEWE
 - Equality with base is page COUNTS only. Real code-block pixels and Chrome comparison are not yet done.
 - Probe sources: scratch-geometry-tests.rs (base probe; A line needs the page_screen_with_metrics replacement described in the packet), v5-nbsp.rs (diagnostic perturbation).
 - Fractional spike final review (relayed 23:33, record): shifted-size fit 1173/1173 on grid; reviewer holdout 1724/1725 (DejaVu 18.515625 / W200.21875 miss); size fit 75/75 on 3 fonts; single-text-node vs span-per-word DOM truth differs in 9/1173; old 17-flip and margin 17/17 were span-DOM-specific; single-node baseline 24/23 flips; margin 0.25 catches 21/24. Fitted, not mechanism; Tier B empty.
+
+## Additional (00:57)
+- Reviewer closeout tgz (reviewer-candidate-evidence-12107c96.tgz) extracted under reviewer-candidate-evidence/ (reviewer-authored, not verified by me).
+- Candidate head now beaf4952 (test renamed browser_code_retains_hard_line_indents_and_wraps_continuations_flush, per reviewer).
+- Shared-consumer controls IN PROGRESS: workspace tests do not build on rev5 itself for kobo-cli, kobod (missing assets/cobalt-launch.sh), kobo-panels, kobo-sim, kobo-bookview (missing docs/quality fixtures). These are excluded; not caused by the candidate.
