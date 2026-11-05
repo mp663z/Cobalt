@@ -1,0 +1,13 @@
+model = greedy wrap over fontdue unrounded advance sums, kerning/liga off in Chrome; compares break word indices
+LibEmb cases 391 identical breaks 390 different 1 (line count differs in 0 )
+DejaEmb cases 391 identical breaks 384 different 7 (line count differs in 2 )
+SansEmb cases 391 identical breaks 382 different 9 (line count differs in 3 )
+  LibEmb px 17.140625 W 226.953125 chrome [6, 12, 16, 22] model [6, 11, 15, 21]
+  DejaEmb px 12.734375 W 280.4375 chrome [8, 14, 22] model [8, 14, 21]
+  DejaEmb px 13.46875 W 387.40625 chrome [11, 20] model [10, 19]
+  DejaEmb px 16.40625 W 146.734375 chrome [3, 6, 9, 11, 13, 15, 18, 21] model [3, 6, 9, 11, 13, 15, 18, 21, 24]
+  DejaEmb px 17.875 W 267.0625 chrome [5, 11, 14, 19, 24] model [5, 10, 14, 19, 24]
+  SansEmb px 12 W 160.109375 chrome [5, 11, 14, 19, 24] model [5, 11, 15, 20]
+  SansEmb px 13.46875 W 160.109375 chrome [5, 10, 13, 16, 21] model [4, 9, 12, 15, 20]
+  SansEmb px 14.203125 W 133.375 chrome [4, 8, 11, 13, 15, 19, 23] model [4, 8, 11, 13, 15, 19, 22]
+  SansEmb px 14.203125 W 333.921875 chrome [10, 18] model [10, 17]
