@@ -1,0 +1,474 @@
+diff -ruN --exclude target --exclude '*.orig' /home/sandbox/cb/clean4q/crates/kobo-web-document/src/data_stylesheet.rs /home/sandbox/cb/clean4r/crates/kobo-web-document/src/data_stylesheet.rs
+--- /home/sandbox/cb/clean4q/crates/kobo-web-document/src/data_stylesheet.rs	2026-11-02 17:02:28.000000000 +0530
++++ /home/sandbox/cb/clean4r/crates/kobo-web-document/src/data_stylesheet.rs	2026-11-05 19:56:44.737531455 +0530
+@@ -156,6 +156,13 @@
+     })
+ }
+ 
++/// Longest full `data:` href this admission can accept for `max_decoded`: `data:` (5), a header of at
++/// most `MAX_HEADER_BYTES`, the comma (1), and the payload bound. Derived, no literals; the decoder
++/// remains the authority on every byte.
++pub(crate) fn max_href_len(max_decoded: usize) -> Option<usize> {
++    max_encoded_len(max_decoded)?.checked_add(5 + MAX_HEADER_BYTES + 1)
++}
++
+ fn max_encoded_len(decoded: usize) -> Option<usize> {
+     decoded.checked_add(2)?.checked_div(3)?.checked_mul(4)
+ }
+diff -ruN --exclude target --exclude '*.orig' /home/sandbox/cb/clean4q/crates/kobo-web-document/src/dom.rs /home/sandbox/cb/clean4r/crates/kobo-web-document/src/dom.rs
+--- /home/sandbox/cb/clean4q/crates/kobo-web-document/src/dom.rs	2026-11-05 18:12:56.611337523 +0530
++++ /home/sandbox/cb/clean4r/crates/kobo-web-document/src/dom.rs	2026-11-05 19:56:44.737531455 +0530
+@@ -63,6 +63,10 @@
+     nodes: RefCell<Vec<Node>>,
+     text_bytes: Cell<usize>,
+     exempt_bytes: Cell<usize>,
++    /// Opt-in per-parse retention of oversize `link[href^=data:text/css]` values:
++    /// (per-href cap, per-document aggregate cap). (0, 0) is off and byte-identical
++    /// to the default behavior. Unlike `measure::*` this is not process-global.
++    inline_sheet_href: Cell<(usize, usize)>,
+     max_text_bytes: usize,
+     pub(crate) errors: Cell<usize>,
+     pub(crate) dropped_attributes: Cell<usize>,
+@@ -82,6 +86,7 @@
+             }]),
+             text_bytes: Cell::new(0),
+             exempt_bytes: Cell::new(0),
++            inline_sheet_href: Cell::new((0, 0)),
+             max_text_bytes,
+             errors: Cell::new(0),
+             dropped_attributes: Cell::new(0),
+@@ -92,6 +97,18 @@
+         }
+     }
+ 
++    /// Opt in to keeping (whole, uncounted as dropped) `link[href]` values that start
++    /// with `data:text/css` up to `per_href` bytes each and `aggregate` bytes per
++    /// document. Every other over-cap attribute still counts as dropped.
++    pub fn set_inline_sheet_href_caps(&self, per_href: usize, aggregate: usize) {
++        self.inline_sheet_href.set((per_href, aggregate));
++    }
++
++    /// Bytes of oversize `link[href]` values kept under an opt-in or measurement cap.
++    pub(crate) fn retained_oversize_href_bytes(&self) -> usize {
++        self.exempt_bytes.get()
++    }
++
+     pub fn len(&self) -> usize {
+         self.nodes.borrow().len()
+     }
+@@ -170,6 +187,7 @@
+         existing: &mut Vec<(LocalName, String)>,
+         attrs: Vec<Attribute>,
+         losses: &Cell<usize>,
++        tag: &str,
+     ) {
+         for attribute in attrs {
+             // QualName namespace and prefix are independent. Observe both before
+@@ -183,10 +201,16 @@
+             {
+                 continue;
+             }
+-            let tag = measure::TAG.with(|t| t.borrow().clone());
+             let exempt_cap = measure::EXEMPT_CAP.load(std::sync::atomic::Ordering::Relaxed);
+-            let sheet_cap = measure::SHEET_HREF_CAP.load(std::sync::atomic::Ordering::Relaxed);
+-            let sheet_agg = measure::SHEET_AGG_CAP.load(std::sync::atomic::Ordering::Relaxed);
++            let (own_cap, own_agg) = self.inline_sheet_href.get();
++            let (sheet_cap, sheet_agg) = if own_cap > 0 {
++                (own_cap, own_agg)
++            } else {
++                (
++                    measure::SHEET_HREF_CAP.load(std::sync::atomic::Ordering::Relaxed),
++                    measure::SHEET_AGG_CAP.load(std::sync::atomic::Ordering::Relaxed),
++                )
++            };
+             let narrow = sheet_cap > 0
+                 && tag == "link"
+                 && &*attribute.name.local == "href"
+@@ -200,19 +224,19 @@
+             let exempt = narrow
+                 || (exempt_cap > 0
+                     && matches!(
+-                        (tag.as_str(), &*attribute.name.local),
++                        (tag, &*attribute.name.local),
+                         ("link", "href") | ("img", "src") | ("source", "srcset")
+                     )
+                     && attribute.value.len() <= exempt_cap);
+             if narrow && attribute.value.len() > MAX_ATTRIBUTE_LEN && existing.len() < MAX_ATTRIBUTES {
+-                self.exempt_bytes.set(self.exempt_bytes.get() + attribute.value.len());
++                self.exempt_bytes.set(self.exempt_bytes.get().saturating_add(attribute.value.len()));
+             }
+             if existing.len() >= MAX_ATTRIBUTES
+                 || (attribute.value.len() > MAX_ATTRIBUTE_LEN && !exempt)
+             {
+                 if attribute.value.len() > MAX_ATTRIBUTE_LEN || existing.len() >= MAX_ATTRIBUTES {
+                     measure::LOG.lock().unwrap().push((
+-                        tag.clone(),
++                        tag.to_owned(),
+                         attribute.name.local.to_string(),
+                         attribute.value.len(),
+                         existing.len() >= MAX_ATTRIBUTES,
+@@ -279,7 +303,7 @@
+     fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> Handle {
+         let mut kept = Vec::with_capacity(attrs.len().min(MAX_ATTRIBUTES));
+         measure::TAG.with(|t| *t.borrow_mut() = name.local.to_string());
+-        self.keep_attrs(&mut kept, attrs, &self.dropped_attributes);
++        self.keep_attrs(&mut kept, attrs, &self.dropped_attributes, &name.local);
+         let template = flags.template.then(|| self.push(Data::Other));
+         self.push(Data::Element {
+             name,
+@@ -360,7 +384,7 @@
+         } = &mut nodes[*target].data
+         {
+             measure::TAG.with(|t| *t.borrow_mut() = String::from("(merge)"));
+-            self.keep_attrs(existing, attrs, &self.merged_attributes_dropped);
++            self.keep_attrs(existing, attrs, &self.merged_attributes_dropped, "(merge)");
+         }
+     }
+ 
+diff -ruN --exclude target --exclude '*.orig' /home/sandbox/cb/clean4q/crates/kobo-web-document/src/lib.rs /home/sandbox/cb/clean4r/crates/kobo-web-document/src/lib.rs
+--- /home/sandbox/cb/clean4q/crates/kobo-web-document/src/lib.rs	2026-11-05 19:29:21.854243219 +0530
++++ /home/sandbox/cb/clean4r/crates/kobo-web-document/src/lib.rs	2026-11-05 19:56:44.737531455 +0530
+@@ -412,7 +412,7 @@
+     sheets: &[Vec<u8>],
+     limits: &Limits,
+ ) -> style_tree::StyleTree {
+-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL)
++    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false)
+ }
+ 
+ /// Like [`parse_style_tree`] but evaluates supported `@media` width queries
+@@ -425,7 +425,7 @@
+     limits: &Limits,
+     media: MediaContext,
+ ) -> style_tree::StyleTree {
+-    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL)
++    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false)
+ }
+ 
+ /// Like [`parse_style_tree_with_media`] with an explicit [`SupplyBudget`].
+@@ -440,7 +440,30 @@
+     media: Option<MediaContext>,
+     budget: SupplyBudget,
+ ) -> style_tree::StyleTree {
+-    parse_style_tree_in(bytes, sheets, limits, media, budget)
++    parse_style_tree_in(bytes, sheets, limits, media, budget, false)
++}
++
++/// CANDIDATE, opt-in, unadopted: like [`parse_style_tree_with_supply`], but an
++/// oversize `link[href]` whose value starts with `data:text/css` is retained whole
++/// (not counted as a dropped attribute) up to the encoded size implied by
++/// `budget.max_sheet_bytes`, and `budget.max_linked_sheets` such values per
++/// document, so the engine's own strict decoder admits or refuses it. Every
++/// other dropped attribute is still counted and refused.
++#[must_use]
++pub fn parse_style_tree_with_inline_sheets(
++    bytes: &[u8],
++    sheets: &[Vec<u8>],
++    limits: &Limits,
++    media: Option<MediaContext>,
++    budget: SupplyBudget,
++) -> style_tree::StyleTree {
++    parse_style_tree_in(bytes, sheets, limits, media, budget, true)
++}
++
++/// Per-href and per-document retention caps, derived from the sheet budget and sheet count.
++fn inline_href_caps(budget: &SupplyBudget) -> Option<(usize, usize)> {
++    let per = data_stylesheet::max_href_len(budget.max_sheet_bytes)?;
++    Some((per, per.checked_mul(budget.max_linked_sheets)?))
+ }
+ 
+ fn parse_style_tree_in(
+@@ -449,11 +472,17 @@
+     limits: &Limits,
+     media: Option<MediaContext>,
+     budget: SupplyBudget,
++    inline_sheets: bool,
+ ) -> style_tree::StyleTree {
+     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
+     let mut warnings = Vec::new();
+     let text = decode(input, &mut warnings);
+     let sink = dom::Sink::new(limits.max_text_bytes);
++    if inline_sheets {
++        if let Some((per, aggregate)) = inline_href_caps(&budget) {
++            sink.set_inline_sheet_href_caps(per, aggregate);
++        }
++    }
+     let options = html5ever::ParseOpts {
+         tree_builder: html5ever::tree_builder::TreeBuilderOpts {
+             scripting_enabled: false,
+@@ -488,6 +517,7 @@
+         .get()
+         .saturating_add(sink.merged_attributes_dropped.get());
+     diagnostics.dropped_text = sink.dropped_text.get();
++    diagnostics.retained_inline_sheet_href_bytes = sink.retained_oversize_href_bytes();
+     if diagnostics.dropped_attributes > 0 {
+         diagnostics.record(style_diagnostics::RefusalReason::DroppedAttributes);
+     }
+diff -ruN --exclude target --exclude '*.orig' /home/sandbox/cb/clean4q/crates/kobo-web-document/src/style_diagnostics.rs /home/sandbox/cb/clean4r/crates/kobo-web-document/src/style_diagnostics.rs
+--- /home/sandbox/cb/clean4q/crates/kobo-web-document/src/style_diagnostics.rs	2026-11-02 17:02:28.000000000 +0530
++++ /home/sandbox/cb/clean4r/crates/kobo-web-document/src/style_diagnostics.rs	2026-11-05 19:56:44.737531455 +0530
+@@ -72,6 +72,8 @@
+     pub retained_nodes: usize,
+     pub dropped_attributes: usize,
+     pub dropped_text: bool,
++    /// Bytes of oversize `data:text/css` link hrefs retained under an opt-in or measurement cap.
++    pub retained_inline_sheet_href_bytes: usize,
+     /// Selector/property pairs retained, not unique selectors or CSS rules.
+     pub expanded_declarations: usize,
+     pub match_attempts: usize,
+@@ -100,6 +102,7 @@
+         self.dom_nodes = earlier.dom_nodes;
+         self.dropped_attributes = earlier.dropped_attributes;
+         self.dropped_text = earlier.dropped_text;
++        self.retained_inline_sheet_href_bytes = earlier.retained_inline_sheet_href_bytes;
+     }
+ }
+ 
+diff -ruN --exclude target --exclude '*.orig' /home/sandbox/cb/clean4q/crates/kobo-web-document/tests/inline_sheet_href_optin.rs /home/sandbox/cb/clean4r/crates/kobo-web-document/tests/inline_sheet_href_optin.rs
+--- /home/sandbox/cb/clean4q/crates/kobo-web-document/tests/inline_sheet_href_optin.rs	1970-01-01 05:30:00.000000000 +0530
++++ /home/sandbox/cb/clean4r/crates/kobo-web-document/tests/inline_sheet_href_optin.rs	2026-11-05 19:57:05.785612399 +0530
+@@ -0,0 +1,244 @@
++//! Opt-in candidate (UNREVIEWED): oversize `link[href^=data:text/css]` retained per parse so the
++//! engine's own strict decoder is the authority; default entries unchanged; all other drops unchanged.
++use kobo_web_document::{
++    parse_style_tree_with_inline_sheets as optin, parse_style_tree_with_supply as plain, style_diagnostics::RefusalReason as R,
++    style_tree::StyleTree, Limits, SupplyBudget,
++};
++
++fn b64(bytes: &[u8]) -> String {
++    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++    let mut out = String::new();
++    for c in bytes.chunks(3) {
++        let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
++        out.push(T[(n >> 18) as usize & 63] as char);
++        out.push(T[(n >> 12) as usize & 63] as char);
++        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
++        out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
++    }
++    out
++}
++/// Valid CSS padded with comments to about `len` decoded bytes.
++fn css(len: usize, rule: &str) -> Vec<u8> {
++    let mut s = String::from(rule);
++    while s.len() < len {
++        s.push(' ');
++    }
++    s.into_bytes()
++}
++fn href(len: usize, rule: &str) -> String {
++    format!("data:text/css;base64,{}", b64(&css(len, rule)))
++}
++fn budget(max: usize, sheets: usize) -> SupplyBudget {
++    SupplyBudget { max_linked_sheets: sheets, max_sheet_bytes: max, max_aggregate_bytes: sheets * max }
++}
++fn count(t: &StyleTree, r: R) -> usize {
++    t.diagnostics.count(r)
++}
++fn page(head: &str) -> Vec<u8> {
++    format!("<!doctype html><html><head>{head}</head><body><p>text</p></body></html>").into_bytes()
++}
++fn margin_top(t: &StyleTree) -> u32 {
++    let n = t.nodes.iter().find(|n| n.tag == "p").unwrap();
++    format!("{:?}", n.style.margin_top).chars().filter(char::is_ascii_digit).collect::<String>().parse().unwrap_or(0)
++}
++fn reasons(t: &StyleTree) -> Vec<(R, usize)> {
++    R::ALL.iter().filter(|r| count(t, **r) > 0).map(|r| (*r, count(t, *r))).collect()
++}
++
++#[test]
++fn oversize_sheet_is_decoded_by_the_engine_only_when_opted_in() {
++    let h = href(6000, "p{margin-top:7px}");
++    assert!(h.len() > 2048);
++    let html = page(&format!("<link rel=stylesheet href=\"{h}\">"));
++    let b = budget(8192, 2);
++    let off = plain(&html, &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&off, R::DroppedAttributes), 1, "default path unchanged: href dropped and counted");
++    assert!(off.unsupported);
++    let on = optin(&html, &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&on, R::DroppedAttributes), 0);
++    assert!(!on.unsupported, "{:?}", reasons(&on));
++    assert_eq!(margin_top(&on), 7, "engine decoded and applied the sheet");
++}
++
++#[test]
++fn encoded_bound_is_exactly_four_ceil_third_plus_header_and_decoder_stays_authority() {
++    let max = 3000usize;
++    let cap = 4 * max.div_ceil(3) + 5 + 64 + 1;
++    let b = budget(max, 2);
++    // Exactly at the cap: retained (not dropped); invalid base64 length is refused by the DECODER.
++    let at = format!("data:text/css;base64,{}", "A".repeat(cap - 21));
++    assert_eq!(at.len(), cap);
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{at}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&t, R::DroppedAttributes), 0);
++    assert!(t.unsupported, "decoder must still refuse invalid base64");
++    // One byte over: dropped and counted, exactly as the default path.
++    let over = format!("{at}A");
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{over}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&t, R::DroppedAttributes), 1);
++    // Decoded size above the sheet budget but within the encoded cap: DECODER refuses it.
++    let big = href(max + 30, "p{margin-top:3px}");
++    assert!(big.len() <= cap);
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{big}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&t, R::DroppedAttributes), 0);
++    assert!(t.unsupported);
++    assert!(!reasons(&t).is_empty());
++    eprintln!("decoded-over-budget reasons: {:?}", reasons(&t));
++}
++
++#[test]
++fn other_attributes_and_elements_still_drop_and_count() {
++    let h = href(6000, "p{margin-top:7px}");
++    let b = budget(8192, 2);
++    for head in [
++        format!("<link rel=stylesheet src=\"{h}\">"),
++        format!("<link rel=stylesheet data-x=\"{h}\">"),
++        format!("<meta content=\"{h}\">"),
++        format!("<link rel=stylesheet href=\"data:image/png;base64,{}\">", "A".repeat(6000)),
++        format!("<link rel=stylesheet href=\"https://example.test/{}\">", "a".repeat(6000)),
++    ] {
++        let t = optin(&page(&head), &[], &Limits::DEFAULT, None, b);
++        assert!(count(&t, R::DroppedAttributes) >= 1, "{}", &head[..40]);
++    }
++    let body = format!("<!doctype html><p>x</p><a href=\"{h}\">l</a><img src=\"{h}\">").into_bytes();
++    let tb = optin(&body, &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&tb, R::DroppedAttributes), 1, "a[href] dropped; img[src] over cap also dropped but counted once per diagnostics record: {:?} attrs={}", reasons(&tb), tb.diagnostics.dropped_attributes);
++    assert_eq!(tb.diagnostics.dropped_attributes, 2);
++    // 33rd attribute on an otherwise exempt link is still dropped.
++    let attrs: String = (0..32).map(|i| format!(" data-{i}=1")).collect();
++    let t = optin(&page(&format!("<link{attrs} rel=stylesheet href=\"{h}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(t.diagnostics.dropped_attributes, 2, "rel and href are attributes 33 and 34: {:?}", reasons(&t));
++}
++
++#[test]
++fn aggregate_is_per_parse_and_third_sheet_still_refuses() {
++    let max = 3000;
++    let b = budget(max, 2);
++    let hs: Vec<String> = (0..3).map(|i| href(2500, &format!("p{{margin-top:{}px}}", i + 1))).collect();
++    let head: String = hs.iter().map(|h| format!("<link rel=stylesheet href=\"{h}\">")).collect();
++    let t = optin(&page(&head), &[], &Limits::DEFAULT, None, b);
++    assert!(t.unsupported);
++    assert!(count(&t, R::DroppedAttributes) >= 1, "third href exceeds the per-parse aggregate: {:?}", reasons(&t));
++    // A second parse starts from zero (no process-global state).
++    let t2 = optin(&page(&format!("<link rel=stylesheet href=\"{}\">", hs[0])), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(count(&t2, R::DroppedAttributes), 0);
++    assert!(!t2.unsupported, "{:?}", reasons(&t2));
++}
++
++#[test]
++fn html_entities_in_the_href_are_decoded_before_length_and_decoding() {
++    let h = href(6000, "p{margin-top:9px}");
++    let (first, rest) = h.split_at(h.len() / 2);
++    let c = rest.chars().next().unwrap();
++    let ent = format!("{first}&#x{:x};{}", c as u32, &rest[c.len_utf8()..]);
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{ent}\">")), &[], &Limits::DEFAULT, None, budget(8192, 2));
++    assert_eq!(count(&t, R::DroppedAttributes), 0);
++    assert_eq!(margin_top(&t), 9);
++}
++
++#[test]
++fn inactive_link_keeps_default_semantics() {
++    let h = href(6000, "p{margin-top:7px}");
++    let t = optin(&page(&format!("<link rel=icon href=\"{h}\">")), &[], &Limits::DEFAULT, None, budget(8192, 2));
++    assert_eq!(count(&t, R::DroppedAttributes), 0, "retained, not lost");
++    assert_eq!(margin_top(&t), 16, "not a stylesheet: the sheet is not applied");
++    let small = page("<link rel=icon href=\"data:text/css;base64,cHt9\">");
++    let a = plain(&small, &[], &Limits::DEFAULT, None, budget(8192, 2));
++    let b = optin(&small, &[], &Limits::DEFAULT, None, budget(8192, 2));
++    assert_eq!(format!("{:?}", reasons(&a)), format!("{:?}", reasons(&b)));
++}
++
++#[test]
++fn inputs_without_oversize_data_hrefs_are_identical_to_the_default_entry() {
++    let big_other = "x".repeat(5000);
++    let pages: Vec<Vec<u8>> = vec![
++        page("<style>p{margin-top:5px}</style>"),
++        page("<link rel=stylesheet href=\"data:text/css;base64,cHttYXJnaW4tdG9wOjVweH0=\">"),
++        page(&format!("<meta content=\"{big_other}\">")),
++        page("<link rel=stylesheet href=\"https://example.test/a.css\">"),
++        b"<!doctype html><p style='margin:3px'>a</p><div class=a></div>".to_vec(),
++        page(""),
++    ];
++    for (i, p) in pages.iter().enumerate() {
++        let a = plain(p, &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL);
++        let b = optin(p, &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL);
++        assert_eq!(a.unsupported, b.unsupported, "page {i}");
++        assert_eq!(reasons(&a), reasons(&b), "page {i}");
++        assert_eq!(format!("{:?}", a.nodes.iter().map(|n| (&n.tag, n.style.margin_top)).collect::<Vec<_>>()), format!("{:?}", b.nodes.iter().map(|n| (&n.tag, n.style.margin_top)).collect::<Vec<_>>()), "page {i}");
++    }
++}
++
++const CANON_CAP: usize = 349_528 + 5 + 64 + 1; // 4*ceil(262144/3) + "data:" + header window + comma
++
++#[test]
++fn canonical_budget_derives_the_documented_cap_and_cap_plus_one_drops() {
++    let b = SupplyBudget::CANONICAL;
++    assert_eq!(CANON_CAP, 349_598);
++    let at = format!("data:text/css;base64,{}", "A".repeat(CANON_CAP - 21));
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{at}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(t.diagnostics.dropped_attributes, 0);
++    assert_eq!(t.diagnostics.retained_inline_sheet_href_bytes, CANON_CAP);
++    let t = optin(&page(&format!("<link rel=stylesheet href=\"{at}A\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!(t.diagnostics.dropped_attributes, 1);
++    assert_eq!(t.diagnostics.retained_inline_sheet_href_bytes, 0);
++    // Default entry never retains and reports 0.
++    let d = plain(&page(&format!("<link rel=stylesheet href=\"{at}\">")), &[], &Limits::DEFAULT, None, b);
++    assert_eq!((d.diagnostics.dropped_attributes, d.diagnostics.retained_inline_sheet_href_bytes), (1, 0));
++}
++
++#[test]
++fn header_case_charset_media_and_decoder_refusals_are_the_decoders() {
++    let b = budget(8192, 2);
++    let body = b64(&css(6000, "p{margin-top:7px}"));
++    let ok = |href: String, extra: &str| optin(&page(&format!("<link rel=stylesheet{extra} href=\"{href}\">")), &[], &Limits::DEFAULT, None, b);
++    let t = ok(format!("DATA:TEXT/CSS;BASE64,{body}"), "");
++    assert_eq!((t.diagnostics.dropped_attributes, t.unsupported, margin_top(&t)), (0, false, 7), "{:?}", reasons(&t));
++    let t = ok(format!("data:text/css;charset=utf-8;base64,{body}"), "");
++    assert_eq!((t.diagnostics.dropped_attributes, t.unsupported, margin_top(&t)), (0, false, 7), "{:?}", reasons(&t));
++    // Non-css media type with the css prefix absent: not retained.
++    let t = ok(format!("data:text/plain;base64,{body}"), "");
++    assert_eq!(t.diagnostics.dropped_attributes, 1);
++    // Retained, then refused by the decoder for other charset / URL-escaped / non-base64 forms.
++    for href in [format!("data:text/css;charset=latin1;base64,{body}"), format!("data:text/css,{}", "p%7Bmargin-top:1px%7D".repeat(300))] {
++        let t = ok(href, "");
++        assert_eq!(t.diagnostics.dropped_attributes, 0);
++        assert!(t.unsupported, "decoder refuses");
++    }
++    // Invalid UTF-8 inside valid base64 and invalid base64 characters: decoder refusals.
++    let bad_utf8 = b64(&[0xff; 6000]);
++    let t = ok(format!("data:text/css;base64,{bad_utf8}"), "");
++    assert_eq!(t.diagnostics.dropped_attributes, 0);
++    assert!(t.unsupported);
++    let t = ok(format!("data:text/css;base64,{}!{}", &body[..3000], &body[3000..]), "");
++    assert_eq!(t.diagnostics.dropped_attributes, 0);
++    assert!(t.unsupported);
++    // Media attribute unchanged semantics: non-matching media is not an applied sheet but is retained.
++    let t = ok(format!("data:text/css;base64,{body}"), " media=\"print\"");
++    assert_eq!(t.diagnostics.dropped_attributes, 0);
++    assert_eq!(margin_top(&t), 16, "print media sheet not applied; {:?}", reasons(&t));
++}
++
++#[test]
++fn optin_caps_win_over_the_measurement_globals_and_globals_stay_inert_by_default() {
++    use kobo_web_document::measure;
++    use std::sync::{atomic::Ordering, Mutex};
++    static SERIAL: Mutex<()> = Mutex::new(());
++    let _g = SERIAL.lock().unwrap();
++    let h = href(6000, "p{margin-top:7px}");
++    let html = page(&format!("<link rel=stylesheet href=\"{h}\">"));
++    measure::SHEET_HREF_CAP.store(100, Ordering::Relaxed); // global cap too small for the href
++    measure::SHEET_AGG_CAP.store(100, Ordering::Relaxed);
++    let on = optin(&html, &[], &Limits::DEFAULT, None, budget(8192, 2));
++    let off = plain(&html, &[], &Limits::DEFAULT, None, budget(8192, 2));
++    measure::SHEET_HREF_CAP.store(0, Ordering::Relaxed);
++    measure::SHEET_AGG_CAP.store(0, Ordering::Relaxed);
++    assert_eq!(on.diagnostics.dropped_attributes, 0, "opt-in cap takes precedence");
++    assert_eq!(off.diagnostics.dropped_attributes, 1, "global too small: dropped as before");
++    // Globals alone (measurement path) still work exactly as before and report retained bytes.
++    measure::SHEET_HREF_CAP.store(10_000, Ordering::Relaxed);
++    measure::SHEET_AGG_CAP.store(20_000, Ordering::Relaxed);
++    let g = plain(&html, &[], &Limits::DEFAULT, None, budget(8192, 2));
++    measure::SHEET_HREF_CAP.store(0, Ordering::Relaxed);
++    measure::SHEET_AGG_CAP.store(0, Ordering::Relaxed);
++    assert_eq!(g.diagnostics.dropped_attributes, 0);
++    assert_eq!(g.diagnostics.retained_inline_sheet_href_bytes, h.len());
++}

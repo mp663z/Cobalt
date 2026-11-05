@@ -1,4 +1,3 @@
-   Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/clean4q/crates/kobo-web-document)
 warning: method `flex_units_shadow` is never used
    --> crates/kobo-web-document/src/box_tree.rs:464:8
     |
@@ -10,8 +9,9 @@ warning: method `flex_units_shadow` is never used
     |
     = note: `#[warn(dead_code)]` on by default
 
-warning: `kobo-web-document` (lib test) generated 1 warning
-warning: `kobo-web-document` (lib) generated 1 warning (1 duplicate)
+   Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/clean4r/crates/kobo-web-document)
+warning: `kobo-web-document` (lib) generated 1 warning
+warning: `kobo-web-document` (lib test) generated 1 warning (1 duplicate)
 warning: unused import: `style_diagnostics::RefusalReason as R`
  --> crates/kobo-web-document/tests/light_scheme_proto.rs:3:78
   |
@@ -30,37 +30,37 @@ warning: unused variable: `e`
   = note: `#[warn(unused_variables)]` on by default
 
 warning: `kobo-web-document` (example "flex_rects") generated 1 warning
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 26.69s
-     Running unittests src/lib.rs (/home/sandbox/cb/tgt-q/debug/deps/kobo_web_document-ec42a47476d560b2)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.42s
+     Running unittests src/lib.rs (/home/sandbox/cb/tgt-r/debug/deps/kobo_web_document-ec42a47476d560b2)
 
 running 188 tests
 test box_tree::tests::adjoining_margin_equation_handles_positive_negative_and_zero ... ok
 test box_tree::tests::all_inline_children_stay_in_inline_formatting_context ... ok
 test box_tree::tests::block_inside_inline_is_explicitly_unsupported ... ok
-test box_tree::tests::auto_block_height_contains_definite_children_but_not_indefinite_percent ... ok
 test box_tree::tests::block_width_edges_auto_margins_and_direction ... ok
+test box_tree::tests::auto_block_height_contains_definite_children_but_not_indefinite_percent ... ok
 test box_tree::tests::border_box_width_excludes_nonnegative_edges ... ok
 test box_tree::tests::css_2_2_block_width_with_zero_edges ... ok
 test box_tree::tests::border_box_height_subtracts_vertical_padding_without_underflow ... ok
 test box_tree::tests::definite_sibling_stack_stops_at_first_unknown ... ok
 test box_tree::tests::hidden_subtree_has_no_boxes_or_text ... ok
 test box_tree::tests::definite_height_does_not_guess_auto_or_indefinite_percent ... ok
-test box_tree::tests::inline_block_width_is_not_guessed ... ok
 test box_tree::tests::horizontal_margins_and_anonymous_blocks_reset_noninherited_values ... ok
+test box_tree::tests::inline_block_width_is_not_guessed ... ok
 test box_tree::tests::measured_direct_text_receives_content_origin_without_background_permission ... ok
-test box_tree::tests::measured_text_height_does_not_turn_background_only_pass_into_text_paint ... ok
 test box_tree::tests::mixed_children_get_anonymous_blocks_in_dom_order ... ok
+test box_tree::tests::measured_text_height_does_not_turn_background_only_pass_into_text_paint ... ok
 test box_tree::tests::normalized_wrappers_keep_sources_order_and_width_geometry ... ok
 test box_tree::tests::padding_changes_content_width_and_x_without_stealing_margin ... ok
 test box_tree::tests::root_children_keep_their_top_margin_and_nested_first_margins_collapse ... ok
 test box_tree::tests::normalization_rejects_bad_graphs_atomically ... ok
+test box_tree::tests::source_exemption_is_only_exact_generated_anonymous_wrapper ... ok
 test box_tree::tests::vertical_padding_moves_content_and_siblings_without_margin_collapse ... ok
 test box_tree::tests::vertical_pass_positions_only_definite_block_subtrees ... ok
-test box_tree::tests::vertical_pass_rejects_unknown_height_and_parent_child_collapse ... ok
 test box_tree::tests::vertical_percentage_margin_uses_containing_width_and_auto_zero ... ok
-test box_tree::tests::source_exemption_is_only_exact_generated_anonymous_wrapper ... ok
-test box_tree::tests::width_position_is_known_only_on_block_paths ... ok
+test box_tree::tests::vertical_pass_rejects_unknown_height_and_parent_child_collapse ... ok
 test box_tree::tests::widths_follow_nearest_block_content_width ... ok
+test box_tree::tests::width_position_is_known_only_on_block_paths ... ok
 test computed_style::tests::css_wide_keywords_resolve_per_property ... ok
 test computed_style::tests::display_is_not_inherited_but_color_is ... ok
 test computed_style::tests::font_size_inherits_and_css_wide_keywords_keep_their_scope ... ok
@@ -75,18 +75,18 @@ test css_border::tests::oversized_edges_refuse_without_returning_a_page ... ok
 test custom_props::tests::budgets_refuse ... ok
 test custom_props::tests::css_wide_keywords_through_var_refuse ... ok
 test css::tests::wikipedia_fixture_hides_matching_navigation_but_keeps_article ... ok
-test custom_props::tests::cycles_and_unresolvable_custom_values_refuse ... ok
 test custom_props::tests::definitions_accept_only_bounded_plain_tokens ... ok
-test custom_props::tests::malformed_and_foreign_function_names ... ok
+test custom_props::tests::cycles_and_unresolvable_custom_values_refuse ... ok
 test custom_props::tests::fallback_may_contain_commas_and_nested_var ... ok
+test custom_props::tests::malformed_and_foreign_function_names ... ok
 test custom_props::tests::missing_without_fallback_refuses ... ok
 test custom_props::tests::map_inherits_overrides_and_resolves_local_references ... ok
 test custom_props::tests::names_are_case_sensitive_and_values_keep_case ... ok
 test data_stylesheet::tests::size_arithmetic_is_checked_before_allocation ... ok
 test custom_props::tests::substitution_is_token_level_never_glued ... ok
 test dom::profile_saturation_test::saturated_profile_counts_cannot_wrap_to_zero ... ok
-test dom::profile_mapping_tests::every_refusing_html_tag_has_an_explicit_exact_profile_mapping ... ok
 test dom::source_fact_tests::arena_scan_includes_detached_template_and_other_namespaces_once ... ok
+test dom::profile_mapping_tests::every_refusing_html_tag_has_an_explicit_exact_profile_mapping ... ok
 test dom::source_fact_tests::both_paths_reject_oversized_new_but_not_oversized_existing ... ok
 test dom::source_fact_tests::both_attribute_paths_classify_all_rejections_after_duplicates ... ok
 test dom::source_fact_tests::loss_accounting_saturates_on_both_paths ... ok
@@ -95,18 +95,18 @@ test flex_units::tests::exact_px_mode_refuses_fractional_share ... ok
 test flex_units::tests::three_equal_flex_one_in_100px_chrome_units ... ok
 test flex_units_v2::tests::bounds_refuse ... ok
 test flex_units_v2::tests::exact_px_mode_refuses_fractional_share ... ok
-test flex_units_v2::tests::three_equal_flex_one_in_100px_chrome_units ... ok
 test dom::source_fact_tests::namespace_uri_or_prefix_observed_before_any_filter_on_both_paths ... ok
+test flex_units_v2::tests::three_equal_flex_one_in_100px_chrome_units ... ok
 test flex_units_v3::tests::bounds_refuse ... ok
-test flex_units_v3::tests::exact_px_mode_refuses_fractional_share ... ok
 test flex_units_v3::tests::three_equal_flex_one_in_100px_chrome_units ... ok
+test flex_units_v3::tests::exact_px_mode_refuses_fractional_share ... ok
 test inline_lines::apostrophe_wrap_tests::ambiguous_quotes_and_multiple_apostrophes_still_refuse ... ok
 test inline_lines::apostrophe_wrap_tests::internal_ascii_apostrophes_stay_in_sentence_words ... ok
 test inline_lines::bracket_word_tests::duplicated_boundary_whitespace_collapses_once_and_trims_edges ... ok
 test inline_lines::bracket_word_tests::runs_normal_boundary_space_belongs_to_the_run_that_carries_it ... ok
 test inline_lines::bracket_word_tests::runs_normal_tracks_per_face_advances_positions_and_flags ... ok
-test inline_lines::bracket_word_tests::runs_normal_wraps_across_runs_on_word_boundaries ... ok
 test inline_lines::bracket_word_tests::direct_text_refuses_a_bold_run_without_a_bold_face_key ... ok
+test inline_lines::bracket_word_tests::runs_normal_wraps_across_runs_on_word_boundaries ... ok
 test inline_lines::bracket_word_tests::runs_text_places_strong_with_bold_face_and_flags ... ok
 test inline_lines::bracket_word_tests::single_paired_brackets_stay_on_their_word_line ... ok
 test inline_lines::bracket_word_tests::unmatched_nested_and_multiword_brackets_still_refuse ... ok
@@ -223,23 +223,23 @@ test url::tests::rfc3986_normal_examples ... ok
 test url::tests::same_document_ignores_fragment ... ok
 test style_tree::custom_property_tests::tree_wide_custom_property_budget_trips_without_unbounded_allocation ... ok
 
-test result: ok. 188 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+test result: ok. 188 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
 
-     Running tests/art76_dump_rows.rs (/home/sandbox/cb/tgt-q/debug/deps/art76_dump_rows-62676d5283324c22)
+     Running tests/art76_dump_rows.rs (/home/sandbox/cb/tgt-r/debug/deps/art76_dump_rows-62676d5283324c22)
 
 running 1 test
 test dump_engine_rows ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.39s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.12s
 
-     Running tests/art77_dump_nested.rs (/home/sandbox/cb/tgt-q/debug/deps/art77_dump_nested-ed1b8536d0b69139)
+     Running tests/art77_dump_nested.rs (/home/sandbox/cb/tgt-r/debug/deps/art77_dump_nested-ed1b8536d0b69139)
 
 running 1 test
 test dump_engine_rows_nested ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.79s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.63s
 
-     Running tests/charset_media.rs (/home/sandbox/cb/tgt-q/debug/deps/charset_media-14ccbd49eb724712)
+     Running tests/charset_media.rs (/home/sandbox/cb/tgt-r/debug/deps/charset_media-14ccbd49eb724712)
 
 running 5 tests
 test charset_and_media_reachable_via_retained_data ... ok
@@ -250,7 +250,7 @@ test inactive_structure_and_work_still_refuse ... ok
 
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_absolute.rs (/home/sandbox/cb/tgt-q/debug/deps/css_absolute-f0efd880ca2afee8)
+     Running tests/css_absolute.rs (/home/sandbox/cb/tgt-r/debug/deps/css_absolute-f0efd880ca2afee8)
 
 running 8 tests
 test auto_offsets_share_static_anchor_without_advancing_flow ... ok
@@ -259,12 +259,12 @@ test cascade_initial_unset_and_inherit_keep_position_noninherited ... ok
 test opposite_offsets_use_initial_containing_block_and_box_edges ... ok
 test positioned_leaf_removed_from_sibling_flow_and_painted_last ... ok
 test opaque_rgba_is_rgb_but_partial_or_malformed_alpha_refuses ... ok
-test unsupported_position_shapes_do_not_turn_into_normal_flow ... ok
 test visual_absolute_lab_sources_render ... ok
+test unsupported_position_shapes_do_not_turn_into_normal_flow ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_background.rs (/home/sandbox/cb/tgt-q/debug/deps/css_background-64c27a832f26410b)
+     Running tests/css_background.rs (/home/sandbox/cb/tgt-r/debug/deps/css_background-64c27a832f26410b)
 
 running 11 tests
 test a_display_none_root_neither_paints_nor_propagates_its_background ... ok
@@ -273,15 +273,15 @@ test malformed_arena_is_refused_before_geometry_passes ... ok
 test opaque_named_and_integer_rgb_colors_paint_exact_channels ... ok
 test padded_background_covers_padding_box_and_stacks_after_bottom_padding ... ok
 test retained_color_paints_only_proven_content_rectangles ... ok
-test canvas_backgrounds_cover_viewport_before_local_boxes ... ok
 test single_color_background_shorthand_paints_only_supported_rectangles ... ok
+test canvas_backgrounds_cover_viewport_before_local_boxes ... ok
 test unknown_css_and_text_are_not_passed_off_as_rendered ... ok
 test visual_paint_refuses_legacy_decoding_and_truncated_utf8 ... ok
 test visual_paint_refuses_quirks_and_limited_quirks ... ok
 
 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_border.rs (/home/sandbox/cb/tgt-q/debug/deps/css_border-dc913b7293e65048)
+     Running tests/css_border.rs (/home/sandbox/cb/tgt-r/debug/deps/css_border-dc913b7293e65048)
 
 running 14 tests
 test border_only_root_and_propagated_body_still_paint ... ok
@@ -301,16 +301,16 @@ test border_command_budget_fails_whole_page ... ok
 
 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
-     Running tests/css_border_functional_colour.rs (/home/sandbox/cb/tgt-q/debug/deps/css_border_functional_colour-783771b158295781)
+     Running tests/css_border_functional_colour.rs (/home/sandbox/cb/tgt-r/debug/deps/css_border_functional_colour-783771b158295781)
 
 running 3 tests
 test spaced_rgb_ring_has_exact_pixels ... ok
 test unsupported_forms_still_refuse_before_paint ... ok
 test spaced_and_tight_rgb_rasterize_identically ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/css_border_pattern.rs (/home/sandbox/cb/tgt-q/debug/deps/css_border_pattern-306f9714c75120fe)
+     Running tests/css_border_pattern.rs (/home/sandbox/cb/tgt-r/debug/deps/css_border_pattern-306f9714c75120fe)
 
 running 6 tests
 test currentcolor_and_no_ink_styles_preserve_used_widths ... ok
@@ -322,7 +322,7 @@ test complete_single_side_patterns_have_exact_ink_and_gaps ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
-     Running tests/css_border_pattern_ring.rs (/home/sandbox/cb/tgt-q/debug/deps/css_border_pattern_ring-af5676c80a9428f0)
+     Running tests/css_border_pattern_ring.rs (/home/sandbox/cb/tgt-r/debug/deps/css_border_pattern_ring-af5676c80a9428f0)
 
 running 5 tests
 test ring_command_exhaustion_refuses_whole ... ok
@@ -331,19 +331,19 @@ test unproven_ring_joins_and_fit_refuse_whole ... ok
 test visual_ring_and_rectangle_sources_render ... ok
 test uniform_rectangular_rings_have_exact_corners_gaps_and_interiors ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
 
-     Running tests/css_display_list.rs (/home/sandbox/cb/tgt-q/debug/deps/css_display_list-8f7ef7d0da7c34e6)
+     Running tests/css_display_list.rs (/home/sandbox/cb/tgt-r/debug/deps/css_display_list-8f7ef7d0da7c34e6)
 
 running 4 tests
 test hard_limits_and_failed_operations_do_not_change_state ... ok
-test complete_paint_lists_combine_in_order_without_partial_budget_failure ... ok
 test negative_oversize_and_empty_intersections_are_safe_and_exact ... ok
 test overlap_nested_clip_and_mask_exact_pixels ... ok
+test complete_paint_lists_combine_in_order_without_partial_budget_failure ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/css_family_retention.rs (/home/sandbox/cb/tgt-q/debug/deps/css_family_retention-15dffbbd6515e6b7)
+     Running tests/css_family_retention.rs (/home/sandbox/cb/tgt-r/debug/deps/css_family_retention-15dffbbd6515e6b7)
 
 running 4 tests
 test absent_family_stays_unresolved_with_no_new_ua_binding ... ok
@@ -353,7 +353,7 @@ test named_lists_quotes_fontface_and_other_generics_stay_unsupported ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/css_link_media.rs (/home/sandbox/cb/tgt-q/debug/deps/css_link_media-19661bce36a7477a)
+     Running tests/css_link_media.rs (/home/sandbox/cb/tgt-r/debug/deps/css_link_media-19661bce36a7477a)
 
 running 8 tests
 test handshake_does_not_fire_on_truncated_or_partially_refused_inputs ... ok
@@ -362,17 +362,17 @@ test link_media_unknown_refuses_before_supply_and_known_true_maps_in_order ... o
 test handshake_exact_count_missing_extra_and_skipped_inputs ... ok
 test style_elements_and_links_share_the_same_classifier ... ok
 test unknown_queries_empty_values_and_missing_context_fail_closed ... ok
-test width_features_follow_the_viewport_exactly ... ok
 test type_lists_true_false_and_unknown_permutations ... ok
+test width_features_follow_the_viewport_exactly ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_media_context.rs (/home/sandbox/cb/tgt-q/debug/deps/css_media_context-3d1f64421b2bf89d)
+     Running tests/css_media_context.rs (/home/sandbox/cb/tgt-r/debug/deps/css_media_context-3d1f64421b2bf89d)
 
 running 10 tests
 test gov_fractional_em_values_apply_without_rounding ... ok
-test known_false_blocks_hide_nothing_else_and_true_blocks_keep_declaration_policy ... ok
 test known_true_blocks_with_later_supported_declarations_are_clean ... ok
+test known_false_blocks_hide_nothing_else_and_true_blocks_keep_declaration_policy ... ok
 test no_context_refuses_every_width_query_and_never_defaults_a_width ... ok
 test nested_media_blocks_combine_and_a_false_ancestor_wins ... ok
 test reparse_at_another_width_is_the_resize_contract ... ok
@@ -383,7 +383,7 @@ test unknown_conditions_still_refuse_even_with_a_context ... ok
 
 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_nested_absolute.rs (/home/sandbox/cb/tgt-q/debug/deps/css_nested_absolute-6ecebbbcb95bb81c)
+     Running tests/css_nested_absolute.rs (/home/sandbox/cb/tgt-r/debug/deps/css_nested_absolute-6ecebbbcb95bb81c)
 
 running 6 tests
 test child_border_box_sizing_and_opposite_offsets_preserve_precedence ... ok
@@ -395,7 +395,7 @@ test unsupported_depth_flow_autosizes_and_offsets_refuse_whole ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_nested_phrases.rs (/home/sandbox/cb/tgt-q/debug/deps/css_nested_phrases-aa99e61ad4439f83)
+     Running tests/css_nested_phrases.rs (/home/sandbox/cb/tgt-r/debug/deps/css_nested_phrases-aa99e61ad4439f83)
 
 running 6 tests
 test anonymous_block_and_nested_replaced_remain_refused ... ok
@@ -407,7 +407,7 @@ test whole_page_depth_and_cap_precedence_before_callbacks ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
 
-     Running tests/css_normal_metrics.rs (/home/sandbox/cb/tgt-q/debug/deps/css_normal_metrics-a1b4ed3cf3316db7)
+     Running tests/css_normal_metrics.rs (/home/sandbox/cb/tgt-r/debug/deps/css_normal_metrics-a1b4ed3cf3316db7)
 
 running 5 tests
 test inherited_explicit_line_height_never_calls_new_method ... ok
@@ -418,7 +418,7 @@ test explicit_px_percent_number_never_consult_new_method_and_stay_identical ... 
 
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_paint_bridge.rs (/home/sandbox/cb/tgt-q/debug/deps/css_paint_bridge-7998e0184e64fdff)
+     Running tests/css_paint_bridge.rs (/home/sandbox/cb/tgt-r/debug/deps/css_paint_bridge-7998e0184e64fdff)
 
 running 8 tests
 test auto_block_background_uses_child_flow_height ... ok
@@ -432,7 +432,7 @@ test unsupported_css_never_yields_partial_paint_even_empty_selection ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_px_device_px_contract.rs (/home/sandbox/cb/tgt-q/debug/deps/css_px_device_px_contract-4ffc954bdf1a1bb7)
+     Running tests/css_px_device_px_contract.rs (/home/sandbox/cb/tgt-r/debug/deps/css_px_device_px_contract-4ffc954bdf1a1bb7)
 
 running 3 tests
 test constant_is_one_and_documented_assumption_holds ... ok
@@ -441,7 +441,7 @@ test fractional_border_floor_is_the_1x_rule_with_min_one_device_px ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/css_rem_render.rs (/home/sandbox/cb/tgt-q/debug/deps/css_rem_render-7b853c16e4257d2b)
+     Running tests/css_rem_render.rs (/home/sandbox/cb/tgt-r/debug/deps/css_rem_render-7b853c16e4257d2b)
 
 running 3 tests
 test dump_ppm_when_requested ... ok
@@ -450,7 +450,7 @@ test rem_renders_pixel_identical_to_resolved_px ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_root_selector.rs (/home/sandbox/cb/tgt-q/debug/deps/css_root_selector-8d78d4abdae6337b)
+     Running tests/css_root_selector.rs (/home/sandbox/cb/tgt-r/debug/deps/css_root_selector-8d78d4abdae6337b)
 
 running 4 tests
 test non_root_element_never_matches_root ... ok
@@ -460,22 +460,22 @@ test root_specificity_beats_html_in_either_order_in_pixels ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/css_text_align.rs (/home/sandbox/cb/tgt-q/debug/deps/css_text_align-5aec50533f1d5788)
+     Running tests/css_text_align.rs (/home/sandbox/cb/tgt-r/debug/deps/css_text_align-5aec50533f1d5788)
 
 running 9 tests
 test empty_text_and_unbreakable_words_do_not_gain_new_layout_paths ... ok
 test css_wide_keywords_and_importance_keep_existing_cascade ... ok
 test explicit_alignment_uses_advance_extent_not_ink ... ok
 test fractional_center_refuses_instead_of_rounding ... ok
-test inherited_alignment_and_inline_override_have_block_scope ... ok
 test mixed_bold_advances_control_offset ... ok
+test inherited_alignment_and_inline_override_have_block_scope ... ok
 test shifted_text_respects_content_origin_padding_and_border ... ok
 test wrapped_lines_align_independently_and_trim_boundary_spaces ... ok
 test unsupported_values_and_rtl_remain_whole_page_refusals ... ok
 
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/css_text_page.rs (/home/sandbox/cb/tgt-q/debug/deps/css_text_page-667c17027eb2a84c)
+     Running tests/css_text_page.rs (/home/sandbox/cb/tgt-r/debug/deps/css_text_page-667c17027eb2a84c)
 
 running 67 tests
 test background_clipped_to_an_empty_area_paints_nothing ... ok
@@ -483,36 +483,36 @@ test auto_border_box_height_uses_wrapped_content_and_padding ... ok
 test bold_advance_layout_and_bitmap_use_the_same_face_key ... ok
 test bold_runs_refuse_mismatched_bold_line_metrics ... ok
 test bold_runs_refuse_without_a_matching_bold_face ... ok
-test block_indentation_and_trailing_newline_do_not_create_inline_boxes ... ok
-test border_box_height_clamps_to_zero_content_when_padding_exceeds_declaration ... ok
 test border_box_and_equivalent_content_box_have_identical_complete_rasters ... ok
+test border_box_height_clamps_to_zero_content_when_padding_exceeds_declaration ... ok
+test block_indentation_and_trailing_newline_do_not_create_inline_boxes ... ok
 test contractions_and_possessives_wrap_with_terminal_punctuation ... ok
 test definite_height_overflow_does_not_enable_unproven_clipping ... ok
 test currentcolor_reaches_canvas_and_local_background_pixels ... ok
 test definite_text_block_height_keeps_extra_room_before_the_next_sibling ... ok
 test direction_and_visible_list_markers_are_not_silently_omitted ... ok
 test em_and_percent_line_height_produce_same_complete_raster ... ok
-test direct_text_canvas_background_propagation_and_paint_order ... ok
 test exact_border_box_percentage_width_subtracts_padding_after_resolution ... ok
+test direct_text_canvas_background_propagation_and_paint_order ... ok
 test exact_horizontal_percentage_margins_match_pixels ... ok
 test exact_nested_percentage_height_matches_equivalent_pixel_geometry ... ok
 test exact_nested_percentage_width_matches_equivalent_pixels ... ok
-test foreground_currentcolor_reaches_glyph_pixels ... ok
 test explicit_pixel_line_height_sets_geometry_and_half_leading ... ok
+test foreground_currentcolor_reaches_glyph_pixels ... ok
 test fractional_percentage_heights_refuse_instead_of_flooring_backgrounds ... ok
 test fractional_horizontal_margins_and_half_pixel_centering_refuse ... ok
 test horizontal_ink_at_viewport_edge_clips_only_when_rasterized ... ok
-test fractional_percentage_width_refuses_before_rounding_text_geometry ... ok
 test horizontal_ink_overflows_content_without_changing_wrapped_geometry ... ok
+test fractional_percentage_width_refuses_before_rounding_text_geometry ... ok
 test horizontal_overhang_does_not_permit_unbreakable_words_or_hidden_overflow ... ok
 test invalid_natural_baselines_still_refuse_before_adjustment ... ok
 test italic_and_unsupported_weight_runs_still_refuse_the_page ... ok
 test large_negative_sibling_margin_clips_above_the_canvas ... ok
 test last_child_bottom_margin_escapes_auto_height_parent ... ok
-test horizontal_margins_position_background_and_text_together ... ok
-test measured_auto_height_does_not_make_percentage_descendant_definite ... ok
 test malformed_arena_is_refused_before_geometry_passes ... ok
+test measured_auto_height_does_not_make_percentage_descendant_definite ... ok
 test mixed_inline_strong_paints_with_per_run_faces ... ok
+test horizontal_margins_position_background_and_text_together ... ok
 test multiple_text_blocks_refuse_unsupported_sibling_without_partial_page ... ok
 test negative_adjusted_baseline_and_top_ink_clip_at_viewport_not_line ... ok
 test multiple_direct_text_blocks_stack_and_paint_in_document_order ... ok
@@ -529,8 +529,8 @@ test parent_edge_vertical_margins_collapse_and_paint ... ok
 test positioned_leaf_paints_after_glyphs_and_does_not_push_next_block ... ok
 test positive_adjoining_sibling_margins_collapse_to_the_larger_gap ... ok
 test refuses_branches_unknown_css_and_provider_failure_without_partial_page ... ok
-test short_definite_height_keeps_background_and_following_sibling_in_flow ... ok
 test short_line_height_keeps_measured_lines_while_ink_overflows ... ok
+test short_definite_height_keeps_background_and_following_sibling_in_flow ... ok
 test shorter_even_line_height_uses_negative_half_leading_when_ink_fits ... ok
 test single_text_paint_refuses_quirks ... ok
 test terminal_sentence_punctuation_wraps_but_internal_punctuation_refuses ... ok
@@ -538,8 +538,8 @@ test ua_body_margin_offsets_direct_text_page ... ok
 test unitless_line_height_paints_and_refuses_fractional_used_values ... ok
 test sibling_percentage_gaps_use_containing_width_not_height_or_child_width ... ok
 test unsupported_border_join_does_not_return_partial_text_page ... ok
-test visible_borders_paint_before_text ... ok
 test whole_single_text_page_paints_background_before_measured_glyph ... ok
+test visible_borders_paint_before_text ... ok
 test wrapped_sentence_marks_keep_next_sibling_after_measured_lines ... ok
 test zero_and_indefinite_text_heights_remain_refused ... ok
 test wrapped_text_overflows_definite_height_without_inflating_ancestor_height ... ok
@@ -548,18 +548,18 @@ test zero_height_without_vertical_padding_still_refuses_through_collapse ... ok
 
 test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
-     Running tests/css_zero_positioned.rs (/home/sandbox/cb/tgt-q/debug/deps/css_zero_positioned-141053ab3b05086f)
+     Running tests/css_zero_positioned.rs (/home/sandbox/cb/tgt-r/debug/deps/css_zero_positioned-141053ab3b05086f)
 
 running 5 tests
 test auto_container_is_zero_and_child_uses_true_static_flow_anchor ... ok
 test padded_static_ancestor_composes_child_offsets ... ok
 test padding_content_origin_and_negative_right_bottom_use_zero_containing_block ... ok
-test unproven_auto_containers_refuse_whole ... ok
 test zero_container_visual_source_renders ... ok
+test unproven_auto_containers_refuse_whole ... ok
 
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/data_stylesheet.rs (/home/sandbox/cb/tgt-q/debug/deps/data_stylesheet-68af21843e8265be)
+     Running tests/data_stylesheet.rs (/home/sandbox/cb/tgt-r/debug/deps/data_stylesheet-68af21843e8265be)
 
 running 8 tests
 test canonical_vectors_and_exact_css_bytes ... ok
@@ -573,38 +573,38 @@ test exact_limit_and_both_encoded_decoded_budget_failures ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
-     Running tests/flex_admission_probe.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_admission_probe-38d98b552312ad77)
+     Running tests/flex_admission_probe.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_admission_probe-38d98b552312ad77)
 
 running 1 test
 test probe ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_align_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_align_proto-a5c9c6ba6f00a40c)
+     Running tests/flex_align_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_align_proto-a5c9c6ba6f00a40c)
 
 running 27 tests
-test a2_flex_end_matches_chrome ... ok
 test a1_flex_start_matches_chrome ... ok
+test a2_flex_end_matches_chrome ... ok
 test a3_center_matches_chrome ... ok
 test a4_stretch_explicit_matches_chrome ... ok
-test a5_flex_start_auto_height_nostretch_matches_chrome ... ok
 test a6_center_margins_matches_chrome ... ok
+test a5_flex_start_auto_height_nostretch_matches_chrome ... ok
 test a8_both_matches_chrome ... ok
 test a7_flex_end_padding_matches_chrome ... ok
 test j10_margins_center_even_matches_chrome ... ok
 test j11_overflow_end_shrinks_to_fit_matches_chrome ... ok
 test j1_flex_end_matches_chrome ... ok
 test j2_center_matches_chrome ... ok
-test j3_space_between_matches_chrome ... ok
 test j4_space_around_matches_chrome ... ok
-test j6_margins_center_refused ... ok
+test j3_space_between_matches_chrome ... ok
 test j5_space_evenly_matches_chrome ... ok
+test j6_margins_center_refused ... ok
 test j7_single_between_matches_chrome ... ok
 test j8_grow_consumes_free_matches_chrome ... ok
 test z1_odd_center_refused ... ok
 test j9_flex_start_overflow_shrink_matches_chrome ... ok
-test z3_fractional_around_refused ... ok
 test z2_fractional_between_refused ... ok
+test z3_fractional_around_refused ... ok
 test z5_odd_cross_center_refused ... ok
 test z4_overflow_center_refused ... ok
 test z6_baseline_refused ... ok
@@ -613,19 +613,19 @@ test z8_align_self_refused ... ok
 
 test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_basis_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_basis_proto-60bafa0703b85a2e)
+     Running tests/flex_basis_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_basis_proto-60bafa0703b85a2e)
 
 running 20 tests
-test b2_basis_overrides_width_matches_chrome ... ok
 test b1_basis_auto_width_grow_matches_chrome ... ok
+test b2_basis_overrides_width_matches_chrome ... ok
 test b3_shrink_zero_item_matches_chrome ... ok
 test b4_shrink_2_vs_1_matches_chrome ... ok
 test b5_basis_below_min_content_matches_chrome ... ok
 test b6_shrink_basis_px_width_auto_matches_chrome ... ok
 test b7_grow_and_shrink_declared_matches_chrome ... ok
 test b8_frozen_at_hyp_then_shrink_matches_chrome ... ok
-test b9_shrink_zero_all_overflow_matches_chrome ... ok
 test o1_old_r2_overflow_matches_chrome ... ok
+test b9_shrink_zero_all_overflow_matches_chrome ... ok
 test x1_basis_percent_refused ... ok
 test o2_old_h4_overflow_grow_matches_chrome ... ok
 test x2_basis_content_refused ... ok
@@ -639,30 +639,30 @@ test x9_fraction_after_freeze_refused ... ok
 
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_border_family_gen.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_border_family_gen-1288bd94c1426e59)
+     Running tests/flex_border_family_gen.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_border_family_gen-1288bd94c1426e59)
 
 running 1 test
 test gen ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
 
-     Running tests/flex_grow_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_grow_proto-ac4d21be1649bb36)
+     Running tests/flex_grow_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_grow_proto-ac4d21be1649bb36)
 
 running 21 tests
 test g1_equal_grow_matches_chrome ... ok
 test g10_definite_height_equal_margin_box_matches_chrome ... ok
-test g2_ratio_1_3_matches_chrome ... ok
 test g3_mixed_margin_padding_refused ... ok
+test g2_ratio_1_3_matches_chrome ... ok
 test g4_single_fill_matches_chrome ... ok
 test g5_container_padding_matches_chrome ... ok
-test g7_grow_zero_and_full_matches_chrome ... ok
 test g6_nested_grow_inside_grown_item_matches_chrome ... ok
+test g7_grow_zero_and_full_matches_chrome ... ok
 test g8_grow_inherit_keyword_matches_chrome ... ok
-test g9_mixed_margin_padding_divisible_matches_chrome ... ok
 test h10_definite_height_below_tallest_item_refused ... ok
+test g9_mixed_margin_padding_divisible_matches_chrome ... ok
 test h11_definite_height_below_item_margin_box_refused ... ok
-test h1_fractional_share_three_matches_chrome ... ok
 test h2_fractional_grow_refused ... ok
+test h1_fractional_share_three_matches_chrome ... ok
 test h3_negative_grow_refused ... ok
 test h4_overflow_with_grow_superseded_now_shrinks ... ok
 test h5_exponent_refused ... ok
@@ -673,38 +673,38 @@ test h9_fractional_share_three_in_400_refused ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_refusal_diag_probe.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_refusal_diag_probe-5d930f3b4f8b9be5)
+     Running tests/flex_refusal_diag_probe.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_refusal_diag_probe-5d930f3b4f8b9be5)
 
 running 1 test
 test diag ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_row_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_row_proto-c288813d714b50f3)
+     Running tests/flex_row_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_row_proto-c288813d714b50f3)
 
 running 26 tests
-test c10_two_flex_stacked_matches_chrome ... ok
 test c1_explicit_heights_matches_chrome ... ok
+test c10_two_flex_stacked_matches_chrome ... ok
 test c2_stretch_auto_matches_chrome ... ok
 test c3_margin_padding_matches_chrome ... ok
-test c4_container_padding_matches_chrome ... ok
 test c5_sibling_margins_matches_chrome ... ok
+test c4_container_padding_matches_chrome ... ok
 test c6_child_margin_no_collapse_matches_chrome ... ok
-test c7_definite_height_matches_chrome ... ok
 test c8_nested_in_block_matches_chrome ... ok
+test c7_definite_height_matches_chrome ... ok
 test c9_nested_flex_matches_chrome ... ok
 test r10_wrap_refused ... ok
 test r11_gap_refused ... ok
-test r12_flex_shorthand_superseded_now_supported ... ok
 test r13_inline_flex_refused ... ok
-test r14_relative_item_refused ... ok
+test r12_flex_shorthand_superseded_now_supported ... ok
 test r15_order_refused ... ok
-test r16_empty_item_refused ... ok
+test r14_relative_item_refused ... ok
 test r1_flex_grow_superseded_now_supported ... ok
+test r16_empty_item_refused ... ok
 test r2_overflow_superseded_now_shrinks ... ok
 test r3_auto_width_refused ... ok
-test r4_column_refused ... ok
 test r5_text_item_refused ... ok
+test r4_column_refused ... ok
 test r6_auto_margin_refused ... ok
 test r7_pct_width_refused ... ok
 test r8_justify_superseded_now_supported ... ok
@@ -712,22 +712,22 @@ test r9_align_items_superseded_now_supported ... ok
 
 test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_shorthand_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_shorthand_proto-93289d027040c4ea)
+     Running tests/flex_shorthand_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_shorthand_proto-93289d027040c4ea)
 
 running 20 tests
-test f10_shrink_zero_form_matches_chrome ... ok
 test f11_zero_basis_three_items_matches_chrome ... ok
+test f10_shrink_zero_form_matches_chrome ... ok
 test f12_basis_first_exact_matches_chrome ... ok
 test f1_flex1_two_matches_chrome ... ok
 test f2_flex_2_1_matches_chrome ... ok
 test f3_none_width_px_matches_chrome ... ok
-test f4_auto_width_px_matches_chrome ... ok
 test f5_triple_basis_last_matches_chrome ... ok
+test f4_auto_width_px_matches_chrome ... ok
 test f6_basis_first_refused ... ok
 test f7_auto_then_grow_matches_chrome ... ok
 test f8_single_basis_matches_chrome ... ok
-test f9_flex_then_longhand_override_matches_chrome ... ok
 test y1_fraction_refused ... ok
+test f9_flex_then_longhand_override_matches_chrome ... ok
 test y2_pct_basis_refused ... ok
 test y3_content_refused ... ok
 test y4_four_tokens_refused ... ok
@@ -738,15 +738,15 @@ test y8_flex_auto_no_width_refused ... ok
 
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_shrink_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_shrink_proto-1aca51c4d3e5bbf6)
+     Running tests/flex_shrink_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_shrink_proto-1aca51c4d3e5bbf6)
 
 running 15 tests
 test s1_equal_shrink_matches_chrome ... ok
 test s10_freeze_then_scale_matches_chrome ... ok
 test s2_scaled_unequal_refused ... ok
 test s3_min_content_freeze_matches_chrome ... ok
-test s4_margins_padding_matches_chrome ... ok
 test s5_grow_ignored_when_overflow_matches_chrome ... ok
+test s4_margins_padding_matches_chrome ... ok
 test s7_all_frozen_at_min_matches_chrome ... ok
 test s6_min_content_from_nested_padding_matches_chrome ... ok
 test s8_zero_min_item_matches_chrome ... ok
@@ -759,28 +759,28 @@ test t5_zero_base_all_refused ... ok
 
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/flex_units_diff.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_units_diff-54fc55a22a884c00)
+     Running tests/flex_units_diff.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_units_diff-54fc55a22a884c00)
 
 running 1 test
 test units_exactpx_matches_integer_engine_on_random_rows ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.22s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.30s
 
-     Running tests/flex_units_diff_v2.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_units_diff_v2-4902fa66f7fea874)
+     Running tests/flex_units_diff_v2.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_units_diff_v2-4902fa66f7fea874)
 
 running 1 test
 test v2_units_exactpx_matches_integer_engine_zero_width_omitted ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.11s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.02s
 
-     Running tests/flex_units_diff_v3.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_units_diff_v3-ba6519f2856dd792)
+     Running tests/flex_units_diff_v3.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_units_diff_v3-ba6519f2856dd792)
 
 running 1 test
 test v3_units_v2_exactpx_matches_integer_engine_zero_width_omitted ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.55s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.49s
 
-     Running tests/flex_units_precision_fixture.rs (/home/sandbox/cb/tgt-q/debug/deps/flex_units_precision_fixture-0f410ea10fe157dd)
+     Running tests/flex_units_precision_fixture.rs (/home/sandbox/cb/tgt-r/debug/deps/flex_units_precision_fixture-0f410ea10fe157dd)
 
 running 3 tests
 test near_tie_detects_exact_and_near_half ... ok
@@ -789,7 +789,7 @@ test rounding_primitives_diverge_at_the_largest_double_below_half ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/golden.rs (/home/sandbox/cb/tgt-q/debug/deps/golden-177c45d0f70edf92)
+     Running tests/golden.rs (/home/sandbox/cb/tgt-r/debug/deps/golden-177c45d0f70edf92)
 
 running 14 tests
 test basic ... ok
@@ -807,9 +807,25 @@ test sanitize ... ok
 test unsupported_and_disabled_form_controls_are_not_submitted ... ok
 test deep_nesting_stops_at_the_depth_limit_and_keeps_the_text ... ok
 
-test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.96s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.12s
 
-     Running tests/light_scheme_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/light_scheme_proto-557de72f78a380ff)
+     Running tests/inline_sheet_href_optin.rs (/home/sandbox/cb/tgt-r/debug/deps/inline_sheet_href_optin-3404bbba2bc6a10f)
+
+running 10 tests
+test aggregate_is_per_parse_and_third_sheet_still_refuses ... ok
+test encoded_bound_is_exactly_four_ceil_third_plus_header_and_decoder_stays_authority ... ok
+test header_case_charset_media_and_decoder_refusals_are_the_decoders ... ok
+test html_entities_in_the_href_are_decoded_before_length_and_decoding ... ok
+test inactive_link_keeps_default_semantics ... ok
+test inputs_without_oversize_data_hrefs_are_identical_to_the_default_entry ... ok
+test optin_caps_win_over_the_measurement_globals_and_globals_stay_inert_by_default ... ok
+test other_attributes_and_elements_still_drop_and_count ... ok
+test canonical_budget_derives_the_documented_cap_and_cap_plus_one_drops ... ok
+test oversize_sheet_is_decoded_by_the_engine_only_when_opted_in ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/light_scheme_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/light_scheme_proto-557de72f78a380ff)
 
 running 3 tests
 test default_context_still_refuses_prefers_color_scheme ... ok
@@ -818,38 +834,38 @@ test width_features_unchanged_and_combine ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/link_rects_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/link_rects_proto-31f740fc5f65e07d)
+     Running tests/link_rects_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/link_rects_proto-31f740fc5f65e07d)
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/links_in_code.rs (/home/sandbox/cb/tgt-q/debug/deps/links_in_code-ad4d9e7018854e58)
+     Running tests/links_in_code.rs (/home/sandbox/cb/tgt-r/debug/deps/links_in_code-ad4d9e7018854e58)
 
 running 1 test
 test links_inside_code_are_kept_and_the_words_stay_code ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/minmax_direct_pass_probe.rs (/home/sandbox/cb/tgt-q/debug/deps/minmax_direct_pass_probe-8030aeae1e4b60b1)
+     Running tests/minmax_direct_pass_probe.rs (/home/sandbox/cb/tgt-r/debug/deps/minmax_direct_pass_probe-8030aeae1e4b60b1)
 
 running 1 test
 test direct_passes ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/minmax_raster_dump.rs (/home/sandbox/cb/tgt-q/debug/deps/minmax_raster_dump-04dcca4857ef5428)
+     Running tests/minmax_raster_dump.rs (/home/sandbox/cb/tgt-r/debug/deps/minmax_raster_dump-04dcca4857ef5428)
 
 running 1 test
 test raster ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 
-     Running tests/narrow_supply_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/narrow_supply_proto-373c042d15a22fb4)
+     Running tests/narrow_supply_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/narrow_supply_proto-373c042d15a22fb4)
 
 running 11 tests
-test aggregate_cap_drops_the_excess_href_not_silently ... ok
 test bad_payloads_and_dark_media_refuse ... ok
+test aggregate_cap_drops_the_excess_href_not_silently ... ok
 test cascade_link_then_style_later_wins ... ok
 test cascade_specificity_beats_order_and_important_beats_both ... ok
 test cascade_style_then_link_later_wins ... ok
@@ -862,7 +878,7 @@ test sheet_count_ceiling_refuses_the_extra_sheet ... ok
 
 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/padding_em_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/padding_em_proto-554c12c0ba64d171)
+     Running tests/padding_em_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/padding_em_proto-554c12c0ba64d171)
 
 running 5 tests
 test em_uses_the_elements_own_font_size_exactly ... ok
@@ -873,7 +889,7 @@ test rem_and_other_units_stay_refused ... ok
 
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/rem_lengths_proto.rs (/home/sandbox/cb/tgt-q/debug/deps/rem_lengths_proto-6c6ac65d8eae0279)
+     Running tests/rem_lengths_proto.rs (/home/sandbox/cb/tgt-r/debug/deps/rem_lengths_proto-6c6ac65d8eae0279)
 
 running 6 tests
 test element_font_does_not_change_rem ... ok
@@ -885,7 +901,7 @@ test rem_geometry_equals_px_twin ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/shaped_page_integration.rs (/home/sandbox/cb/tgt-q/debug/deps/shaped_page_integration-a705468411f71157)
+     Running tests/shaped_page_integration.rs (/home/sandbox/cb/tgt-r/debug/deps/shaped_page_integration-a705468411f71157)
 
 running 7 tests
 test cumulative_x_is_rounded_once_not_summed_pre_rounded ... ok
@@ -898,7 +914,7 @@ test eligible_shaped_pages_are_never_silently_legacy ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
-     Running tests/shaped_runs_prototype.rs (/home/sandbox/cb/tgt-q/debug/deps/shaped_runs_prototype-def024eaf060cbac)
+     Running tests/shaped_runs_prototype.rs (/home/sandbox/cb/tgt-r/debug/deps/shaped_runs_prototype-def024eaf060cbac)
 
 running 6 tests
 test degenerate_inputs_match_legacy ... ok
@@ -910,7 +926,7 @@ test every_malformed_provider_output_falls_back_to_byte_identical_legacy ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/source_facts.rs (/home/sandbox/cb/tgt-q/debug/deps/source_facts-497e031b4cb0a7cc)
+     Running tests/source_facts.rs (/home/sandbox/cb/tgt-r/debug/deps/source_facts-497e031b4cb0a7cc)
 
 running 17 tests
 test allowlist_is_unique_and_excludes_every_refusing_class ... ok
@@ -933,7 +949,7 @@ test every_profile_tag_in_retained_contexts_refuses_passive_classification ... o
 
 test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 
-     Running tests/style_diagnostics.rs (/home/sandbox/cb/tgt-q/debug/deps/style_diagnostics-6151daf1c3fa06ef)
+     Running tests/style_diagnostics.rs (/home/sandbox/cb/tgt-r/debug/deps/style_diagnostics-6151daf1c3fa06ef)
 
 running 7 tests
 test attribute_loss_precedes_missing_resource_and_records_both ... ok
@@ -946,7 +962,7 @@ test style_complexity_budget_reason_does_not_claim_dom_truncation ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
-     Running tests/supply_budget.rs (/home/sandbox/cb/tgt-q/debug/deps/supply_budget-7cae53f60446fb94)
+     Running tests/supply_budget.rs (/home/sandbox/cb/tgt-r/debug/deps/supply_budget-7cae53f60446fb94)
 
 running 8 tests
 test aggregate_gate_is_new_ordered_after_per_sheet_and_in_document_order ... ok
@@ -958,9 +974,9 @@ test per_sheet_budget_raises_only_when_named ... ok
 test third_sheet_needs_the_sheet_count_budget_each_arm ... ok
 test canonical_entry_matches_the_existing_entry_for_every_gate ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 
-     Running tests/wpt_base.rs (/home/sandbox/cb/tgt-q/debug/deps/wpt_base-24b37a75b59447f2)
+     Running tests/wpt_base.rs (/home/sandbox/cb/tgt-r/debug/deps/wpt_base-24b37a75b59447f2)
 
 running 7 tests
 test a_base_in_the_body_still_counts ... ok
@@ -973,7 +989,7 @@ test without_a_base_links_resolve_against_the_page ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/wpt_encoding.rs (/home/sandbox/cb/tgt-q/debug/deps/wpt_encoding-6d3aee542c8597db)
+     Running tests/wpt_encoding.rs (/home/sandbox/cb/tgt-r/debug/deps/wpt_encoding-6d3aee542c8597db)
 
 running 2 tests
 test utf8_with_or_without_a_byte_order_mark_is_read_as_utf8 ... ok
@@ -981,7 +997,7 @@ test every_high_byte_decodes_as_the_windows_1252_index_says ... ok
 
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running tests/wpt_entities.rs (/home/sandbox/cb/tgt-q/debug/deps/wpt_entities-3a6b48d570e4fddd)
+     Running tests/wpt_entities.rs (/home/sandbox/cb/tgt-r/debug/deps/wpt_entities-3a6b48d570e4fddd)
 
 running 2 tests
 test numeric_character_references_are_repaired_as_the_standard_says ... ok
@@ -989,7 +1005,7 @@ test every_named_character_reference_reads_as_its_characters ... ok
 
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
 
-     Running tests/wpt_url.rs (/home/sandbox/cb/tgt-q/debug/deps/wpt_url-9c9e139d3d8d6264)
+     Running tests/wpt_url.rs (/home/sandbox/cb/tgt-r/debug/deps/wpt_url-9c9e139d3d8d6264)
 
 running 1 test
 test wpt_url_parsing ... ok

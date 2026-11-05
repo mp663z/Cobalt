@@ -412,7 +412,7 @@ pub fn parse_style_tree(
     sheets: &[Vec<u8>],
     limits: &Limits,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL)
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false)
 }
 
 /// Like [`parse_style_tree`] but evaluates supported `@media` width queries
@@ -425,7 +425,7 @@ pub fn parse_style_tree_with_media(
     limits: &Limits,
     media: MediaContext,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL)
+    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false)
 }
 
 /// Like [`parse_style_tree_with_media`] with an explicit [`SupplyBudget`].
@@ -440,7 +440,30 @@ pub fn parse_style_tree_with_supply(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false)
+}
+
+/// CANDIDATE, opt-in, unadopted: like [`parse_style_tree_with_supply`], but an
+/// oversize `link[href]` whose value starts with `data:text/css` is retained whole
+/// (not counted as a dropped attribute) up to the encoded size implied by
+/// `budget.max_sheet_bytes`, and `budget.max_linked_sheets` such values per
+/// document, so the engine's own strict decoder admits or refuses it. Every
+/// other dropped attribute is still counted and refused.
+#[must_use]
+pub fn parse_style_tree_with_inline_sheets(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+    media: Option<MediaContext>,
+    budget: SupplyBudget,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true)
+}
+
+/// Per-href and per-document retention caps, derived from the sheet budget and sheet count.
+fn inline_href_caps(budget: &SupplyBudget) -> Option<(usize, usize)> {
+    let per = data_stylesheet::max_href_len(budget.max_sheet_bytes)?;
+    Some((per, per.checked_mul(budget.max_linked_sheets)?))
 }
 
 fn parse_style_tree_in(
@@ -449,11 +472,17 @@ fn parse_style_tree_in(
     limits: &Limits,
     media: Option<MediaContext>,
     budget: SupplyBudget,
+    inline_sheets: bool,
 ) -> style_tree::StyleTree {
     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
     let mut warnings = Vec::new();
     let text = decode(input, &mut warnings);
     let sink = dom::Sink::new(limits.max_text_bytes);
+    if inline_sheets {
+        if let Some((per, aggregate)) = inline_href_caps(&budget) {
+            sink.set_inline_sheet_href_caps(per, aggregate);
+        }
+    }
     let options = html5ever::ParseOpts {
         tree_builder: html5ever::tree_builder::TreeBuilderOpts {
             scripting_enabled: false,
@@ -488,6 +517,7 @@ fn parse_style_tree_in(
         .get()
         .saturating_add(sink.merged_attributes_dropped.get());
     diagnostics.dropped_text = sink.dropped_text.get();
+    diagnostics.retained_inline_sheet_href_bytes = sink.retained_oversize_href_bytes();
     if diagnostics.dropped_attributes > 0 {
         diagnostics.record(style_diagnostics::RefusalReason::DroppedAttributes);
     }

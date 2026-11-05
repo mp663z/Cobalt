@@ -156,6 +156,13 @@ pub fn decode_with_max(uri: &str, max_decoded: usize) -> Result<InlineStylesheet
     })
 }
 
+/// Longest full `data:` href this admission can accept for `max_decoded`: `data:` (5), a header of at
+/// most `MAX_HEADER_BYTES`, the comma (1), and the payload bound. Derived, no literals; the decoder
+/// remains the authority on every byte.
+pub(crate) fn max_href_len(max_decoded: usize) -> Option<usize> {
+    max_encoded_len(max_decoded)?.checked_add(5 + MAX_HEADER_BYTES + 1)
+}
+
 fn max_encoded_len(decoded: usize) -> Option<usize> {
     decoded.checked_add(2)?.checked_div(3)?.checked_mul(4)
 }

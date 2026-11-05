@@ -63,6 +63,10 @@ pub struct Sink {
     nodes: RefCell<Vec<Node>>,
     text_bytes: Cell<usize>,
     exempt_bytes: Cell<usize>,
+    /// Opt-in per-parse retention of oversize `link[href^=data:text/css]` values:
+    /// (per-href cap, per-document aggregate cap). (0, 0) is off and byte-identical
+    /// to the default behavior. Unlike `measure::*` this is not process-global.
+    inline_sheet_href: Cell<(usize, usize)>,
     max_text_bytes: usize,
     pub(crate) errors: Cell<usize>,
     pub(crate) dropped_attributes: Cell<usize>,
@@ -82,6 +86,7 @@ impl Sink {
             }]),
             text_bytes: Cell::new(0),
             exempt_bytes: Cell::new(0),
+            inline_sheet_href: Cell::new((0, 0)),
             max_text_bytes,
             errors: Cell::new(0),
             dropped_attributes: Cell::new(0),
@@ -90,6 +95,18 @@ impl Sink {
             attr_namespace_discarded: Cell::new(false),
             quirks_mode: Cell::new(QuirksMode::Quirks),
         }
+    }
+
+    /// Opt in to keeping (whole, uncounted as dropped) `link[href]` values that start
+    /// with `data:text/css` up to `per_href` bytes each and `aggregate` bytes per
+    /// document. Every other over-cap attribute still counts as dropped.
+    pub fn set_inline_sheet_href_caps(&self, per_href: usize, aggregate: usize) {
+        self.inline_sheet_href.set((per_href, aggregate));
+    }
+
+    /// Bytes of oversize `link[href]` values kept under an opt-in or measurement cap.
+    pub(crate) fn retained_oversize_href_bytes(&self) -> usize {
+        self.exempt_bytes.get()
     }
 
     pub fn len(&self) -> usize {
@@ -170,6 +187,7 @@ impl Sink {
         existing: &mut Vec<(LocalName, String)>,
         attrs: Vec<Attribute>,
         losses: &Cell<usize>,
+        tag: &str,
     ) {
         for attribute in attrs {
             // QualName namespace and prefix are independent. Observe both before
@@ -183,10 +201,16 @@ impl Sink {
             {
                 continue;
             }
-            let tag = measure::TAG.with(|t| t.borrow().clone());
             let exempt_cap = measure::EXEMPT_CAP.load(std::sync::atomic::Ordering::Relaxed);
-            let sheet_cap = measure::SHEET_HREF_CAP.load(std::sync::atomic::Ordering::Relaxed);
-            let sheet_agg = measure::SHEET_AGG_CAP.load(std::sync::atomic::Ordering::Relaxed);
+            let (own_cap, own_agg) = self.inline_sheet_href.get();
+            let (sheet_cap, sheet_agg) = if own_cap > 0 {
+                (own_cap, own_agg)
+            } else {
+                (
+                    measure::SHEET_HREF_CAP.load(std::sync::atomic::Ordering::Relaxed),
+                    measure::SHEET_AGG_CAP.load(std::sync::atomic::Ordering::Relaxed),
+                )
+            };
             let narrow = sheet_cap > 0
                 && tag == "link"
                 && &*attribute.name.local == "href"
@@ -200,19 +224,19 @@ impl Sink {
             let exempt = narrow
                 || (exempt_cap > 0
                     && matches!(
-                        (tag.as_str(), &*attribute.name.local),
+                        (tag, &*attribute.name.local),
                         ("link", "href") | ("img", "src") | ("source", "srcset")
                     )
                     && attribute.value.len() <= exempt_cap);
             if narrow && attribute.value.len() > MAX_ATTRIBUTE_LEN && existing.len() < MAX_ATTRIBUTES {
-                self.exempt_bytes.set(self.exempt_bytes.get() + attribute.value.len());
+                self.exempt_bytes.set(self.exempt_bytes.get().saturating_add(attribute.value.len()));
             }
             if existing.len() >= MAX_ATTRIBUTES
                 || (attribute.value.len() > MAX_ATTRIBUTE_LEN && !exempt)
             {
                 if attribute.value.len() > MAX_ATTRIBUTE_LEN || existing.len() >= MAX_ATTRIBUTES {
                     measure::LOG.lock().unwrap().push((
-                        tag.clone(),
+                        tag.to_owned(),
                         attribute.name.local.to_string(),
                         attribute.value.len(),
                         existing.len() >= MAX_ATTRIBUTES,
@@ -279,7 +303,7 @@ impl TreeSink for Sink {
     fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> Handle {
         let mut kept = Vec::with_capacity(attrs.len().min(MAX_ATTRIBUTES));
         measure::TAG.with(|t| *t.borrow_mut() = name.local.to_string());
-        self.keep_attrs(&mut kept, attrs, &self.dropped_attributes);
+        self.keep_attrs(&mut kept, attrs, &self.dropped_attributes, &name.local);
         let template = flags.template.then(|| self.push(Data::Other));
         self.push(Data::Element {
             name,
@@ -360,7 +384,7 @@ impl TreeSink for Sink {
         } = &mut nodes[*target].data
         {
             measure::TAG.with(|t| *t.borrow_mut() = String::from("(merge)"));
-            self.keep_attrs(existing, attrs, &self.merged_attributes_dropped);
+            self.keep_attrs(existing, attrs, &self.merged_attributes_dropped, "(merge)");
         }
     }
 
