@@ -1,0 +1,7 @@
+Multiline/inline controls, Liberation Serif (liberation2), line-height normal, Chrome 156 vs Cobalt default vs --verified-normal-bytes. Ink row runs (flat-ish glyph rows) per line.
+m40 (3 lines): chrome (11,36)(58,83)(105,130); default (10,35)(57,82)(104,129) diff 2579px; variant identical rows, diff 1910px
+m36 (3 lines): chrome (9,32)(51,74)(93,116); default 1 row high all lines, diff 2127; variant identical rows, diff 1638
+m20 (3 lines): chrome (4,17)(27,40)(50,63); default and variant (5,17)(28,40)(51,63) same, diff 1682 both (glyph top raster, not baseline; bottoms match)
+i40 (inline span): chrome (11,36); default (10,35) diff 2027; variant (11,36) diff 1566
+b40 (bold b without --font-bold): REFUSED in both.
+Glyph raster diffs remain everywhere; only vertical placement changes.
