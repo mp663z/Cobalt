@@ -1,0 +1,128 @@
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.11
+   Compiling shlex v2.0.1
+   Compiling cc v1.4.4
+   Compiling siphasher v1.0.3
+   Compiling smallvec v1.16.0
+   Compiling proc-macro2 v1.0.107
+   Compiling phf_shared v0.13.1
+   Compiling unicode-ident v1.0.24
+   Compiling simd-adler32 v0.3.10
+   Compiling quote v1.0.47
+   Compiling fastrand v2.5.0
+   Compiling phf_generator v0.13.1
+   Compiling adler2 v2.0.1
+   Compiling parking_lot_core v0.9.12
+   Compiling ring v0.17.14
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling string_cache_codegen v0.6.1
+   Compiling miniz_oxide v0.9.1
+   Compiling phf_codegen v0.13.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling zeroize v1.9.0
+   Compiling equivalent v1.0.2
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.1.5
+   Compiling hashbrown v0.15.5
+   Compiling rustls-pki-types v1.15.1
+   Compiling web_atoms v0.2.6
+   Compiling parking_lot v0.12.5
+   Compiling getrandom v0.2.17
+   Compiling vcpkg v0.2.15
+   Compiling precomputed-hash v0.1.1
+   Compiling unicode-width v0.2.2
+   Compiling pkg-config v0.3.34
+   Compiling untrusted v0.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling bitflags v2.13.1
+   Compiling kobo-ui v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-ui)
+   Compiling libsqlite3-sys v0.35.0
+   Compiling string_cache v0.9.0
+   Compiling phf v0.13.1
+   Compiling rustls v0.23.45
+   Compiling httparse v1.10.1
+   Compiling autocfg v1.5.1
+   Compiling tinyvec_macros v0.1.1
+   Compiling crc32fast v1.5.1
+   Compiling tinyvec v1.12.0
+   Compiling num-traits v0.2.19
+   Compiling rustls-webpki v0.103.15
+   Compiling tendril v0.5.1
+   Compiling kobo-json v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-json)
+   Compiling once_cell v1.21.4
+   Compiling subtle v2.6.1
+   Compiling bytes v1.12.1
+   Compiling itoa v1.0.18
+   Compiling log v0.4.34
+   Compiling markup5ever v0.39.0
+   Compiling http v1.5.0
+   Compiling unicode-normalization v0.1.25
+   Compiling kobo-protocol v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-protocol)
+   Compiling webpki-roots v1.0.9
+   Compiling hashlink v0.10.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling httpdate v1.0.3
+   Compiling ttf-parser v0.21.1
+   Compiling fontdue v0.9.3
+   Compiling kobo-net v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-net)
+   Compiling flate2 v1.1.10
+   Compiling kobo-dict v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-dict)
+   Compiling html5ever v0.39.0
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling kobo-abi v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-abi)
+   Compiling zune-core v0.4.12
+   Compiling pxfm v0.1.30
+   Compiling unicode-linebreak v0.1.5
+   Compiling kobo-text v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-text)
+   Compiling moxcms v0.7.11
+   Compiling rusqlite v0.37.0
+   Compiling kobo-policy v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-policy)
+   Compiling zune-jpeg v0.4.21
+   Compiling png v0.18.1
+   Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/clean4z/crates/kobo-web-document)
+   Compiling kobo-state v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-state)
+   Compiling byteorder-lite v0.1.0
+   Compiling bytemuck v1.25.2
+   Compiling image v0.25.8
+   Compiling kobo-sdk v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-sdk)
+   Compiling kobo-web-layout v0.1.0 (/home/sandbox/cb/clean4z/crates/kobo-web-layout)
+   Compiling kobo-image v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-image)
+   Compiling kobo-browser-core v0.1.0 (/home/sandbox/cb/clean4z/crates/kobo-browser)
+   Compiling kobo-profile v0.3.23 (/home/sandbox/cb/clean4z/crates/kobo-profile)
+   Compiling kobo-browser v0.1.0 (/home/sandbox/cb/clean4z/apps/browser)
+    Finished `release` profile [optimized] target(s) in 1m 42s
+     Running unittests src/main.rs (/home/sandbox/cb/tgt-z/release/deps/kobo_browser-ddd2e78c1d610bc8)
+
+running 1 test
+test corpus_tests::corpus_page_counts_on_every_reader_and_text_size ... FAILED
+
+failures:
+
+---- corpus_tests::corpus_page_counts_on_every_reader_and_text_size stdout ----
+
+thread 'corpus_tests::corpus_page_counts_on_every_reader_and_text_size' panicked at apps/browser/src/corpus_tests.rs:189:5:
+wikipedia-e-reader.pages differs from line 4:
+  expected: "elipsa-2e-389 Default\t29"
+  actual:   "elipsa-2e-389 Default\t30"
+wikipedia-search.pages differs from line 1:
+  expected: "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t15"
+  actual:   "clara-bw-391,clara-bw-395,clara-hd-376,clara-colour-393 Default\t16"
+python-tutorial-intro.pages differs from line 9:
+  expected: "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t38"
+  actual:   "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t39"
+windows-1252.pages differs from line 9:
+  expected: "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t38"
+  actual:   "libra-2-388,libra-colour-390,libra-colour-390-4.46.23836,libra-h2o-384 ExtraLarge\t39"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    corpus_tests::corpus_page_counts_on_every_reader_and_text_size
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 59 filtered out; finished in 11.59s
+
+error: test failed, to rerun pass `-p kobo-browser --bin kobo-browser`

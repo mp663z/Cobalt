@@ -1,0 +1,19 @@
+-- ci.yml line 41 and context
+      - name: Require current generated app pages
+        run: |
+          node tools/generate-app-pages.mjs
+          git diff --exit-code -- docs/apps docs/sitemap.xml docs/index.html README.md
+          test -z "$(git status --porcelain --untracked-files=all -- docs/apps docs/sitemap.xml docs/index.html README.md)"
+      - run: cargo test --workspace --all-targets --all-features --locked
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+-- test attribute
+            assert!(
+                layout.pages.iter().all(|page| !page.is_empty()),
+                "{name} on {panel}: an empty page"
+            );
+            let _ = writeln!(
+                counts,
+-- toolchain used for the 4dc074c7 run: rustc 1.85.1 (see rustc -V at run time; recorded) 
+-- grep of workflows for 'release' + test:
+.github/workflows/ci.yml:41:      - run: cargo test --workspace --all-targets --all-features --locked
+.github/workflows/ci.yml:95:        run: cargo test --locked --manifest-path crates/kobo-flashcards-import/Cargo.toml

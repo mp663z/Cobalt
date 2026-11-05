@@ -1,0 +1,240 @@
+{
+  "suite": "WPT no-script CSS background reftest subset",
+  "upstream_commit": "7efa3ab5de117cfd01ac23b65a7ab58d43397238",
+  "selected": 11,
+  "valid_chrome_controls": 11,
+  "paired": 2,
+  "pass_count": 2,
+  "unsupported_or_no_render": 9,
+  "pass_rate_percent": 18.182,
+  "controls": "test and reference Chrome images must match at selected viewport; Cobalt must render test and match Chrome reference",
+  "cases": [
+    {
+      "name": "background-color-body-propagation-001",
+      "upstream_test": "css/css-backgrounds/background-color-body-propagation-001.html",
+      "upstream_reference": "css/css-backgrounds/background-color-body-propagation-ref.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked pass",
+      "masked_changed_pixels": 0,
+      "masked_diff_percent": 0.0
+    },
+    {
+      "name": "background-color-body-propagation-002",
+      "upstream_test": "css/css-backgrounds/background-color-body-propagation-002.html",
+      "upstream_reference": "css/css-backgrounds/background-color-body-propagation-ref.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked pass",
+      "masked_changed_pixels": 0,
+      "masked_diff_percent": 0.0
+    },
+    {
+      "name": "background-color-root-propagation-001",
+      "upstream_test": "css/css-backgrounds/background-color-root-propagation-001.html",
+      "upstream_reference": "css/reference/blank.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 0,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": 0,
+      "cobalt_diff_percent": 0.0,
+      "chrome_control_status": "valid",
+      "status": "pass",
+      "masked_status": "pass (unmasked)",
+      "masked_changed_pixels": null,
+      "masked_diff_percent": null
+    },
+    {
+      "name": "background-clip-008",
+      "upstream_test": "css/css-backgrounds/background-clip-008.html",
+      "upstream_reference": "css/css-backgrounds/reference/ref-if-there-is-no-red.xht",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked pass",
+      "masked_changed_pixels": 0,
+      "masked_diff_percent": 0.0
+    },
+    {
+      "name": "background-clip-009",
+      "upstream_test": "css/css-backgrounds/background-clip-009.html",
+      "upstream_reference": "css/css-backgrounds/reference/ref-filled-black-96px-square.xht",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked fail",
+      "masked_changed_pixels": 192,
+      "masked_diff_percent": 0.04
+    },
+    {
+      "name": "background-clip-010",
+      "upstream_test": "css/css-backgrounds/background-clip-010.html",
+      "upstream_reference": "css/css-backgrounds/reference/ref-if-there-is-no-red.xht",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked pass",
+      "masked_changed_pixels": 0,
+      "masked_diff_percent": 0.0
+    },
+    {
+      "name": "background-color-clip",
+      "upstream_test": "css/css-backgrounds/background-color-clip.html",
+      "upstream_reference": "css/css-backgrounds/reference/background-color-clip.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 0,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": 0,
+      "cobalt_diff_percent": 0.0,
+      "chrome_control_status": "valid",
+      "status": "pass",
+      "masked_status": "pass (unmasked)",
+      "masked_changed_pixels": null,
+      "masked_diff_percent": null
+    },
+    {
+      "name": "background-clip-color",
+      "upstream_test": "css/css-backgrounds/background-clip-color.html",
+      "upstream_reference": "css/css-backgrounds/background-clip-color-ref.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked fail",
+      "masked_changed_pixels": 510,
+      "masked_diff_percent": 0.10625
+    },
+    {
+      "name": "background-clip-content-box-001",
+      "upstream_test": "css/css-backgrounds/background-clip-content-box-001.html",
+      "upstream_reference": "css/css-backgrounds/reference/background-clip-content-box-ref.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked fail",
+      "masked_changed_pixels": 760,
+      "masked_diff_percent": 0.15833
+    },
+    {
+      "name": "background-clip-padding-box-001",
+      "upstream_test": "css/css-backgrounds/background-clip-padding-box-001.html",
+      "upstream_reference": "css/reference/ref-filled-green-100px-square-only.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "masked fail",
+      "masked_changed_pixels": 200,
+      "masked_diff_percent": 0.04167
+    },
+    {
+      "name": "background-clip_padding-box",
+      "upstream_test": "css/css-backgrounds/background-clip_padding-box.html",
+      "upstream_reference": "css/css-backgrounds/reference/background_clip_padding-box.html",
+      "viewport": "800x600",
+      "chrome_test_status": 0,
+      "chrome_reference_status": 0,
+      "cobalt_status": 1,
+      "chrome_control_changed_pixels": 0,
+      "cobalt_changed_pixels": null,
+      "cobalt_diff_percent": null,
+      "chrome_control_status": "valid",
+      "status": "no paired render",
+      "cobalt_error": [
+        "Error: \"unsupported CSS/background geometry: Unsupported\""
+      ],
+      "masked_status": "unsupported",
+      "masked_changed_pixels": null,
+      "masked_diff_percent": null
+    }
+  ],
+  "masked_text_secondary": {
+    "label": "masked-text secondary score - not the headline metric",
+    "method": "restricted text preview with one explicit local face; reported glyph bands hidden in both images (full width, 8px inflation); all remaining pixels compared exactly; font rasterization is excluded, not matched",
+    "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "environment": "masked-bold-v2-2026-11-01",
+    "bold_font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "artifact": "cobalt-masked.ppm is raw including text; strips applied only in memory",
+    "denominator": 11,
+    "score": 6,
+    "measured_masked": 8,
+    "unmasked_pass": 2,
+    "unsupported": 1
+  }
+}

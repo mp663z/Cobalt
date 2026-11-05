@@ -1,0 +1,12 @@
+warning: method `flex_units_shadow` is never used
+   --> /home/sandbox/cb/clean4x/crates/kobo-web-document/src/box_tree.rs:464:8
+    |
+251 | impl BoxTree {
+    | ------------ method in this implementation
+...
+464 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+Error: "unsupported complete page"

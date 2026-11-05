@@ -1,0 +1,11 @@
+head 083601a6de5387fb04f4fa17ef85ca2b94b84613 tree 2d5939241639fd8a3faeff62fb236ce029f9d670
+rustc rustc 1.85.1 (4eb161250 2025-03-15)
+chrome Google Chrome 156.0.8078.47 
+python Pillow 12.3.0
+690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648  /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b  /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+29d12439831b7f59194efec85872f24f54eff05738933f9a860220d2abff88ba  /usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf
+command: CARGO_TARGET_DIR=<dir> python3 tools/cobalt-wpt/score.py /tmp/wpt-rev5 --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --font-bold /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+environment label in scoreboard: masked-bold-v2-2026-11-01 (found under masked_text_secondary: True)
+result: WPT CSS reftests: 2/11 passed; 2 paired; 9 unsupported; 0 invalid Chrome controls|Masked-text secondary: 6/11 (8 measured masked, 2 already passing unmasked, 1 unsupported)|
+real-page gate 0/5: NOT re-run, last-known
