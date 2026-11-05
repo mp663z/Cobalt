@@ -1,0 +1,96 @@
+Rust Blog	https://blog.rust-lang.org/
+Rust	https://www.rust-lang.org/
+Install	https://www.rust-lang.org/tools/install
+Learn	https://www.rust-lang.org/learn
+Tools	https://www.rust-lang.org/tools
+Governance	https://www.rust-lang.org/governance
+Community	https://www.rust-lang.org/community
+get rustup	https://www.rust-lang.org/install.html
+detailed release notes for 1.85.0	https://doc.rust-lang.org/stable/releases.html#version-1850-2025-02-20
+report	https://github.com/rust-lang/rust/issues/new/choose
+the edition guide	https://doc.rust-lang.org/edition-guide/editions/index.html
+edition guide	https://doc.rust-lang.org/edition-guide/rust-2024/index.html
+RPIT lifetime capture rules	https://doc.rust-lang.org/edition-guide/rust-2024/rpit-lifetime-capture.html
+if let temporary scope	https://doc.rust-lang.org/edition-guide/rust-2024/temporary-if-let-scope.html
+Tail expression temporary scope	https://doc.rust-lang.org/edition-guide/rust-2024/temporary-tail-expr-scope.html
+Match ergonomics reservations	https://doc.rust-lang.org/edition-guide/rust-2024/match-ergonomics.html
+Unsafe extern blocks	https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-extern.html
+Unsafe attributes	https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-attributes.html
+unsafe_op_in_unsafe_fn warning	https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html
+unsafe_op_in_unsafe_fn	https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html#unsafe-op-in-unsafe-fn
+Disallow references to static mut	https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html
+Never type fallback change	https://doc.rust-lang.org/edition-guide/rust-2024/never-type-fallback.html
+never_type_fallback_flowing_into_unsafe	https://doc.rust-lang.org/rustc/lints/listing/warn-by-default.html#never-type-fallback-flowing-into-unsafe
+Macro fragment specifiers	https://doc.rust-lang.org/edition-guide/rust-2024/macro-fragment-specifiers.html
+Missing macro fragment specifiers	https://doc.rust-lang.org/edition-guide/rust-2024/missing-macro-fragment-specifiers.html
+missing_fragment_specifier	https://doc.rust-lang.org/rustc/lints/listing/deny-by-default.html#missing-fragment-specifier
+gen keyword	https://doc.rust-lang.org/edition-guide/rust-2024/gen-keyword.html
+Reserved syntax	https://doc.rust-lang.org/edition-guide/rust-2024/reserved-syntax.html
+Changes to the prelude	https://doc.rust-lang.org/edition-guide/rust-2024/prelude.html
+Add IntoIterator for Box<[T]>	https://doc.rust-lang.org/edition-guide/rust-2024/intoiterator-box-slice.html
+Newly unsafe functions	https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html
+Cargo: Rust-version aware resolver	https://doc.rust-lang.org/edition-guide/rust-2024/cargo-resolver.html
+Cargo: Table and key name consistency	https://doc.rust-lang.org/edition-guide/rust-2024/cargo-table-key-names.html
+Cargo: Reject unused inherited default-features	https://doc.rust-lang.org/edition-guide/rust-2024/cargo-inherited-default-features.html
+Rustdoc combined tests	https://doc.rust-lang.org/edition-guide/rust-2024/rustdoc-doctests.html
+Rustdoc nested include! change	https://doc.rust-lang.org/edition-guide/rust-2024/rustdoc-nested-includes.html
+Rustfmt: Style edition	https://doc.rust-lang.org/edition-guide/rust-2024/rustfmt-style-edition.html
+Rustfmt: Formatting fixes	https://doc.rust-lang.org/edition-guide/rust-2024/rustfmt-formatting-fixes.html
+Rustfmt: Raw identifier sorting	https://doc.rust-lang.org/edition-guide/rust-2024/rustfmt-raw-identifier-sorting.html
+Rustfmt: Version sorting	https://doc.rust-lang.org/edition-guide/rust-2024/rustfmt-version-sorting.html
+transitioning an existing project to a new edition	https://doc.rust-lang.org/edition-guide/editions/transitioning-an-existing-project-to-a-new-edition.html
+RFC 3668	https://rust-lang.github.io/rfcs/3668-async-closures.html
+stabilization report	https://github.com/rust-lang/rust/pull/132706
+RFC 2397	https://rust-lang.github.io/rfcs/2397-do-not-recommend.html
+reference	https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-diagnosticdo_not_recommend-attribute
+BuildHasherDefault::new	https://doc.rust-lang.org/stable/std/hash/struct.BuildHasherDefault.html#method.new
+ptr::fn_addr_eq	https://doc.rust-lang.org/std/ptr/fn.fn_addr_eq.html
+io::ErrorKind::QuotaExceeded	https://doc.rust-lang.org/stable/std/io/enum.ErrorKind.html#variant.QuotaExceeded
+io::ErrorKind::CrossesDevices	https://doc.rust-lang.org/stable/std/io/enum.ErrorKind.html#variant.CrossesDevices
+{float}::midpoint	https://doc.rust-lang.org/core/primitive.f32.html#method.midpoint
+Unsigned {integer}::midpoint	https://doc.rust-lang.org/std/primitive.u64.html#method.midpoint
+NonZeroU*::midpoint	https://doc.rust-lang.org/std/num/type.NonZeroU32.html#method.midpoint
+impl std::iter::Extend for tuples with arity 1 through 12	https://doc.rust-lang.org/stable/std/iter/trait.Extend.html#impl-Extend%3C(A,)%3E-for-(EA,)
+FromIterator<(A, ...)> for tuples with arity 1 through 12	https://doc.rust-lang.org/stable/std/iter/trait.FromIterator.html#impl-FromIterator%3C(EA,)%3E-for-(A,)
+std::task::Waker::noop	https://doc.rust-lang.org/stable/std/task/struct.Waker.html#method.noop
+mem::size_of_val	https://doc.rust-lang.org/stable/std/mem/fn.size_of_val.html
+mem::align_of_val	https://doc.rust-lang.org/stable/std/mem/fn.align_of_val.html
+Layout::for_value	https://doc.rust-lang.org/stable/std/alloc/struct.Layout.html#method.for_value
+Layout::align_to	https://doc.rust-lang.org/stable/std/alloc/struct.Layout.html#method.align_to
+Layout::pad_to_align	https://doc.rust-lang.org/stable/std/alloc/struct.Layout.html#method.pad_to_align
+Layout::extend	https://doc.rust-lang.org/stable/std/alloc/struct.Layout.html#method.extend
+Layout::array	https://doc.rust-lang.org/stable/std/alloc/struct.Layout.html#method.array
+std::mem::swap	https://doc.rust-lang.org/stable/std/mem/fn.swap.html
+std::ptr::swap	https://doc.rust-lang.org/stable/std/ptr/fn.swap.html
+NonNull::new	https://doc.rust-lang.org/stable/std/ptr/struct.NonNull.html#method.new
+HashMap::with_hasher	https://doc.rust-lang.org/stable/std/collections/struct.HashMap.html#method.with_hasher
+HashSet::with_hasher	https://doc.rust-lang.org/stable/std/collections/struct.HashSet.html#method.with_hasher
+BuildHasherDefault::new	https://doc.rust-lang.org/stable/std/hash/struct.BuildHasherDefault.html#method.new
+<float>::recip	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.recip
+<float>::to_degrees	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.to_degrees
+<float>::to_radians	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.to_radians
+<float>::max	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.max
+<float>::min	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.min
+<float>::clamp	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.clamp
+<float>::abs	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.abs
+<float>::signum	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.signum
+<float>::copysign	https://doc.rust-lang.org/stable/std/primitive.f32.html#method.copysign
+MaybeUninit::write	https://doc.rust-lang.org/stable/std/mem/union.MaybeUninit.html#method.write
+Rust	https://github.com/rust-lang/rust/releases/tag/1.85.0
+Cargo	https://doc.rust-lang.org/nightly/cargo/CHANGELOG.html#cargo-185-2025-02-20
+Clippy	https://github.com/rust-lang/rust-clippy/blob/master/CHANGELOG.md#rust-185
+Thanks!	https://thanks.rust-lang.org/rust/1.85.0/
+Documentation	https://doc.rust-lang.org/
+Code of Conduct	https://www.rust-lang.org/policies/code-of-conduct
+Licenses	https://www.rust-lang.org/policies/licenses
+Logo Policy and Media Guide	https://rustfoundation.org/policy/rust-trademark-policy
+Security Disclosures	https://www.rust-lang.org/policies/security
+All Policies	https://www.rust-lang.org/policies
+Mastodon	https://social.rust-lang.org/@rust
+Bluesky	https://bsky.app/profile/rust-lang.org
+YouTube	https://www.youtube.com/channel/UCaYhcUwRBNscFNUKTjgPFiA
+Discord	https://discord.gg/rust-lang
+GitHub	https://github.com/rust-lang
+Main Blog	https://blog.rust-lang.org/feed.xml
+"Inside Rust" Blog	https://blog.rust-lang.org/inside-rust/feed.xml
+Send a fix here	https://github.com/rust-lang/blog.rust-lang.org/edit/main/content/Rust-1.85.0.md
