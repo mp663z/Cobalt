@@ -40,6 +40,10 @@ pub(crate) const MAX_PAYLOAD_RGBA_BYTES: usize = MAX_PIXELS * 4;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Binding {
     Unestablished,
+    /// The preparation read the SAME retained buffer (address and length) that the semantic parse and style
+    /// observation consumed, captured at actual arrival. Says nothing about renderer identity, freshness or
+    /// sheets, and never authorizes Ready.
+    SameBufferAsDocumentParse,
 }
 
 /// A named host refusal, recorded in the stage's test diagnostics. Every
@@ -148,6 +152,27 @@ pub(crate) fn prepare_real_frame(
     admission: &Admission,
     drops: &Rc<RefCell<Vec<u64>>>,
 ) -> PrepOutcome {
+    prepare_real_frame_consumed(bytes, admission, None, drops)
+}
+
+/// [`prepare_real_frame`] reading the Admission's captured arrival source when it has one (`bytes` is only the
+/// fallback when it has none). `consumed` is the (address, length) the semantic parse actually consumed, recorded
+/// by `observe`. The binding is `SameBufferAsDocumentParse` only when the source exists, is non-empty, and is that
+/// very slice; a foreign, absent or over-limit source stays `Unestablished`.
+pub(crate) fn prepare_real_frame_consumed(
+    bytes: &[u8],
+    admission: &Admission,
+    consumed: Option<(usize, usize)>,
+    drops: &Rc<RefCell<Vec<u64>>>,
+) -> PrepOutcome {
+    let source = admission.source().map(|s| s.as_slice());
+    let binding = match (source, consumed) {
+        (Some(s), Some(c)) if !s.is_empty() && (s.as_ptr() as usize, s.len()) == c => {
+            Binding::SameBufferAsDocumentParse
+        }
+        _ => Binding::Unestablished,
+    };
+    let bytes = source.unwrap_or(bytes);
     let metrics = admission.fingerprint.metrics();
     // PREFLIGHT, before any font construction or raster: negative, zero or
     // over-cap dimensions refuse with the painter's InvalidViewport bound
@@ -208,7 +233,7 @@ pub(crate) fn prepare_real_frame(
         generation: admission.generation,
         fingerprint_metrics: *metrics,
         fingerprint_colour: admission.fingerprint.colour(),
-        binding: Binding::Unestablished,
+        binding,
     };
     let payload = FramePayload {
         list,

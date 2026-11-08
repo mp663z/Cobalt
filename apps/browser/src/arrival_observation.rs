@@ -87,6 +87,8 @@ pub(crate) struct ArrivalObservation {
     /// recorded at the moment, never computed by subtraction.
     pub old_loaded_present: bool,
     pub binding: Binding,
+    /// Address and length of the slice `observe` actually handed to the semantic parse and style run.
+    pub consumed: (usize, usize),
     /// The fixed existing diagnostic record from the style run.
     pub diagnostics: StyleDiagnostics,
     pub outcome: StyleOutcome,
@@ -121,6 +123,7 @@ pub(crate) fn observe(
         style_run,
         old_loaded_present,
         binding: Binding::Unestablished,
+        consumed: (bytes.as_ptr() as usize, bytes.len()),
         diagnostics: tree.diagnostics,
         outcome: StyleOutcome {
             truncated: tree.truncated,

@@ -36,8 +36,8 @@ mod css_stage;
 mod forms;
 mod native_font_adapter;
 mod pictures;
-mod sheet_supply;
 mod saved;
+mod sheet_supply;
 use css_stage::CssStage;
 use pictures::Pictures;
 use saved::{Heard, Saved};
@@ -510,26 +510,35 @@ impl Browser {
         // A new document replaces any staged frame before it is parsed.
         self.css.clear();
         self.sheets.clear(context);
+        // Enabled stage only: own a copy of the arrival (<= the input ceiling) BEFORE the parse, so the parse and
+        // preparation read one buffer. Disabled keeps the exact existing call and allocates nothing.
+        let source = if self.css.is_enabled() {
+            css_stage::ArrivalSource::capture(bytes, Limits::DEFAULT.max_input_bytes)
+        } else {
+            None
+        };
+        let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
         #[cfg(not(test))]
-        let document = parse_document(bytes, url, &Limits::DEFAULT);
+        let document = parse_document(parse_bytes, url, &Limits::DEFAULT);
         // TEST-ONLY: the same parse, through the one-borrow observation
         // wrapper; the returned Document continues the normal flow.
         #[cfg(test)]
-        let document = {
+        let (document, consumed) = {
             let input = self
                 .observation_input
                 .take()
                 .unwrap_or(arrival_observation::ObservationInput::Markup { len: bytes.len() });
             let (document, observation) = arrival_observation::observe(
-                bytes,
+                parse_bytes,
                 url,
                 &Limits::DEFAULT,
                 input,
                 self.loaded.is_some(),
             );
+            let consumed = observation.consumed;
             self.last_observation = Some(observation);
             self.observation_count += 1;
-            document
+            (document, consumed)
         };
         let mut title = document
             .title
@@ -562,10 +571,11 @@ impl Browser {
         let metrics = context.metrics();
         let colour = self.pictures.colour();
         #[cfg(not(test))]
-        self.css.admit(
+        self.css.admit_sourced(
             &self.loaded.as_ref().expect("just loaded").document,
             &metrics,
             colour,
+            source,
         );
         // TEST-ONLY (116 v3): the SAME admission through the ONE private
         // local producer entry. The non-escaping closure borrows the SAME
@@ -577,12 +587,18 @@ impl Browser {
         {
             let drops = std::rc::Rc::clone(&self.frame_drops);
             let produce = move |admission: &css_stage::Admission| {
-                arrival_prep::prepare_real_frame(bytes, admission, &drops)
+                arrival_prep::prepare_real_frame_consumed(
+                    bytes,
+                    admission,
+                    Some(consumed),
+                    &drops,
+                )
             };
-            self.css.admit_test(
+            self.css.admit_test_sourced(
                 &self.loaded.as_ref().expect("just loaded").document,
                 &metrics,
                 colour,
+                source,
                 produce,
             );
         }

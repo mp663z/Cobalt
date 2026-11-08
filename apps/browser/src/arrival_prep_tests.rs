@@ -180,7 +180,8 @@ fn an_actual_arrival_yields_a_stage_owned_real_artifact() {
     let d = payload.diagnostics();
     assert_eq!((d.viewport_width, d.viewport_height), (600, 800));
     assert_eq!(d.fingerprint_metrics, SYNTHETIC_METRICS);
-    assert_eq!(d.binding, Binding::Unestablished);
+    // fl77: the producer read the retained buffer the parse consumed.
+    assert_eq!(d.binding, Binding::SameBufferAsDocumentParse);
     assert!(d.commands > 0 && d.commands <= MAX_COMMANDS);
     assert_eq!(payload.list().commands().len(), d.commands);
     assert_eq!(payload.list().glyph_bytes(), d.glyph_bytes);
@@ -553,11 +554,16 @@ fn rem_font_size_paints_identically_to_resolved_px_and_fractional_refuses() {
                 let payload = frame.payload().expect("payload");
                 if let Ok(dir) = std::env::var("REM_DUMP") {
                     let d = payload.diagnostics();
-                    let mut ppm = format!("P6\n{} {}\n255\n", d.viewport_width, d.viewport_height).into_bytes();
+                    let mut ppm = format!("P6\n{} {}\n255\n", d.viewport_width, d.viewport_height)
+                        .into_bytes();
                     for px in payload.rgba().chunks_exact(4) {
                         ppm.extend_from_slice(&px[..3]);
                     }
-                    let tag = String::from_utf8_lossy(bytes).split("font-size:").nth(1).map(|t| t.split('\'').next().unwrap_or("").to_owned()).unwrap_or_default();
+                    let tag = String::from_utf8_lossy(bytes)
+                        .split("font-size:")
+                        .nth(1)
+                        .map(|t| t.split('\'').next().unwrap_or("").to_owned())
+                        .unwrap_or_default();
                     std::fs::write(format!("{dir}/app-{tag}.ppm"), ppm).unwrap();
                 }
                 Some((rgba_digest(payload.rgba()), payload.diagnostics().ink))
@@ -571,5 +577,156 @@ fn rem_font_size_paints_identically_to_resolved_px_and_fractional_refuses() {
     assert!(rem.1 > 0, "ink present");
     let other = digest_of(&page("2rem")).expect("2rem paints");
     assert_ne!(other.0, rem.0, "different size, different pixels");
-    assert!(digest_of(&page("1.4rem")).is_none(), "fractional rem refuses");
+    assert!(
+        digest_of(&page("1.4rem")).is_none(),
+        "fractional rem refuses"
+    );
+}
+
+// ---- fl77: arrival byte binding ----
+
+use crate::css_stage::ArrivalSource;
+
+fn ready_binding(runner: &AppRunner<Browser>) -> Binding {
+    runner
+        .app()
+        .css
+        .ready_payload()
+        .expect("Ready carries the payload")
+        .diagnostics()
+        .binding
+}
+
+#[test]
+fn bound_variant_requires_the_consumed_slice_of_the_actual_parse() {
+    // Corpus-style arrival: each of two same-length distinct inputs binds to its OWN parse.
+    for html in [FIXTURE, FIXTURE_ALT] {
+        let mut runner = producer_runner();
+        go(&mut runner, "https://example.test/bind");
+        arrive(&mut runner, html);
+        assert_eq!(ready_binding(&runner), Binding::SameBufferAsDocumentParse);
+        // The observation recorded the slice its parse consumed: same length, and NOT the caller's `html`
+        // buffer (the arrival is a fresh retained copy).
+        let obs = runner.app().last_observation.as_ref().expect("observed");
+        assert_eq!(obs.consumed.1, html.len());
+    }
+}
+
+#[test]
+fn foreign_absent_or_mismatched_source_stays_unestablished() {
+    let drops = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let consumed_src = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
+    let consumed = (consumed_src.as_slice().as_ptr() as usize, FIXTURE.len());
+    // Foreign: identical bytes, different buffer.
+    let foreign = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
+    let adm = Admission::for_test_sourced(1, &SYNTHETIC_METRICS, false, Some(foreign));
+    let binding = |o: PrepOutcome| match o {
+        PrepOutcome::Ready(f) => f.payload().expect("payload").diagnostics().binding,
+        other => panic!("expected Ready, got {other:?}"),
+    };
+    assert_eq!(
+        binding(arrival_prep::prepare_real_frame_consumed(
+            FIXTURE,
+            &adm,
+            Some(consumed),
+            &drops
+        )),
+        Binding::Unestablished
+    );
+    // The very slice binds (positive control for the comparison itself).
+    let adm = Admission::for_test_sourced(1, &SYNTHETIC_METRICS, false, Some(consumed_src));
+    assert_eq!(
+        binding(arrival_prep::prepare_real_frame_consumed(
+            FIXTURE,
+            &adm,
+            Some(consumed),
+            &drops
+        )),
+        Binding::SameBufferAsDocumentParse
+    );
+    // Absent source / absent consumed record / wrong length.
+    let adm = Admission::for_test(1, &SYNTHETIC_METRICS, false);
+    assert_eq!(
+        binding(arrival_prep::prepare_real_frame_consumed(
+            FIXTURE,
+            &adm,
+            Some(consumed),
+            &drops
+        )),
+        Binding::Unestablished
+    );
+    let src = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
+    let c = (src.as_slice().as_ptr() as usize, FIXTURE.len());
+    let adm = Admission::for_test_sourced(1, &SYNTHETIC_METRICS, false, Some(src));
+    assert_eq!(
+        binding(arrival_prep::prepare_real_frame_consumed(
+            FIXTURE, &adm, None, &drops
+        )),
+        Binding::Unestablished
+    );
+    assert_eq!(
+        binding(arrival_prep::prepare_real_frame_consumed(
+            FIXTURE,
+            &adm,
+            Some((c.0, c.1 - 1)),
+            &drops
+        )),
+        Binding::Unestablished
+    );
+}
+
+#[test]
+fn capture_refuses_over_the_ceiling_and_a_big_arrival_is_never_bound() {
+    let max = kobo_web_document::Limits::DEFAULT.max_input_bytes;
+    assert_eq!(max, 2 * 1024 * 1024);
+    assert!(ArrivalSource::capture(&vec![b'x'; max], max).is_some());
+    assert!(ArrivalSource::capture(&vec![b'x'; max + 1], max).is_none());
+    let mut big = FIXTURE.to_vec();
+    big.resize(max + 1, b' ');
+    let mut runner = producer_runner();
+    go(&mut runner, "https://example.test/big");
+    arrive(&mut runner, &big);
+    assert!(runner
+        .app()
+        .css
+        .ready_payload()
+        .is_none_or(|p| p.diagnostics().binding == Binding::Unestablished));
+}
+
+#[test]
+fn the_retained_source_never_outlives_admission_or_navigation() {
+    let mut runner = producer_runner();
+    let doc = kobo_web_document::parse_document(
+        FIXTURE,
+        &Url::parse("https://example.test/life").expect("url"),
+        &kobo_web_document::Limits::DEFAULT,
+    );
+    let source = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
+    let weak = source.weak();
+    let drops = std::rc::Rc::clone(&runner.app().frame_drops);
+    runner
+        .app_mut()
+        .css
+        .admit_test_sourced(&doc, &SYNTHETIC_METRICS, false, Some(source), |a| {
+            arrival_prep::prepare_real_frame(FIXTURE, a, &drops)
+        });
+    assert!(runner.app().css.ready_payload().is_some());
+    assert!(
+        weak.upgrade().is_none(),
+        "dropped when preparation returned"
+    );
+    // Actual arrival then navigation: nothing retains the buffer.
+    go(&mut runner, "https://example.test/nav");
+    arrive(&mut runner, FIXTURE);
+    runner.app_mut().css.clear();
+    assert!(runner.app().css.ready_payload().is_none());
+}
+
+#[test]
+fn a_disabled_stage_captures_nothing_and_binds_nothing() {
+    let mut runner = runner(SYNTHETIC_METRICS);
+    go(&mut runner, "https://example.test/off");
+    arrive(&mut runner, FIXTURE);
+    assert!(!runner.app().css.is_enabled());
+    assert!(runner.app().css.ready_payload().is_none());
 }

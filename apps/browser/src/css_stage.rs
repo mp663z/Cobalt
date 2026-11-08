@@ -208,6 +208,47 @@ pub(crate) struct Admission {
     pub(crate) generation: u64,
     #[allow(dead_code)] // Read by the real pipeline, not the test fake.
     pub(crate) fingerprint: Fingerprint,
+    /// The arriving bytes, when (and only when) the stage is enabled and the arrival fit the input ceiling. Set
+    /// at Admission creation from the value `show_document_noted` threaded in; never filled afterwards.
+    #[allow(dead_code)] // Read by the test producer only.
+    source: Option<ArrivalSource>,
+}
+
+impl Admission {
+    /// The retained arrival bytes, if any.
+    pub(crate) fn source(&self) -> Option<&ArrivalSource> {
+        self.source.as_ref()
+    }
+}
+
+/// An owned copy of one arrival's bytes, made by `show_document_noted` BEFORE the semantic parse when the CSS
+/// stage is enabled, so the parse and preparation read one buffer instead of two borrows of the caller's slice.
+/// Private field and constructor: the only way to get one is [`ArrivalSource::capture`], which refuses an
+/// arrival longer than `max` (so a clipped input can never be retained). Synchronous lifetime only: it is moved
+/// into the Admission and dropped when preparation returns; the stage never stores it.
+#[derive(Debug)]
+pub(crate) struct ArrivalSource {
+    bytes: std::rc::Rc<[u8]>,
+}
+
+impl ArrivalSource {
+    /// `None` when `bytes` is longer than `max`.
+    pub(crate) fn capture(bytes: &[u8], max: usize) -> Option<Self> {
+        (bytes.len() <= max).then(|| Self {
+            bytes: std::rc::Rc::from(bytes),
+        })
+    }
+
+    /// The retained bytes: the buffer the semantic parse is given.
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// A handle to the same buffer, for tests that watch its lifetime.
+    #[cfg(test)]
+    pub(crate) fn weak(&self) -> std::rc::Weak<[u8]> {
+        std::rc::Rc::downgrade(&self.bytes)
+    }
 }
 
 #[cfg(test)]
@@ -217,6 +258,21 @@ impl Admission {
         Self {
             generation,
             fingerprint: Fingerprint::new(metrics, colour),
+            source: None,
+        }
+    }
+
+    /// A hand-built admission carrying `source`, for the foreign-source negative tests.
+    pub(crate) fn for_test_sourced(
+        generation: u64,
+        metrics: &DisplayMetrics,
+        colour: bool,
+        source: Option<ArrivalSource>,
+    ) -> Self {
+        Self {
+            generation,
+            fingerprint: Fingerprint::new(metrics, colour),
+            source,
         }
     }
 }
@@ -359,6 +415,18 @@ impl CssStage {
     /// enabled, is reached exactly once per admission. In test builds the
     /// boundary uses `admit_test`; the fake-seam tests drive this directly.
     pub(crate) fn admit(&mut self, document: &Document, metrics: &DisplayMetrics, colour: bool) {
+        self.admit_sourced(document, metrics, colour, None);
+    }
+
+    /// [`admit`](Self::admit) with the arrival bytes `show_document_noted` captured. The source goes into the
+    /// Admission at its creation and nowhere else; the gate, its order and every refusal are the same code.
+    pub(crate) fn admit_sourced(
+        &mut self,
+        document: &Document,
+        metrics: &DisplayMetrics,
+        colour: bool,
+        source: Option<ArrivalSource>,
+    ) {
         if let BeginAdmit::Preparing {
             generation,
             fingerprint,
@@ -367,6 +435,7 @@ impl CssStage {
             let outcome = self.preparation.prepare(&Admission {
                 generation,
                 fingerprint,
+                source,
             });
             self.finish(generation, outcome);
         }
@@ -404,23 +473,14 @@ impl CssStage {
         }
     }
 
-    /// TEST-ONLY (116): admits through the SAME common gate, with the
-    /// preparation answer supplied by the boundary's producer closure.
-    /// This is crate-private generic pairing plumbing: it cannot prove the
-    /// closure's bytes are the arriving document's bytes - only the
-    /// reviewed `show_document_noted` callsite associates live bytes, and
-    /// the artifact records `Binding::Unestablished`. Disabled stops at
-    /// the preliminary candidate, production-identical, with the closure
-    /// dropped uninvoked. Fake mode (`with_preparation`) invokes the
-    /// injected preparation exactly as `admit` does, the closure dropped
-    /// uninvoked. Producer mode (`enable_for_test`) invokes the closure
-    /// EXACTLY ONCE at `Preparing`, then finishes.
+    /// Test producer entry: the captured arrival bytes (if any) go into the Admission at creation.
     #[cfg(test)]
-    pub(crate) fn admit_test(
+    pub(crate) fn admit_test_sourced(
         &mut self,
         document: &Document,
         metrics: &DisplayMetrics,
         colour: bool,
+        source: Option<ArrivalSource>,
         produce: impl FnOnce(&Admission) -> PrepOutcome,
     ) {
         let BeginAdmit::Preparing {
@@ -433,6 +493,7 @@ impl CssStage {
         let admission = Admission {
             generation,
             fingerprint,
+            source,
         };
         let outcome = if self.producer {
             produce(&admission)
@@ -495,6 +556,7 @@ impl CssStage {
         let outcome = self.preparation.prepare(&Admission {
             generation,
             fingerprint,
+            source: None,
         });
         self.stage = match outcome {
             PrepOutcome::Ready(frame) => Stage::Ready { frame, generation },
