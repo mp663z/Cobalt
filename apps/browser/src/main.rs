@@ -1857,12 +1857,12 @@ fn plain_page(body: &[u8]) -> String {
 mod corpus_tests;
 #[cfg(test)]
 mod css_stage_tests;
-#[cfg(test)]
-mod sheet_supply_tests;
 #[cfg(all(test, debug_assertions))]
 mod fixture_tests;
 #[cfg(test)]
 mod image_tests;
+#[cfg(test)]
+mod sheet_supply_tests;
 
 /// Pages `document`, with the saved-copy note first when there is one.
 /// Returns the paginator and how many pieces come before the document's own.

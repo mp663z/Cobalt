@@ -375,7 +375,7 @@ fn a_refused_page_never_starts_sheet_traffic() {
 
 #[test]
 fn production_stage_starts_no_sheet_traffic() {
-    let (spawns, supply, refused) = real_seam_spawns(false, &page(TWO));
+    let (spawns, supply, _refused) = real_seam_spawns(false, &page(TWO));
     assert_eq!(spawns, 0);
     assert_eq!(supply, None);
 }
