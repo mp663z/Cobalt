@@ -1,0 +1,121 @@
+[workspace]
+members = [
+    "crates/kobo-abi",
+    "crates/kobo-web-document",
+    "crates/kobo-web-layout",
+    "crates/kobo-browser",
+    "crates/kobo-app-store",
+    "crates/kobo-bookview",
+    "crates/kobo-cli",
+    "crates/kobo-catalog",
+    "crates/kobo-comic",
+    "crates/kobo-doc",
+    "crates/kobo-doctor",
+    "crates/kobo-dict",
+    "crates/kobo-flashcards-format",
+    "crates/kobo-frame-host",
+    "crates/kobo-music-host",
+    "crates/kobo-vault-host",
+    "crates/kobo-hal",
+    "crates/kobo-html",
+    "crates/kobo-image",
+    "crates/kobo-json",
+    "crates/kobo-net",
+    "crates/kobo-opml",
+    "crates/kobo-opds",
+    "crates/kobo-term",
+    "crates/kobo-text",
+    "crates/kobo-policy",
+    "crates/kobo-profile",
+    "crates/kobo-read",
+    "crates/kobo-protocol",
+    "crates/kobo-sdk",
+    "crates/kobo-shell",
+    "crates/kobo-stream",
+    "crates/kobo-state",
+    "crates/kobo-sidekickd",
+    "crates/kobo-sim",
+    "crates/kobo-smoke",
+    "crates/kobo-tap",
+    "crates/kobo-ui",
+    "crates/kobo-guard",
+    "crates/kobo-handoff",
+    "crates/kobo-wifi-trace",
+    "crates/kobo-xml",
+    "crates/kobo-zstory",
+    "crates/kobod",
+    "examples/brief",
+    "examples/audiobook",
+    "examples/chat",
+    "examples/rss",
+    "examples/todo",
+    "examples/tictactoe",
+    "examples/terminal",
+    "examples/gallery",
+    "examples/gutenbird",
+    "examples/hello",
+    "examples/hn",
+    "examples/books",
+    "examples/launcher",
+    "examples/magnet",
+    "examples/settings",
+    "examples/sidekick",
+    "examples/store",
+    "apps/arxiv",
+    "apps/backgammon",
+    "apps/birds",
+    "apps/calibre-web",
+    "apps/crossword",
+    "apps/deck",
+    "apps/fanshelf",
+    "apps/fieldbook",
+    "apps/flashcards",
+    "apps/frame",
+    "apps/grimoire",
+    "apps/habits",
+    "apps/homepanel",
+    "apps/inkling",
+    "apps/kitchencard",
+    "apps/lichess",
+    "apps/logicpack",
+    "apps/morse",
+    "apps/musicstand",
+    "apps/needles",
+    "apps/nonograms",
+    "apps/panels",
+    "apps/paperterm",
+    "apps/parlor",
+    "apps/parser",
+    "apps/post",
+    "apps/pubquiz",
+    "apps/readlater",
+    "apps/browser",
+    "apps/rss-miniflux",
+    "apps/sudoku",
+    "apps/syncthing",
+    "apps/vault",
+    "apps/verses",
+    "apps/zotero-reader",
+    "tools/icon-import",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.3.25"
+edition = "2021"
+rust-version = "1.85.1"
+license = "AGPL-3.0-only"
+repository = "https://github.com/BandarLabs/Cobalt"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

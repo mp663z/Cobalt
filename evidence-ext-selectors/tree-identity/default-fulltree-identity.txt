@@ -1,0 +1,15 @@
+blog plain bytes=2040969 r=a40a68342ddb7748 v=a40a68342ddb7748 IDENTICAL
+blog inline bytes=2040974 r=293e2421395c2d70 v=293e2421395c2d70 IDENTICAL
+  ext differs from inline: 2040974 bytes
+docs plain bytes=4365566 r=e41267911b65bc27 v=e41267911b65bc27 IDENTICAL
+docs inline bytes=4366070 r=f3079b4abdd4498b v=f3079b4abdd4498b IDENTICAL
+  ext differs from inline: 4366082 bytes
+gov plain bytes=1095734 r=4ce5382cd71bf9f8 v=4ce5382cd71bf9f8 IDENTICAL
+gov inline bytes=1095734 r=4ce5382cd71bf9f8 v=4ce5382cd71bf9f8 IDENTICAL
+  ext==inline
+news-npr plain bytes=1326008 r=bccfce37a0cfa4bb v=bccfce37a0cfa4bb IDENTICAL
+news-npr inline bytes=1326040 r=94f93ca61641b2fd v=94f93ca61641b2fd IDENTICAL
+  ext differs from inline: 1326013 bytes
+wikipedia plain bytes=6992045 r=a308e2193b6b6833 v=a308e2193b6b6833 IDENTICAL
+wikipedia inline bytes=6778568 r=7849025a2dbc8042 v=7849025a2dbc8042 IDENTICAL
+  ext differs from inline: 6269281 bytes

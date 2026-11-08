@@ -1,0 +1,10 @@
+blog plain IDENTICAL
+blog inline IDENTICAL
+docs plain IDENTICAL
+docs inline IDENTICAL
+gov plain IDENTICAL
+gov inline IDENTICAL
+news-npr plain IDENTICAL
+news-npr inline IDENTICAL
+wikipedia plain IDENTICAL
+wikipedia inline IDENTICAL

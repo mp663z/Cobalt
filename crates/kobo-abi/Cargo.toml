@@ -1,0 +1,23 @@
+[package]
+name = "kobo-abi"
+version.workspace = true
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Minimal Linux and Kobo kernel ABI boundary for the Cobalt runtime"
+
+[features]
+default = []
+device-write = []
+
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[dependencies]
+libc = "0.2.189"

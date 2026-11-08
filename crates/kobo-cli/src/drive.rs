@@ -1,0 +1,1886 @@
+//! Driving a running application and getting the panel back as a picture.
+//!
+//! # Why this exists
+//!
+//! Everything in this workspace could be tested except the one thing it is
+//! for: what a reader actually sees. A layout assertion proves a button was
+//! placed; it does not prove the screen reads as a product. The only way to
+//! close that loop -- for a person, or for something automating on their
+//! behalf -- is to drive the application the way a finger does and look at the
+//! result.
+//!
+//! Both halves of that already existed and neither was reachable. The
+//! simulator has run the device's own renderer and refresh planner since the
+//! beginning, and it has served the frame over HTTP the whole time; what was
+//! missing was a way to say "tap Search" rather than "tap 536, 912", and a way
+//! to get 1.5 megabytes of raw grey out as something openable.
+//!
+//! # Why taps go through coordinates
+//!
+//! A driver that dispatched actions straight into the application would be
+//! simpler and would be worthless. It would pass on a screen whose only button
+//! had been laid out four millimetres below the bottom edge of the panel,
+//! which is precisely the fault this is for catching. So a step names a
+//! control, this resolves the name against the layout the renderer produced,
+//! and then taps the middle of the rectangle it actually occupies -- through
+//! the same touch transform and the same hit-testing a finger goes through.
+//! If the control is not reachable, the tap misses, and the script fails.
+
+use std::fmt::Write as _;
+use std::io::{Read, Write};
+use std::net::TcpStream;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use crate::RecordedFrame;
+
+/// How long to wait for the simulator to answer one request.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long `wait-for` will keep looking for something to appear.
+const APPEAR_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The panel every simulated frame comes back as.
+/// How long to wait for the application to answer a tap, and how often to look.
+///
+/// Half a second in total. Long enough for a screen that has to be encoded,
+/// sent over a socket, decoded and laid out; short enough that a script full of
+/// deliberately inert taps does not become a script that takes a minute.
+const RESPONSE_LIMIT: u64 = 16 * 1024 * 1024;
+const SETTLE_POLLS: u32 = 25;
+const SETTLE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
+
+#[cfg(test)]
+const SIMULATED_PANEL: (u32, u32) = (1072, 1448);
+#[cfg(test)]
+const FRAME_WIDTH: u32 = SIMULATED_PANEL.0;
+#[cfg(test)]
+const FRAME_HEIGHT: u32 = SIMULATED_PANEL.1;
+
+/// How the device announces a screenshot inside its ordinary report.
+const CAPTURE_HEADER: &str = "capture-begin";
+const CAPTURE_FOOTER: &str = "capture-end";
+
+/// The screen's content area and page-turn declaration, as the simulator
+/// reports them alongside the layout nodes.
+#[derive(Clone, Copy, Debug)]
+struct Paging {
+    content: (i32, i32, i32, i32),
+    has_next: bool,
+}
+
+/// One node of the layout the renderer produced.
+#[derive(Clone, Debug)]
+pub struct Control {
+    pub kind: String,
+    pub rect: (i32, i32, i32, i32),
+    pub centre: (i32, i32),
+    pub lines: Vec<String>,
+    pub action: Option<u32>,
+}
+
+impl Control {
+    /// Whether the visible text of this node carries `needle`, across wraps.
+    ///
+    /// Case-insensitive and by substring, because a label is routinely
+    /// shortened to fit -- "Return to Kobo reader" becomes "Return to Kobo…"
+    /// on a narrow panel, and a script that had to know which panel it was
+    /// running on would be a script nobody kept up to date.
+    fn says(&self, needle: &str) -> bool {
+        let normalize = |text: &str| {
+            text.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
+        normalize(&self.lines.join(" ")).contains(&normalize(needle))
+    }
+
+    /// Whether one of this node's lines is exactly `needle`.
+    fn says_exactly(&self, needle: &str) -> bool {
+        (self.kind == "Back" && needle.trim().eq_ignore_ascii_case("back"))
+            || self
+                .lines
+                .iter()
+                .any(|line| line.trim().eq_ignore_ascii_case(needle.trim()))
+    }
+
+    /// Whether a finger on the middle of this node would do anything.
+    const fn tappable(&self) -> bool {
+        self.action.is_some()
+    }
+}
+
+/// A connection to a running simulator.
+#[derive(Clone)]
+pub struct Driver {
+    address: String,
+    shots: PathBuf,
+    taken: usize,
+    /// Take screenshots without the e-ink residue of earlier frames.
+    ///
+    /// The panel really does keep a ghost of what it last drew, and `/frame`
+    /// is honest about it -- which is what you want when the question is
+    /// whether a screen refreshes cleanly. It is precisely what you do not
+    /// want when the question is whether a screen *reads* well, because two
+    /// screens overlaid are unreadable to a person and worse to a model.
+    ideal: bool,
+}
+
+#[derive(Debug)]
+pub struct CapturedFrame {
+    pub metadata: serde_json::Value,
+    pub width: u32,
+    pub height: u32,
+    pub grey: Vec<u8>,
+}
+
+impl Driver {
+    pub fn new(address: &str, shots: &Path) -> Self {
+        Self {
+            address: address.to_owned(),
+            shots: shots.to_owned(),
+            taken: 0,
+            ideal: false,
+        }
+    }
+
+    /// Takes screenshots from the residue-free frame.
+    #[must_use]
+    pub const fn ideal(mut self, ideal: bool) -> Self {
+        self.ideal = ideal;
+        self
+    }
+
+    /// Runs one script, stopping at the first step that fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns the failing step, its line number and why it failed. A failed
+    /// step always takes a screenshot first, because the question that
+    /// immediately follows "tap Search failed" is "what was on the screen".
+    pub fn run_script(&mut self, script: &str) -> Result<(), String> {
+        for (number, line) in script.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Err(error) = self.step(line) {
+                // A screenshot of the failure, when one can still be had. If
+                // the simulator is what failed, the attempt fails too, and
+                // repeating its complaint inside the first one helps nobody.
+                let where_to_look = self
+                    .shot(&format!("failed-line-{}", number + 1))
+                    .map_or_else(
+                        |_| String::new(),
+                        |path| format!(" (screen at {})", path.display()),
+                    );
+                return Err(format!(
+                    "line {}: {line}: {error}{where_to_look}",
+                    number + 1
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Runs one step.
+    pub fn step(&mut self, line: &str) -> Result<(), String> {
+        let (verb, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+        let rest = rest.trim();
+        let result = match verb {
+            "tap" => self.tap(rest),
+            "tap-id" => self.tap_action_id(rest),
+            "maybe-tap-id" => self.maybe_tap_id(rest),
+            "tap-paged" => self.tap_paged(rest),
+            "tap-at" => {
+                let (x, y) = parse_point(rest)?;
+                self.touch(x, y)
+            }
+            "type" => self.type_text(rest),
+            "shot" => self.shot(rest).map(|path| {
+                println!("shot {}", path.display());
+            }),
+            "shot-colour" => self.shot_format(rest, true).map(|path| {
+                println!(
+                    "shot {} (ideal color; panel appearance uncalibrated)",
+                    path.display()
+                );
+            }),
+            "expect" => self.expect(rest),
+            "expect-missing" => {
+                if self.find(rest)?.is_some() {
+                    return Err(format!("{rest:?} is on the screen and should not be"));
+                }
+                Ok(())
+            }
+            "wait-for" => self.wait_for(rest),
+            "wait-for-id" => self.wait_for_id(parse_action_id(rest)?),
+            "wait-idle" => self.wait_idle(rest),
+            "expect-state" => self.expect_state(rest),
+            "clean" => self.clean(),
+            "lifecycle" => self.post("/lifecycle", rest),
+            "scenario" => self.post("/scenario", rest),
+            "tasks" if rest == "cancel" => {
+                self.post("/tasks", rest)?;
+                self.wait_idle("")
+            }
+            "session" if rest == "disconnect" => self.post("/session", rest),
+            "input" => {
+                self.post("/input", rest)?;
+                self.wait_idle("")
+            }
+            "panel" => self.post("/panel", rest),
+            "device" => {
+                self.post("/device", rest)?;
+                self.wait_idle("")
+            }
+            "wifi" => {
+                self.post("/wifi", rest)?;
+                self.wait_idle("")
+            }
+            "clock" => {
+                self.post("/clock", rest)?;
+                self.wait_idle("")
+            }
+            "wait" => {
+                let milliseconds: u64 = rest
+                    .parse()
+                    .map_err(|_| "wait takes a number of milliseconds".to_owned())?;
+                std::thread::sleep(Duration::from_millis(milliseconds));
+                Ok(())
+            }
+            "dump" => {
+                for control in self.layout()? {
+                    if !control.lines.is_empty() {
+                        println!("{:>24}  {:?}", control.kind, control.lines);
+                    }
+                }
+                Ok(())
+            }
+            other => Err(format!("unknown step {other:?}")),
+        };
+        result?;
+        if matches!(
+            verb,
+            "tap"
+                | "tap-id"
+                | "maybe-tap-id"
+                | "tap-paged"
+                | "tap-at"
+                | "type"
+                | "wait-for"
+                | "wait-for-id"
+                | "wait-idle"
+                | "wait"
+                | "input"
+                | "tasks"
+                | "panel"
+                | "device"
+                | "wifi"
+                | "clock"
+                | "scenario"
+                | "lifecycle"
+        ) {
+            self.clean()?;
+        }
+        Ok(())
+    }
+
+    /// Taps the control carrying the named action.
+    fn tap_action_id(&mut self, rest: &str) -> Result<(), String> {
+        let action = parse_action_id(rest)?;
+        let control = self
+            .layout()?
+            .into_iter()
+            .find(|control| control.action == Some(action))
+            .ok_or_else(|| format!("action {action} is not reachable on this screen"))?;
+        self.touch(control.centre.0, control.centre.1)
+    }
+
+    /// Taps the control carrying `action` when this panel draws it, and
+    /// skips with a note when it does not. A pager that the whole catalogue
+    /// fits on one page never draws is not a failure; the page it would
+    /// have turned to does not exist on this panel.
+    fn maybe_tap_id(&mut self, rest: &str) -> Result<(), String> {
+        let action = parse_action_id(rest)?;
+        if let Some(control) = self
+            .layout()?
+            .into_iter()
+            .find(|control| control.action == Some(action))
+        {
+            return self.touch(control.centre.0, control.centre.1);
+        }
+        println!("maybe-tap-id {rest}: not on this screen, skipping");
+        Ok(())
+    }
+
+    /// Taps the first control saying `label`, turning pages to find it.
+    ///
+    /// Pagination is a function of profile and text scale: a catalogue that
+    /// fits one panel at one size spills onto a second page at a larger
+    /// one, so a route that assumes either layout is wrong on the other.
+    /// This looks for the label, and while it is missing and the screen
+    /// declared page-turn zones, taps the forward zone -- the empty right
+    /// edge of the content, where a reader's thumb goes -- and looks
+    /// again. The bound keeps a genuinely absent label a failure.
+    fn tap_paged(&mut self, label: &str) -> Result<(), String> {
+        const MAX_PAGES: u32 = 8;
+        for page in 0..=MAX_PAGES {
+            if let Some(control) = self.find(label)? {
+                let (x, y) = control.centre;
+                return self.touch(x, y);
+            }
+            if page == MAX_PAGES {
+                break;
+            }
+            let controls = self.layout()?;
+            let paging = self.paging()?;
+            if !paging.has_next {
+                break;
+            }
+            let (x, y) = forward_point(&controls, paging.content)
+                .ok_or("no empty spot in the forward page-turn zone")?;
+            self.touch(x, y)?;
+        }
+        Err(format!(
+            "{label:?} never appeared within {MAX_PAGES} page turns"
+        ))
+    }
+
+    /// The screen's content rectangle and whether it declared page-turn
+    /// zones, from the same layout payload the controls come from. Both
+    /// default to the old payload's absence: no reported area and no zones.
+    fn paging(&self) -> Result<Paging, String> {
+        let body = self.get("/layout")?;
+        let body = String::from_utf8_lossy(&body).into_owned();
+        let number = |key: &str| {
+            i32::try_from(json_number(&body, key).unwrap_or_default()).unwrap_or_default()
+        };
+        let content = (
+            number("\"x\""),
+            number("\"y\""),
+            number("\"width\""),
+            number("\"height\""),
+        );
+        Ok(Paging {
+            content,
+            has_next: body.contains("\"pageTurns\":{"),
+        })
+    }
+
+    /// Taps the control whose label carries `label`.
+    ///
+    /// Four passes, narrowest first: a tappable node whose whole label is the
+    /// word, then a tappable node that merely contains it, then the same two
+    /// again for nodes that cannot be tapped at all.
+    ///
+    /// The order matters more than it looks. A plain substring search over
+    /// every node finds prose before it finds controls, and prose is drawn
+    /// first: a script that said `tap Close` on a screen whose body text
+    /// contained the word "closes" tapped the paragraph, which does nothing,
+    /// and then reported that the button underneath was broken. The last two
+    /// passes are kept so that tapping a row or a tile by its title still
+    /// works -- the tappable node there is the row, whose own lines are the
+    /// title, but a picture or a label inside it may be what matched.
+    fn tap(&mut self, label: &str) -> Result<(), String> {
+        let controls = self.layout()?;
+        let control = controls
+            .iter()
+            .find(|control| control.tappable() && control.says_exactly(label))
+            .or_else(|| {
+                controls
+                    .iter()
+                    .find(|control| control.tappable() && control.says(label))
+            })
+            .or_else(|| controls.iter().find(|control| control.says_exactly(label)))
+            .or_else(|| controls.iter().find(|control| control.says(label)))
+            .ok_or_else(|| format!("nothing on the screen says {label:?}"))?;
+        let (x, y) = control.centre;
+        self.touch(x, y)
+    }
+
+    /// Types through visible touch targets. Standard SDK key identities take
+    /// precedence over matching letters in a crossword or document. Custom
+    /// keyboards retain label matching when no SDK keyboard is present.
+    fn type_text(&mut self, text: &str) -> Result<(), String> {
+        for character in text.chars() {
+            let label = match character {
+                ' ' => "Space".to_owned(),
+                character => character.to_string(),
+            };
+            let controls = self.layout()?;
+            let key = keyboard_key(&controls, &label).ok_or_else(|| {
+                format!("no key for {label:?}; is the right keyboard layer showing?")
+            })?;
+            self.touch(key.centre.0, key.centre.1)?;
+        }
+        Ok(())
+    }
+
+    /// Asserts that something on the screen says this.
+    fn expect(&mut self, text: &str) -> Result<(), String> {
+        if self.find(text)?.is_some() {
+            return Ok(());
+        }
+        Err(format!("nothing on the screen says {text:?}"))
+    }
+
+    /// The same, but allowing for work that is still in flight.
+    fn wait_for(&mut self, text: &str) -> Result<(), String> {
+        let deadline = Instant::now() + APPEAR_TIMEOUT;
+        loop {
+            if self.find(text)?.is_some() {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "waited {}s and nothing on the screen said {text:?}",
+                    APPEAR_TIMEOUT.as_secs()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn wait_for_id(&self, action: u32) -> Result<(), String> {
+        let deadline = Instant::now() + APPEAR_TIMEOUT;
+        loop {
+            if self
+                .layout()?
+                .iter()
+                .any(|control| control.action == Some(action))
+            {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(format!("action {action} did not become reachable"));
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn wait_idle(&self, requested: &str) -> Result<(), String> {
+        let timeout = if requested.is_empty() {
+            10_000
+        } else {
+            requested
+                .parse::<u64>()
+                .map_err(|_| "wait-idle takes a timeout in milliseconds")?
+        };
+        if timeout == 0 || timeout > 60_000 {
+            return Err("wait-idle timeout must be from 1 to 60000 milliseconds".into());
+        }
+        let deadline = Instant::now() + Duration::from_millis(timeout);
+        loop {
+            let report: serde_json::Value = serde_json::from_slice(&self.get("/activity")?)
+                .map_err(|error| format!("read simulator activity: {error}"))?;
+            if activity_idle(&report)? {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "app did not become idle within {timeout} ms: {report}"
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+
+    fn expect_state(&self, expression: &str) -> Result<(), String> {
+        let (target, expected) = expression
+            .split_once(char::is_whitespace)
+            .ok_or("expect-state takes ENDPOINT#JSON_POINTER followed by a JSON value")?;
+        let (endpoint, pointer) = target
+            .split_once('#')
+            .ok_or("expect-state requires an endpoint and #JSON_POINTER")?;
+        if !matches!(
+            endpoint,
+            "/simulation"
+                | "/activity"
+                | "/layout"
+                | "/clock"
+                | "/device"
+                | "/wifi"
+                | "/panel"
+                | "/input"
+        ) || !pointer.starts_with('/')
+        {
+            return Err("expect-state uses /simulation, /activity, /layout, /clock, /device, /wifi, /panel or /input and a JSON pointer beginning with /".into());
+        }
+        let report: serde_json::Value = serde_json::from_slice(&self.get(endpoint)?)
+            .map_err(|error| format!("read assertion state: {error}"))?;
+        assert_json_pointer(&report, pointer, expected.trim())
+    }
+
+    /// Asserts the renderer raised no errors about this screen.
+    ///
+    /// Warnings are printed and not fatal. An error means something was
+    /// clipped, unreachable, or drawn in a character the panel's face cannot
+    /// set, and none of those are visible in a screenshot until somebody
+    /// notices they are missing.
+    fn clean(&mut self) -> Result<(), String> {
+        let body = self.get("/diagnostics")?;
+        let report: serde_json::Value = serde_json::from_slice(&body)
+            .map_err(|error| format!("read layout diagnostics: {error}"))?;
+        let issues = report
+            .get("issues")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("layout diagnostics contain no issue list")?;
+        let mut errors = Vec::new();
+        for issue in issues {
+            let message = issue
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("layout diagnostic has no explanation")?;
+            match issue.get("severity").and_then(serde_json::Value::as_str) {
+                Some("warning") => eprintln!("layout warning: {message}"),
+                Some("error") => errors.push(message),
+                _ => return Err("layout diagnostic has an unknown severity".into()),
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "the renderer refused this screen: {}",
+                errors.join("; ")
+            ))
+        }
+    }
+
+    /// Writes the panel out as a PNG and returns where it went.
+    fn shot(&mut self, name: &str) -> Result<PathBuf, String> {
+        self.shot_format(name, false)
+    }
+
+    fn shot_format(&mut self, name: &str, colour: bool) -> Result<PathBuf, String> {
+        let bytes = self.get(if colour {
+            "/colour-capture"
+        } else if self.ideal {
+            "/ideal-capture"
+        } else {
+            "/capture"
+        })?;
+        let (metadata, width, height, pixels) = parse_atomic_capture(&bytes)?;
+        let png = if metadata["frame"]["format"] == "rgb24" {
+            kobo_image::encode_png_rgb(width, height, pixels)
+        } else {
+            kobo_image::encode_png_grey(width, height, pixels)
+        }
+        .map_err(|error| format!("encode the frame: {error}"))?;
+        self.taken += 1;
+        let name = if name.is_empty() {
+            format!("{:03}", self.taken)
+        } else {
+            name.trim_end_matches(".png").replace(['/', ' '], "-")
+        };
+        std::fs::create_dir_all(&self.shots)
+            .map_err(|error| format!("create {}: {error}", self.shots.display()))?;
+        let path = self.shots.join(format!("{name}.png"));
+        std::fs::write(&path, png).map_err(|error| format!("write {}: {error}", path.display()))?;
+        let sidecar = path.with_extension("json");
+        std::fs::write(
+            &sidecar,
+            serde_json::to_vec_pretty(&metadata).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| format!("write {}: {error}", sidecar.display()))?;
+        Ok(path)
+    }
+
+    /// Captures one committed frame and its provenance in the same response.
+    pub fn capture(&self) -> Result<CapturedFrame, String> {
+        let bytes = self.get(if self.ideal {
+            "/ideal-capture"
+        } else {
+            "/capture"
+        })?;
+        let (metadata, width, height, grey) = parse_atomic_capture(&bytes)?;
+        if metadata["frame"]["format"] != "grey8" {
+            return Err("expected a grayscale recording frame".into());
+        }
+        Ok(CapturedFrame {
+            metadata,
+            width,
+            height,
+            grey: grey.to_vec(),
+        })
+    }
+
+    /// The first control saying `label`, if any.
+    fn find(&self, label: &str) -> Result<Option<Control>, String> {
+        Ok(self
+            .layout()?
+            .into_iter()
+            .find(|control| control.says(label)))
+    }
+
+    /// Everything the renderer put on the panel.
+    pub fn layout(&self) -> Result<Vec<Control>, String> {
+        let body = self.get("/layout")?;
+        let body = String::from_utf8_lossy(&body).into_owned();
+        Ok(json_objects(&body)
+            .into_iter()
+            .map(|node| Control {
+                kind: json_field(&node, "kind").unwrap_or_default(),
+                rect: (
+                    i32::try_from(json_number(&node, "\"x\"").unwrap_or_default())
+                        .unwrap_or_default(),
+                    i32::try_from(json_number(&node, "\"y\"").unwrap_or_default())
+                        .unwrap_or_default(),
+                    i32::try_from(json_number(&node, "\"width\"").unwrap_or_default())
+                        .unwrap_or_default(),
+                    i32::try_from(json_number(&node, "\"height\"").unwrap_or_default())
+                        .unwrap_or_default(),
+                ),
+                centre: json_point(&node, "centre"),
+                lines: json_array(&node, "lines"),
+                action: json_number(&node, "\"action\"")
+                    .and_then(|value| u32::try_from(value).ok()),
+            })
+            .collect())
+    }
+
+    /// Presses a point and waits for the application to answer.
+    ///
+    /// The wait is the important half. The tap is posted to the simulator and
+    /// answered by the application in another process, so a script that read
+    /// the layout back immediately read the screen it had just tapped on --
+    /// and then reported that the button did nothing, which is a race that
+    /// passes four runs in five and looks exactly like a real defect.
+    ///
+    /// SDK callback completion is authoritative, including when the callback
+    /// draws an intermediate screen or starts a long transfer. Active network
+    /// work is not awaited here, so the next step can cancel it. Simulators
+    /// without callback markers retain the bounded legacy paint wait.
+    fn touch(&self, x: i32, y: i32) -> Result<(), String> {
+        let before = self.paints()?;
+        self.post("/touch", &format!("x={x}&y={y}"))?;
+        let deadline = Instant::now() + APPEAR_TIMEOUT;
+        loop {
+            let bytes = match self.get("/activity") {
+                Ok(bytes) => bytes,
+                Err(error) if error == "/activity: the simulator answered 404" => break,
+                Err(error) => return Err(error),
+            };
+            let report: serde_json::Value = serde_json::from_slice(&bytes)
+                .map_err(|error| format!("read simulator activity: {error}"))?;
+            if report["connected"] != true {
+                return Err("the app disconnected while handling the tap".into());
+            }
+            if report["callbackMarkers"] != true {
+                break;
+            }
+            let callbacks = report["pendingCallbacks"]
+                .as_u64()
+                .ok_or("simulator has no callback count")?;
+            if callbacks == 0 {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err("the app did not finish handling the tap within 10 seconds".into());
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        // Older simulators and the built-in counter have no SDK markers.
+        for _ in 0..SETTLE_POLLS {
+            if self.paints()? != before {
+                return Ok(());
+            }
+            std::thread::sleep(SETTLE_INTERVAL);
+        }
+        Ok(())
+    }
+
+    /// How many screens the application has painted so far.
+    fn paints(&self) -> Result<u64, String> {
+        let body = self.get("/layout")?;
+        let body = String::from_utf8_lossy(&body).into_owned();
+        Ok(json_number(&body, "\"paints\"")
+            .and_then(|value| u64::try_from(value).ok())
+            .unwrap_or_default())
+    }
+
+    fn get(&self, path: &str) -> Result<Vec<u8>, String> {
+        self.request("GET", path, "")
+    }
+
+    fn post(&self, path: &str, body: &str) -> Result<(), String> {
+        self.request("POST", path, body).map(|_| ())
+    }
+
+    /// One HTTP request, spoken by hand.
+    ///
+    /// No client library, deliberately. This CLI has exactly one dependency
+    /// and the whole conversation is four verbs against a server in this same
+    /// workspace; pulling in an async runtime to say `GET /frame` would be a
+    /// worse trade than eighty lines of `write!`.
+    fn request(&self, method: &str, path: &str, body: &str) -> Result<Vec<u8>, String> {
+        let mut stream = TcpStream::connect(&self.address).map_err(|error| {
+            format!(
+                "connect to the simulator at {}: {error}\n\
+                 start one with: kobo dev --builtin",
+                self.address
+            )
+        })?;
+        stream
+            .set_read_timeout(Some(REQUEST_TIMEOUT))
+            .and_then(|()| stream.set_write_timeout(Some(REQUEST_TIMEOUT)))
+            .map_err(|error| format!("configure the connection: {error}"))?;
+        let mut request = String::new();
+        let _ = write!(
+            &mut request,
+            "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n",
+            self.address
+        );
+        if method == "POST" {
+            let _ = write!(
+                &mut request,
+                "Content-Type: text/plain\r\nContent-Length: {}\r\n",
+                body.len()
+            );
+        }
+        request.push_str("\r\n");
+        request.push_str(body);
+        stream
+            .write_all(request.as_bytes())
+            .map_err(|error| format!("send {method} {path}: {error}"))?;
+        let mut answer = Vec::new();
+        Read::take(&mut stream, RESPONSE_LIMIT + 1)
+            .read_to_end(&mut answer)
+            .map_err(|error| format!("read the answer to {method} {path}: {error}"))?;
+        if answer.len() as u64 > RESPONSE_LIMIT {
+            return Err(format!("the answer to {method} {path} exceeds 16 MiB"));
+        }
+        split_response(&answer, path)
+    }
+}
+
+/// How often a recording looks at the panel when nothing says otherwise.
+///
+/// Four times a second rather than the two `kobo record` takes from a reader.
+/// The device's rate is set by what it costs there: six megabytes read out of
+/// the framebuffer of a machine that is also drawing to it. Here the frame
+/// comes over loopback from a process on the same desk, so the only budget
+/// that matters is the simulator's request loop, which the driver is using at
+/// the same time. Four is fast enough to catch a screen that is only up for a
+/// moment -- a spinner, or a wrong state a screen passes through before it
+/// settles -- and slow enough to leave that loop to the taps.
+pub const DEFAULT_RECORD_FPS: u32 = 4;
+
+/// The fastest a recording may look at the panel.
+///
+/// The simulator serves one request at a time and the driver is queueing
+/// behind every one of these. Past roughly this rate a recording stops being a
+/// passenger and starts deciding how long a tap takes to settle, which would
+/// make the recording a cause of the thing it is meant to be watching.
+pub const MAXIMUM_RECORD_FPS: u32 = 20;
+
+/// How long the sampler waits before noticing it has been asked to stop.
+const STOP_POLL: Duration = Duration::from_millis(10);
+
+/// The frames of one recording, with the ones that did not move left out.
+///
+/// The same bargain `kobo record` strikes on the device, for the same reason.
+/// Every grey level is kept, because the panel is greyscale and its text is
+/// anti-aliased and a recording that flattened the greys would look harsher
+/// than the thing it recorded. What keeps it small instead is that a screen
+/// that nobody has touched is the same screen: a script that waits two seconds
+/// between taps is one frame there, not eight.
+#[derive(Default)]
+struct FrameLog {
+    frames: Vec<RecordedFrame>,
+    looked: u32,
+    provenance: Vec<serde_json::Value>,
+}
+
+impl FrameLog {
+    fn sample_capture(&mut self, millis: u32, capture: CapturedFrame) {
+        if self.sample(millis, capture.grey) {
+            self.provenance.push(capture.metadata);
+        }
+    }
+
+    /// Offers one look at the panel, and says whether it was worth keeping.
+    fn sample(&mut self, millis: u32, grey: Vec<u8>) -> bool {
+        self.looked += 1;
+        if self
+            .frames
+            .last()
+            .is_some_and(|last| last.grey.as_slice() == grey.as_slice())
+        {
+            return false;
+        }
+        self.frames.push(RecordedFrame { millis, grey });
+        true
+    }
+}
+
+/// Films the simulated panel while something else drives it.
+///
+/// The moving-picture half of [`Driver::shot`], and deliberately a separate
+/// thing from the driver rather than a step in the script. A recording made of
+/// the steps would only ever show the screens the script stops on, and the
+/// frames worth having are usually the ones between them: the list that was
+/// empty for half a second before the fetch came back, the pane that was drawn
+/// at the wrong size until the second layout pass. So this watches on its own
+/// clock and the script never knows it is there.
+///
+/// # Ghosting
+///
+/// A recording is taken from the residue-free frame unless it is asked for the
+/// other one. This is the opposite default to [`Driver::shot`], and on
+/// purpose. A still with e-ink residue on it is a still of two screens, which
+/// a person can still read past; a hundred of them played in sequence is every
+/// screen the run ever showed, all at once, and there is nothing to read past.
+/// Ask for `ghosting` when the recording is *of* the refreshes.
+pub struct Recorder {
+    /// A second connection to the same simulator, used only for frames.
+    sampler: Driver,
+    dimensions: (u32, u32),
+    metadata_directory: Option<PathBuf>,
+    started: Instant,
+    log: Arc<Mutex<FrameLog>>,
+    stop: Arc<AtomicBool>,
+    /// Why the sampler gave up, if it did.
+    failure: Arc<Mutex<Option<String>>>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Recorder {
+    /// Starts filming, and takes the opening frame before it returns.
+    ///
+    /// The first frame is taken here rather than on the sampler thread so that
+    /// a simulator which is not running is a message now, with the line about
+    /// how to start one, rather than a script that runs to the end and then
+    /// reports that it recorded nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the rate is one the simulator cannot serve, or
+    /// when the first frame cannot be had.
+    pub fn start(address: &str, fps: u32, ghosting: bool) -> Result<Self, String> {
+        if fps == 0 || fps > MAXIMUM_RECORD_FPS {
+            return Err(format!(
+                "--fps takes a rate between 1 and {MAXIMUM_RECORD_FPS}, not {fps}"
+            ));
+        }
+        let sampler = Driver::new(address, Path::new(".")).ideal(!ghosting);
+        let captured = sampler.capture()?;
+        let dimensions = (captured.width, captured.height);
+        let mut opening = FrameLog::default();
+        opening.sample_capture(0, captured);
+
+        let interval = Duration::from_micros(1_000_000 / u64::from(fps));
+        let started = Instant::now();
+        let log = Arc::new(Mutex::new(opening));
+        let stop = Arc::new(AtomicBool::new(false));
+        let failure = Arc::new(Mutex::new(None));
+        let worker = {
+            let sampler = sampler.clone();
+            let log = Arc::clone(&log);
+            let stop = Arc::clone(&stop);
+            let failure = Arc::clone(&failure);
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    let looked_at = Instant::now();
+                    match sampler.capture() {
+                        Ok(captured) => {
+                            let millis =
+                                u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+                            lock(&log).sample_capture(millis, captured);
+                        }
+                        Err(error) => {
+                            *lock(&failure) = Some(error);
+                            return;
+                        }
+                    }
+                    // Measured from the start of the read, exactly as the
+                    // device does it, so a slow frame shortens the wait rather
+                    // than adding to it and the recording keeps the rate it
+                    // was asked for. Slept in slices, so stopping does not
+                    // have to wait out an interval that is already over.
+                    while looked_at.elapsed() < interval && !stop.load(Ordering::Relaxed) {
+                        std::thread::sleep(
+                            STOP_POLL.min(interval.saturating_sub(looked_at.elapsed())),
+                        );
+                    }
+                }
+            })
+        };
+        Ok(Self {
+            sampler,
+            dimensions,
+            metadata_directory: None,
+            started,
+            log,
+            stop,
+            failure,
+            worker: Some(worker),
+        })
+    }
+
+    /// Write provenance for each retained frame beside the recording.
+    #[must_use]
+    pub fn with_metadata(mut self, directory: &Path) -> Self {
+        self.metadata_directory = Some(directory.to_path_buf());
+        self
+    }
+
+    /// Stops filming and hands back the panel, its size, and every frame kept.
+    ///
+    /// The closing frame is taken here, after the sampler has stopped. Without
+    /// it a script whose last step is a tap ends the recording on the screen
+    /// before that tap about half the time, which reads as the last thing the
+    /// script did having done nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the sampler failed before it had a single frame.
+    /// A sampler that failed part way through has still recorded whatever it
+    /// saw up to then, which is the half of the run worth looking at, so that
+    /// is reported and kept rather than thrown away.
+    pub fn finish(mut self) -> Result<(u32, u32, Vec<RecordedFrame>), String> {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+        let closing = self.sampler.capture();
+        let mut log = lock(&self.log);
+        match closing {
+            Ok(captured) => {
+                let millis = u32::try_from(self.started.elapsed().as_millis()).unwrap_or(u32::MAX);
+                log.sample_capture(millis, captured);
+            }
+            Err(error) => *lock(&self.failure) = Some(error),
+        }
+        if let Some(error) = lock(&self.failure).take() {
+            if log.frames.is_empty() {
+                return Err(error);
+            }
+            eprintln!("warning: the recording stopped early: {error}");
+        }
+        if let Some(directory) = &self.metadata_directory {
+            std::fs::create_dir_all(directory)
+                .map_err(|error| format!("create recording metadata directory: {error}"))?;
+            for (index, metadata) in log.provenance.iter().enumerate() {
+                let path = directory.join(format!("frame-{index:04}.json"));
+                std::fs::write(
+                    &path,
+                    serde_json::to_vec_pretty(metadata).map_err(|error| error.to_string())?,
+                )
+                .map_err(|error| format!("write {}: {error}", path.display()))?;
+            }
+        }
+        println!(
+            "recording: kept {} of {} frames",
+            log.frames.len(),
+            log.looked
+        );
+        Ok((
+            self.dimensions.0,
+            self.dimensions.1,
+            std::mem::take(&mut log.frames),
+        ))
+    }
+}
+
+/// A poisoned lock here means the sampler thread panicked mid-frame, which
+/// loses that frame and nothing else; the frames already taken are still
+/// frames, and refusing to hand them back would be the larger loss.
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Pulls the picture out of a device transcript.
+///
+/// The doctor prints its whole read-only report and then the panel, so this
+/// has to find the picture inside prose rather than parse a file. The header
+/// carries the width, the height and the byte count the device measured, so a
+/// truncated transfer -- an SSH connection dropped halfway through two
+/// megabytes is not a rare event -- is caught here rather than becoming a PNG
+/// that is half a screenshot and half black.
+///
+/// # Errors
+///
+/// Returns an error when there is no capture in the transcript, when its
+/// header is malformed, or when fewer bytes arrived than were announced.
+pub fn decode_capture(transcript: &str) -> Result<(u32, u32, Vec<u8>), String> {
+    let mut lines = transcript.lines();
+    let header = lines
+        .find(|line| line.starts_with(CAPTURE_HEADER))
+        .ok_or_else(|| {
+            "the device sent no capture; is this build of kobo-doctor current?".to_owned()
+        })?;
+    let fields: Vec<&str> = header.split_whitespace().collect();
+    let [_, width, height, length] = fields.as_slice() else {
+        return Err(format!(
+            "the device sent a capture header we cannot read: {header:?}"
+        ));
+    };
+    let parse = |value: &str, what: &str| -> Result<u32, String> {
+        value
+            .parse::<u32>()
+            .map_err(|_| format!("the device reported {what} as {value:?}"))
+    };
+    let width = parse(width, "the panel width")?;
+    let height = parse(height, "the panel height")?;
+    let announced = parse(length, "the capture length")? as usize;
+    let mut grey = Vec::with_capacity(announced);
+    for line in lines {
+        if line.starts_with(CAPTURE_FOOTER) {
+            break;
+        }
+        grey.extend(base64_decode(line.trim())?);
+    }
+    if grey.len() != announced {
+        return Err(format!(
+            "the device announced {announced} bytes of screen and {} arrived; \
+             the transfer was cut short",
+            grey.len()
+        ));
+    }
+    Ok((width, height, grey))
+}
+
+/// Standard base64, padded.
+#[allow(clippy::naive_bytecount)]
+fn base64_decode(line: &str) -> Result<Vec<u8>, String> {
+    let value_of = |character: u8| -> Option<u32> {
+        match character {
+            b'A'..=b'Z' => Some(u32::from(character - b'A')),
+            b'a'..=b'z' => Some(u32::from(character - b'a') + 26),
+            b'0'..=b'9' => Some(u32::from(character - b'0') + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    };
+    let bytes = line.as_bytes();
+    if bytes.len() % 4 != 0 {
+        return Err("a line of the capture is not a whole number of base64 groups".to_owned());
+    }
+    let mut decoded = Vec::with_capacity(bytes.len() / 4 * 3);
+    for group in bytes.chunks(4) {
+        let padding = group.iter().filter(|byte| **byte == b'=').count();
+        let mut packed = 0_u32;
+        for byte in group {
+            let sextet = if *byte == b'=' {
+                0
+            } else {
+                value_of(*byte).ok_or_else(|| {
+                    format!(
+                        "the capture contains {:?}, which is not base64",
+                        *byte as char
+                    )
+                })?
+            };
+            packed = (packed << 6) | sextet;
+        }
+        let triple = [
+            u8::try_from((packed >> 16) & 0xff).unwrap_or(0),
+            u8::try_from((packed >> 8) & 0xff).unwrap_or(0),
+            u8::try_from(packed & 0xff).unwrap_or(0),
+        ];
+        decoded.extend_from_slice(&triple[..3 - padding]);
+    }
+    Ok(decoded)
+}
+
+/// The body of an HTTP response, with the status checked.
+fn split_response(answer: &[u8], path: &str) -> Result<Vec<u8>, String> {
+    let header_end = answer
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or_else(|| format!("{path}: the simulator sent no complete response"))?;
+    let head = String::from_utf8_lossy(&answer[..header_end]);
+    let status = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse::<u16>().ok())
+        .ok_or_else(|| format!("{path}: the simulator sent no status"))?;
+    if !(200..300).contains(&status) {
+        return Err(format!("{path}: the simulator answered {status}"));
+    }
+    Ok(answer[header_end + 4..].to_vec())
+}
+
+/// The objects directly inside the document's array, as their own strings.
+///
+/// A parser rather than a dependency, and a deliberately shallow one: the two
+/// documents this reads are produced a few hundred lines away in this same
+/// workspace, so the shapes are known -- an object holding one array of
+/// objects. It counts braces and respects strings, which is all that is needed
+/// and all that is claimed. It does not descend into a node's own nested
+/// objects, so a node comes back whole.
+fn json_objects(body: &str) -> Vec<String> {
+    let mut objects = Vec::new();
+    let mut inside_array = false;
+    let mut depth = 0;
+    let mut start = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (index, character) in body.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match character {
+            '"' => in_string = true,
+            '[' if !inside_array => inside_array = true,
+            ']' if inside_array && depth == 0 => break,
+            '{' if inside_array => {
+                if depth == 0 {
+                    start = index;
+                }
+                depth += 1;
+            }
+            '}' if inside_array && depth > 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    objects.push(body[start..=index].to_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+    objects
+}
+
+/// The string value of `field`, unescaped.
+fn json_field(object: &str, field: &str) -> Option<String> {
+    let key = format!("\"{field}\":\"");
+    let start = object.find(&key)? + key.len();
+    let mut value = String::new();
+    let mut escaped = false;
+    for character in object[start..].chars() {
+        if escaped {
+            value.push(match character {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                other => other,
+            });
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            return Some(value);
+        } else {
+            value.push(character);
+        }
+    }
+    None
+}
+
+/// The strings of a `"field":[...]` array.
+fn json_array(object: &str, field: &str) -> Vec<String> {
+    let key = format!("\"{field}\":[");
+    let Some(start) = object.find(&key).map(|at| at + key.len()) else {
+        return Vec::new();
+    };
+    let Some(end) = object[start..].find(']').map(|at| at + start) else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    let mut rest = &object[start..end];
+    while let Some(open) = rest.find('"') {
+        let mut value = String::new();
+        let mut escaped = false;
+        let mut consumed = open + 1;
+        for character in rest[open + 1..].chars() {
+            consumed += character.len_utf8();
+            if escaped {
+                value.push(match character {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    other => other,
+                });
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                break;
+            } else {
+                value.push(character);
+            }
+        }
+        lines.push(value);
+        rest = &rest[consumed..];
+    }
+    lines
+}
+
+/// The `x` and `y` of a nested `"field":{"x":..,"y":..}`.
+///
+/// Scoped to the nested object rather than searched for across the whole node,
+/// because a node carries its own top-level `x` and `y` as well and a search
+/// for `"y"` finds the wrong one -- which is a tap that lands on the right
+/// column and the wrong row, and passes for as long as the two happen to agree.
+fn json_point(object: &str, field: &str) -> (i32, i32) {
+    let key = format!("\"{field}\":{{");
+    let Some(start) = object.find(&key).map(|at| at + key.len()) else {
+        return (0, 0);
+    };
+    let Some(end) = object[start..].find('}').map(|at| at + start) else {
+        return (0, 0);
+    };
+    let inner = &object[start..end];
+    (
+        json_number(inner, "\"x\"")
+            .and_then(|x| i32::try_from(x).ok())
+            .unwrap_or(0),
+        json_number(inner, "\"y\"")
+            .and_then(|y| i32::try_from(y).ok())
+            .unwrap_or(0),
+    )
+}
+
+/// The number following `key`, which is given with its quotes already on so a
+/// nested path can be matched without a real parser.
+/// Reads a whole number, wide enough for every number the layout carries.
+///
+/// `i64` rather than `i32` because an action is a `u32` hash and rather more
+/// than half of them are larger than `i32::MAX`. Parsing those into an `i32`
+/// failed, the control came back with no action, and the driver reported the
+/// key as missing from the keyboard: `q` and `o` could not be typed while `h`
+/// could, which reads as a layout bug and is arithmetic.
+fn json_number(object: &str, key: &str) -> Option<i64> {
+    let start = object.find(key)? + key.len();
+    let rest = object[start..].trim_start_matches([':', '"']);
+    let digits: String = rest
+        .chars()
+        .take_while(|character| character.is_ascii_digit() || *character == '-')
+        .collect();
+    digits.parse().ok()
+}
+
+/// A spot in the forward page-turn zone -- the right edge of the content,
+/// where a reader's thumb goes -- that no drawn node covers, so the tap
+/// falls through to the zone instead of landing on a control drawn over it.
+/// The candidates favour the far right because a screen that split the
+/// content into turn columns still keeps that edge as the next page.
+fn forward_point(controls: &[Control], content: (i32, i32, i32, i32)) -> Option<(i32, i32)> {
+    let (cx, cy, cw, ch) = content;
+    for across in [90, 80] {
+        for down in [50, 25, 75, 12, 88] {
+            let x = cx + cw * across / 100;
+            let y = cy + ch * down / 100;
+            let covered = controls.iter().any(|control| {
+                let (nx, ny, nw, nh) = control.rect;
+                x >= nx && x < nx + nw && y >= ny && y < ny + nh
+            });
+            if !covered {
+                return Some((x, y));
+            }
+        }
+    }
+    None
+}
+
+fn parse_atomic_capture(bytes: &[u8]) -> Result<(serde_json::Value, u32, u32, &[u8]), String> {
+    let header: [u8; 4] = bytes
+        .get(..4)
+        .ok_or("capture has no metadata header")?
+        .try_into()
+        .map_err(|_| "capture header is invalid")?;
+    let size = u32::from_le_bytes(header) as usize;
+    if size > 128 * 1024 {
+        return Err("capture metadata exceeds its limit".into());
+    }
+    let metadata: serde_json::Value = serde_json::from_slice(
+        bytes
+            .get(4..4 + size)
+            .ok_or("capture metadata is incomplete")?,
+    )
+    .map_err(|error| format!("read capture metadata: {error}"))?;
+    if metadata["schema"] != "cobalt.simulator-capture"
+        || metadata["version"] != 1
+        || !matches!(
+            metadata["frame"]["format"].as_str(),
+            Some("grey8" | "rgb24")
+        )
+    {
+        return Err("unsupported capture schema or pixel format".into());
+    }
+    let simulation = metadata
+        .get("simulation")
+        .ok_or("capture has no simulation state")?;
+    let (width, height) =
+        parse_dimensions(&serde_json::to_vec(simulation).map_err(|error| error.to_string())?)?;
+    let frame = &bytes[4 + size..];
+    let channels = if metadata["frame"]["format"] == "rgb24" {
+        3
+    } else {
+        1
+    };
+    if frame.len() != width as usize * height as usize * channels {
+        return Err("capture pixels do not match the panel size".into());
+    }
+    if metadata["frame"]["sha256"].as_str() != Some(&kobo_net::sha256::hex_digest(frame)) {
+        return Err("capture pixels do not match their recorded digest".into());
+    }
+    Ok((metadata, width, height, frame))
+}
+
+fn keyboard_key<'a>(controls: &'a [Control], label: &str) -> Option<&'a Control> {
+    let mut keys = (0..3)
+        .flat_map(|row| (0..10).map(move |column| format!("kb.r{row}c{column}")))
+        .filter_map(|name| parse_action_id(&name).ok())
+        .collect::<Vec<_>>();
+    keys.push(parse_action_id("kb.space").expect("fixed key"));
+    let is_key = |control: &Control| control.action.is_some_and(|action| keys.contains(&action));
+    let standard = controls.iter().any(is_key);
+    controls.iter().find(|control| {
+        control.tappable()
+            && (!standard || is_key(control))
+            && control.lines.len() == 1
+            && control.lines[0].trim().eq_ignore_ascii_case(label)
+    })
+}
+
+fn parse_action_id(value: &str) -> Result<u32, String> {
+    if let Ok(number) = value.parse::<u32>() {
+        return Ok(number);
+    }
+    if value.is_empty()
+        || value.len() > 128
+        || !value.as_bytes()[0].is_ascii_lowercase()
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b".-_".contains(&b))
+    {
+        return Err("action ID must be an unsigned number or a stable action name".into());
+    }
+    Ok(kobo_ui::ActionId::from_name(value).0)
+}
+fn activity_idle(report: &serde_json::Value) -> Result<bool, String> {
+    if report.get("connected").and_then(serde_json::Value::as_bool) != Some(true) {
+        return Err("the app disconnected before becoming idle".into());
+    }
+    if report
+        .get("callbackMarkers")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return Ok(false);
+    }
+    let pending = report
+        .get("pendingCallbacks")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or("simulator activity has no callback count")?;
+    let active = report
+        .get("activeWork")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or("simulator activity has no work count")?;
+    Ok(pending == 0 && active == 0)
+}
+fn assert_json_pointer(
+    report: &serde_json::Value,
+    pointer: &str,
+    expected: &str,
+) -> Result<(), String> {
+    let expected: serde_json::Value = serde_json::from_str(expected)
+        .map_err(|error| format!("expected value is not JSON: {error}"))?;
+    let actual = report
+        .pointer(pointer)
+        .ok_or_else(|| format!("state has no value at {pointer}"))?;
+    if actual == &expected {
+        Ok(())
+    } else {
+        Err(format!("{pointer}: expected {expected}, found {actual}"))
+    }
+}
+
+fn parse_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("read simulator profile: {error}"))?;
+    let profile = value
+        .get("profile")
+        .ok_or("simulator response has no profile")?;
+    let dimension = |name| {
+        profile
+            .get(name)
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|number| u32::try_from(number).ok())
+            .filter(|&number| number > 0)
+            .ok_or_else(|| format!("simulator profile has an invalid {name}"))
+    };
+    let (width, height) = (dimension("width")?, dimension("height")?);
+    if u64::from(width) * u64::from(height) > kobo_image::MAX_PIXELS {
+        return Err("simulator profile exceeds the screenshot pixel limit".into());
+    }
+    Ok((width, height))
+}
+
+fn parse_point(text: &str) -> Result<(i32, i32), String> {
+    let (x, y) = text
+        .split_once([',', ' '])
+        .ok_or_else(|| "tap-at takes 'x,y'".to_owned())?;
+    let x = x
+        .trim()
+        .parse()
+        .map_err(|_| "tap-at takes whole numbers".to_owned())?;
+    let y = y
+        .trim()
+        .parse()
+        .map_err(|_| "tap-at takes whole numbers".to_owned())?;
+    Ok((x, y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        base64_decode, decode_capture, json_array, json_field, json_number, json_objects,
+        json_point, split_response, Driver, FrameLog, Recorder, FRAME_HEIGHT, FRAME_WIDTH,
+        MAXIMUM_RECORD_FPS,
+    };
+    use std::path::Path;
+
+    const BODY: &str = r#"{"nodes":[{"kind":"Button","x":10,"y":20,"width":30,"height":40,"centre":{"x":25,"y":40},"action":77,"lines":["Search","for a \"book\""]},{"kind":"Divider","x":0,"y":1,"width":2,"height":3,"centre":{"x":1,"y":2},"action":null,"lines":[]}]}"#;
+
+    #[test]
+    fn typing_prefers_sdk_keys_over_existing_crossword_letters() {
+        let control = |name: &str, label: &str| super::Control {
+            kind: "Cell".into(),
+            rect: (0, 0, 0, 0),
+            centre: (1, 1),
+            lines: vec![label.into()],
+            action: Some(super::parse_action_id(name).unwrap()),
+        };
+        let cells = [
+            control("entry-12", "N"),
+            control("kb.r2c5", "n"),
+            control("entry-1", "1"),
+        ];
+        assert_eq!(
+            super::keyboard_key(&cells, "n").unwrap().action,
+            cells[1].action
+        );
+        assert!(super::keyboard_key(&cells, "1").is_none());
+        assert_eq!(
+            super::keyboard_key(&cells[..1], "n").unwrap().action,
+            cells[0].action
+        );
+    }
+
+    #[test]
+    fn forward_point_finds_uncovered_spot_in_the_turn_zone() {
+        let control = |x: i32, y: i32, width: i32, height: i32| super::Control {
+            kind: "Button".into(),
+            rect: (x, y, width, height),
+            centre: (x + width / 2, y + height / 2),
+            lines: Vec::new(),
+            action: Some(1),
+        };
+        let content = (0, 0, 600, 800);
+        // A button on the mid-right edge pushes the pick to another row.
+        let point = super::forward_point(&[control(520, 360, 80, 80)], content).unwrap();
+        assert!((point.0 - 540).abs() <= 60 && (point.1 - 400).abs() > 40);
+        // A wall of controls over every candidate leaves no spot at all.
+        let wall = [control(460, 0, 140, 800)];
+        assert_eq!(super::forward_point(&wall, content), None);
+    }
+
+    #[test]
+    fn atomic_capture_rejects_truncation_corruption_and_mismatched_metadata() {
+        let pixels = [0_u8, 64, 128, 255, 0, 255];
+        let metadata = serde_json::json!({"schema":"cobalt.simulator-capture", "version":1, "simulation":{"profile":{"width":2,"height":3}}, "frame":{"format":"grey8", "sha256":kobo_net::sha256::hex_digest(&pixels)}});
+        let encoded = serde_json::to_vec(&metadata).unwrap();
+        let mut capture = u32::try_from(encoded.len()).unwrap().to_le_bytes().to_vec();
+        capture.extend(encoded);
+        capture.extend(pixels);
+        let (restored, width, height, frame) = super::parse_atomic_capture(&capture).unwrap();
+        assert_eq!(restored, metadata);
+        assert_eq!((width, height), (2, 3));
+        assert_eq!(frame, pixels);
+        assert!(super::parse_atomic_capture(&capture[..capture.len() - 1]).is_err());
+        *capture.last_mut().unwrap() ^= 1;
+        assert!(super::parse_atomic_capture(&capture).is_err());
+        assert!(super::parse_atomic_capture(&[255, 255, 255, 255]).is_err());
+    }
+
+    #[test]
+    fn tap_waits_past_intermediate_paint_for_callback_but_not_for_network_work() {
+        use std::io::{Read, Write};
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = server.local_addr().unwrap().to_string();
+        server.set_nonblocking(true).unwrap();
+        let worker = std::thread::spawn(move || {
+            let mut callbacks = 0;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            loop {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "driver did not await callback completion"
+                );
+                let (mut stream, _) = match server.accept() {
+                    Ok(client) => client,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                        continue;
+                    }
+                    Err(error) => panic!("accept driver: {error}"),
+                };
+                stream
+                    .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                    .unwrap();
+                let mut bytes = [0_u8; 4096];
+                let size = stream.read(&mut bytes).unwrap();
+                let request = String::from_utf8_lossy(&bytes[..size]);
+                let body = if request.starts_with("GET /layout ") {
+                    "{\"paints\":2,\"nodes\":[]}".to_owned()
+                } else if request.starts_with("POST /touch ") {
+                    String::new()
+                } else {
+                    assert!(request.starts_with("GET /activity "));
+                    callbacks += 1;
+                    serde_json::json!({"connected":true,"callbackMarkers":true,"pendingCallbacks":u8::from(callbacks < 3),"activeWork":1}).to_string()
+                };
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+                .unwrap();
+                if callbacks == 3 {
+                    return callbacks;
+                }
+            }
+        });
+        let driver = Driver::new(&address, Path::new("."));
+        driver.touch(10, 20).unwrap();
+        assert_eq!(worker.join().unwrap(), 3);
+    }
+
+    #[test]
+    fn colour_capture_validates_each_channel_and_png_preserves_them() {
+        let pixels = [200_u8, 10, 30, 20, 240, 100];
+        let metadata = serde_json::json!({"schema":"cobalt.simulator-capture", "version":1, "simulation":{"profile":{"width":2,"height":1}}, "frame":{"format":"rgb24", "sha256":kobo_net::sha256::hex_digest(&pixels)}});
+        let encoded = serde_json::to_vec(&metadata).unwrap();
+        let mut bytes = u32::try_from(encoded.len()).unwrap().to_le_bytes().to_vec();
+        bytes.extend(encoded);
+        bytes.extend(pixels);
+        let (_, width, height, restored) = super::parse_atomic_capture(&bytes).unwrap();
+        assert_eq!(restored, pixels);
+        let png = kobo_image::encode_png_rgb(width, height, restored).unwrap();
+        let decoded = kobo_image::decode_colour(&png).unwrap();
+        assert_eq!(decoded.colour(), Some(pixels.as_slice()));
+        assert!(super::parse_atomic_capture(&bytes[..bytes.len() - 1]).is_err());
+        *bytes.last_mut().unwrap() ^= 1;
+        assert!(super::parse_atomic_capture(&bytes).is_err());
+    }
+
+    #[test]
+    fn semantic_assertions_retain_types_and_require_real_callback_completion() {
+        let report = serde_json::json!({"effects": {"post": 0}, "scenario": "offline"});
+        assert!(super::assert_json_pointer(&report, "/effects/post", "0").is_ok());
+        assert!(super::assert_json_pointer(&report, "/effects/post", "\"0\"").is_err());
+        assert!(super::assert_json_pointer(&report, "/missing", "null").is_err());
+        assert!(super::parse_action_id("comic-next").is_ok());
+        assert!(super::parse_action_id("-1").is_err());
+        assert!(super::parse_action_id("4294967296").is_err());
+        assert!(super::parse_action_id("").is_err());
+        for (callbacks, work, expected) in [(0, 0, true), (1, 0, false), (0, 1, false)] {
+            assert_eq!(
+                super::activity_idle(
+                    &serde_json::json!({"connected":true, "callbackMarkers":true, "pendingCallbacks":callbacks, "activeWork":work})
+                ),
+                Ok(expected)
+            );
+        }
+        assert!(super::activity_idle(&serde_json::json!({"connected":false})).is_err());
+        assert!(!super::activity_idle(
+            &serde_json::json!({"connected":true, "callbackMarkers":false})
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn capture_dimensions_follow_every_supported_profile_and_reject_bad_metadata() {
+        for profile in kobo_profile::SUPPORTED_PROFILES {
+            let metadata =
+                serde_json::json!({"profile": {"width": profile.width, "height": profile.height}});
+            assert_eq!(
+                super::parse_dimensions(metadata.to_string().as_bytes()).unwrap(),
+                (profile.width, profile.height)
+            );
+        }
+        for metadata in [
+            r#"{"profile":{"width":0,"height":1448}}"#,
+            r#"{"profile":{"width":1072.5,"height":1448}}"#,
+            r#"{"profile":{"width":4294967295,"height":4294967295}}"#,
+            r#"{"width":1072,"height":1448}"#,
+        ] {
+            assert!(super::parse_dimensions(metadata.as_bytes()).is_err());
+        }
+    }
+
+    #[test]
+    fn text_assertions_survive_wrapping_but_do_not_invent_clipped_words() {
+        let text = super::Control {
+            kind: "Banner".into(),
+            rect: (0, 0, 0, 0),
+            centre: (50, 100),
+            action: None,
+            lines: vec![
+                "Couldn't finish. Check".into(),
+                "free space and try…".into(),
+            ],
+        };
+        assert!(text.says("check free space"));
+        assert!(text.says("CHECK\nfree  space"));
+        assert!(!text.says("try again"));
+        assert!(!text.says("finish Check"));
+    }
+
+    #[test]
+    fn back_is_addressable_without_painted_text() {
+        let back = super::Control {
+            kind: "Back".into(),
+            rect: (0, 0, 0, 0),
+            centre: (50, 100),
+            lines: vec![],
+            action: Some(u32::MAX),
+        };
+        assert!(back.says_exactly("Back"));
+        assert!(!back.says_exactly("Next"));
+    }
+
+    #[test]
+    fn a_transition_fails_when_the_renderer_reports_an_unreachable_control() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0; 4096];
+            let length = stream.read(&mut request).unwrap();
+            assert!(String::from_utf8_lossy(&request[..length]).starts_with("GET /diagnostics "));
+            let body = r#"{"issues":[{"severity":"error","message":"Button outside panel"}]}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let error = Driver::new(&address, Path::new("."))
+            .step("wait 0")
+            .unwrap_err();
+        assert!(error.contains("Button outside panel"));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn the_layout_reader_finds_every_node_and_its_words() {
+        let nodes = json_objects(BODY);
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(json_field(&nodes[0], "kind").as_deref(), Some("Button"));
+        assert_eq!(
+            json_array(&nodes[0], "lines"),
+            vec!["Search".to_owned(), "for a \"book\"".to_owned()],
+            "an escaped quote inside a label must not end the label"
+        );
+        assert_eq!(
+            json_point(&nodes[0], "centre"),
+            (25, 40),
+            "the centre must come from the centre, not from the node's own x and y"
+        );
+        assert_eq!(json_number(&nodes[0], "\"action\""), Some(77));
+        assert!(json_array(&nodes[1], "lines").is_empty());
+    }
+
+    /// An action is a `u32` hash, so most of them do not fit an `i32`. Reading
+    /// one into an `i32` silently produced a control with no action, and the
+    /// driver then reported the key as absent from the keyboard.
+    #[test]
+    fn an_action_larger_than_an_i32_is_still_an_action() {
+        let body = r#"{"nodes":[{"kind":"CellLabel","centre":{"x":882,"y":527},"action":2633322323,"lines":["o"]}]}"#;
+        let node = &json_objects(body)[0];
+        assert_eq!(json_number(node, "\"action\""), Some(2_633_322_323));
+        assert_eq!(
+            json_number(node, "\"action\"").and_then(|value| u32::try_from(value).ok()),
+            Some(2_633_322_323),
+            "the key would be untypable"
+        );
+    }
+
+    #[test]
+    fn a_brace_inside_a_label_does_not_end_the_node() {
+        let body =
+            r#"{"nodes":[{"kind":"Text","lines":["a } brace"]},{"kind":"Rule","lines":[]}]}"#;
+        assert_eq!(
+            json_objects(body).len(),
+            2,
+            "a closing brace inside a string is a character, not structure"
+        );
+    }
+
+    #[test]
+    fn a_refused_request_is_reported_rather_than_parsed() {
+        let answer = b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 3\r\n\r\nno!";
+        assert!(split_response(answer, "/touch").is_err());
+        let answer = b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n";
+        assert_eq!(split_response(answer, "/touch"), Ok(Vec::new()));
+    }
+    #[test]
+    fn the_decoder_agrees_with_the_standard_at_every_remainder() {
+        assert_eq!(base64_decode("Zg==").as_deref(), Ok(&b"f"[..]));
+        assert_eq!(base64_decode("Zm8=").as_deref(), Ok(&b"fo"[..]));
+        assert_eq!(base64_decode("Zm9v").as_deref(), Ok(&b"foo"[..]));
+        assert_eq!(
+            base64_decode("AP+A").as_deref(),
+            Ok(&[0x00, 0xff, 0x80][..])
+        );
+        assert!(
+            base64_decode("Zm9").is_err(),
+            "a partial group is a truncated transfer"
+        );
+        assert!(base64_decode("Zm9!").is_err());
+    }
+
+    #[test]
+    fn a_capture_is_found_inside_the_doctors_ordinary_report() {
+        let transcript = concat!(
+            "Kobo doctor 0.1.0\n",
+            "framebuffer: id=mxc 1072x1448\n",
+            "capture-begin 2 3 6\n",
+            "AAECAwQF\n",
+            "capture-end\n"
+        );
+        assert_eq!(
+            decode_capture(transcript),
+            Ok((2, 3, vec![0, 1, 2, 3, 4, 5]))
+        );
+    }
+
+    #[test]
+    fn a_transfer_cut_short_is_refused_rather_than_saved_as_half_a_picture() {
+        let transcript = "capture-begin 2 3 6\nAAEC\ncapture-end\n";
+        let error = decode_capture(transcript).expect_err("three bytes is not six");
+        assert!(error.contains("cut short"), "{error}");
+    }
+
+    #[test]
+    fn a_report_with_no_capture_says_so_rather_than_producing_an_empty_screen() {
+        assert!(decode_capture("Kobo doctor 0.1.0\n").is_err());
+    }
+
+    /// A script that waits two seconds between taps is a screen nobody
+    /// touched, and a recording that kept eight copies of it would be eight
+    /// megabytes of the same picture.
+    #[test]
+    fn a_screen_that_did_not_move_is_recorded_once() {
+        let mut log = FrameLog::default();
+        assert!(log.sample(0, vec![0xff; 4]));
+        assert!(!log.sample(250, vec![0xff; 4]));
+        assert!(!log.sample(500, vec![0xff; 4]));
+        assert!(log.sample(750, vec![0x40; 4]));
+        assert_eq!(log.looked, 4);
+        assert_eq!(log.frames.len(), 2);
+        assert_eq!(
+            log.frames[1].millis, 750,
+            "a kept frame is stamped when it appeared"
+        );
+    }
+
+    /// Only the frame before is compared, not every frame so far. A screen
+    /// that goes away and comes back -- opening a pane and closing it, which
+    /// is most of what these scripts do -- is a new thing to see each time,
+    /// and a recording that dropped the return would cut the tap that made it.
+    #[test]
+    fn a_screen_that_comes_back_is_recorded_again() {
+        let mut log = FrameLog::default();
+        log.sample(0, vec![0xff; 4]);
+        log.sample(100, vec![0x40; 4]);
+        assert!(log.sample(200, vec![0xff; 4]));
+        assert_eq!(log.frames.len(), 3);
+    }
+
+    /// The simulator serves one request at a time and the driver is queueing
+    /// behind every frame this asks for. A rate it cannot serve is refused
+    /// here, before a script has been run against it, rather than quietly
+    /// becoming the reason a tap took a second to settle.
+    #[test]
+    fn a_rate_the_simulator_cannot_serve_is_refused_before_anything_is_driven() {
+        for fps in [0, MAXIMUM_RECORD_FPS + 1, 1000] {
+            let error = Recorder::start("127.0.0.1:1", fps, false)
+                .err()
+                .expect("a rate outside the range is refused");
+            assert!(error.contains("--fps"), "{error}");
+        }
+    }
+
+    /// Films a simulator that is really running, which is the whole claim.
+    ///
+    /// The failure this guards against is a recording that is technically a
+    /// file: the right number of frames, the right length, and every pixel the
+    /// same shade of nothing. That is what an off-by-one in the frame size, a
+    /// panel read before the first paint, or a sampler pointed at the wrong
+    /// endpoint all look like, and none of them fails a test that only counts
+    /// frames. So this asserts the panel is the size the panel is, and that
+    /// there is more than one grey on it.
+    #[test]
+    fn a_recording_of_a_running_simulator_is_a_full_panel_with_something_drawn_on_it() {
+        let mut server = kobo_sim::Server::bind_address("127.0.0.1:0").expect("bind simulator");
+        let address = server.local_addr().expect("simulator address").to_string();
+        std::thread::spawn(move || server.serve());
+
+        let evidence =
+            std::env::temp_dir().join(format!("cobalt-recording-{}", std::process::id()));
+        let recorder = Recorder::start(&address, 10, false)
+            .expect("start recording")
+            .with_metadata(&evidence);
+        // Something for it to film: the built-in simulator's button increments
+        // a counter and redraws, so the panel really does change under it.
+        let mut driver = Driver::new(&address, Path::new("."));
+        driver.step("tap Increment").expect("tap the counter");
+        driver.step("wait 250").expect("wait");
+        let (width, height, frames) = recorder.finish().expect("finish recording");
+
+        assert_eq!((width, height), (FRAME_WIDTH, FRAME_HEIGHT));
+        assert!(!frames.is_empty(), "nothing was filmed");
+        for (index, frame) in frames.iter().enumerate() {
+            let metadata: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(evidence.join(format!("frame-{index:04}.json"))).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                metadata["frame"]["sha256"],
+                kobo_net::sha256::hex_digest(&frame.grey)
+            );
+            assert_eq!(metadata["mode"], "counter-demo");
+            assert_eq!(
+                frame.grey.len(),
+                (FRAME_WIDTH as usize) * (FRAME_HEIGHT as usize),
+                "a frame is not the size of the panel"
+            );
+            let first = frame.grey[0];
+            assert!(
+                frame.grey.iter().any(|grey| *grey != first),
+                "the frame is one flat shade, so nothing was drawn on it"
+            );
+        }
+        assert!(
+            frames.len() >= 2,
+            "the counter was tapped and the recording never noticed"
+        );
+        std::fs::remove_dir_all(evidence).unwrap();
+    }
+}

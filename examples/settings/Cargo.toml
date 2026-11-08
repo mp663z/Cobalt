@@ -1,0 +1,20 @@
+[package]
+name = "kobo-settings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-app-store = { path = "../../crates/kobo-app-store" }
+kobo-json = { path = "../../crates/kobo-json" }
+# The settings screen is the one application the runtime answers automatic
+# update requests for, so it is the one that turns that feature on.
+kobo-sdk = { path = "../../crates/kobo-sdk", features = ["runtime-settings"] }
+
+[dev-dependencies]
+kobo-text = { path = "../../crates/kobo-text" }
+
+[lints]
+workspace = true

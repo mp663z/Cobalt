@@ -1,0 +1,12 @@
+# Stateful path: run after drive.kobo without wiping the simulator's store.
+# The saved Mealie address persists, so the app opens ready rather than on
+# the connect splash.
+wait 500
+expect No recipes yet
+clean
+shot kitchen-states-tonight
+tap Settings
+expect Kitchen Card settings
+expect https://mealie.invalid:8443
+clean
+shot kitchen-states-settings

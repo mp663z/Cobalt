@@ -1,0 +1,540 @@
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/crates/kobo-web-document/src/box_tree.rs clean4s/crates/kobo-web-document/src/box_tree.rs
+--- clean4r/crates/kobo-web-document/src/box_tree.rs	2026-11-05 18:24:20.509967565 +0530
++++ clean4s/crates/kobo-web-document/src/box_tree.rs	2026-11-05 20:06:56.999470439 +0530
+@@ -1722,6 +1722,21 @@
+     #[must_use]
+     #[allow(clippy::too_many_lines)] // Bounded box construction and positioned-leaf validation.
+     pub fn from_style(styled: &StyleTree) -> Self {
++        Self::from_style_inner(styled, false)
++    }
++
++    /// EXPERIMENTAL: like [`BoxTree::from_style`] but a non-`none` `text-decoration` does not
++    /// by itself mark the tree unsupported. Only a painter that validates and draws the
++    /// decoration (`css_text_page::paint_direct_text_blocks_underline`) may use this tree;
++    /// every other consumer must go through `from_style`, which refuses it.
++    #[must_use]
++    pub fn from_style_with_text_decoration(styled: &StyleTree) -> Self {
++        Self::from_style_inner(styled, true)
++    }
++
++    #[must_use]
++    #[allow(clippy::too_many_lines)]
++    fn from_style_inner(styled: &StyleTree, allow_text_decoration: bool) -> Self {
+         let mut tree = Self {
+             truncated: styled.truncated,
+             unsupported: styled.unsupported,
+@@ -1890,6 +1905,14 @@
+         if !tree.normalize_preorder(limit) {
+             tree.unsupported = true;
+         }
++        if !allow_text_decoration
++            && tree
++                .boxes
++                .iter()
++                .any(|b| b.style.text_decoration != crate::computed_style::TextDecoration::None)
++        {
++            tree.unsupported = true;
++        }
+         tree
+     }
+ 
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/crates/kobo-web-document/src/computed_style.rs clean4s/crates/kobo-web-document/src/computed_style.rs
+--- clean4r/crates/kobo-web-document/src/computed_style.rs	2026-11-05 18:23:30.385774804 +0530
++++ clean4s/crates/kobo-web-document/src/computed_style.rs	2026-11-05 20:06:02.163259566 +0530
+@@ -31,6 +31,8 @@
+     MarginBottom,
+     Direction,
+     TextAlign,
++    /// EXPERIMENTAL: `text-decoration` underline|none only; not inherited.
++    TextDecoration,
+     FontFamily,
+     FontSize,
+     FontWeight,
+@@ -257,6 +259,7 @@
+     MarginRem(i32),
+     Direction(Direction),
+     TextAlign(TextAlign),
++    TextDecoration(TextDecoration),
+     BackgroundColor(Option<u32>),
+     BorderColor(BorderColor),
+     BorderStyle(BorderStyle),
+@@ -371,6 +374,13 @@
+     Center,
+ }
+ 
++/// EXPERIMENTAL: only `none` and `underline` exist; every other text-decoration form is refused by the parser.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum TextDecoration {
++    None,
++    Underline,
++}
++
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+ pub enum FontStyle {
+     Normal,
+@@ -438,6 +448,8 @@
+     pub margin_bottom: Margin,
+     pub direction: Direction,
+     pub text_align: TextAlign,
++    /// Not inherited; a decorating box paints its own and descendant text (restricted paths only).
++    pub text_decoration: TextDecoration,
+     /// Computed CSS font-size in integer pixels. Relative sizes need an explicit parent.
+     pub font_size: u32,
+     /// Explicit generic family, retained but not admitted for rendering.
+@@ -482,6 +494,7 @@
+         margin_bottom: Margin::Px(0),
+         direction: Direction::Ltr,
+         text_align: TextAlign::Initial,
++        text_decoration: TextDecoration::None,
+         font_size: 16,
+         font_family: None,
+         font_weight: 400,
+@@ -550,6 +563,7 @@
+             margin_bottom: initial.margin_bottom,
+             direction: parent.unwrap_or(initial).direction,
+             text_align: parent.unwrap_or(initial).text_align,
++            text_decoration: TextDecoration::None,
+             font_size: parent.unwrap_or(initial).font_size,
+             font_family: parent.unwrap_or(initial).font_family,
+             font_weight: parent.unwrap_or(initial).font_weight,
+@@ -588,6 +602,7 @@
+             Property::MarginBottom,
+             Property::Direction,
+             Property::TextAlign,
++            Property::TextDecoration,
+             Property::FontFamily,
+             Property::FontSize,
+             Property::FontWeight,
+@@ -636,6 +651,7 @@
+                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
+                 Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+                 Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
++                Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
+                 Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family),
+                 Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
+                 Property::FontWeight => Value::FontWeight(parent.unwrap_or(initial).font_weight),
+@@ -708,6 +724,9 @@
+                 Value::TextAlign(align) if property == Property::TextAlign => {
+                     computed.text_align = align;
+                 }
++                Value::TextDecoration(d) if property == Property::TextDecoration => {
++                    computed.text_decoration = d;
++                }
+                 Value::Direction(direction) if property == Property::Direction => {
+                     computed.direction = direction;
+                 }
+@@ -872,6 +891,7 @@
+         Property::MarginBottom => Value::Margin(initial.margin_bottom),
+         Property::Direction => Value::Direction(initial.direction),
+         Property::TextAlign => Value::TextAlign(initial.text_align),
++        Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
+         Property::FontFamily => Value::FontFamily(initial.font_family),
+         Property::FontSize => Value::FontSize(initial.font_size),
+         Property::FontWeight => Value::FontWeight(initial.font_weight),
+@@ -908,6 +928,7 @@
+         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
+         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+         Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
++        Property::TextDecoration => Value::TextDecoration(parent.unwrap_or(initial).text_decoration),
+         Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family),
+         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
+         Property::FontWeight => Value::FontWeight(parent.unwrap_or(initial).font_weight),
+@@ -1036,6 +1057,7 @@
+             margin_bottom: Margin::Px(0),
+             direction: Direction::Ltr,
+             text_align: TextAlign::Initial,
++        text_decoration: TextDecoration::None,
+             font_weight: 400,
+             font_style: FontStyle::Normal,
+             font_size: 16,
+@@ -1072,6 +1094,7 @@
+                 margin_bottom: Margin::Px(0),
+                 direction: Direction::Ltr,
+                 text_align: TextAlign::Initial,
++        text_decoration: TextDecoration::None,
+                 font_weight: 400,
+                 font_style: FontStyle::Normal,
+                 font_size: 16,
+@@ -1215,6 +1238,7 @@
+             margin_bottom: Margin::Px(0),
+             direction: Direction::Ltr,
+             text_align: TextAlign::Initial,
++        text_decoration: TextDecoration::None,
+             font_weight: 400,
+             font_style: FontStyle::Normal,
+             font_size: 16,
+@@ -1260,6 +1284,7 @@
+                     margin_bottom: Margin::Px(0),
+                     direction: Direction::Ltr,
+                     text_align: TextAlign::Initial,
++        text_decoration: TextDecoration::None,
+                     font_weight: 400,
+                     font_style: FontStyle::Normal,
+                     font_size: 16,
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/crates/kobo-web-document/src/css_text_page.rs clean4s/crates/kobo-web-document/src/css_text_page.rs
+--- clean4r/crates/kobo-web-document/src/css_text_page.rs	2026-11-02 18:04:52.000000000 +0530
++++ clean4s/crates/kobo-web-document/src/css_text_page.rs	2026-11-05 20:35:53.796668690 +0530
+@@ -26,6 +26,12 @@
+ /// substitute regular metrics or bitmaps for a bold glyph.
+ pub trait FontProvider {
+     /// None preserves the existing explicit-face legacy contract, not parity.
++    /// Lowercase hex SHA-256 of the regular face's font bytes, if the provider can prove it.
++    /// `None` (default) makes the measured underline profile refuse.
++    fn face_sha256_hex(&self) -> Option<String> {
++        None
++    }
++
+     fn normal_line_metrics(&self, _size: u32, _bold: bool) -> Option<NormalLineMetrics> {
+         None
+     }
+@@ -105,7 +111,7 @@
+     viewport_height: u32,
+     font: &impl FontProvider,
+ ) -> Result<DisplayList, PageError> {
+-    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None)
++    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, None)
+ }
+ 
+ /// PROTOTYPE (host research, unadopted): like [`paint_direct_text_blocks`],
+@@ -125,7 +131,121 @@
+     font: &impl FontProvider,
+     shaping: &TextShaping,
+ ) -> Result<DisplayList, PageError> {
+-    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, Some(shaping))
++    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, Some(shaping), None)
++}
++
++/// EXPERIMENTAL, unadopted: like [`paint_direct_text_blocks`] but additionally paints
++/// `text-decoration: underline` for one restricted shape, bound to a named measured profile.
++/// Anything outside that shape (inline decoration, inherited decoration, wrapped lines, bold or
++/// italic, other faces or sizes, skip-ink glyphs) refuses the WHOLE page. Use only with a tree
++/// from [`BoxTree::from_style_with_text_decoration`].
++///
++/// # Errors
++/// As [`paint_direct_text_blocks`], plus `Unsupported` outside the profile.
++pub fn paint_direct_text_blocks_underline(
++    tree: &BoxTree,
++    viewport_width: u32,
++    viewport_height: u32,
++    font: &impl FontProvider,
++    profile: UnderlineProfile,
++) -> Result<DisplayList, PageError> {
++    if font.face_sha256_hex().as_deref() != Some(profile.face_sha256_hex()) {
++        return Err(PageError::Unsupported);
++    }
++    paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, Some(profile))
++}
++
++/// Named, measured underline geometry. The numbers are NOT derived from font tables: they were
++/// measured from headless Chrome 156 pixels for the default serif (Liberation Serif Regular, 100%
++/// zoom, DPR 1), `text-decoration: underline`, `text-decoration-skip-ink: auto`, line-height
++/// normal, integer font sizes in {12,14,16,20,24,32} (pixel-verified vs Chrome 156; c40 baseline disagreed by 1 row and is refused). The caller must bind the
++/// provider's face to this profile; the profile cannot verify the face.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum UnderlineProfile {
++    ChromeLiberationSerif156,
++}
++
++/// (offset below baseline row, thickness) for font sizes {12,14,16,20,24,32}, measured from Chrome 156.
++fn chrome_liberation_serif_underline(size: u32) -> Option<(u32, u32)> {
++    // Measured rule: thickness = max(1, floor(size/10)); offset = ceil(size/20), min 1.
++    // Rule fits the Chrome table for 8..=57, but Cobalt-vs-Chrome pixels were verified only at the listed sizes.
++    [12u32, 14, 16, 20, 24, 32].contains(&size).then(|| ((size.div_ceil(20)).max(1), (size / 10).max(1)))
++}
++
++/// Characters whose glyph does not reach the underline band in Chrome 156 with skip-ink auto
++/// (no gap observed at 12/16/20/24/32 px). Q g j p q y , ; ( ) [ ] @ were observed to skip ink
++/// and everything not listed here was not measured: refused.
++fn underline_char_allowed(c: char) -> bool {
++    match c {
++        'A'..='Z' => c != 'Q',
++        'a'..='z' => !matches!(c, 'g' | 'j' | 'p' | 'q' | 'y'),
++        '0'..='9' | ' ' | '.' | ':' | '!' | '?' | '-' | '/' | '\\' | '\'' | '"' | '#' | '&' | '*' | '+' | '=' | '%' => true,
++        _ => false,
++    }
++}
++
++impl UnderlineProfile {
++    /// SHA-256 of the exact face bytes the profile was measured against (fonts-liberation2 2.1.5).
++    #[must_use]
++    pub const fn face_sha256_hex(self) -> &'static str {
++        match self {
++            Self::ChromeLiberationSerif156 => "29d12439831b7f59194efec85872f24f54eff05738933f9a860220d2abff88ba",
++        }
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn underline_rect(
++        self,
++        tree: &BoxTree,
++        index: usize,
++        lines: &crate::inline_lines::DirectTextLines,
++        content_x: i32,
++        content_y: i32,
++        baseline: i32,
++    ) -> Result<Rect, PageError> {
++        use crate::computed_style::{TextAlign, TextDecoration};
++        let node = &tree.boxes[index];
++        // The decorating box must be this block, with only direct text children and no decorated ancestor.
++        let mut ancestor = node.parent;
++        while let Some(p) = ancestor {
++            if tree.boxes[p].style.text_decoration != TextDecoration::None {
++                return Err(PageError::Unsupported);
++            }
++            ancestor = tree.boxes[p].parent;
++        }
++        if node.style.text_decoration != TextDecoration::Underline
++            || node.kind != BoxKind::Block
++            || node.children.iter().any(|&c| tree.boxes[c].kind != BoxKind::Text)
++            || tree.boxes.iter().enumerate().any(|(i, b)| {
++                i != index
++                    && b.kind != BoxKind::Text // text leaves mirror their parent's computed style
++                    && b.style.text_decoration != TextDecoration::None
++            })
++            || !matches!(node.style.text_align, TextAlign::Initial | TextAlign::Left)
++            || node.style.font_weight != 400
++            || node.style.font_style != crate::computed_style::FontStyle::Normal
++            || lines.lines.count != 1
++            || lines.lines.glyphs.iter().any(|g| g.bold || g.line != 0)
++            || lines.lines.glyphs.is_empty()
++            || !lines.lines.glyphs.iter().all(|g| underline_char_allowed(g.character))
++        {
++            return Err(PageError::Unsupported);
++        }
++        let (offset, thickness) = match self {
++            Self::ChromeLiberationSerif156 => chrome_liberation_serif_underline(node.style.font_size),
++        }
++        .ok_or(PageError::Unsupported)?;
++        let first = lines.lines.glyphs.first().ok_or(PageError::Unsupported)?;
++        let last = lines.lines.glyphs.last().ok_or(PageError::Unsupported)?;
++        let x0 = i64::from(content_x) + i64::from(first.x);
++        let x1 = i64::from(content_x) + i64::from(last.x) + i64::from(last.advance);
++        let y = i64::from(content_y) + i64::from(baseline) + i64::from(offset);
++        Ok(Rect {
++            x: i32::try_from(x0).map_err(|_| PageError::InvalidGeometry)?,
++            y: i32::try_from(y).map_err(|_| PageError::InvalidGeometry)?,
++            width: u32::try_from(x1 - x0).map_err(|_| PageError::InvalidGeometry)?,
++            height: thickness,
++        })
++    }
+ }
+ 
+ #[allow(clippy::too_many_lines)]
+@@ -135,6 +255,7 @@
+     viewport_height: u32,
+     font: &impl FontProvider,
+     shaping: Option<&TextShaping>,
++    underline: Option<UnderlineProfile>,
+ ) -> Result<DisplayList, PageError> {
+     let pixels = usize::try_from(viewport_width).ok().and_then(|w| {
+         usize::try_from(viewport_height)
+@@ -144,6 +265,16 @@
+     if viewport_width == 0 || viewport_height == 0 || pixels.is_none_or(|n| n > MAX_PIXELS) {
+         return Err(PageError::InvalidViewport);
+     }
++    // Any decorated box is refused unless the caller opted in with a profile AND the box is
++    // inside the validated one-line direct-text subset (checked per block below).
++    if underline.is_none()
++        && tree
++            .boxes
++            .iter()
++            .any(|b| b.style.text_decoration != crate::computed_style::TextDecoration::None)
++    {
++        return Err(PageError::Unsupported);
++    }
+     if tree.unsupported
+         || tree.quirks
+         || tree.truncated
+@@ -187,7 +318,7 @@
+     });
+     if shaping.is_some() && page_layout.is_none() {
+         // Whole-page legacy fallback: no mixed metric systems.
+-        return paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None);
++        return paint_direct_text_blocks_inner(tree, viewport_width, viewport_height, font, None, underline);
+     }
+     let heights = if let Some(layout) = &page_layout {
+         UsedHeightPass::from_boxes_with_page_text(tree, viewport_width, viewport_height, layout)
+@@ -374,6 +505,7 @@
+         return Err(PageError::Unsupported);
+     }
+     let mut list = DisplayList::default();
++    let mut underlined = 0usize;
+     if let Some(color) = canvas {
+         list.fill(
+             Rect {
+@@ -511,8 +643,35 @@
+             )
+             .map_err(|_| PageError::Unsupported)?;
+             list.append_list(glyphs).map_err(PageError::Paint)?;
++            if node.style.text_decoration != crate::computed_style::TextDecoration::None {
++                let profile = underline.ok_or(PageError::Unsupported)?;
++                let rect = profile.underline_rect(
++                    tree,
++                    index,
++                    lines,
++                    i32::try_from(widths.content_x[index].ok_or(PageError::InvalidGeometry)?)
++                        .map_err(|_| PageError::InvalidGeometry)?,
++                    i32::try_from(vertical.content_y[index].ok_or(PageError::InvalidGeometry)?)
++                        .map_err(|_| PageError::InvalidGeometry)?,
++                    baseline,
++                )?;
++                list.fill(
++                    rect,
++                    rgb(node.style.color),
++                    Source {
++                        node: node.source,
++                        action: None,
++                    },
++                )
++                .map_err(PageError::Paint)?;
++                underlined += 1;
++            }
+         }
+     }
++    // Every decorated non-text box must have been painted as a validated underline block.
++    if tree.boxes.iter().filter(|b| b.kind != BoxKind::Text && b.style.text_decoration != crate::computed_style::TextDecoration::None).count() != underlined {
++        return Err(PageError::Unsupported);
++    }
+     // Auto-level positioned leaves paint after normal-flow content, in tree order.
+     for (index, node) in tree.boxes.iter().enumerate() {
+         if node.style.positioned.position != crate::computed_style::Position::Absolute {
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/crates/kobo-web-document/src/style_tree.rs clean4s/crates/kobo-web-document/src/style_tree.rs
+--- clean4r/crates/kobo-web-document/src/style_tree.rs	2026-11-05 19:45:54.316082078 +0530
++++ clean4s/crates/kobo-web-document/src/style_tree.rs	2026-11-05 20:06:02.163259566 +0530
+@@ -1249,6 +1249,17 @@
+                     parse_padding(value).map(Value::Padding)
+                 })
+                 .map(|value| (Property::PaddingRight, value)),
++            // EXPERIMENTAL: exactly `none` or `underline` (no color/style/thickness/line forms, no
++            // longhands). The paint path decides separately whether the page may draw it.
++            "text-decoration" => parse_keyword(value)
++                .or(match value {
++                    "none" => Some(Value::TextDecoration(crate::computed_style::TextDecoration::None)),
++                    "underline" => {
++                        Some(Value::TextDecoration(crate::computed_style::TextDecoration::Underline))
++                    }
++                    _ => None,
++                })
++                .map(|v| (Property::TextDecoration, v)),
+             "text-align" => parse_keyword(value)
+                 .or(match value {
+                     "left" => Some(Value::TextAlign(TextAlign::Left)),
+diff -ruN --exclude target --exclude .git --exclude Cargo.lock clean4r/crates/kobo-web-document/tests/css_text_decoration_underline.rs clean4s/crates/kobo-web-document/tests/css_text_decoration_underline.rs
+--- clean4r/crates/kobo-web-document/tests/css_text_decoration_underline.rs	1970-01-01 05:30:00.000000000 +0530
++++ clean4s/crates/kobo-web-document/tests/css_text_decoration_underline.rs	2026-11-05 20:35:53.800668705 +0530
+@@ -0,0 +1,116 @@
++//! Experimental, measured-subset underline. Geometry numbers come from Chrome 156 pixels
++//! (see packet); these tests pin the rule and the refusals, not general text-decoration.
++use kobo_web_document::{
++    box_tree::BoxTree,
++    css_text_page::{paint_direct_text_blocks, paint_direct_text_blocks_underline, FontProvider, UnderlineProfile},
++    display_list::{Command, DisplayList},
++    inline_lines::GlyphBitmap,
++    parse_style_tree, Limits,
++};
++struct Face;
++impl FontProvider for Face {
++    fn face_sha256_hex(&self) -> Option<String> { Some(UnderlineProfile::ChromeLiberationSerif156.face_sha256_hex().to_owned()) }
++    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
++    fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
++    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
++    fn raster(&self, ch: char, _: u32, _: bool) -> Option<GlyphBitmap> {
++        Some(GlyphBitmap { left: 0, top: -3, width: u32::from(ch != ' '), height: if ch == ' ' { 0 } else { 2 },
++            coverage: if ch == ' ' { vec![] } else { vec![255; 2] } })
++    }
++}
++fn tree(html: &str, allow: bool) -> BoxTree {
++    let s = parse_style_tree(
++        format!("<!doctype html><style>body{{margin:0}}p{{margin:0}}</style>{html}").as_bytes(), &[], &Limits::DEFAULT);
++    if allow { BoxTree::from_style_with_text_decoration(&s) } else { BoxTree::from_style(&s) }
++}
++fn ul(html: &str) -> Result<DisplayList, ()> {
++    paint_direct_text_blocks_underline(&tree(html, true), 100, 100, &Face, UnderlineProfile::ChromeLiberationSerif156).map_err(|_| ())
++}
++fn fills(d: &DisplayList) -> Vec<(i32, i32, u32, u32)> {
++    d.commands().iter().filter_map(|c| match c { Command::Fill { rect, .. } => Some((rect.x, rect.y, rect.width, rect.height)), _ => None }).collect()
++}
++#[test]
++fn rule_matches_recorded_chrome_rows() {
++    // (size, offset below baseline row, thickness) from the Chrome 156 pixel table.
++    for (s, off, th) in [(12u32, 1u32, 1u32), (14, 1, 1), (16, 1, 1), (20, 1, 2), (24, 2, 2), (32, 2, 3)] {
++        let d = ul(&format!("<p style='font-size:{s}px;text-decoration:underline'>AB</p>")).unwrap();
++        let f = fills(&d);
++        let line = f.iter().find(|r| r.3 == th && r.2 == 4).expect("underline fill");
++        assert_eq!(line.0, 0);
++        assert_eq!(line.1, 7 + off as i32, "size {s}");
++    }
++}
++#[test]
++fn none_is_noop_and_default_painter_refuses_decorated() {
++    let t = tree("<p style='text-decoration:none'>AB</p>", false);
++    assert!(paint_direct_text_blocks(&t, 100, 100, &Face).is_ok());
++    let t = tree("<p style='text-decoration:underline'>AB</p>", true);
++    assert!(paint_direct_text_blocks(&t, 100, 100, &Face).is_err());
++    assert!(tree("<p style='text-decoration:underline'>AB</p>", false).unsupported);
++}
++#[test]
++fn refusals() {
++    for h in [
++        "<p style='font-size:16px;text-decoration:underline'><span>AB</span></p>",
++        "<div style='text-decoration:underline'><p style='font-size:16px'>AB</p></div>",
++        "<p style='font-size:16px;text-decoration:underline;font-weight:700'>AB</p>",
++        "<p style='font-size:16px;text-decoration:underline;font-style:italic'>AB</p>",
++        "<p style='font-size:16px;text-decoration:underline'>A~B</p>",
++        "<p style='font-size:16px;text-decoration:underline'>AB<br>CD</p>",
++        "<p style='font-size:11px;text-decoration:underline'>AB</p>",
++        "<p style='font-size:40px;text-decoration:underline'>AB</p>",
++        "<p style='font-size:16px;text-decoration:underline;text-align:center'>AB</p>",
++        "<p style='font-size:16px;width:6px;text-decoration:underline'>AB CD EF</p>",
++    ] {
++        assert!(ul(h).is_err(), "{h}");
++    }
++}
++#[test]
++fn other_forms_stay_refused() {
++    for v in ["overline", "line-through", "underline overline", "underline red", "underline dotted", "none underline", "inherit x"] {
++        let s = parse_style_tree(format!("<p style='text-decoration:{v}'>A</p>").as_bytes(), &[], &Limits::DEFAULT);
++        assert!(s.unsupported, "{v}");
++    }
++}
++#[test]
++fn skip_ink_chars_and_unmeasured_chars_refuse_but_plain_letters_pass() {
++    for ch in ["g", "j", "p", "q", "y", "Q", ",", ";", "(", ")", "[", "]", "@", "é", "~", "$"] {
++        assert!(ul(&format!("<p style='font-size:16px;text-decoration:underline'>A{ch}B</p>")).is_err(), "{ch}");
++    }
++    assert!(ul("<p style='font-size:16px;text-decoration:underline'>AZaz09 .:!?-</p>").is_ok());
++}
++#[test]
++fn overflow_beyond_viewport_refuses_or_stays_inside() {
++    // 100px-wide viewport, 60 glyphs x 2px = 120px on one line: must not paint a line past the page silently.
++    let long = "A".repeat(60);
++    if let Ok(d) = ul(&format!("<p style='font-size:16px;text-decoration:underline'>{long}</p>")) {
++        assert!(fills(&d).iter().all(|r| r.0 >= 0 && r.0 + r.2 as i32 <= 100), "{:?}", fills(&d));
++    }
++}
++struct NoId;
++impl FontProvider for NoId {
++    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
++    fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
++    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
++    fn raster(&self, ch: char, s: u32, b: bool) -> Option<GlyphBitmap> { Face.raster(ch, s, b) }
++}
++struct WrongId;
++impl FontProvider for WrongId {
++    fn face_sha256_hex(&self) -> Option<String> { Some("0".repeat(64)) }
++    fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(2) }
++    fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(10) }
++    fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(7) }
++    fn raster(&self, ch: char, s: u32, b: bool) -> Option<GlyphBitmap> { Face.raster(ch, s, b) }
++}
++#[test]
++fn unbound_or_wrong_face_refuses_at_library_boundary() {
++    let t = tree("<p style='font-size:16px;text-decoration:underline'>AB</p>", true);
++    let p = UnderlineProfile::ChromeLiberationSerif156;
++    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &Face, p).is_ok());
++    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &NoId, p).is_err());
++    assert!(paint_direct_text_blocks_underline(&t, 100, 100, &WrongId, p).is_err());
++}
++#[test]
++fn underscore_refuses_as_skip_ink_unproven() {
++    assert!(ul("<p style='font-size:16px;text-decoration:underline'>A_B</p>").is_err());
++}

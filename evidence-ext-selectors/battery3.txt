@@ -1,0 +1,31 @@
+[data-vt~=b]
+[data-list~=b]
+[class~=b]
+.b
+.a
+.d
+.c
+p.b
+div.a
+[class~=a]
+[class~="a b"]
+[class="a b"]
+p:first-child:first-child
+p:first-child:first-child:first-child
+p:last-child:last-child
+p:only-child:only-child
+p:first-child:last-child
+span:first-child:first-child
+div:only-child:only-child
+p:first-child:first-child:first-child:first-child:first-child:first-child:first-child:first-child:first-child
+p:root:root
+p:first-child:root
+html:root:first-child
+*:first-child:first-child
+p[a]:first-child:first-child
+.x:first-child:first-child
+div > p:first-child:first-child
+p:first-child:first-child + p
+[data-vt]
+[data-vt="ab"]
+[data-vt*=""]

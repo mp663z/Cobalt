@@ -1,0 +1,15 @@
+expect Sync
+expect Sync is off
+tap Resume Sync
+expect Enabled
+expect Pause Sync
+expect Not run yet
+expect-missing Sync is off
+clean
+shot syncthing-on
+tap Set up Sync
+expect Pair one computer folder
+expect kobo sync setup
+expect sync/vault
+clean
+shot syncthing-guide

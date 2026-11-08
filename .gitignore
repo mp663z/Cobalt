@@ -1,0 +1,27 @@
+.DS_Store
+/.kobo/
+/target/
+# Tests in a crate write their scratch under that crate's own target
+# directory, which the root pattern never covered: the store smoke test's
+# fixture device was committed this way, and every run since has rewritten
+# bytes nobody reads.
+/crates/kobod/target/
+/crates/kobo-cli/target/
+/crates/kobo-flashcards-import/target/
+/.pass
+
+# Credentials. `kobo secret` reads keys off this machine and writes them
+# straight to the reader; nothing it touches belongs in a commit. These
+# patterns are here so a key that is copied into the tree for a moment cannot
+# be added by accident.
+secrets/
+*.pem
+*.key
+.env
+.env.*
+.openai
+.anthropic
+.credentials
+
+# The running development log. Useful while building, not part of what ships.
+BUILD_IN_PUBLIC.md

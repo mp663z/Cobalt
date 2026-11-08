@@ -1,0 +1,24 @@
+[package]
+name = "kobo-browser"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-browser-core = { path = "../../crates/kobo-browser" }
+kobo-image = { path = "../../crates/kobo-image" }
+kobo-sdk = { path = "../../crates/kobo-sdk" }
+kobo-web-document = { path = "../../crates/kobo-web-document" }
+kobo-web-layout = { path = "../../crates/kobo-web-layout" }
+
+[dev-dependencies]
+kobo-net = { path = "../../crates/kobo-net" }
+kobo-profile = { path = "../../crates/kobo-profile" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+kobo-text = { path = "../../crates/kobo-text", features = ["diagnostic-font-session"] }
+kobo-ui = { path = "../../crates/kobo-ui" }
+
+[lints]
+workspace = true

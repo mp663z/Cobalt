@@ -1,0 +1,9 @@
+expect Photographs
+# Wait for the loaded-photo controls, not "Opening this photograph".
+wait-for Next
+clean
+shot shelf
+tap Open
+wait 800
+clean
+shot photo

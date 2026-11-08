@@ -1,0 +1,21 @@
+[package]
+name = "kobo-read"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-doc = { path = "../kobo-doc" }
+kobo-sdk = { path = "../kobo-sdk" }
+kobo-ui = { path = "../kobo-ui" }
+unicode-segmentation = "1.13.3"
+
+[dev-dependencies]
+kobo-image = { path = "../kobo-image" }
+kobo-profile = { path = "../kobo-profile" }
+kobo-text = { path = "../kobo-text" }
+
+[lints]
+workspace = true

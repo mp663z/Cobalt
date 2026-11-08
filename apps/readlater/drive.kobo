@@ -1,0 +1,20 @@
+expect Connect Wallabag
+expect readlater login
+tap Add address
+expect Read Later settings
+clean
+shot readlater-setup
+tap https://wallabag.example
+expect https://
+type localhost
+tap ?123
+type :8443
+tap Save
+expect Read Later settings
+tap Back
+expect No saved articles
+tap Sync
+wait-for Off the air
+expect No saved articles
+clean
+shot readlater-offline

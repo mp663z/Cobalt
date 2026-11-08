@@ -1,0 +1,856 @@
+//! Turning a fragment of someone else's HTML into text a panel can draw.
+//!
+//! Two applications need this and neither controls what arrives. A Hacker News
+//! comment body is HTML written by a stranger; an RSS item's description is
+//! HTML written by a stranger and then passed through a publishing system that
+//! may have escaped it once, twice, or not at all. Hacker News documents the
+//! small set of tags it allows (`<p>`, `<i>`, `<a>`, `<pre><code>`) but that
+//! is a statement about what a site *intends* to send, not a guarantee about
+//! what turns up on the wire. This module is written for the other case.
+//!
+//! Three properties, each of which has a test:
+//!
+//! * It never panics. Every malformed shape a byte stream can take (a `<`
+//!   with no `>`, a `&` with no `;`, tags inside tags, an entity that names a
+//!   codepoint that does not exist) has a defined, boring outcome.
+//! * It never grows. The output is bounded by [`MAX_TEXT`] and, below that
+//!   ceiling, is never longer than the input: every construction it recognises
+//!   is at least as long as what it produces. There is no input that makes it
+//!   allocate a multiple of itself.
+//! * It interprets nothing. The output is characters. Tags are removed rather
+//!   than executed, entities are decoded exactly once and never rescanned, and
+//!   control characters are dropped instead of being handed to a renderer that
+//!   would have to decide what a `\u{7}` looks like.
+
+/// Reading `MathML` as a line of text.
+pub mod math;
+
+/// The most text one converted body may produce.
+///
+/// An article summary is a few hundred words. This is far above that and far
+/// below the point at which a page of them costs anything, and it exists so
+/// that a single hostile field cannot make one screen's worth of state larger
+/// than the whole response it came from.
+///
+/// It is the ceiling for a *field*, which is what this module was written for.
+/// A whole document is a different question and takes its ceiling from
+/// [`to_text_within`]: a paper converted against this one comes out at a tenth
+/// of itself, cut mid-sentence, which is not a summary of the paper but a
+/// truncation pretending to be one.
+pub const MAX_TEXT: usize = 8 * 1024;
+
+/// The longest entity name this will consider, `&thetasym;` plus room.
+///
+/// A cap rather than a search to the end of the input: without one, a body
+/// consisting of a single `&` followed by half a megabyte of letters is half a
+/// megabyte of scanning for every `&` in it.
+const MAX_ENTITY: usize = 12;
+
+/// Elements whose *content* is dropped along with their tags.
+///
+/// Neither source is supposed to send these. If one arrives, the text inside
+/// it was written to be executed rather than read, and rendering `alert(1)` as
+/// prose is not useful to anybody. Nothing here could run it (the output of
+/// this module is characters on an E Ink panel) but it is still noise, and
+/// noise that says something went wrong upstream.
+const OPAQUE: [&str; 2] = ["script", "style"];
+
+/// The named entities that appear in practice, with their replacements.
+///
+/// Deliberately short. The full HTML5 table is two thousand entries; what is
+/// here is what typeset prose and the two feeds actually use, and an unknown
+/// name is left alone rather than guessed at, so a name missing from here is
+/// displayed rather than lost.
+///
+/// Matching is case-insensitive, which HTML's own table is not. That is a
+/// simplification, and the cost of it is that a pair differing only in case
+/// (`dagger` and `Dagger`, `prime` and `Prime`) cannot both live here. Only
+/// names with no such twin are listed.
+const NAMED: [(&str, &str); 34] = [
+    ("amp", "&"),
+    ("lt", "<"),
+    ("gt", ">"),
+    ("quot", "\""),
+    ("apos", "'"),
+    ("nbsp", " "),
+    ("hellip", "\u{2026}"),
+    ("mdash", "\u{2014}"),
+    ("ndash", "\u{2013}"),
+    ("lsquo", "\u{2018}"),
+    ("rsquo", "\u{2019}"),
+    ("ldquo", "\u{201c}"),
+    // Typeset prose closes the quotation it opened. `ldquo` without `rdquo`
+    // meant every closing curly quotation mark in a book was drawn as
+    // `&rdquo;`.
+    ("rdquo", "\u{201d}"),
+    ("sbquo", "\u{201a}"),
+    ("bdquo", "\u{201e}"),
+    ("laquo", "\u{ab}"),
+    ("raquo", "\u{bb}"),
+    ("lsaquo", "\u{2039}"),
+    ("rsaquo", "\u{203a}"),
+    ("bull", "\u{2022}"),
+    ("middot", "\u{b7}"),
+    ("deg", "\u{b0}"),
+    ("copy", "\u{a9}"),
+    ("reg", "\u{ae}"),
+    ("trade", "\u{2122}"),
+    ("sect", "\u{a7}"),
+    ("para", "\u{b6}"),
+    ("pound", "\u{a3}"),
+    ("euro", "\u{20ac}"),
+    ("times", "\u{d7}"),
+    ("frac12", "\u{bd}"),
+    // A soft hyphen is a permission to break, not a hyphen. The line breaker
+    // does its own breaking, so the permission has nothing to say and drawing
+    // it would put a hyphen in the middle of an unbroken word.
+    ("shy", ""),
+    ("ensp", " "),
+    ("emsp", " "),
+];
+
+/// Converts one HTML fragment into plain text with blank lines between
+/// paragraphs.
+///
+/// `<p>` becomes a paragraph break, an `<img>` becomes its bracketed `alt`
+/// text, every other tag is removed, and entities are decoded. The result is
+/// what `kobo_sdk::Context::paginate` expects: paragraphs separated by a
+/// blank line, with no markup left in them.
+#[must_use]
+pub fn to_text(html: &str) -> String {
+    to_text_within(html, MAX_TEXT)
+}
+
+/// The same conversion against a ceiling the caller chooses.
+///
+/// [`MAX_TEXT`] is the right bound for a field arriving inside a feed of a
+/// thousand others, and the wrong one for a document somebody asked for by
+/// name: a paper is tens of thousands of characters, and converting one
+/// against the field ceiling returns its opening pages and an ellipsis. The
+/// two are different questions and this is the one that lets the caller say
+/// which it is asking.
+///
+/// The bound is still a bound. What an application may not do is pass a
+/// ceiling it did not get from somewhere -- the size it was willing to fetch,
+/// say -- because the point of having one is that the response cannot decide
+/// how much memory it costs to read it.
+#[must_use]
+pub fn to_text_within(html: &str, ceiling: usize) -> String {
+    // Never larger than the input, and never larger than the ceiling. Both
+    // bounds matter: the first is what makes the conversion safe on a body
+    // that is already at the transport limit, the second is what makes it safe
+    // on a body that arrives inside a thread of a thousand others.
+    let mut out = String::with_capacity(html.len().min(ceiling));
+    let mut rest = html;
+    while let Some(at) = rest.find(['<', '&']) {
+        // `<` and `&` are ASCII, so the offset is always a character boundary
+        // and both slices below are valid however the rest of the input is
+        // encoded.
+        push_text(&mut out, &rest[..at], ceiling);
+        if out.len() >= ceiling {
+            break;
+        }
+        let tail = &rest[at..];
+        rest = if tail.starts_with('<') {
+            take_tag(&mut out, tail, ceiling)
+        } else {
+            take_entity(&mut out, tail)
+        };
+    }
+    if out.len() < ceiling {
+        push_text(&mut out, rest, ceiling);
+    }
+    if out.len() >= ceiling {
+        // Cut on a character boundary, then say so. Silently stopping mid-word
+        // reads as a comment whose author trailed off.
+        let mut cut = ceiling;
+        while !out.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        out.truncate(cut);
+        out.push('\u{2026}');
+    }
+    out.trim().to_owned()
+}
+
+/// Decodes every entity in a run of text, leaving everything else alone.
+///
+/// Separated out because the structural parsers in `kobo-doc` do their own tag
+/// scanning (they need the shape of a book, which [`to_text`] deliberately
+/// throws away) but entity decoding is the same job wherever it happens, and
+/// two tables would drift.
+#[must_use]
+pub fn decode_entities(text: &str) -> String {
+    if !text.contains('&') {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = take_entity(&mut out, &rest[at..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Appends literal text, dropping control characters.
+///
+/// A stray `\u{7}` or `\u{1b}` in a comment has no drawing, and letting one
+/// through means every renderer downstream has to decide what to do with it.
+/// Tabs and newlines are kept because the paginator understands both.
+fn push_text(out: &mut String, text: &str, ceiling: usize) {
+    // Space that follows a paragraph break is indentation somebody wrote for a
+    // browser, and the paginator emits one node per paragraph: keeping it
+    // pushes the first word of a paragraph off its own left margin.
+    let text = if out.ends_with('\n') {
+        text.trim_start()
+    } else {
+        text
+    };
+    for character in text.chars() {
+        if out.len() >= ceiling {
+            return;
+        }
+        if character == '\n' || character == '\t' || !character.is_control() {
+            out.push(character);
+        }
+    }
+}
+
+/// Consumes one tag from the front of `tail`, which begins with `<`.
+///
+/// Returns what is left afterwards. A `<` that never closes is not a tag at
+/// all: it is emitted as the character it is and scanning continues one byte
+/// later, which is the only reading that cannot lose the rest of a comment.
+fn take_tag<'a>(out: &mut String, tail: &'a str, ceiling: usize) -> &'a str {
+    let Some(end) = tail.find('>') else {
+        out.push('<');
+        return &tail[1..];
+    };
+    let inside = &tail[1..end];
+    let after = &tail[end + 1..];
+    let name = element_name(inside);
+    if breaks_paragraph(&name) {
+        push_break(out, ceiling);
+    }
+    if name == "img" && !inside.starts_with('/') {
+        if let Some(alternative) = attribute(inside, "alt") {
+            push_alternative(out, alternative, ceiling);
+        }
+    }
+    // A formula is read rather than stripped. Left to the general path it
+    // arrives as its own rendering and its LaTeX source run together, which is
+    // every number in it printed twice.
+    if name == "math" && !inside.starts_with('/') {
+        let onwards = skip_element(after, &name);
+        let element = &tail[..tail.len() - onwards.len()];
+        push_text(out, &math::render(element), ceiling);
+        return onwards;
+    }
+    if OPAQUE.contains(&name.as_str()) && !inside.starts_with('/') {
+        return skip_element(after, &name);
+    }
+    after
+}
+
+/// Writes an image's alternative text in place of the image.
+///
+/// The panel cannot show the picture, so the text written to stand in for it
+/// is the whole of what that element says. A feed of comics is the clearest
+/// case: every entry is one `<img>` and nothing else, so dropping the tag
+/// silently produced an article that was entirely blank and looked like a
+/// failed download rather than a picture.
+///
+/// Bracketed, and on its own, because it is not the author's prose and reading
+/// it as though it were is worse than not showing it. An empty `alt` is the
+/// spelling for an image that carries no meaning (a spacer or a tracking
+/// pixel) and is honoured by writing nothing at all.
+fn push_alternative(out: &mut String, value: &str, ceiling: usize) {
+    let mut decoded = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(at) = rest.find('&') {
+        push_text(&mut decoded, &rest[..at], ceiling);
+        rest = take_entity(&mut decoded, &rest[at..]);
+    }
+    push_text(&mut decoded, rest, ceiling);
+    let decoded = decoded.trim();
+    if decoded.is_empty() || out.len() + decoded.len() + 2 > ceiling {
+        return;
+    }
+    push_break(out, ceiling);
+    out.push('[');
+    push_text(out, decoded, ceiling);
+    out.push(']');
+    push_break(out, ceiling);
+}
+
+/// The value of `wanted` in a tag body, however it happens to be quoted.
+///
+/// Matches on a whole attribute name rather than a substring, so `data-alt`
+/// and `salt` are not read as `alt`. An unquoted value runs to the next space,
+/// which is what a browser does with one.
+#[must_use]
+pub fn attribute<'a>(inside: &'a str, wanted: &str) -> Option<&'a str> {
+    // Lower-casing ASCII does not change any byte's length and leaves every
+    // other byte alone, so offsets found here are offsets into `inside` too.
+    let lower = inside.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(offset) = lower.get(from..)?.find(wanted) {
+        let start = from + offset;
+        let named = start == 0
+            || lower[..start].ends_with(|character: char| {
+                character.is_whitespace() || character == '/' || character == '"'
+            });
+        let after = inside.get(start + wanted.len()..)?.trim_start();
+        if named {
+            if let Some(assigned) = after.strip_prefix('=') {
+                return Some(quoted(assigned.trim_start()));
+            }
+        }
+        from = start + wanted.len();
+    }
+    None
+}
+
+/// The body of a quoted attribute value, or the word an unquoted one is.
+///
+/// A quote that never closes takes the rest of the tag, which is the reading
+/// that keeps the most of what was written.
+fn quoted(value: &str) -> &str {
+    let Some(quote) = value.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+        let end = value.find(char::is_whitespace).unwrap_or(value.len());
+        return &value[..end];
+    };
+    let body = &value[quote.len_utf8()..];
+    match body.find(quote) {
+        Some(end) => &body[..end],
+        None => body,
+    }
+}
+
+/// The lower-case element name inside a tag body, without its attributes.
+///
+/// `/p` and `a href="…"` both reduce to something this can compare, and a tag
+/// body containing another `<` (which is not a tag, but is a thing a stranger
+/// can send) reduces to a name that matches nothing.
+#[must_use]
+pub fn element_name(inside: &str) -> String {
+    inside
+        .trim_start_matches('/')
+        .split(|c: char| c.is_whitespace() || c == '/' || c == '<')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
+/// Whether this element starts a new paragraph on the panel.
+///
+/// Hacker News writes `<p>` with no closing tag, so the *opening* one is the
+/// break. `pre` is here because a code block that ran on from the sentence
+/// before it would be unreadable; `br` is not, because a single newline is
+/// folded into a space by the paginator, which is what a soft break should do.
+fn breaks_paragraph(name: &str) -> bool {
+    matches!(name, "p" | "pre" | "blockquote" | "li" | "div")
+}
+
+/// Adds a paragraph break unless there is already one, or nothing yet.
+fn push_break(out: &mut String, ceiling: usize) {
+    if out.is_empty() || out.ends_with("\n\n") || out.len() + 2 > ceiling {
+        return;
+    }
+    while out.ends_with(' ') || out.ends_with('\n') {
+        out.pop();
+    }
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+}
+
+/// Skips to the end of an element whose content is not text.
+///
+/// Searches for the close tag as literal characters rather than walking the
+/// tags in between, because the content is not markup. A `<` inside a listing
+/// or a script (`if (a < b)`) is a less-than sign, and a scanner that treats
+/// it as the start of a tag finds the `>` of the real close tag first, decides
+/// that was not the one it wanted, and carries on past it. The whole rest of
+/// the document is then inside an element that already ended.
+///
+/// Falls off the end of the input when the close tag never arrives, which is
+/// the safe direction: an unterminated `<script>` swallows what follows rather
+/// than spilling its body onto the panel.
+#[must_use]
+pub fn skip_element<'a>(after: &'a str, name: &str) -> &'a str {
+    // Compared a character at a time rather than against a lower-cased copy.
+    // The copy was of everything still to be read, and this is called once per
+    // element that is skipped, so a paper carrying a thousand formulae copied
+    // and lower-cased the best part of a gigabyte to find a thousand close
+    // tags. That is thirty milliseconds on a development machine and eight
+    // seconds on a reader, which is the difference between a paper that opens
+    // and one that appears to have hung.
+    let haystack = after.as_bytes();
+    let close = name.as_bytes();
+    let mut from = 0;
+    while let Some(offset) = haystack[from..].iter().position(|byte| *byte == b'<') {
+        let start = from + offset;
+        let tail = &after[start..];
+        // `</scriptx>` does not close a `<script>`. Only a name that ends
+        // where the tag ends, or where its attributes would begin, counts.
+        // Past the `<` and the `/` that must follow it.
+        let named = tail
+            .as_bytes()
+            .get(2..close.len() + 2)
+            .is_some_and(|found| tail.as_bytes()[1] == b'/' && found.eq_ignore_ascii_case(close));
+        if named
+            && tail[close.len() + 2..]
+                .starts_with(|character: char| character == '>' || character.is_whitespace())
+        {
+            if let Some(end) = tail.find('>') {
+                return &tail[end + 1..];
+            }
+            return "";
+        }
+        from = start + 1;
+    }
+    ""
+}
+
+fn take_entity<'a>(out: &mut String, tail: &'a str) -> &'a str {
+    let body = &tail[1..];
+    // A byte search over a fixed-length prefix rather than a search of the
+    // whole remainder. `;` cannot occur inside a multi-byte character, so the
+    // position it finds is always a character boundary, and the prefix is what
+    // stops a body of one `&` and half a megabyte of letters costing a scan of
+    // half a megabyte for every ampersand in it.
+    let head = &body.as_bytes()[..MAX_ENTITY.min(body.len())];
+    let Some(end) = head.iter().position(|byte| *byte == b';') else {
+        out.push('&');
+        return body;
+    };
+    let name = &body[..end];
+    let after = &body[end + 1..];
+    if let Some(digits) = name.strip_prefix('#') {
+        // A reference to a codepoint that does not exist, or to one with no
+        // drawing, is left exactly as written. Substituting U+FFFD would put a
+        // black diamond in the middle of a sentence and blame the panel for
+        // it; dropping it silently would hide that it was ever there.
+        let Some(character) = numeric(digits) else {
+            out.push('&');
+            return body;
+        };
+        out.push(character);
+        return after;
+    }
+    let Some((_, replacement)) = NAMED
+        .iter()
+        .find(|(known, _)| known.eq_ignore_ascii_case(name))
+    else {
+        out.push('&');
+        return body;
+    };
+    out.push_str(replacement);
+    after
+}
+
+/// Decodes `#39` or `#x27`, the two spellings Hacker News uses.
+///
+/// Returns `None` for anything that is not a drawable character, which covers
+/// an empty reference, one too long to be a codepoint, one that names a
+/// surrogate half, and one that names a control character.
+fn numeric(digits: &str) -> Option<char> {
+    let (digits, radix) = match digits.strip_prefix(['x', 'X']) {
+        Some(hex) => (hex, 16),
+        None => (digits, 10),
+    };
+    // Eight digits is past the top of Unicode in either base, so the parse
+    // below can never see a number large enough to be interesting.
+    if digits.is_empty() || digits.len() > 8 {
+        return None;
+    }
+    let code = u32::from_str_radix(digits, radix).ok()?;
+    let character = char::from_u32(code)?;
+    if character.is_control() && character != '\n' && character != '\t' {
+        return None;
+    }
+    Some(character)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_less_than_sign_inside_a_script_does_not_swallow_the_rest_of_the_page() {
+        // Walking the tags between here and the close tag reads `< 2;</script>`
+        // as one tag, steps past the real close tag, and everything after it
+        // is then inside a `<script>` that already ended.
+        let text = super::to_text("<p>Before.<script>if (1 < 2) {}</script><p>After.");
+        assert!(text.contains("After."), "the page was swallowed: {text:?}");
+        assert!(
+            !text.contains('2'),
+            "the script was read as prose: {text:?}"
+        );
+    }
+
+    #[test]
+    fn a_longer_name_does_not_close_a_shorter_one() {
+        let text = super::to_text("<p>Before.<script>x</scriptx> still script</script><p>After.");
+        assert!(!text.contains("still script"), "{text:?}");
+        assert!(text.contains("After."), "{text:?}");
+    }
+
+    #[test]
+    fn an_opening_tag_inside_a_script_does_not_close_it() {
+        // Only `</script>` ends a script; `< script >` is a less-than sign
+        // followed by a word. Pages that build tags from strings are where
+        // this shows up, and it is why they are written `'<' + 'script>'` in
+        // the first place. A scanner that accepts any character between the
+        // `<` and the name stops here, takes the very next `>` for the end of
+        // the close tag, and spills the rest of the script onto the panel.
+        let text = super::to_text("<p>Before.<script>w('< script > tail')</script><p>After.");
+        assert!(!text.contains("tail"), "the script leaked: {text:?}");
+        assert!(text.contains("After."), "{text:?}");
+    }
+
+    #[test]
+    fn a_close_tag_shouted_in_capitals_still_closes_its_element() {
+        let text = super::to_text("<p>Before.<SCRIPT>x = 1;</SCRIPT><p>After.");
+        assert!(
+            !text.contains("x = 1"),
+            "the script was read as prose: {text:?}"
+        );
+        assert!(text.contains("After."), "{text:?}");
+    }
+
+    #[test]
+    fn skipping_an_element_costs_no_more_when_the_document_behind_it_is_long() {
+        // This is a timing test because the fault it guards against was one.
+        // Finding a close tag used to mean lower-casing a copy of everything
+        // still unread, so the price of skipping one element was the length of
+        // the whole rest of the document. A paper of eleven hundred formulae
+        // paid it eleven hundred times: thirty milliseconds here, and eight
+        // seconds on a reader, where a paper that takes eight seconds to open
+        // is a paper that has hung.
+        //
+        // The two documents below carry the same elements to skip and differ
+        // only in what follows them, so a scanner that reads forward once is
+        // barely troubled by the difference and one that re-reads the tail is
+        // brought to its knees by it.
+        const SKIPPED: usize = 4_000;
+        let scripts = "<script>x</script>".repeat(SKIPPED);
+        let short = super::to_text(&format!("{scripts}<p>After."));
+        assert!(short.contains("After."), "{short:?}");
+
+        let long = format!("{scripts}<p>{}", "word ".repeat(400_000));
+        let started = std::time::Instant::now();
+        let text = super::to_text(&long);
+        let took = started.elapsed();
+        assert!(
+            text.starts_with("word"),
+            "{:?}",
+            &text[..20.min(text.len())]
+        );
+        // Generous by two orders of magnitude in both directions: the forward
+        // scan does this in a tenth of a second and the copying it replaced
+        // took thirteen and a half. Nothing in between is a result worth
+        // reporting.
+        assert!(
+            took < std::time::Duration::from_secs(2),
+            "skipping {SKIPPED} elements ahead of a long document took {took:?}"
+        );
+    }
+
+    #[test]
+    fn a_closing_curly_quotation_mark_is_decoded_like_the_opening_one() {
+        assert_eq!(
+            super::to_text("<p>&ldquo;Yes,&rdquo; she said."),
+            "\u{201c}Yes,\u{201d} she said."
+        );
+    }
+
+    #[test]
+    fn entities_decode_the_same_way_wherever_they_are_read() {
+        assert_eq!(
+            super::decode_entities("a &amp; b &mdash; c"),
+            "a & b \u{2014} c"
+        );
+        assert_eq!(
+            super::decode_entities("AT&T"),
+            "AT&T",
+            "a company was mangled"
+        );
+        assert_eq!(
+            super::decode_entities("no entities here"),
+            "no entities here"
+        );
+    }
+
+    use super::{to_text, to_text_within, MAX_TEXT};
+
+    /// A paper is not a feed item, and converting one against the ceiling meant
+    /// for a feed item returns its opening pages and an ellipsis. The arXiv
+    /// reader was showing a tenth of every paper this way, cut mid-sentence,
+    /// with a page count that made the tenth look like the whole thing.
+    #[test]
+    fn a_document_is_converted_against_the_ceiling_its_reader_asked_for() {
+        let paper = "<p>Sentence.</p>".repeat(4000);
+        assert!(
+            paper.len() > MAX_TEXT * 4,
+            "the fixture has to exceed a field"
+        );
+        let as_field = to_text(&paper);
+        assert!(as_field.ends_with('\u{2026}'), "a field is still cut");
+        assert!(as_field.len() <= MAX_TEXT + 4, "{}", as_field.len());
+        let as_document = to_text_within(&paper, 512 * 1024);
+        assert!(
+            !as_document.ends_with('\u{2026}'),
+            "the document was cut anyway"
+        );
+        assert!(as_document.len() > MAX_TEXT * 4, "{}", as_document.len());
+    }
+
+    /// The ceiling is still a ceiling. A caller naming a larger one is saying
+    /// how much it is willing to hold, not handing the decision to the body.
+    #[test]
+    fn a_chosen_ceiling_bounds_the_output_as_firmly_as_the_default_one() {
+        let long = "x".repeat(100_000);
+        let text = to_text_within(&long, 1000);
+        assert!(text.len() <= 1004, "{}", text.len());
+        assert!(text.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn a_paragraph_tag_becomes_a_blank_line_and_everything_else_is_removed() {
+        // Hacker News writes `<p>` with no closing tag, so the opening one is
+        // the break. Losing it turns a three paragraph comment into one wall.
+        assert_eq!(
+            to_text("First thought.<p>Second thought.<p>Third."),
+            "First thought.\n\nSecond thought.\n\nThird."
+        );
+        assert_eq!(
+            to_text("A <i>stressed</i> word and <a href=\"https://x.test/\">a link</a>."),
+            "A stressed word and a link."
+        );
+    }
+
+    #[test]
+    fn the_entities_hacker_news_actually_sends_are_decoded() {
+        // These six account for essentially every entity in a real thread;
+        // leaving them encoded puts `&#x27;` in the middle of every
+        // contraction on the panel.
+        assert_eq!(
+            to_text("it&#x27;s &quot;fine&quot; &amp; 1 &lt; 2 &gt; 0, see &#x2F;usr&#x2F;bin"),
+            "it's \"fine\" & 1 < 2 > 0, see /usr/bin"
+        );
+        assert_eq!(to_text("&#39;&#8212;&#x1F600;"), "'\u{2014}\u{1f600}");
+    }
+
+    #[test]
+    fn a_decoded_entity_is_never_decoded_a_second_time() {
+        // The attack this closes: `&amp;lt;` decoding to `&lt;` and then to
+        // `<` would let a comment reintroduce markup that the site escaped on
+        // the way out. Output is written, never rescanned.
+        assert_eq!(to_text("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+        assert_eq!(to_text("&amp;amp;"), "&amp;");
+    }
+
+    #[test]
+    fn a_tag_that_never_closes_does_not_swallow_the_comment() {
+        // A lone `<` is a character somebody typed, not the start of markup.
+        // Treating it as a tag would delete everything after it.
+        assert_eq!(to_text("if x < y then say so"), "if x < y then say so");
+        assert_eq!(to_text("a <b"), "a <b");
+        assert_eq!(to_text("<"), "<");
+        assert_eq!(to_text("<<<<"), "<<<<");
+    }
+
+    #[test]
+    fn an_ampersand_that_names_nothing_survives_as_itself() {
+        // `AT&T` is a company. So is `Procter&Gamble`. Neither is malformed
+        // input, and neither should lose a character.
+        assert_eq!(to_text("AT&T and P&G"), "AT&T and P&G");
+        assert_eq!(to_text("&"), "&");
+        assert_eq!(to_text("&notarealentity; x"), "&notarealentity; x");
+        assert_eq!(to_text("&;"), "&;");
+        // Past the scan ceiling, so not an entity however it is spelled.
+        assert_eq!(
+            to_text("&averyverylongname; y"),
+            "&averyverylongname; y",
+            "an over-long name was decoded"
+        );
+    }
+
+    #[test]
+    fn nested_and_malformed_angle_brackets_terminate() {
+        // Every one of these is a shape a stranger can send and none of them
+        // has an obvious reading. What matters is that each has *a* reading
+        // and that none of them is a panic or a loop.
+        assert_eq!(to_text("<a <b>>text"), ">text");
+        assert_eq!(to_text("<<p>>"), ">");
+        assert_eq!(to_text("<p"), "<p");
+        assert_eq!(to_text("</>"), "");
+        assert_eq!(to_text("<p></p></p></p>"), "");
+        assert_eq!(to_text("a<p><p><p>b"), "a\n\nb");
+    }
+
+    #[test]
+    fn a_reference_to_a_character_that_cannot_be_drawn_is_dropped() {
+        // A NUL, an escape and a lone surrogate half all name something with
+        // no glyph. Emitting them hands the renderer a decision it should
+        // never have to make, and mangling the text around them would hide
+        // that the reference was there at all.
+        assert_eq!(to_text("a&#0;b"), "a&#0;b");
+        assert_eq!(to_text("a&#x1b;b"), "a&#x1b;b");
+        assert_eq!(to_text("a&#xD800;b"), "a&#xD800;b");
+        assert_eq!(to_text("a&#999999999999;b"), "a&#999999999999;b");
+        assert_eq!(to_text("a&#;b"), "a&#;b");
+        assert_eq!(to_text("a&#x;b"), "a&#x;b");
+        assert_eq!(to_text("a\u{7}b"), "ab");
+    }
+
+    #[test]
+    fn script_and_style_lose_their_contents_as_well_as_their_tags() {
+        // Nothing here could run it, but a comment whose text is `alert(1)`
+        // is not a comment, and an unterminated one must not spill.
+        assert_eq!(
+            to_text("before<script>alert(1)</script>after"),
+            "beforeafter"
+        );
+        assert_eq!(to_text("before<style>b{x:y}</style>after"), "beforeafter");
+        assert_eq!(to_text("before<script>alert(1)"), "before");
+        assert_eq!(to_text("before<script>a<b>c</script>after"), "beforeafter");
+    }
+
+    #[test]
+    fn the_output_is_never_longer_than_the_input_and_never_past_the_ceiling() {
+        // The property that makes this safe to run over a thousand comments:
+        // there is no fragment that expands. If one existed, a body at the
+        // transport ceiling could become several times the response it
+        // arrived in.
+        for hostile in [
+            "<p>".repeat(4000),
+            "&".repeat(4000),
+            "&#x27;".repeat(4000),
+            "<".repeat(4000),
+            "&amp;".repeat(4000),
+            "<p><i><a href=\"#\">".repeat(400),
+        ] {
+            let text = to_text(&hostile);
+            assert!(
+                text.len() <= hostile.len(),
+                "{} bytes in, {} out",
+                hostile.len(),
+                text.len()
+            );
+            assert!(
+                text.len() <= MAX_TEXT + 4,
+                "past the ceiling: {}",
+                text.len()
+            );
+        }
+    }
+
+    #[test]
+    fn a_body_past_the_ceiling_is_cut_on_a_character_boundary_and_says_so() {
+        // Cutting inside a multi-byte character would panic; cutting without
+        // saying so reads as an author who trailed off.
+        let long = "\u{e9}".repeat(MAX_TEXT);
+        let text = to_text(&long);
+        assert!(text.ends_with('\u{2026}'), "no mark that it was cut");
+        assert!(text.len() <= MAX_TEXT + 4);
+        assert!(text.chars().count() > 1000, "cut far too early");
+    }
+
+    #[test]
+    fn a_code_block_stands_apart_from_the_sentence_before_it() {
+        // Hacker News wraps code in `<pre><code>`, and running it on from the
+        // paragraph above turns both into nonsense.
+        assert_eq!(
+            to_text("Try this:<pre><code>  cargo build\n</code></pre>then read it."),
+            "Try this:\n\ncargo build\n\nthen read it."
+        );
+    }
+
+    #[test]
+    fn whitespace_around_a_break_does_not_become_an_empty_paragraph() {
+        // The paginator emits one text node per paragraph, so a blank one is a
+        // visible gap the author did not write.
+        assert_eq!(to_text("<p>leading break"), "leading break");
+        assert_eq!(to_text("trailing break<p>"), "trailing break");
+        assert_eq!(to_text("a  <p>  b"), "a\n\nb");
+        assert_eq!(to_text(""), "");
+        assert_eq!(to_text("   "), "");
+    }
+
+    #[test]
+    fn a_picture_is_replaced_by_what_it_was_written_to_say() {
+        // The xkcd feed is the case this was found on: every entry is one
+        // image and nothing else, so without this an article is blank.
+        assert_eq!(
+            to_text(r#"<img src="c.png" title="hover" alt="I NOTATION POLISH REVERSE" />"#),
+            "[I NOTATION POLISH REVERSE]"
+        );
+    }
+
+    #[test]
+    fn an_image_that_says_nothing_writes_nothing() {
+        // An empty alt is the spelling for a spacer or a tracking pixel.
+        // Not even a paragraph break: an image that says nothing is not
+        // there at all, so the sentence around it closes back up.
+        assert_eq!(
+            to_text(r#"before <img src="px.gif" alt=""> after"#),
+            "before  after"
+        );
+        assert_eq!(
+            to_text(r#"before <img src="px.gif"> after"#),
+            "before  after"
+        );
+    }
+
+    #[test]
+    fn alternative_text_stands_apart_from_the_prose_around_it() {
+        assert_eq!(
+            to_text(r#"<p>Look at this.<img alt="a cat, asleep">And this."#),
+            "Look at this.\n\n[a cat, asleep]\n\nAnd this."
+        );
+    }
+
+    #[test]
+    fn entities_inside_alternative_text_are_decoded_like_any_other() {
+        assert_eq!(
+            to_text(r#"<img alt="Ben &amp; Jerry&#39;s">"#),
+            "[Ben & Jerry's]"
+        );
+    }
+
+    #[test]
+    fn an_attribute_is_matched_whole_and_not_as_a_substring() {
+        assert_eq!(to_text(r#"<img data-alt="tracking" src="x.png">"#), "");
+        assert_eq!(to_text(r#"<img salt="no" src="x.png">"#), "");
+        assert_eq!(to_text(r#"<img data-alt="no" alt="yes">"#), "[yes]");
+    }
+
+    #[test]
+    fn every_way_an_attribute_can_be_quoted_is_read() {
+        assert_eq!(to_text("<img alt='single'>"), "[single]");
+        assert_eq!(to_text("<img alt=bare src=x.png>"), "[bare]");
+        assert_eq!(
+            to_text(r#"<img ALT = "spaced and shouted">"#),
+            "[spaced and shouted]"
+        );
+        // A quote that never closes takes the rest of the tag rather than
+        // discarding the words, which is the reading that loses least.
+        assert_eq!(to_text(r#"<img alt="never closed>"#), "[never closed]");
+    }
+
+    #[test]
+    fn alternative_text_cannot_push_the_output_past_its_ceiling() {
+        let long = "x".repeat(MAX_TEXT - 4);
+        let html = format!("{long}<img alt=\"{}\">", "y".repeat(64));
+        let text = to_text(&html);
+        assert!(text.len() <= MAX_TEXT + 4, "{}", text.len());
+    }
+
+    #[test]
+    fn a_closing_image_tag_is_not_a_second_picture() {
+        assert_eq!(to_text(r#"<img alt="one"></img>"#), "[one]");
+    }
+}

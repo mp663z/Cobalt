@@ -1,0 +1,5 @@
+# An empty stand points at the companion push command.
+wait-for Music Stand
+expect Your stand is empty
+clean
+shot musicstand-empty

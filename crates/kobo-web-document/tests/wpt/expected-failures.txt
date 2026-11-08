@@ -1,0 +1,90 @@
+# WPT cases this code does not pass, grouped by reason. Each line is
+# the suite, then the case key as the suite's test prints it.
+# The line starting with '# ' just above a group is its reason.
+
+# By design: an address with a user name or password is refused, not stripped, as the runtime's HTTPS parser does.
+url http://user:pass@foo:21/bar;par?b#c http://example.org/foo/bar
+url https://test:@test -
+url https://:@test -
+url http://a:b@c:29/d http://example.org/foo/bar
+url http://é@é -
+url http://é@example.com -
+url http://&a:foo(b]c@d:2/ http://example.org/foo/bar
+url http://::@c@d:2 http://example.org/foo/bar
+url http://foo.com:b@d/ http://example.org/foo/bar
+url http://a:b@c\\ -
+url http://%25DOMAIN:foobar@foodomain.com/ -
+url http://@www.example.com -
+url http:a:b@www.example.com -
+url http:/a:b@www.example.com -
+url http://a:b@www.example.com -
+url http://@pple.com -
+url http::b@www.example.com -
+url http:/:b@www.example.com -
+url http://:b@www.example.com -
+url http:a:@www.example.com -
+url http:/a:@www.example.com -
+url http://a:@www.example.com -
+url http://www.@pple.com -
+url http://:@www.example.com -
+url http://foo:💩@example.com/bar http://other.com/
+url http://😀x@host/ -
+url http://a:😀x@host/ -
+url http://😀@host/ -
+url https://@test@test@example:800/ http://doesnotmatter/
+url https://@@@example http://doesnotmatter/
+url http://`{}:`{}@h/`{}?`{} http://doesnotmatter/
+url /some/path http://user@example.org/smth
+url  http://user:pass@example.org:21/smth
+url /some/path http://user:pass@example.org:21/smth
+url https://user:pass[\u{7F}@foo/bar http://example.org
+
+# Not yet: a host ending in empty labels after a number is accepted; IDNA refuses it.
+url http://foo.09.. -
+
+# Not yet: a reference of slashes and backslashes mixed is read as a new host rather than a path.
+url /\\/\\//example.org/../path http://example.org/
+
+# By design: a bare '@' reads as the start of credentials and is refused.
+url http:@www.example.com -
+url http:/@www.example.com -
+
+# By design: a trailing dot is dropped from a host name, so a host of dots alone is empty.
+url http://./ -
+url http://../ -
+
+# By design: the tree keeps attribute local names only, so an xlink: or xml:
+# attribute in SVG or MathML prints without its namespace. Nothing reads it.
+tree tests9.dat#24
+tree tests9.dat#25
+tree tests9.dat#26
+tree tests9.dat#27
+tree tests10.dat#23
+tree tests10.dat#24
+tree tests10.dat#25
+tree tests10.dat#26
+tree webkit02.dat#23
+tree webkit02.dat#24
+
+# By design: an element keeps at most 32 attributes; these have 58.
+tree tests11.dat#1
+tree tests11.dat#2
+tree tests11.dat#3
+tree tests11.dat#4
+
+# Not yet: html5ever 0.39 predates these rules of the current standard
+# (annotation-xml as an HTML integration point for XHTML and NUL, frameset
+# after template, form inside a template's table, selectedcontent).
+tree plain-text-unsafe.dat#37
+tree template.dat#44
+tree template.dat#45
+tree template.dat#46
+tree template.dat#117
+tree tests20.dat#55
+tree tests20.dat#56
+tree tests20.dat#57
+tree tests20.dat#58
+tree webkit02.dat#45
+tree webkit02.dat#46
+tree webkit02.dat#47
+tree webkit02.dat#48

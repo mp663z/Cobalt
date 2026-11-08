@@ -1,0 +1,20 @@
+== blog
+plain  unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=361 CssDeclaration=457 ComputedValue=794 MatchWork=0 expanded=1194 match_attempts=1061466 retained_nodes=1959
+inline unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=361 CssDeclaration=457 ComputedValue=794 MatchWork=0 expanded=1194 match_attempts=1061466 retained_nodes=1959
+ext    unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=321 CssDeclaration=457 ComputedValue=794 MatchWork=0 expanded=1467 match_attempts=1304163 retained_nodes=1959
+== docs
+plain  unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=7 CssDeclaration=63 ComputedValue=1294 MatchWork=0 expanded=404 match_attempts=728008 retained_nodes=4198
+inline unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=46 CssDeclaration=107 ComputedValue=1240 MatchWork=0 expanded=923 match_attempts=1663246 retained_nodes=4198
+ext    unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=27 CssDeclaration=107 ComputedValue=1240 MatchWork=0 expanded=948 match_attempts=1708296 retained_nodes=4198
+== gov
+plain  unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=0 CssDeclaration=1 ComputedValue=0 MatchWork=0 expanded=0 match_attempts=0 retained_nodes=1059
+inline unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=0 CssDeclaration=1 ComputedValue=0 MatchWork=0 expanded=0 match_attempts=0 retained_nodes=1059
+ext    unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=0 CssDeclaration=1 ComputedValue=0 MatchWork=0 expanded=0 match_attempts=0 retained_nodes=1059
+== news-npr
+plain  unsupported=true truncated=true first=Some(InputBytes) CssSelector=415 CssDeclaration=392 ComputedValue=0 MatchWork=0 expanded=3445 match_attempts=2614755 retained_nodes=1288
+inline unsupported=true truncated=true first=Some(InputBytes) CssSelector=446 CssDeclaration=459 ComputedValue=1 MatchWork=0 expanded=4096 match_attempts=3108864 retained_nodes=1288
+ext    unsupported=true truncated=true first=Some(InputBytes) CssSelector=262 CssDeclaration=437 ComputedValue=0 MatchWork=0 expanded=4096 match_attempts=3108864 retained_nodes=1288
+== wikipedia
+plain  unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=295 CssDeclaration=295 ComputedValue=28 MatchWork=1 expanded=1191 match_attempts=4000001 retained_nodes=6774
+inline unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=300 CssDeclaration=304 ComputedValue=30 MatchWork=1 expanded=1229 match_attempts=4000001 retained_nodes=6567
+ext    unsupported=true truncated=true first=Some(DroppedAttributes) CssSelector=284 CssDeclaration=303 ComputedValue=28 MatchWork=1 expanded=1330 match_attempts=4000001 retained_nodes=6073

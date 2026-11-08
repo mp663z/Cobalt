@@ -1,0 +1,8 @@
+expect 10+5
+expect Rapid · Rated
+expect Waiting
+expect Cancel pairing
+shot waiting
+tap Cancel pairing
+wait-for Cancelling
+shot cancellation-requested

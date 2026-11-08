@@ -1,0 +1,13 @@
+{
+  "id": "musicstand",
+  "display_name": "Music Stand",
+  "short_label": "Music",
+  "summary": "Read music scores with setlists and half-page turns.",
+  "page_description": "A Kobo score reader with stable stand mode, setlists, and two-stage half-page turns.",
+  "version": "0.1.6",
+  "release_notes": "Music libraries, setlists, and their scores now page to fit the reader. Navigation and collection controls stay reachable, and Back returns through the collection views.",
+  "glyph": "note",
+  "capabilities": [
+    "keep-awake"
+  ]
+}

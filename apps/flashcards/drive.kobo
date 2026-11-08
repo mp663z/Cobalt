@@ -1,0 +1,11 @@
+# The empty collection offers the sample deck; starting it lands on the
+# deck list with the imported Getting started deck due.
+wait-for No collection yet
+clean
+shot flashcards-empty
+tap Start with the sample
+wait-for Choose a deck
+expect Getting started
+expect 6 due
+clean
+shot flashcards-decks

@@ -1,0 +1,45 @@
+[package]
+name = "kobo-sdk"
+version.workspace = true
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Application SDK for declarative Kobo E Ink applications"
+documentation = "https://docs.rs/kobo-sdk"
+
+[features]
+# On by default, because an application that measures text with different type
+# from the runtime measures it wrongly, and the only way to notice is a page
+# that loses its last paragraph on the panel and nowhere else.
+default = ["text"]
+text = ["dep:kobo-text"]
+# The requests only the runtime's own settings application may make. Off by
+# default, and deliberately not part of what a published application can call.
+#
+# The runtime refuses these from anyone else, so offering them to every
+# application would only offer a call that cannot succeed. They also carry wire
+# messages added after the current protocol version was published: an
+# application built against this SDK and installed on a reader running the
+# released runtime would agree with it about the version number and then send a
+# request it cannot decode. Keeping them behind a switch the bundled settings
+# application turns on means the published protocol still describes everything
+# a published application is able to say.
+runtime-settings = []
+
+[dependencies]
+kobo-json = { version = "0.3.2", path = "../kobo-json" }
+kobo-state = { path = "../kobo-state" }
+kobo-net = { version = "0.3.2", path = "../kobo-net" }
+kobo-policy = { version = "0.3.2", path = "../kobo-policy" }
+kobo-protocol = { version = "0.3.2", path = "../kobo-protocol" }
+kobo-text = { version = "0.3.2", path = "../kobo-text", optional = true }
+kobo-ui = { version = "0.3.2", path = "../kobo-ui" }
+
+[dev-dependencies]
+kobo-profile = { path = "../kobo-profile" }
+unicode-width = "0.2.2"
+
+[lints]
+workspace = true

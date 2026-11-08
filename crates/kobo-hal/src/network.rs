@@ -1,0 +1,611 @@
+//! Keeping the network alive across a reader handoff.
+//!
+//! Stopping and restarting the stock reader reliably drops the Wi-Fi
+//! connection. The reader owns the radio, and the restarted one begins from its
+//! own "not connected" state, so the association and the lease are simply gone.
+//! On a device managed over Wi-Fi that means every handoff can cost the
+//! connection used to run it, which was measured rather than assumed: the
+//! device became unreachable after a session and only came back when its owner
+//! tapped through the reader's own network UI.
+//!
+//! There is no supported way to ask the reader to reconnect. It exposes no
+//! D-Bus service; the session bus carries only `Fontickel`, `Sickel` and the
+//! bus itself. `/tmp/nickel-hardware-status` is one-way reporting rather than
+//! control: the stock scripts write `network <action> ip=…` into it to say what
+//! has already happened. There is no wifi script to call either, because
+//! `libnickel` drives the radio internally.
+//!
+//! What is left is to put back exactly what was running. This module records
+//! the supplicant and DHCP client while they are still alive, and starts those
+//! same programs again, with their own arguments and environment, if the
+//! connection has not returned on its own. Nothing here invents a
+//! configuration, chooses a network, or writes to persistent storage, and
+//! everything it does is undone by a reboot.
+//!
+//! Deliberately not done: writing to `/tmp/nickel-hardware-status` to correct
+//! the reader's indicator. That FIFO blocks until something reads it, which is
+//! why the stock scripts background every write to it, and a cosmetic icon is
+//! not worth a runtime that can hang.
+
+use crate::reader::{Reader, ReaderError};
+use std::fs;
+use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// The supplicant that owns the wireless association.
+pub const SUPPLICANT_EXECUTABLE: &str = "/bin/wpa_supplicant";
+
+/// The DHCP client that owns the address and the default route.
+pub const DHCP_EXECUTABLE: &str = "/sbin/dhcpcd";
+
+/// The interface the device connects with.
+///
+/// Detected rather than assumed. Most Kobos name it `wlan0`, but the Libra
+/// H2O's older Realtek driver names it `eth0` -- assuming `wlan0` there made
+/// every caller of this conclude Wi-Fi was simply absent, on a device that was
+/// connected to it at the time. Whichever interface under `/sys/class/net`
+/// carries a `wireless` subdirectory is the radio: that is the kernel's own
+/// marker for it, not a name any driver gets to choose, and there is exactly
+/// one such interface on any of these devices. Falls back to `wlan0` when
+/// nothing can be read, which matches every device this was measured against
+/// before it was detected instead of hardcoded.
+///
+/// Looked up on every call rather than once per process. A radio whose driver
+/// is still loading has no interface yet, so the first answer can be the
+/// fallback, and a cached fallback would then misname an `eth0` radio for the
+/// rest of the session. One directory read is cheap next to that.
+#[must_use]
+pub fn wireless_link() -> String {
+    detect_wireless_link(Path::new("/sys/class/net")).unwrap_or_else(|| "wlan0".to_owned())
+}
+
+/// The pure half of [`wireless_link`], taking the root so it can be tested
+/// without `/sys`.
+fn detect_wireless_link(root: &Path) -> Option<String> {
+    let mut entries: Vec<_> = fs::read_dir(root).ok()?.filter_map(Result::ok).collect();
+    // Sorted so that a root with more than one match (never expected on real
+    // hardware, but not something a directory read can rule out) picks the
+    // same interface every time rather than whichever the filesystem
+    // happened to list first.
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    entries.into_iter().find_map(|entry| {
+        let name = entry.file_name().to_str()?.to_owned();
+        entry.path().join("wireless").is_dir().then_some(name)
+    })
+}
+
+const POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// How long to keep watching before concluding the connection survived.
+///
+/// The restarted reader takes the link down some seconds after it starts, not
+/// while it is starting. Checking once on the way past therefore reads the
+/// routing table while the old default route is still in it and concludes,
+/// wrongly, that nothing needs doing. Measured on a Clara BW: the summary said
+/// the connection was unaffected, and the device was unreachable moments later.
+const SETTLE: Duration = Duration::from_secs(12);
+
+/// The state of the connection after an attempt to restore it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Restored {
+    /// The connection was still up and nothing was started.
+    Unaffected,
+    /// Daemons were started again and the connection came back.
+    Restarted,
+    /// The connection did not come back within the time allowed.
+    ///
+    /// This is reported rather than raised as an error, because a session that
+    /// has already put the reader back has succeeded at the thing that matters;
+    /// the owner can reconnect by hand exactly as before.
+    StillDown,
+}
+
+/// The connection as it was before the reader was stopped.
+#[derive(Debug, Default)]
+pub struct Connection {
+    /// In start order: the association has to exist before a lease can.
+    daemons: Vec<Reader>,
+    /// Executables whose presence could not be established safely.
+    uncertain: Vec<String>,
+    /// Whether there was a connection to lose in the first place.
+    was_online: bool,
+}
+
+/// Network daemons Cobalt started for the duration of one panel session.
+#[derive(Debug)]
+pub struct SessionConnection {
+    outcome: Restored,
+    started: Vec<Reader>,
+    start_errors: Vec<ReaderError>,
+    uncertain_executables: Vec<String>,
+}
+
+impl SessionConnection {
+    #[must_use]
+    pub fn outcome(&self) -> Restored {
+        self.outcome
+    }
+
+    #[must_use]
+    pub fn start_errors(&self) -> &[ReaderError] {
+        &self.start_errors
+    }
+
+    #[must_use]
+    pub fn uncertain_executables(&self) -> &[String] {
+        &self.uncertain_executables
+    }
+
+    /// Stops every daemon this session started, even if one stop fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns all stop failures so the caller can choose a clean reboot
+    /// rather than starting Nickel on top of an owner that may still exist.
+    pub fn release(self, within: Duration) -> Result<(), Vec<ReaderError>> {
+        let mut errors = Vec::new();
+        for daemon in self.started.into_iter().rev() {
+            if let Err(error) = daemon.stop(within) {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+impl Connection {
+    /// Records the networking daemons that are currently running.
+    ///
+    /// This never fails. A daemon that is not running is one this module will
+    /// not try to restore, which is the correct behaviour for a device that was
+    /// already offline when the session began.
+    #[must_use]
+    pub fn capture() -> Self {
+        let mut daemons = Vec::new();
+        let mut uncertain = Vec::new();
+        for executable in [SUPPLICANT_EXECUTABLE, DHCP_EXECUTABLE] {
+            match Reader::find_running(executable) {
+                Ok(daemon) => daemons.push(daemon),
+                Err(ReaderError::NotRunning) => {}
+                Err(_) => uncertain.push(executable.to_owned()),
+            }
+        }
+        Self {
+            daemons,
+            uncertain,
+            was_online: is_online(&wireless_link()),
+        }
+    }
+
+    /// Returns whether any daemon identity was captured.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.daemons.is_empty()
+    }
+
+    /// Returns whether the reader had a usable route when it was captured.
+    #[must_use]
+    pub fn was_online(&self) -> bool {
+        self.was_online
+    }
+
+    /// Stops one daemon captured before the reader handoff, if it still runs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the exact captured process cannot be stopped or
+    /// its original presence could not be established.
+    pub fn release_captured(&self, executable: &str, within: Duration) -> Result<(), ReaderError> {
+        let uncertain = self
+            .uncertain
+            .iter()
+            .any(|uncertain| uncertain == executable);
+        let captured = self
+            .daemons
+            .iter()
+            .find(|daemon| daemon.executable() == executable);
+        match Reader::find_running(executable) {
+            Err(ReaderError::NotRunning) => Ok(()),
+            Ok(observed)
+                if !uncertain && captured.is_some_and(|daemon| observed.pid() == daemon.pid()) =>
+            {
+                observed.stop(within)
+            }
+            Ok(observed) => Err(ReaderError::IdentityChanged(observed.pid())),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Puts the connection back if it has gone, waiting up to `within`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error only when a recorded daemon could not be started at
+    /// all. Failing to reach the network in time is reported as
+    /// [`Restored::StillDown`].
+    pub fn restore(&self, within: Duration) -> Result<Restored, ReaderError> {
+        // A device that was already offline has nothing to put back, and
+        // starting a supplicant it was not running would be inventing state.
+        if !self.was_online {
+            return Ok(Restored::Unaffected);
+        }
+        if !went_offline(&wireless_link(), SETTLE) {
+            return Ok(Restored::Unaffected);
+        }
+        for daemon in &self.daemons {
+            if Reader::find_running(daemon.executable()).is_ok() {
+                continue;
+            }
+            daemon.start(within)?;
+        }
+        Ok(if wait_until_online(&wireless_link(), within) {
+            Restored::Restarted
+        } else {
+            Restored::StillDown
+        })
+    }
+
+    /// Restores a dropped connection and records only daemons Cobalt starts.
+    #[must_use]
+    pub fn restore_for_session(&self, within: Duration) -> SessionConnection {
+        let mut start_errors = Vec::new();
+        let uncertain_executables = self.uncertain.clone();
+        // A device that was already offline has nothing to put back, and
+        // starting a supplicant it was not running would be inventing state.
+        if !self.was_online {
+            return SessionConnection {
+                outcome: Restored::Unaffected,
+                started: Vec::new(),
+                start_errors,
+                uncertain_executables,
+            };
+        }
+        if !went_offline(&wireless_link(), SETTLE) {
+            return SessionConnection {
+                outcome: Restored::Unaffected,
+                started: Vec::new(),
+                start_errors,
+                uncertain_executables,
+            };
+        }
+        let mut started = Vec::new();
+        for daemon in &self.daemons {
+            // Starting a second copy of a daemon that is already running would
+            // leave two of them fighting over one interface, which is worse
+            // than the problem being fixed.
+            match Reader::find_running(daemon.executable()) {
+                Ok(observed) if observed.pid() == daemon.pid() => continue,
+                Ok(observed) => {
+                    start_errors.push(ReaderError::IdentityChanged(observed.pid()));
+                    continue;
+                }
+                Err(ReaderError::NotRunning) => {}
+                Err(error) => {
+                    start_errors.push(error);
+                    continue;
+                }
+            }
+            match daemon.start_captured(within) {
+                Ok(running) => {
+                    let launched_pid = running.pid();
+                    started.push(running);
+                    match Reader::find_running(daemon.executable()) {
+                        Ok(observed) if observed.pid() == launched_pid => {}
+                        Ok(_) | Err(ReaderError::Ambiguous(_)) => {
+                            start_errors.push(ReaderError::Ambiguous(vec![launched_pid]));
+                        }
+                        Err(error) => start_errors.push(error),
+                    }
+                }
+                Err(error) => start_errors.push(error),
+            }
+        }
+        let outcome = if wait_until_online(&wireless_link(), within) {
+            Restored::Restarted
+        } else {
+            Restored::StillDown
+        };
+        SessionConnection {
+            outcome,
+            started,
+            start_errors,
+            uncertain_executables,
+        }
+    }
+}
+
+/// Returns whether `link` currently has a default route.
+///
+/// A default route is used rather than the presence of an address because it is
+/// what actually decides whether the device can be reached, and because it is a
+/// plain file read that needs no socket and no `unsafe`.
+#[must_use]
+pub fn is_online(link: &str) -> bool {
+    fs::read_to_string("/proc/net/route").is_ok_and(|table| has_default_route(&table, link))
+}
+
+/// Watches `link` for `settle`, returning whether it was ever seen offline.
+///
+/// Returning early on the first offline reading keeps the common case cheap;
+/// only a connection that genuinely survives costs the full wait.
+fn went_offline(link: &str, settle: Duration) -> bool {
+    let deadline = Instant::now() + settle;
+    loop {
+        if !is_online(link) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(POLL_INTERVAL);
+    }
+}
+
+fn wait_until_online(link: &str, within: Duration) -> bool {
+    let deadline = Instant::now() + within;
+    loop {
+        if is_online(link) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Parses the kernel's routing table for a default route on `link`.
+///
+/// The destination column is a hexadecimal address in the host's byte order, so
+/// the default route is the all-zero one.
+fn has_default_route(table: &str, link: &str) -> bool {
+    table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut columns = line.split_whitespace();
+            Some((columns.next()?, columns.next()?))
+        })
+        .any(|(interface, destination)| {
+            interface == link && destination.chars().all(|digit| digit == '0')
+        })
+}
+
+/// Returns whether the kernel reports a carrier on `link`.
+///
+/// Used for reporting rather than for decisions: a link can be up with no
+/// address, which is not a usable connection.
+#[must_use]
+pub fn has_carrier(link: &str) -> bool {
+    fs::read_to_string(Path::new("/sys/class/net").join(link).join("operstate"))
+        .is_ok_and(|state| state.trim() == "up")
+}
+
+/// Where the kernel publishes wireless link quality.
+const WIRELESS: &str = "/proc/net/wireless";
+
+/// Reads the signal level on `link`, in dBm.
+///
+/// Read-only, like everything else in this module that reports rather than
+/// changes: a text file the kernel publishes, no socket, no ioctl and no
+/// `unsafe`. Returns `None` when the interface is not wireless, is not
+/// associated, or the device has no wireless stack at all, all of which are
+/// legitimately "no signal to report" rather than "a signal of zero".
+#[must_use]
+pub fn signal_dbm(link: &str) -> Option<i32> {
+    signal_dbm_in(&fs::read_to_string(WIRELESS).ok()?, link)
+}
+
+/// The same, against arbitrary contents, so the parsing is testable on a
+/// machine with no radio.
+///
+/// The file has two header lines and then one row per interface:
+///
+/// ```text
+/// Inter-| sta-|   Quality        |   Discarded packets ...
+///  face | tus | link level noise |  nwid  crypt  frag ...
+///  wlan0: 0000   54.  -56.  -256        0      0     0 ...
+/// ```
+///
+/// The level column carries a trailing full stop, and some drivers report it
+/// as an unsigned byte biased by 256 rather than as a negative number. Both
+/// spellings are accepted, because which one a device uses is a property of
+/// its driver and not something worth having a different build for.
+#[must_use]
+pub fn signal_dbm_in(table: &str, link: &str) -> Option<i32> {
+    let wanted = format!("{link}:");
+    for line in table.lines().skip(2) {
+        let mut columns = line.split_whitespace();
+        let interface = columns.next()?;
+        if interface != wanted {
+            continue;
+        }
+        // status, quality, then level.
+        let level = columns.nth(2)?.trim_end_matches('.');
+        let level: i32 = level.parse().ok()?;
+        // A level above zero is the biased spelling. Real Wi-Fi is never
+        // stronger than about -20 dBm, so there is no ambiguity to resolve.
+        return Some(if level > 0 { level - 256 } else { level });
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detect_wireless_link;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn root(name: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("kobo-wireless-link-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("a test directory");
+        path
+    }
+
+    fn interface(root: &Path, name: &str, wireless: bool) {
+        let path = root.join(name);
+        fs::create_dir_all(&path).expect("an interface directory");
+        if wireless {
+            fs::create_dir_all(path.join("wireless")).expect("a wireless directory");
+        }
+    }
+
+    #[test]
+    fn the_interface_with_a_wireless_directory_is_found_regardless_of_its_name() {
+        // The bug this pins: a Libra H2O names its radio eth0, not wlan0, so
+        // a caller that assumed the name concluded Wi-Fi was simply absent on
+        // a device that was connected to it at the time.
+        let root = root("eth0-named-radio");
+        interface(&root, "lo", false);
+        interface(&root, "eth0", true);
+        assert_eq!(detect_wireless_link(&root), Some("eth0".to_owned()));
+    }
+
+    #[test]
+    fn the_conventional_name_is_still_found() {
+        let root = root("wlan0-named-radio");
+        interface(&root, "lo", false);
+        interface(&root, "wlan0", true);
+        assert_eq!(detect_wireless_link(&root), Some("wlan0".to_owned()));
+    }
+
+    #[test]
+    fn nothing_wireless_is_reported_as_nothing_found() {
+        let root = root("no-radio-present");
+        interface(&root, "lo", false);
+        interface(&root, "eth0", false);
+        assert_eq!(detect_wireless_link(&root), None);
+    }
+
+    #[test]
+    fn a_root_that_cannot_be_read_is_reported_as_nothing_found() {
+        let missing = std::env::temp_dir().join(format!(
+            "kobo-wireless-link-missing-{}-{}",
+            std::process::id(),
+            "root"
+        ));
+        let _ = fs::remove_dir_all(&missing);
+        assert_eq!(detect_wireless_link(&missing), None);
+    }
+
+    #[test]
+    fn a_signal_is_read_from_the_row_for_the_interface_asked_for() {
+        let table = "Inter-| sta-|   Quality        |   Discarded packets\n \
+                     face | tus | link level noise |  nwid  crypt   frag\n \
+                     lo: 0000    0.    0.    0        0      0      0\n \
+                     wlan0: 0000   54.  -56.  -256        0      0      0\n";
+        assert_eq!(signal_dbm_in(table, "wlan0"), Some(-56));
+        assert_eq!(
+            signal_dbm_in(table, "eth0"),
+            None,
+            "an interface that is not in the table reported a signal anyway"
+        );
+    }
+
+    #[test]
+    fn a_driver_that_biases_the_level_by_a_byte_is_understood() {
+        // Some drivers report the level as an unsigned byte offset by 256
+        // rather than as a negative number. Read literally that is a signal
+        // stronger than any radio produces, which would pin the mark to full
+        // on a device that is barely associated.
+        let table = "header\nheader\n wlan0: 0000   54.  200.  -256        0\n";
+        assert_eq!(signal_dbm_in(table, "wlan0"), Some(-56));
+    }
+
+    #[test]
+    fn no_wireless_stack_reports_nothing_rather_than_silence() {
+        // "" is a device with no radio; the mark for that is different in
+        // shape from a weak one, so the distinction has to survive the read.
+        assert_eq!(signal_dbm_in("", "wlan0"), None);
+        assert_eq!(signal_dbm_in("only\nheaders\n", "wlan0"), None);
+    }
+
+    use super::{has_default_route, signal_dbm_in, Connection};
+
+    /// Taken verbatim from the device, header row included.
+    const REAL_TABLE: &str =
+        "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n\
+wlan0\t00000000\t0101A8C0\t0003\t0\t0\t312\t00000000\t0\t0\t0\n\
+wlan0\t0001A8C0\t00000000\t0001\t0\t0\t312\t00FFFFFF\t0\t0\t0\n";
+
+    #[test]
+    fn the_real_routing_table_reads_as_online() {
+        assert!(has_default_route(REAL_TABLE, "wlan0"));
+    }
+
+    #[test]
+    fn a_subnet_route_alone_is_not_a_connection() {
+        let table = "Iface\tDestination\tGateway\n\
+wlan0\t0001A8C0\t00000000\n";
+        assert!(
+            !has_default_route(table, "wlan0"),
+            "an interface with only a local route cannot reach anything"
+        );
+    }
+
+    #[test]
+    fn another_interfaces_default_route_does_not_count() {
+        let table = "Iface\tDestination\tGateway\n\
+usb0\t00000000\t0101A8C0\n";
+        assert!(!has_default_route(table, "wlan0"));
+    }
+
+    #[test]
+    fn an_empty_table_reads_as_offline() {
+        assert!(!has_default_route("Iface\tDestination\tGateway\n", "wlan0"));
+    }
+
+    #[test]
+    fn the_header_row_is_never_mistaken_for_a_route() {
+        // "Destination" contains no digits at all, so a careless all-zero test
+        // over an empty iterator would accept it.
+        let table = "Iface\tDestination\tGateway\n\
+wlan0\tDestination\tGateway\n";
+        assert!(!has_default_route(table, "wlan0"));
+    }
+
+    #[test]
+    fn capturing_on_a_host_without_those_daemons_records_nothing() {
+        let connection = Connection::capture();
+        assert!(
+            connection.is_empty(),
+            "capture must never fail when the daemons are absent"
+        );
+        assert!(!connection.was_online());
+    }
+}
+
+#[cfg(test)]
+mod race_tests {
+    use super::{Connection, Restored};
+    use std::time::Duration;
+
+    /// The defect this module was rewritten for.
+    ///
+    /// The first on-device run reported the connection as unaffected and then
+    /// went unreachable, because the reader takes the link down after it has
+    /// started rather than while it is starting. A connection that was never up
+    /// must still be left alone, which is what this pins.
+    #[test]
+    fn a_device_that_was_offline_has_nothing_to_restore() {
+        let connection = Connection::default();
+        assert!(!connection.was_online);
+        let outcome = connection
+            .restore(Duration::from_secs(1))
+            .expect("restoring nothing cannot fail");
+        assert_eq!(outcome, Restored::Unaffected);
+    }
+
+    /// `restore` must not start daemons it never recorded.
+    #[test]
+    fn an_empty_capture_starts_nothing() {
+        assert!(Connection::default().is_empty());
+    }
+}

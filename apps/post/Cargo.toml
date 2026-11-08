@@ -1,0 +1,17 @@
+[package]
+name = "kobo-post"
+version = "0.2.4"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-json = { path = "../../crates/kobo-json" }
+kobo-net = { path = "../../crates/kobo-net" }
+kobo-sdk = { path = "../../crates/kobo-sdk" }
+
+kobo-ui = { path = "../../crates/kobo-ui" }
+
+[lints]
+workspace = true

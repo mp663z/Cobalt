@@ -1,0 +1,11 @@
+    = note: `#[warn(dead_code)]` on by default
+blog.complete.html [default] first=Some(DroppedAttributes) unsupported=true dropped_attrs=7 retained_href_bytes=0 [DroppedAttributes=1,MissingStylesheet=4,CssDeclaration=4]
+blog.complete.html [opt-in] first=Some(DroppedAttributes) unsupported=true dropped_attrs=3 retained_href_bytes=169992 [DroppedAttributes=1,StylesheetCount=3,CssCondition=5,CssSelector=340,CssSelectorGroup=1,CssDeclaration=413,ComputedValue=654]
+docs.complete.html [default] first=Some(DroppedAttributes) unsupported=true dropped_attrs=9 retained_href_bytes=0 [DroppedAttributes=1,MissingStylesheet=3,StylesheetMedia=2,CssDeclaration=44]
+docs.complete.html [opt-in] first=Some(DroppedAttributes) unsupported=true dropped_attrs=4 retained_href_bytes=45641 [DroppedAttributes=1,StylesheetCount=2,StylesheetMedia=2,CssDeclaration=44]
+gov.complete.html [default] first=Some(DroppedAttributes) unsupported=true dropped_attrs=1 retained_href_bytes=0 [DroppedAttributes=1,MissingStylesheet=1,CssCondition=3,CssDeclaration=1]
+gov.complete.html [opt-in] first=Some(DroppedAttributes) unsupported=true dropped_attrs=1 retained_href_bytes=0 [DroppedAttributes=1,MissingStylesheet=1,CssCondition=3,CssDeclaration=1]
+news-npr.complete.html [default] first=Some(InputBytes) unsupported=true dropped_attrs=15 retained_href_bytes=0 [InputBytes=1,DroppedAttributes=1,MissingStylesheet=1,StylesheetCount=5,StylesheetMedia=2,CssSelector=1,CssDeclaration=5]
+news-npr.complete.html [opt-in] first=Some(InputBytes) unsupported=true dropped_attrs=10 retained_href_bytes=567593 [InputBytes=1,DroppedAttributes=1,StylesheetCount=6,StylesheetMedia=2,CssAtRule=1,CssCondition=1,CssSelector=26,CssDeclaration=51]
+wikipedia.complete.html [default] first=Some(DroppedAttributes) unsupported=true dropped_attrs=16 retained_href_bytes=0 [DroppedAttributes=1,MissingStylesheet=5,StylesheetCount=13,CssSelector=1,CssDeclaration=15,ComputedValue=29]
+wikipedia.complete.html [opt-in] first=Some(DroppedAttributes) unsupported=true dropped_attrs=6 retained_href_bytes=511238 [DroppedAttributes=1,StylesheetCount=18,CssAtRule=1,CssCondition=36,CssSelector=104,CssDeclaration=140,ComputedValue=16]

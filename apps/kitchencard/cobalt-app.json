@@ -1,0 +1,25 @@
+{
+  "id": "kitchencard",
+  "display_name": "Kitchen Card",
+  "short_label": "Kitchen",
+  "summary": "Keep Mealie recipes handy in a counter-friendly cooking view.",
+  "page_description": "A read-only Mealie companion. Pick tonight's recipe and cook one large step at a time, with the screen kept on and the recipe available offline.",
+  "version": "0.1.6",
+  "release_notes": "Page through every recipe and ingredient, and keep your cooking step when switching between Steps and Ingredients.",
+  "glyph": "reader",
+  "capabilities": [
+    "network",
+    "keep-awake"
+  ],
+  "setup": {
+    "steps": [
+      {
+        "text": "Make the Mealie API available to the Kobo at https://mealie.local."
+      },
+      {
+        "text": "Create a long-lived Mealie API token and install it under the exact name mealie.",
+        "command": "kobo secret set mealie --device <address>"
+      }
+    ]
+  }
+}

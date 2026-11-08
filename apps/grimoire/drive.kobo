@@ -1,0 +1,20 @@
+wait 500
+expect Grimoire
+clean
+shot home
+tap Spells
+expect 2014
+tap Filters
+tap Class
+tap-id filters-next
+tap Wizard
+expect Wizard
+tap School
+tap Abjuration
+expect Abjuration
+clean
+shot spell-filters
+tap View results
+expect Spells
+clean
+shot spell-results

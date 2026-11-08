@@ -1,0 +1,22 @@
+[data-w~=b]	5
+[data-w~="a b"]	4,8
+[type=text]	4,13
+[target=blank]	4
+[dir=rtl]	4
+[lang=en]	4
+linearGradient	7
+lineargradient	7
+foreignObject	8
+foreignobject	8
+[type=a]	11
+ol[type=a]	11
+ol[type=A]	11
+[viewbox=A]	8
+[VIEWBOX=A]	8
+html:only-child	0
+[data-w|=""]	
+[data-w^=""]	
+.b	
+[class~=b]	
+[data-list~=b]	
+[data-ff~=b]	10

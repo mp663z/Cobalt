@@ -1,0 +1,47 @@
+[package]
+name = "kobo-cli"
+version.workspace = true
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kobo"
+path = "src/main.rs"
+
+[dependencies]
+kobo-sdk = { path = "../kobo-sdk", default-features = false }
+kobo-catalog = { path = "../kobo-catalog" }
+kobo-ui = { path = "../kobo-ui" }
+kobo-app-store = { path = "../kobo-app-store" }
+kobo-opml = { path = "../kobo-opml" }
+kobo-sim = { path = "../kobo-sim" }
+kobo-image = { path = "../kobo-image" }
+kobo-json = { path = "../kobo-json" }
+kobo-zstory = { path = "../kobo-zstory" }
+kobo-comic = { path = "../kobo-comic" }
+kobo-net = { path = "../kobo-net" }
+kobo-stream = { path = "../kobo-stream" }
+kobo-doc = { path = "../kobo-doc" }
+kobo-frame-host = { path = "../kobo-frame-host" }
+kobo-music-host = { path = "../kobo-music-host" }
+kobo-vault-host = { path = "../kobo-vault-host" }
+kobo-html = { path = "../kobo-html" }
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+kobo-profile = { path = "../kobo-profile" }
+kobo-protocol = { path = "../kobo-protocol" }
+kobod = { path = "../kobod" }
+kobo-wifi-trace = { path = "../kobo-wifi-trace" }
+ring = "0.17"
+rusqlite = { version = "0.37.0", features = ["bundled", "serialize"] }
+serde_json = "1.0"
+
+[features]
+default = []
+# Enables the owner-attended `smoke-display` command. Never enabled by default,
+# so a stock `cargo install`/`cargo run` of this CLI cannot touch the display.
+device-write = []
+
+[lints]
+workspace = true

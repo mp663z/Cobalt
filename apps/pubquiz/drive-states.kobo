@@ -1,0 +1,22 @@
+wait 800
+expect Question packs
+tap About
+expect opentdb.com
+clean
+shot about
+tap Back to packs
+tap Start pass-around
+expect setup
+tap Continue
+tap Start round
+expect Ada answers
+clean
+shot question
+tap Mercury
+expect Hand to
+clean
+shot pass
+tap Show result
+expect Question result
+clean
+shot reveal

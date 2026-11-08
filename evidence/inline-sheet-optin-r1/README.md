@@ -1,0 +1,3 @@
+# r1 opt-in inline data:text/css link href retention: review checkpoint (2026-11-05 20:05 IST)
+Status: fresh independent review PASS as a candidate (suite 639/0, manifest 1705, default-OFF full tree and reason counters identical on the 5 real pages, entity/truncation/cap adversarials). NOT canonical, NOT a gate pass, NOT adopted; default entries unchanged; new entry is opt-in. Real-page gate 0/5 (last-known).
+Disclosures: StyleDiagnostics gains a field (retained_inline_sheet_href_bytes, 0 by default) so Debug output and struct shape differ even with the opt-in off; full serialized shape identity is NOT claimed. The measure::TAG thread-local write remains (write-only, nonblocking, left alone).

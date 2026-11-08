@@ -1,0 +1,10 @@
+import {spawn} from 'node:child_process'; import fs from 'node:fs';
+const c=spawn('/usr/bin/google-chrome',['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=9373','--host-resolver-rules=MAP * ~NOTFOUND','about:blank'],{stdio:'ignore'});
+await new Promise(r=>setTimeout(r,1500));
+const page=(await(await fetch('http://127.0.0.1:9373/json')).json()).find(t=>t.type==='page');
+const ws=new WebSocket(page.webSocketDebuggerUrl); await new Promise(r=>ws.onopen=r); let id=0; const pend={}; ws.onmessage=e=>{let m=JSON.parse(e.data);if(m.id&&pend[m.id]){pend[m.id](m);delete pend[m.id]}};
+const send=(method,params={})=>new Promise(r=>{const i=++id;pend[i]=r;ws.send(JSON.stringify({id:i,method,params}))});
+await send('Emulation.setScriptExecutionDisabled',{value:true});await send('Page.navigate',{url:'file://'+process.argv[2]});await new Promise(r=>setTimeout(r,700)); await send('Emulation.setScriptExecutionDisabled',{value:false});
+const list=fs.readFileSync(process.argv[3],'utf8').trimEnd().split('\n');
+const r=await send('Runtime.evaluate',{expression:`(()=>{const all=[...document.getElementsByTagName('*')]; const idx=new Map(all.map((e,i)=>[e,i])); return JSON.stringify(${JSON.stringify(list)}.map(s=>{try{return s+'\t'+[...document.querySelectorAll(s)].map(e=>idx.get(e)).join(',')}catch(e){return s+'\tINVALID'}}))})()`,returnByValue:true});
+fs.writeFileSync(process.argv[4],JSON.parse(r.result.result.value).join('\n')+'\n');c.kill();await new Promise(r=>c.on('exit',r));process.exit(0);

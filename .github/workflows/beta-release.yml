@@ -1,0 +1,526 @@
+name: Publish beta platform
+
+on:
+  push:
+    branches: [beta]
+  workflow_dispatch:
+
+# Read by default, and raised for the one job that publishes. The device
+# and host jobs run `cargo build`, which executes build scripts from every
+# dependency in the graph: third-party code on the runner should not be
+# able to see a token that can write to this repository. `prepare` only
+# reads -- it lists tags and waits on this commit's CI. This is the shape
+# apps.yml already uses.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cobalt-beta-platform
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      # Every job used to be gated on the branch, so dispatching this workflow
+      # anywhere else skipped all of them and reported success.
+      - name: Refuse to publish the beta channel from another branch
+        if: github.ref != 'refs/heads/beta'
+        run: |
+          echo "This workflow publishes the beta channel and only runs on refs/heads/beta." >&2
+          echo "It was started on ${GITHUB_REF}; re-run it with the beta branch selected." >&2
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # A beta tag is immutable, so the one outcome worth blocking is
+      # publishing a tree nobody has tested. CI starts on the same push as this
+      # workflow, so waiting for it is the ordinary case rather than a fault.
+      # Everything that is not an observed success refuses: no run recorded, a
+      # cancelled or failed run, or a run still going when the wait runs out.
+      - name: Require this commit's CI to have passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deadline=$(( $(date +%s) + 2700 ))
+          while :; do
+            state="$(
+              gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+                --jq '[.workflow_runs[] | select(.event == "push")]
+                      | sort_by(.run_number)
+                      | last
+                      | if . == null then "absent absent"
+                        else "\(.status) \(.conclusion // "pending")" end' \
+                2>/dev/null || echo "unreachable unreachable"
+            )"
+            case "$state" in
+              "completed success")
+                echo "CI passed for ${GITHUB_SHA}."
+                break
+                ;;
+              "completed "*)
+                echo "CI for ${GITHUB_SHA} concluded ${state#completed }." >&2
+                echo "The beta channel publishes only what CI has accepted." >&2
+                exit 1
+                ;;
+              *)
+                echo "CI for ${GITHUB_SHA} is ${state}; waiting."
+                ;;
+            esac
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "CI did not finish for ${GITHUB_SHA} within the wait." >&2
+              echo "Refusing to publish a beta tag on an untested tree." >&2
+              exit 1
+            fi
+            sleep 30
+          done
+      - name: Read the workspace version
+        id: version
+        run: |
+          version="$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml)"
+          printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Enforce immutable beta versions
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -o pipefail
+          tag="beta-v${VERSION}"
+          tag_count="$(git ls-remote --tags origin "refs/tags/$tag" | wc -l)"
+          release_count="$(gh release list --limit 100 --json tagName \
+            --jq '[.[] | select(.tagName == "'"$tag"'")] | length')"
+          if [ "$tag_count" != "$release_count" ]; then
+            echo "$tag has an incomplete tag/release pair; refusing to continue" >&2
+            exit 1
+          fi
+          if [ "$tag_count" -eq 1 ]; then
+            release="$RUNNER_TEMP/release.json"
+            # The release is created against an existing tag, so GitHub fills
+            # targetCommitish with the default branch and it says nothing about
+            # what was published. The tag ref below is the authority.
+            gh release view "$tag" --json tagName,isDraft,isPrerelease,assets \
+              > "$release"
+            node - "$release" "$tag" "$VERSION" <<'NODE'
+          const fs = require("fs");
+          const release = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const version = process.argv[4];
+          const expected = [
+            `cobalt-${version}-ClaraBW-KoboRoot.tgz`,
+            `cobalt-${version}-ClaraBW.sha256`,
+            `cobalt-${version}-KoboRoot.tgz`,
+            `cobalt-${version}.sha256`,
+            "THIRD-PARTY.md",
+            "cobalt-host-manifest.txt",
+            "cobalt-host-manifest.txt.sig",
+            "cobalt-host-manifest.txt.sshsig",
+            ...["macos-x86_64", "macos-arm64", "linux-x86_64", "linux-arm64"]
+              .map(platform => `kobo-${version}-${platform}.tar.gz`),
+          ].sort();
+          const assets = release.assets.map(asset => asset.name).sort();
+          if (
+            release.tagName !== process.argv[3] ||
+            release.isDraft ||
+            !release.isPrerelease ||
+            JSON.stringify(assets) !== JSON.stringify(expected)
+          ) process.exit(1);
+          NODE
+            tag_sha="$(git ls-remote --tags origin "refs/tags/$tag" | awk '{print $1}')"
+            git cat-file -e "${tag_sha}^{commit}"
+            git merge-base --is-ancestor "$tag_sha" "$GITHUB_SHA"
+            published="$RUNNER_TEMP/published-$tag"
+            bootstrap="$RUNNER_TEMP/install-$tag.sh"
+            git show "${tag_sha}:install.sh" > "$bootstrap"
+            mkdir "$published"
+            gh release download "$tag" --dir "$published"
+            cd "$published"
+            sha256sum --check "cobalt-${VERSION}.sha256"
+            cmp "cobalt-${VERSION}.sha256" "cobalt-${VERSION}-ClaraBW.sha256"
+            cmp "cobalt-${VERSION}-KoboRoot.tgz" \
+              "cobalt-${VERSION}-ClaraBW-KoboRoot.tgz"
+            grep -Fx "version ${VERSION}" cobalt-host-manifest.txt
+            grep -Fx "channels stable,beta" cobalt-host-manifest.txt
+            grep -Fx "source ${tag_sha}" cobalt-host-manifest.txt
+            printf '%s\n' \
+              'cobalt-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL7XUR3p+tvPgftO/kRbigc8gagzP2RBDG3tWIu/1KXe' \
+              > allowed_signers
+            ssh-keygen -Y verify -q \
+              -f allowed_signers -I cobalt-release -n cobalt-host-release \
+              -s cobalt-host-manifest.txt.sshsig < cobalt-host-manifest.txt
+            node - <<'NODE'
+          const crypto = require("crypto");
+          const fs = require("fs");
+          const publicKey = Buffer.from(
+            "302a300506032b6570032100bed7511de9fadbcf81fb4efe445b8a073c81a8333f64410c6ded588bbfd4a5de",
+            "hex",
+          );
+          const signature = Buffer.from(
+            fs.readFileSync("cobalt-host-manifest.txt.sig", "utf8").trim(),
+            "hex",
+          );
+          if (
+            signature.length !== 64 ||
+            !crypto.verify(
+              null,
+              fs.readFileSync("cobalt-host-manifest.txt"),
+              {key: publicKey, format: "der", type: "spki"},
+              signature,
+            )
+          ) process.exit(1);
+          NODE
+            while read -r kind first second third fourth; do
+              case "$kind" in
+                device)
+                  name=$first
+                  bytes=$second
+                  checksum=$third
+                  test -z "${fourth:-}"
+                  ;;
+                bootstrap)
+                  test "$first" = install.sh
+                  name=$bootstrap
+                  bytes=$second
+                  checksum=$third
+                  test -z "${fourth:-}"
+                  ;;
+                host)
+                  name=$second
+                  bytes=$third
+                  checksum=$fourth
+                  ;;
+                *) continue ;;
+              esac
+              test -f "$name"
+              test "$(wc -c < "$name" | tr -d ' ')" = "$bytes"
+              test "$(sha256sum "$name" | cut -d' ' -f1)" = "$checksum"
+            done < cobalt-host-manifest.txt
+            cd "$GITHUB_WORKSPACE"
+            # The tag being an ancestor of this commit only proves beta has not
+            # rewritten history. Beta can still have moved on with packaged
+            # changes the published tag does not carry, and skipping the build
+            # then reports success while no reader receives them.
+            changed="$RUNNER_TEMP/changed-since-$tag"
+            git diff --name-only --diff-filter=ACDMRT "$tag_sha" "$GITHUB_SHA" > "$changed"
+            node tools/device-package-changes.mjs --tag "$tag" --version "$VERSION" \
+              < "$changed"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest="$(git ls-remote --tags origin 'refs/tags/beta-v*' |
+            sed -n 's#.*refs/tags/beta-v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' |
+            sort -V | tail -n 1)"
+          if [ -n "$latest" ]; then
+            test "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -n 1)" = "$VERSION"
+            test "$latest" != "$VERSION"
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  device:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.85.1
+          targets: armv7-unknown-linux-musleabihf
+      - name: Install the ARM cross-compiler
+        run: sudo apt-get update && sudo apt-get install --yes gcc-arm-linux-gnueabihf
+      # The device target is musl, but the C in the dependency tree was being
+      # compiled by the glibc armhf cross-compiler. Ubuntu's armhf toolchain
+      # now defaults to 64-bit time_t, so SQLite's calls to stat, fcntl and
+      # nanosleep emit glibc's __stat64_time64 and friends, which musl has
+      # never defined. Nothing noticed while only ring compiled C, because it
+      # calls none of them. Zig ships musl headers for every target it emits,
+      # so it is the cross-compiler for the device rather than a fourth apt
+      # package pretending musl and glibc are interchangeable.
+      - name: Install the musl cross-compiler the device C needs
+        run: |
+          set -eu
+          # Community mirrors listed at https://ziglang.org/download/community-mirrors.txt.
+          # Every source must match the same reviewed digest before extraction.
+          # Bound each attempt: ziglang.org has stalled indefinitely on CI runners.
+          zig_downloaded=false
+          for zig_url in \
+            'https://pkg.hexops.org/zig/zig-x86_64-linux-0.16.0.tar.xz?source=cobalt-ci' \
+            'https://ziglang.freetls.fastly.net/zig-x86_64-linux-0.16.0.tar.xz?source=cobalt-ci' \
+            'https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz'; do
+            if curl -fL --connect-timeout 15 --max-time 120 \
+              --speed-limit 1024 --speed-time 20 -o /tmp/zig.tar.xz "$zig_url" \
+              && echo "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00  /tmp/zig.tar.xz" \
+                | sha256sum -c -; then
+              zig_downloaded=true
+              break
+            fi
+            echo "::warning::Could not obtain the pinned Zig archive from $zig_url"
+          done
+          if [ "$zig_downloaded" != true ]; then
+            echo "No source supplied the pinned Zig archive" >&2
+            exit 1
+          fi
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt
+          sudo tee /usr/local/bin/armv7-musl-cc >/dev/null <<'CC'
+          #!/bin/sh
+          # cc-rs passes --target=armv7-unknown-linux-musleabihf. Zig spells the
+          # same machine arm-linux-musleabihf and refuses "armv7", so the triple
+          # comes from here and the one we are handed is dropped.
+          zig=/opt/zig-x86_64-linux-0.16.0/zig
+          count=$#
+          index=0
+          while [ "$index" -lt "$count" ]; do
+            argument="$1"
+            shift
+            case "$argument" in
+              --target=*) ;;
+              *) set -- "$@" "$argument" ;;
+            esac
+            index=$((index + 1))
+          done
+          # Zig instruments with UBSan by default and does not link its runtime,
+          # so sqlite3.c ends up referencing __ubsan_handle_* that nothing
+          # defines. The device build is not a sanitiser run.
+          exec "$zig" cc -target arm-linux-musleabihf -fno-sanitize=undefined "$@"
+          CC
+          sudo chmod +x /usr/local/bin/armv7-musl-cc
+          armv7-musl-cc --version
+
+      # The Syncthing engine used to be rebuilt here, so that packaging could
+      # embed the reviewed bytes. It is no longer part of the release: readers
+      # fetch it on first use from a tag of its own, because 27.9 MB of engine
+      # in a 31.0 MB update was charged to everybody whether or not they sync.
+      # Rebuilding it on every platform release now costs a Go toolchain
+      # download and a full build for an artifact this job does not package.
+      #
+      # The reproducibility claim still has to be checkable, so it moved to
+      # .github/workflows/syncthing-engine.yml, where it can be run on demand
+      # against the same pinned commit and the same digest the runtime enforces.
+      - name: Build the deterministic device package
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          CC_armv7_unknown_linux_musleabihf: armv7-musl-cc
+          CFLAGS_armv7_unknown_linux_musleabihf: -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+        run: cargo run --locked -p kobo-cli -- package --out "dist/cobalt-${VERSION}-KoboRoot.tgz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: device-package
+          path: dist/cobalt-*-KoboRoot.tgz
+          if-no-files-found: error
+
+  host:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            helper-target: x86_64-apple-darwin
+            cc: ""
+          - platform: macos-arm64
+            runner: macos-14
+            target: aarch64-apple-darwin
+            helper-target: aarch64-apple-darwin
+            cc: ""
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            helper-target: x86_64-unknown-linux-musl
+            cc: musl-gcc
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-musl
+            helper-target: aarch64-unknown-linux-musl
+            cc: musl-gcc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.85.1
+          targets: ${{ matrix.target }}
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.88.0
+          targets: ${{ matrix.helper-target }}
+      - name: Install Linux host build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools libclang-dev pkg-config
+      - name: Install macOS importer build tools
+        if: runner.os == 'macOS'
+        run: brew install llvm
+      # Every platform compiled the importer's schema with whatever protoc its
+      # image happened to carry: 3.12 from jammy apt, which predates the proto3
+      # optional fields Anki's schema uses and so refused the build outright,
+      # against a brew protobuf on macOS that floats to whatever is current.
+      # One release built its four host binaries with two different compilers,
+      # and neither was chosen. The version here is the one the importer's own
+      # CI job already builds and tests with, so what is tested and what is
+      # shipped now agree, and neither moves unless this line moves.
+      - name: Install the protoc the importer schema needs
+        run: |
+          set -eu
+          case "${{ runner.os }}-$(uname -m)" in
+            Linux-x86_64)
+              protoc_arch=linux-x86_64
+              protoc_digest=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8
+              ;;
+            Linux-aarch64)
+              protoc_arch=linux-aarch_64
+              protoc_digest=2dd17f75d66a682640b136e31848da9fb2eefe68d55303baf8b32617374f6711
+              ;;
+            macOS-x86_64)
+              protoc_arch=osx-x86_64
+              protoc_digest=9448ff40278504a7ae5139bb70c962acc78c32d8fc54b4890a55c14c68b9d10a
+              ;;
+            macOS-arm64)
+              protoc_arch=osx-aarch_64
+              protoc_digest=96839af0caed64352442fc8236f4bdf7c1cd6efcfaa98fa5db37307a73fc7c70
+              ;;
+            *)
+              echo "no pinned protoc for ${{ runner.os }} $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+          archive="$RUNNER_TEMP/protoc.zip"
+          curl -fL --connect-timeout 15 --max-time 120 -o "$archive" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-${protoc_arch}.zip"
+          # The runners disagree on which checksum tool they carry, and a
+          # missing one must fail the build rather than skip the check.
+          if command -v sha256sum >/dev/null 2>&1; then
+            echo "${protoc_digest}  ${archive}" | sha256sum -c -
+          else
+            echo "${protoc_digest}  ${archive}" | shasum -a 256 -c -
+          fi
+          unzip -q -o "$archive" -d "$RUNNER_TEMP/protoc"
+          # prost-build reads both: the compiler, and the well-known type
+          # definitions that ship beside it rather than with the schema.
+          echo "PROTOC=$RUNNER_TEMP/protoc/bin/protoc" >>"$GITHUB_ENV"
+          echo "PROTOC_INCLUDE=$RUNNER_TEMP/protoc/include" >>"$GITHUB_ENV"
+          "$RUNNER_TEMP/protoc/bin/protoc" --version
+      - name: Build the host kobo command
+        env:
+          CC_x86_64_unknown_linux_musl: ${{ matrix.cc }}
+          CC_aarch64_unknown_linux_musl: ${{ matrix.cc }}
+        run: |
+          cargo build --locked --release -p kobo-cli --target "${{ matrix.target }}"
+          # The importer intentionally owns a separate Rust 1.88 workspace and
+          # lockfile so Anki's host-only graph never enters the reader/CLI graph.
+          if [ "${{ runner.os }}" = macOS ]; then
+            export LIBCLANG_PATH="$(brew --prefix llvm)/lib"
+          fi
+          cargo +1.88.0 build --locked --release \
+            --manifest-path crates/kobo-flashcards-import/Cargo.toml \
+            --target "${{ matrix.helper-target }}"
+      - name: Stage the host binary
+        run: |
+          mkdir -p host
+          cp "target/${{ matrix.target }}/release/kobo" host/kobo
+          cp "crates/kobo-flashcards-import/target/${{ matrix.helper-target }}/release/flashcards-import" \
+            host/flashcards-import
+      - name: Smoke the staged binaries
+        # A file that exists is not a binary that runs: link errors show up
+        # here, on CI, instead of on an owner's machine.
+        run: |
+          file host/kobo host/flashcards-import
+          host/kobo --version
+          host/flashcards-import --version
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: host-${{ matrix.platform }}
+          path: |
+            host/kobo
+            host/flashcards-import
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, device, host]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.85.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: device-package
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: host-*
+          path: dist/host-binaries
+      - name: Arrange matrix artifacts
+        run: |
+          for platform in macos-x86_64 macos-arm64 linux-x86_64 linux-arm64; do
+            test -f "dist/host-binaries/host-${platform}/kobo"
+            test -f "dist/host-binaries/host-${platform}/flashcards-import"
+            mkdir -p "dist/host-binaries/${platform}"
+            mv "dist/host-binaries/host-${platform}/kobo" \
+              "dist/host-binaries/${platform}/kobo"
+            mv "dist/host-binaries/host-${platform}/flashcards-import" \
+              "dist/host-binaries/${platform}/flashcards-import"
+          done
+      - name: Build deterministic host release assets
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          chmod +x tools/build-host-release.sh
+          tools/build-host-release.sh "$VERSION" beta "$GITHUB_SHA" dist
+          cp "dist/cobalt-${VERSION}-KoboRoot.tgz" \
+            "dist/cobalt-${VERSION}-ClaraBW-KoboRoot.tgz"
+          cp THIRD-PARTY.md dist/
+          cd dist
+          sha256sum THIRD-PARTY.md \
+            "cobalt-${VERSION}-KoboRoot.tgz" \
+            "cobalt-${VERSION}-ClaraBW-KoboRoot.tgz" > "cobalt-${VERSION}.sha256"
+          cp "cobalt-${VERSION}.sha256" "cobalt-${VERSION}-ClaraBW.sha256"
+      - name: Sign the release manifest
+        env:
+          COBALT_APP_SIGNING_SEED: ${{ secrets.COBALT_APP_SIGNING_SEED }}
+        run: |
+          test -n "$COBALT_APP_SIGNING_SEED" || {
+            echo "COBALT_APP_SIGNING_SEED is not configured" >&2
+            exit 1
+          }
+          seed="$RUNNER_TEMP/cobalt-release-seed"
+          trap 'rm -f "$seed"' EXIT
+          printf '%s' "$COBALT_APP_SIGNING_SEED" > "$seed"
+          chmod 600 "$seed"
+          cargo run --locked -p kobo-cli -- host-release-sign \
+            --manifest dist/cobalt-host-manifest.txt \
+            --seed "$seed" \
+            --signature dist/cobalt-host-manifest.txt.sig \
+            --ssh-signature dist/cobalt-host-manifest.txt.sshsig
+          rm dist/install.sh
+      - name: Create the immutable isolated prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          tag="beta-v${VERSION}"
+          test -z "$(git ls-remote --tags origin "refs/tags/$tag")"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists; refusing replacement" >&2
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            --field "ref=refs/tags/${tag}" --field "sha=${GITHUB_SHA}" \
+            --jq '.object.sha' | grep -Fx "$GITHUB_SHA"
+          find dist -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 12
+          gh release create "$tag" dist/* \
+            --title "Cobalt ${VERSION} beta" \
+            --notes "Immutable prerelease built from the beta branch at ${GITHUB_SHA}." \
+            --prerelease \
+            --latest=false

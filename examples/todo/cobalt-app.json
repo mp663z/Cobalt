@@ -1,0 +1,10 @@
+{
+  "id": "todo",
+  "display_name": "Todo",
+  "short_label": "Todo",
+  "summary": "Keep a simple to-do list that stays on your Kobo.",
+  "version": "1.0.10",
+  "glyph": "check",
+  "capabilities": [],
+  "release_notes": "Say so when the list cannot be saved, instead of letting it look kept."
+}

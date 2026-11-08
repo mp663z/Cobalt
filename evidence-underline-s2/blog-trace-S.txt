@@ -1,0 +1,31 @@
+REMOVE sheet0 [.button, button, input[type="submit"], input[type="reset"], ] [text-decoration: none] -> expanded -2 match_attempts -1778
+REMOVE sheet1 [abbr[title]] [text-decoration: underline dotted] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.link] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet1 [.strike] [text-decoration: line-through] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.underline] [text-decoration: underline] -> expanded -1 match_attempts -889
+REMOVE sheet1 [.no-underline] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet1 [.underline-hover:focus, .underline-hover:hover] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.strike-ns] [text-decoration: line-through] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.underline-ns] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.no-underline-ns] [text-decoration: none] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.strike-m] [text-decoration: line-through] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.underline-m] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.no-underline-m] [text-decoration: none] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.strike-l] [text-decoration: line-through] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.underline-l] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet1 [.no-underline-l] [text-decoration: none] -> expanded -0 match_attempts -0
+REMOVE sheet3 [div.brand] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [div.brand a] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [.white a] [text-decoration: underline] -> expanded -1 match_attempts -889
+REMOVE sheet3 [.white .button.button-secondary] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [.white a.anchor::before] [text-decoration: none] -> expanded -0 match_attempts -0
+REMOVE sheet3 [.posts a] [text-decoration: underline] -> expanded -1 match_attempts -889
+REMOVE sheet3 [.posts .button.button-secondary] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [table.post-list a] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [table.post-list a:hover] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet3 [footer.footer a] [text-decoration: none] -> expanded -1 match_attempts -889
+REMOVE sheet3 [footer.footer a:hover] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet4 [.z-l-u] [text-decoration: underline] -> expanded -0 match_attempts -0
+REMOVE sheet4 [.z-l-s] [text-decoration: line-through] -> expanded -0 match_attempts -0
+REMOVE sheet4 [.z-l-us] [text-decoration: underline line-through] -> expanded -0 match_attempts -0
+sum of per-declaration contributions: expanded 13 match_attempts 11557

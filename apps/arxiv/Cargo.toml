@@ -1,0 +1,18 @@
+[package]
+name = "kobo-arxiv"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kobo-bookview = { path = "../../crates/kobo-bookview", features = ["raster"] }
+kobo-doc = { path = "../../crates/kobo-doc" }
+kobo-html = { path = "../../crates/kobo-html" }
+kobo-read = { path = "../../crates/kobo-read" }
+kobo-sdk = { path = "../../crates/kobo-sdk" }
+kobo-xml = { path = "../../crates/kobo-xml" }
+
+[lints]
+workspace = true

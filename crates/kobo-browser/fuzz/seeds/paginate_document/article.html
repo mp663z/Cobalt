@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Notes on reading from paper screens</title></head>
+<body>
+<article>
+<h1>Notes on reading from paper screens</h1>
+<p>An electrophoretic panel is made of millions of small capsules. Each holds dark and light particles that move when a voltage is applied, and they stay where they were put when the voltage is taken away. That single property explains almost everything about how these screens behave: an image costs nothing to keep, and a great deal to change.</p>
+<p>A reader that respects the panel shows a page, leaves it alone, and changes the whole of it at once when the reader asks. A web page built for a glowing screen does the opposite. It scrolls, it animates, and it redraws parts of itself many times a second. <em>Reading</em> the same words on paper means taking the page apart and setting it again in pages that do not move.</p>
+<h2 id="pages">Pages instead of scrolling</h2>
+<p>Scrolling on e-ink smears. Each small step leaves a faint ghost of the text above it, and a flick that would take a quarter of a second on a phone takes several refreshes here. Pages avoid all of it. A page is laid out once, drawn once, and stays sharp for as long as it is read.</p>
+<p>The cost is that a page has to be measured. The same paragraph takes more lines at a larger size, on a narrower panel, or in a wider face, so the cut between one page and the next is only right for the panel it was measured on. This browser measures with the same layout that draws the page, so a page never loses its last line off the bottom.</p>
+<h2 id="refresh">Refresh and ghosting</h2>
+<p>A full refresh drives every pixel to black and back before drawing the new image. It clears ghosts completely and looks like a flash. A partial refresh only moves the pixels that change, which is quick and quiet but leaves a trace of what was there before. Most readers mix the two: partial refreshes for small changes, and a full one every few pages.</p>
+<blockquote><p>The best refresh is the one you do not need.</p></blockquote>
+<p>A browser for this panel therefore tries to change the screen as rarely as possible. It does not load images that are off the page, it does not run scripts that move things, and it does not draw a loading bar that updates twenty times a second.</p>
+<h2 id="what">What is kept, and what is not</h2>
+<ol>
+<li>Headings, paragraphs, lists and quotations are kept and set as text.</li>
+<li>Links are kept. Each is drawn where it sits in the text and listed on the Links screen.</li>
+<li>Tables are kept when they fit, and cut between rows when they do not.</li>
+<li>Scripts, styles, frames, video and advertising are dropped.</li>
+</ol>
+<p>Code is set as it was written, line by line:</p>
+<pre>fn turn(page: &amp;mut usize, pages: usize) {
+    *page = (*page + 1).min(pages - 1);
+}</pre>
+<table>
+<caption>Refresh modes</caption>
+<tr><th>Mode</th><th>Speed</th><th>Ghosting</th></tr>
+<tr><td>Full</td><td>Slow</td><td>None</td></tr>
+<tr><td>Partial</td><td>Fast</td><td>Some</td></tr>
+<tr><td>Fast (A2)</td><td>Fastest</td><td>Heavy</td></tr>
+</table>
+<p>Back to <a href="index.html">the sample pages</a>, or up to <a href="#pages">the section on pages</a>.</p>
+</article>
+</body></html>

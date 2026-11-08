@@ -1,0 +1,647 @@
+//! Which coding agents exist, where they keep their configuration, and how
+//! each one spells "run this command when you want permission".
+//!
+//! Every agent here asks the same question and accepts the same three
+//! answers. What differs is only paperwork: the file the registration lives
+//! in, the name of the event, and whether the command is written as a string
+//! or as a list. That is a table, not a set of branches, so it is one -- and
+//! adding an agent is a row rather than a rewrite of `setup`.
+//!
+//! Writing into somebody else's configuration file is the delicate part. The
+//! rules are: never write a file that did not parse, keep a copy of what was
+//! there before, leave every key that is not ours exactly as it was, and do
+//! nothing at all if the hook is already registered. Running `setup` twice
+//! is meant to be as boring as running it once.
+
+use kobo_json::Value;
+use std::path::PathBuf;
+
+/// How an agent spells a hook registration in its configuration file.
+///
+/// Claude Code and Codex landed on the same shape, so there is one variant
+/// for both. That is worth stating rather than assuming: Codex's `command`
+/// is a string and a list is refused outright, which the binary says in as
+/// many words when you hand it one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Wiring {
+    /// `{ "hooks": { EVENT: [ { "matcher": "*", "hooks": [ ... ] } ] } }`,
+    /// where each hook is a `type`, a `command` string and a `timeout`.
+    Matcher,
+}
+
+/// One event this daemon wants to hear about, and which tools it wants it
+/// for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Listen {
+    /// The event name as the agent spells it.
+    pub event: &'static str,
+    /// Which tools it fires for. `*` is all of them.
+    pub matcher: &'static str,
+}
+
+/// One coding agent, described once and used by detection, setup and the
+/// hook itself.
+#[derive(Debug)]
+pub struct Agent {
+    /// What the user types: `setup claude`.
+    pub id: &'static str,
+    /// What the reader shows above the question.
+    pub name: &'static str,
+    /// The configuration file, relative to the home directory.
+    pub config: &'static str,
+    /// A directory whose presence means this agent has run here.
+    pub marker: &'static str,
+    /// Executables that mean this agent is installed.
+    pub binaries: &'static [&'static str],
+    /// The events to register, and what each one listens for.
+    pub events: &'static [Listen],
+    /// How its configuration file is shaped.
+    pub wiring: Wiring,
+}
+
+/// Every agent this daemon can answer for.
+pub const AGENTS: &[Agent] = &[
+    Agent {
+        id: "claude",
+        name: "Claude Code",
+        config: ".claude/settings.json",
+        marker: ".claude",
+        binaries: &["claude"],
+        events: &[
+            // Fires only when it was about to ask, which is the whole
+            // question. PreToolUse fires before every tool call instead,
+            // so it would ring the reader for every grep.
+            Listen {
+                event: "PermissionRequest",
+                matcher: "*",
+            },
+            // A multiple-choice question is not a permission, so it never
+            // reaches PermissionRequest. It is answered by handing the tool
+            // its own input back, which only PreToolUse can do, and the
+            // matcher keeps that to this one tool.
+            Listen {
+                event: "PreToolUse",
+                matcher: "AskUserQuestion",
+            },
+        ],
+        wiring: Wiring::Matcher,
+    },
+    Agent {
+        id: "codex",
+        name: "Codex",
+        config: ".codex/hooks.json",
+        marker: ".codex",
+        binaries: &["codex"],
+        events: &[Listen {
+            event: "PermissionRequest",
+            matcher: "*",
+        }],
+        wiring: Wiring::Matcher,
+    },
+];
+
+/// The agent registered under `id`.
+///
+/// # Errors
+///
+/// When no agent goes by that name, with the list of those that do.
+pub fn find(id: &str) -> Result<&'static Agent, String> {
+    AGENTS.iter().find(|agent| agent.id == id).ok_or_else(|| {
+        let known: Vec<&str> = AGENTS.iter().map(|agent| agent.id).collect();
+        format!("unknown agent '{id}'; expected one of {}", known.join(", "))
+    })
+}
+
+impl Agent {
+    /// The absolute path of this agent's configuration file.
+    ///
+    /// # Errors
+    ///
+    /// Only when there is no `HOME` to resolve it against.
+    pub fn config_path(&self) -> Result<PathBuf, String> {
+        Ok(home()?.join(self.config))
+    }
+
+    /// Whether this agent appears to be installed: either it has left its
+    /// directory in the home directory or its executable is on the path.
+    #[must_use]
+    pub fn is_installed(&self) -> bool {
+        let marked = home().is_ok_and(|home| home.join(self.marker).is_dir());
+        marked || self.binaries.iter().any(|name| on_path(name))
+    }
+}
+
+/// The home directory.
+fn home() -> Result<PathBuf, String> {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| "no HOME in the environment".to_owned())
+}
+
+/// Whether `name` is an executable somewhere on `PATH`.
+fn on_path(name: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|directory| directory.join(name).is_file())
+}
+
+/// What `setup` found when it looked at a configuration file.
+#[derive(PartialEq, Eq, Debug)]
+pub enum Outcome {
+    /// The hook was already registered. Nothing was written.
+    AlreadyThere,
+    /// The file needs replacing with this text.
+    Write(String),
+}
+
+impl Agent {
+    /// Our own registration, in this agent's dialect.
+    fn entry(&self, binary: &str, listen: &Listen) -> Value {
+        let hook = kobo_json::ObjectBuilder::new()
+            .set("type", "command")
+            // One string. Codex refuses a list with "invalid type: sequence,
+            // expected a string", and Claude Code has never taken one.
+            .set("command", format!("{binary} hook {}", self.id))
+            // Longer than the daemon holds a question, so the agent waits for
+            // the person rather than giving up on them.
+            .set("timeout", 360)
+            .build();
+        match self.wiring {
+            Wiring::Matcher => kobo_json::ObjectBuilder::new()
+                .set("matcher", listen.matcher)
+                .set("hooks", Value::Array(vec![hook]))
+                .build(),
+        }
+    }
+
+    /// The configuration file's new text, or [`Outcome::AlreadyThere`].
+    ///
+    /// `current` is the file's existing contents, or `None` when there is no
+    /// file yet. Everything already in it is carried across untouched; our
+    /// entry joins whatever hooks were registered before rather than
+    /// replacing them, because another tool's hook is not ours to remove.
+    ///
+    /// # Errors
+    ///
+    /// When the file exists but is not JSON we can read. That is deliberately
+    /// fatal: a configuration file we cannot parse is one we must not
+    /// rewrite, because doing so would throw away whatever it really said.
+    pub fn merge(&self, current: Option<&str>, binary: &str) -> Result<Outcome, String> {
+        let root = match current.map(str::trim) {
+            None | Some("") => Value::Object(Vec::new()),
+            Some(text) => kobo_json::parse(text).map_err(|error| {
+                format!(
+                    "{} is not JSON this can read ({error}).\n\
+                     Nothing was written. Comments and trailing commas are the \
+                     usual reason.\n\
+                     Fix the file, or register the hook by hand:\n  \
+                     {binary} setup {} --print",
+                    self.config, self.id
+                )
+            })?,
+        };
+        let mut hooks = root
+            .get("hooks")
+            .cloned()
+            .unwrap_or(Value::Object(Vec::new()));
+        let mut wrote = false;
+        for listen in self.events {
+            let existing = hooks
+                .get(listen.event)
+                .and_then(Value::as_array)
+                .map(<[Value]>::to_vec)
+                .unwrap_or_default();
+            // Each event is judged on its own, so an install from before a
+            // second event was wanted gains it rather than being left half
+            // registered forever.
+            if existing
+                .iter()
+                .any(|entry| mentions(entry, "kobo-sidekickd"))
+            {
+                continue;
+            }
+            let mut entries = existing;
+            entries.push(self.entry(binary, listen));
+            hooks = set_field(&hooks, listen.event, Value::Array(entries));
+            wrote = true;
+        }
+        if !wrote {
+            return Ok(Outcome::AlreadyThere);
+        }
+        let root = set_field(&root, "hooks", hooks);
+        Ok(Outcome::Write(root.to_json_pretty() + "\n"))
+    }
+}
+
+/// `object` with `key` set, keeping every other field where it was.
+///
+/// An existing key keeps its position rather than moving to the end, so a
+/// file's diff after this is the smallest true one.
+fn set_field(object: &Value, key: &str, value: Value) -> Value {
+    let mut fields = match object {
+        Value::Object(fields) => fields.clone(),
+        _ => Vec::new(),
+    };
+    if let Some(slot) = fields.iter_mut().find(|(name, _)| name == key) {
+        slot.1 = value;
+    } else {
+        fields.push((key.to_owned(), value));
+    }
+    Value::Object(fields)
+}
+
+/// Whether any string anywhere inside `value` contains `needle`.
+///
+/// Used to recognise our own registration however the agent reshaped it, and
+/// whatever path the binary was at when it was written.
+fn mentions(value: &Value, needle: &str) -> bool {
+    let mut stack = vec![value];
+    while let Some(value) = stack.pop() {
+        match value {
+            Value::String(text) if text.contains(needle) => return true,
+            Value::Array(items) => stack.extend(items.iter()),
+            Value::Object(fields) => stack.extend(fields.iter().map(|(_, value)| value)),
+            _ => {}
+        }
+    }
+    false
+}
+
+/// This executable's path, for writing into somebody's configuration.
+///
+/// An agent runs the hook with no shell and no inherited working directory,
+/// so the registration has to name an absolute path rather than trust that
+/// `kobo-sidekickd` will be found.
+#[must_use]
+pub fn own_path() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.to_str().map(str::to_owned))
+        .unwrap_or_else(|| "kobo-sidekickd".to_owned())
+}
+
+/// Registers the hook with one agent, writing its configuration file.
+///
+/// Keeps a new backup of the previous configuration before replacing it,
+/// and says in one line what it did.
+///
+/// # Errors
+///
+/// When the file cannot be read, cannot be parsed, or cannot be written.
+pub fn install(agent: &Agent, dry_run: bool) -> Result<bool, String> {
+    install_at(agent, &agent.config_path()?, &own_path(), dry_run)
+}
+
+fn install_at(
+    agent: &Agent,
+    path: &std::path::Path,
+    binary: &str,
+    dry_run: bool,
+) -> Result<bool, String> {
+    let current = match std::fs::read_to_string(path) {
+        Ok(text) => Some(text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(format!("cannot read {}: {error}", path.display())),
+    };
+    let outcome = agent.merge(current.as_deref(), binary)?;
+    let Outcome::Write(text) = outcome else {
+        println!("{:<12} already registered", agent.name);
+        return Ok(false);
+    };
+    if dry_run {
+        println!("{:<12} would write {}", agent.name, path.display());
+        return Ok(true);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    let saved = publish_config(path, &text, current.as_deref())?;
+    println!("{:<12} registered in {}{saved}", agent.name, path.display());
+    Ok(true)
+}
+
+fn publish_config(
+    path: &std::path::Path,
+    text: &str,
+    previous: Option<&str>,
+) -> Result<String, String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let partial = path.with_extension("json.writing");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&partial)
+        .map_err(|error| {
+            format!("Cannot prepare configuration; previous file unchanged: {error}")
+        })?;
+    let result = (|| {
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.sync_all())
+            .map_err(|error| format!("Cannot prepare configuration: {error}"))?;
+        let saved = if let Some(previous) = previous {
+            let backup = backup_config(path, previous)?;
+            format!(", previous kept as {}", backup.display())
+        } else {
+            String::new()
+        };
+        std::fs::rename(&partial, path).map_err(|error| {
+            format!("Cannot publish configuration; previous file unchanged: {error}")
+        })?;
+        Ok(saved)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    result
+}
+
+fn backup_config(path: &std::path::Path, previous: &str) -> Result<PathBuf, String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    for index in 0..1000 {
+        let extension = if index == 0 {
+            "json.bak".to_owned()
+        } else {
+            format!("json.bak.{index}")
+        };
+        let backup = path.with_extension(extension);
+        let mut file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&backup)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Cannot create configuration backup: {error}")),
+        };
+        if let Err(error) = file
+            .write_all(previous.as_bytes())
+            .and_then(|()| file.sync_all())
+        {
+            let _ = std::fs::remove_file(&backup);
+            return Err(format!("Cannot save configuration backup: {error}"));
+        }
+        return Ok(backup);
+    }
+    Err("Configuration backup slots are full; move older backups before retrying.".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find, Outcome};
+
+    #[test]
+    fn setup_preview_backup_retry_and_invalid_config_preserve_owner_files() {
+        let root = std::env::temp_dir().join(format!(
+            "sidekick-config-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.json");
+        let agent = find("claude").unwrap();
+        let original = "{\"theme\":\"light\",\"permissions\":{\"allow\":[\"Read\"]}}";
+        std::fs::write(&path, original).unwrap();
+        assert!(super::install_at(agent, &path, BINARY, true).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        let partial = path.with_extension("json.writing");
+        std::fs::write(&partial, "other operation").unwrap();
+        assert!(super::install_at(agent, &path, BINARY, false).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        assert_eq!(
+            std::fs::read_to_string(&partial).unwrap(),
+            "other operation"
+        );
+        std::fs::remove_file(&partial).unwrap();
+        assert!(super::install_at(agent, &path, BINARY, false).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("json.bak")).unwrap(),
+            original
+        );
+        assert!(!super::install_at(agent, &path, BINARY, false).unwrap());
+        assert!(!path.with_extension("json.bak.1").exists());
+        let edited = "{\"theme\":\"dark\"}";
+        std::fs::write(&path, edited).unwrap();
+        assert!(super::install_at(agent, &path, BINARY, false).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("json.bak")).unwrap(),
+            original
+        );
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("json.bak.1")).unwrap(),
+            edited
+        );
+        let installed = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            kobo_json::parse(&installed)
+                .unwrap()
+                .get("theme")
+                .and_then(kobo_json::Value::as_str),
+            Some("dark")
+        );
+        std::fs::write(&path, "{broken").unwrap();
+        assert!(super::install_at(agent, &path, BINARY, false).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{broken");
+        assert!(!partial.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The path an agent would be given, which is never the bare name.
+    const BINARY: &str = "/opt/kobo-sidekickd";
+
+    fn written(id: &str, current: Option<&str>) -> String {
+        match find(id).expect("known agent").merge(current, BINARY) {
+            Ok(Outcome::Write(text)) => text,
+            other => panic!("expected a write, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_home_with_no_configuration_yet_gets_a_whole_file() {
+        let text = written("claude", None);
+        let parsed = kobo_json::parse(&text).expect("what we write is JSON");
+        let entry = parsed
+            .get("hooks")
+            .and_then(|hooks| hooks.get("PermissionRequest"))
+            .and_then(|event| event.index(0))
+            .expect("one registration");
+        assert_eq!(
+            entry.get("matcher").and_then(kobo_json::Value::as_str),
+            Some("*")
+        );
+        let hook = entry
+            .get("hooks")
+            .and_then(|hooks| hooks.index(0))
+            .expect("one hook");
+        assert_eq!(
+            hook.get("command").and_then(kobo_json::Value::as_str),
+            Some("/opt/kobo-sidekickd hook claude")
+        );
+        assert_eq!(
+            hook.get("timeout").and_then(kobo_json::Value::as_i64),
+            Some(360)
+        );
+    }
+
+    /// Codex refuses a list outright. Its own words, handed one: "invalid
+    /// type: sequence, expected a string".
+    #[test]
+    fn codex_is_given_its_command_as_one_string_because_a_list_is_refused() {
+        let text = written("codex", None);
+        let parsed = kobo_json::parse(&text).expect("what we write is JSON");
+        let command = parsed
+            .get("hooks")
+            .and_then(|hooks| hooks.get("PermissionRequest"))
+            .and_then(|event| event.index(0))
+            .and_then(|entry| entry.get("hooks"))
+            .and_then(|hooks| hooks.index(0))
+            .and_then(|hook| hook.get("command"))
+            .expect("a command");
+        assert_eq!(
+            command.as_str(),
+            Some("/opt/kobo-sidekickd hook codex"),
+            "a sequence here is the one shape Codex rejects"
+        );
+        assert!(command.as_array().is_none(), "never a list");
+    }
+
+    #[test]
+    fn settings_that_have_nothing_to_do_with_us_survive_untouched() {
+        let before = r#"{"model":"opus","tui":"fullscreen"}"#;
+        let after = kobo_json::parse(&written("claude", Some(before))).expect("JSON");
+        assert_eq!(
+            after.get("model").and_then(kobo_json::Value::as_str),
+            Some("opus")
+        );
+        assert_eq!(
+            after.get("tui").and_then(kobo_json::Value::as_str),
+            Some("fullscreen")
+        );
+    }
+
+    /// Somebody else's hook is not ours to remove.
+    #[test]
+    fn another_tools_hook_is_joined_rather_than_replaced() {
+        let before = r#"{"hooks":{"PermissionRequest":[{"matcher":"Bash","hooks":[{"type":"command","command":"/usr/bin/other"}]}],"Stop":[{"hooks":[]}]}}"#;
+        let after = kobo_json::parse(&written("claude", Some(before))).expect("JSON");
+        let event = after
+            .get("hooks")
+            .and_then(|hooks| hooks.get("PermissionRequest"))
+            .and_then(kobo_json::Value::as_array)
+            .expect("an array");
+        assert_eq!(event.len(), 2, "the other tool kept its place");
+        assert_eq!(
+            event[0].get("matcher").and_then(kobo_json::Value::as_str),
+            Some("Bash")
+        );
+        assert!(after
+            .get("hooks")
+            .and_then(|hooks| hooks.get("Stop"))
+            .is_some());
+    }
+
+    #[test]
+    fn registering_twice_changes_nothing_the_second_time() {
+        let once = written("claude", None);
+        let agent = find("claude").expect("known agent");
+        assert_eq!(
+            agent.merge(Some(&once), BINARY).expect("reads back"),
+            Outcome::AlreadyThere
+        );
+    }
+
+    /// Recognised by name, so moving the binary does not register it twice.
+    #[test]
+    fn a_registration_written_from_another_path_is_still_recognised_as_ours() {
+        let elsewhere =
+            written("claude", None).replace("/opt/kobo-sidekickd", "/usr/local/bin/kobo-sidekickd");
+        assert_eq!(
+            find("claude")
+                .expect("known agent")
+                .merge(Some(&elsewhere), BINARY)
+                .expect("reads back"),
+            Outcome::AlreadyThere
+        );
+    }
+
+    /// A file we cannot read is a file we must not rewrite.
+    #[test]
+    fn a_configuration_that_does_not_parse_is_refused_rather_than_replaced() {
+        let error = find("claude")
+            .expect("known agent")
+            .merge(Some("{\n  // notes\n  \"model\": \"opus\",\n}"), BINARY)
+            .expect_err("refuses");
+        assert!(error.contains("Nothing was written"), "{error}");
+        assert!(error.contains(".claude/settings.json"), "{error}");
+    }
+
+    #[test]
+    fn an_empty_file_is_treated_as_no_file_rather_than_as_broken() {
+        assert!(matches!(
+            find("claude")
+                .expect("known agent")
+                .merge(Some("  \n"), BINARY),
+            Ok(Outcome::Write(_))
+        ));
+    }
+
+    #[test]
+    fn an_agent_nobody_has_heard_of_is_named_along_with_those_we_know() {
+        let error = find("emacs").expect_err("unknown");
+        assert!(
+            error.contains("claude") && error.contains("codex"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn claude_is_asked_about_permissions_broadly_and_questions_narrowly() {
+        let text = written("claude", None);
+        let root = kobo_json::parse(&text).expect("valid json");
+        let hooks = root.get("hooks").expect("hooks");
+        let matcher = |event: &str| {
+            hooks
+                .get(event)
+                .and_then(kobo_json::Value::as_array)
+                .and_then(<[kobo_json::Value]>::first)
+                .and_then(|entry| entry.get("matcher"))
+                .and_then(kobo_json::Value::as_str)
+                .unwrap_or("")
+                .to_owned()
+        };
+        // Every tool can want permission, so that one listens to all of them.
+        assert_eq!(matcher("PermissionRequest"), "*");
+        // PreToolUse fires before every tool call, so without the matcher
+        // this would ring the reader for every grep.
+        assert_eq!(matcher("PreToolUse"), "AskUserQuestion");
+    }
+
+    #[test]
+    fn an_older_registration_gains_the_event_it_was_missing() {
+        // What setup wrote before questions were handled at all.
+        let before = r#"{"hooks":{"PermissionRequest":[{"matcher":"*","hooks":[
+            {"type":"command","command":"/old/kobo-sidekickd hook claude"}]}]}}"#;
+        let text = written("claude", Some(before));
+        let root = kobo_json::parse(&text).expect("valid json");
+        let hooks = root.get("hooks").expect("hooks");
+        let count = |event: &str| {
+            hooks
+                .get(event)
+                .and_then(kobo_json::Value::as_array)
+                .map_or(0, <[kobo_json::Value]>::len)
+        };
+        // The one already there is left alone rather than written twice.
+        assert_eq!(count("PermissionRequest"), 1);
+        assert_eq!(count("PreToolUse"), 1);
+        assert!(text.contains("/old/kobo-sidekickd"), "{text}");
+    }
+}

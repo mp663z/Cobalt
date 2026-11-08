@@ -1,0 +1,38 @@
+# Each network failure the simulator can stage, then a retry that works and
+# a fetch that survives a trip to the background. Uses example.com live.
+wait-for Sample pages
+scenario offline
+tap-id link-3
+wait-for No Wi-Fi
+shot failure-offline
+scenario normal
+tap-id retry
+wait-for Example Domain
+shot failure-offline-retried
+tap-id back
+wait-for Sample pages
+scenario host-down
+tap-id link-3
+wait-for The site did not answer
+shot failure-host-down
+tap-id return
+wait-for Sample pages
+scenario network-timeout
+tap-id link-3
+wait-for The site took too long
+shot failure-timeout
+tap-id return
+wait-for Sample pages
+scenario permission-denied
+tap-id link-3
+wait-for Browse cannot use the network
+expect-missing Try again
+shot failure-denied
+tap-id return
+wait-for Sample pages
+scenario normal
+tap-id link-3
+lifecycle background
+lifecycle foreground
+wait-for Example Domain
+shot failure-background-during-fetch

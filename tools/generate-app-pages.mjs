@@ -1,0 +1,698 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { setupPanel } from "./app-page-setup.mjs";
+import { collectRegistry } from "./app-registry.mjs";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const catalog = collectRegistry();
+const systemApps = [
+  {
+    id: "launcher",
+    display_name: "Launcher",
+    summary: "Opens installed apps and always keeps a route back to the Kobo reader."
+  },
+  {
+    id: "store",
+    display_name: "App Store",
+    summary: "Installs, updates, removes and reinstalls signed apps over Wi-Fi."
+  },
+  {
+    id: "terminal",
+    display_name: "Terminal",
+    summary: "A shell with an on-screen keyboard."
+  },
+  {
+    id: "settings",
+    display_name: "Settings",
+    summary: "Wi-Fi, device information and Cobalt updates."
+  }
+];
+const screenshots = {
+  arxiv: ["arxiv.png", "The newest Artificial Intelligence preprints listed newest first in the Preprints app on a Kobo"],
+  audiobook: ["audiobook.png", "An audiobook player with cover art and playback controls on a Kobo"],
+  backgammon: ["backgammon.png", "Backgammon board on a Kobo after Black opened with 4 and 6, with dice, cube and match score."],
+  birds: ["birds.png", "A labelled collage of public-domain bird plates filling a Kobo screen."],
+  browser: ["browser.png", "An article laid out in pages in the Browse app on a Kobo, page 1 of 4."],
+  brief: ["brief.png", "A numbered daily news brief on a Kobo"],
+  "calibre-web": ["calibre-web.png", "A book from a calibre-web library open on a Kobo, with text-size and front-light controls and the page count."],
+  chat: ["chat.png", "An answer displayed for touch-friendly reading on a Kobo"],
+  crossword: ["crossword.png", "Crossword grid on a Kobo with the first answer filled in and numbered cells."],
+  deck: ["deck.png", "Deck paired with a computer, showing Test, Format and Deploy command pads."],
+  fanshelf: ["fanshelf.png", "A followed work in Fanshelf naming its author, fandom, rating and chapter count, with Read and Check updates controls."],
+  fieldbook: ["fieldbook.png", "Fieldbook tallying an American Robin during an outing."],
+  flashcards: ["flashcards.png", "A Flashcards review showing the revealed answer with Again, Hard, Good and Easy rating buttons."],
+  frame: ["frame.png", "A full-area monochrome photograph in Frame on a Kobo Clara BW."],
+  gallery: ["components.png", "Cobalt typography and interface components on a Kobo"],
+  grimoire: ["grimoire.png", "Grimoire initiative order showing the active combatant and round counter on a Kobo."],
+  gutenbird: ["gutenbird.png", "A shelf of books from an OPDS library on a Kobo"],
+  habits: ["habits.png", "Habits today screen on a Kobo Clara BW, with daily and weekday streak tasks."],
+  hn: ["hackernews.png", "A ranked list of Hacker News stories on a Kobo"],
+  homepanel: ["homepanel.png", "Home Panel tile grid on a Kobo showing four Home Assistant tiles with the last refresh time."],
+  inkling: ["inkling.png", "A solved Inkling five-letter daily puzzle with grayscale shape feedback."],
+  kitchencard: ["kitchencard.png", "Kitchen Card showing a large cooking instruction with Steps and Ingredients tabs."],
+  lichess: ["lichess.png", "Lichess on Kobo with Account/Games, Puzzles, Computer and How to play tiles above the rapid and classical time controls."],
+  logicpack: ["logicpack.png", "Logic Pack's Minesweeper board after a revealed cell and contradiction check."],
+  launcher: ["launcher.png", "The Cobalt launcher on its Apps tab, with Books, Settings and Kobo reader tabs below"],
+  magnet: ["magnet.png", "The Kobo hall sensor responding to a magnet"],
+  morse: ["morse.png", "A letter filling the Kobo screen while the front light sends Morse code"],
+  musicstand: ["musicstand.png", "Music Stand showing the Prelude from Bach's Cello Suite No. 1 as a full-page score."],
+  needles: ["needles.png", "Needles row counter showing the current row, section and repeat progress, with +1 row and Undo."],
+  nonograms: ["nonograms.png", "A Nonograms puzzle with the selected square and its row and column clues highlighted."],
+  panels: ["panels.png", "The Panels comic shelf with a cover and saved progress, page 2 of 4."],
+  paperterm: ["paperterm.png", "Paperterm showing a laptop terminal session in portrait, with the keyboard open."],
+  parlor: ["parlor.png", "Reversi opening board showing four legal moves, with Undo, Moves and New game."],
+  parser: ["parser.png", "Parser opening Lamplight, with tappable words in the story and command buttons for LOOK, TAKE and the compass directions."],
+  post: ["post.png", "Post inbox listing Hermes letters newest first, with Newer and Older paging."],
+  pubquiz: ["pubquiz.png", "Pub Quiz pass-around question with four large answer choices for Ada."],
+  readlater: ["readlater.png", "Read Later's unread queue of synced Wallabag articles with reading times."],
+  rss: ["feeds.png", "Subscribed feeds and articles in the Feeds app on a Kobo"],
+  "rss-miniflux": ["rss-miniflux.png", "A Miniflux article open on a Kobo with text-size and front-light controls."],
+  settings: ["settings.png", "Cobalt Settings listing Bluetooth, Wi-Fi, Battery, Software update and About"],
+  sidekick: ["sidekick.png", "Sidekick showing several coding-agent sessions and their pending approvals."],
+  store: ["store.png", "The Cobalt App Store listing installed and available apps"],
+  sudoku: ["sudoku.png", "An original Sudoku puzzle with pencil notes, selected keys and a highlighted row and column"],
+  syncthing: ["syncthing.png", "Sync folders: vault, frame and books receive, out sends."],
+  terminal: ["terminal.png", "A shell and touch keyboard on a Kobo"],
+  tictactoe: ["tictactoe.png", "A completed game of tic-tac-toe on a Kobo"],
+  todo: ["todo.png", "A to-do list with one open item on a Kobo"],
+  vault: ["vault.png", "Vault home on a Kobo with four synced notes and Browse, Tags, Recent and Search rows."],
+  verses: ["verses.png", "Verses displaying a public-domain daily poem in a spacious Kobo reading layout."],
+  "zotero-reader": ["zotero-reader.png", "Reading a paper with structured layout and Zotero metadata on a Kobo"]
+};
+// Categories are a property of the listing, not of the app, so they live here
+// rather than in cobalt-app.json. A manifest field would ship inside every
+// package and force all 45 apps to publish a new version for a line of text
+// that only the website draws.
+const categories = {
+  arxiv: "Reading",
+  audiobook: "Audio",
+  backgammon: "Games",
+  birds: "Devices",
+  brief: "Reading",
+  browser: "Reading",
+  "calibre-web": "Reading",
+  chat: "Developer",
+  crossword: "Games",
+  deck: "Devices",
+  fanshelf: "Reading",
+  fieldbook: "Productivity",
+  flashcards: "Productivity",
+  frame: "Devices",
+  gallery: "Developer",
+  grimoire: "Reference",
+  gutenbird: "Reading",
+  habits: "Productivity",
+  hn: "Reading",
+  homepanel: "Devices",
+  inkling: "Games",
+  kitchencard: "Productivity",
+  lichess: "Games",
+  logicpack: "Games",
+  magnet: "Developer",
+  morse: "Devices",
+  musicstand: "Reference",
+  needles: "Productivity",
+  nonograms: "Games",
+  panels: "Reading",
+  paperterm: "Devices",
+  parlor: "Games",
+  parser: "Games",
+  post: "Productivity",
+  pubquiz: "Games",
+  readlater: "Reading",
+  rss: "Reading",
+  "rss-miniflux": "Reading",
+  sidekick: "Developer",
+  sudoku: "Games",
+  syncthing: "Devices",
+  tictactoe: "Games",
+  todo: "Productivity",
+  vault: "Reference",
+  verses: "Reading",
+  "zotero-reader": "Reading"
+};
+const categoryFor = app => {
+  const category = categories[app.id];
+  if (!category) {
+    throw new Error(`${app.id} has no listing category; add one to categories`);
+  }
+  return category;
+};
+// schema.org's application types, so search engines file each page under a
+// kind of software rather than the generic SoftwareApplication.
+const schemaCategories = {
+  Audio: "MultimediaApplication",
+  Developer: "DeveloperApplication",
+  Devices: "UtilitiesApplication",
+  Games: "GameApplication",
+  Productivity: "UtilitiesApplication",
+  Reading: "ReferenceApplication",
+  Reference: "ReferenceApplication"
+};
+const schemaCategoryFor = app =>
+  categories[app.id] ? schemaCategories[categoryFor(app)] : "UtilitiesApplication";
+// Every listed app, system apps included, is a package under apps/ or examples/.
+const sourceDirFor = id =>
+  ["apps", "examples"].find(dir => existsSync(resolve(root, dir, id, "Cargo.toml")));
+// A page title is what a search result shows, so it names the app and what it
+// is for. Apps whose name does not say what they do carry a short phrase that
+// does; the rest are named plainly.
+const titlePhrases = {
+  arxiv: "research preprints on Kobo",
+  "calibre-web": "read your calibre-web books on Kobo",
+  deck: "a computer remote on Kobo",
+  grimoire: "tabletop RPG reference on Kobo",
+  inkling: "a daily word puzzle on Kobo",
+  needles: "a knitting row counter on Kobo",
+  parlor: "Reversi for two on Kobo",
+  parser: "a text adventure on Kobo",
+  post: "letters from Hermes on Kobo",
+  "rss-miniflux": "a Miniflux reader for Kobo",
+  syncthing: "Syncthing folder sync on Kobo",
+  birds: "BirdNET-Go sightings on Kobo",
+  fanshelf: "AO3 works offline on Kobo",
+  fieldbook: "a bird sighting log on Kobo",
+  frame: "a photo frame on Kobo",
+  gutenbird: "OPDS library books on Kobo",
+  homepanel: "Home Assistant controls on Kobo",
+  kitchencard: "Mealie recipes on Kobo",
+  musicstand: "sheet music on Kobo",
+  panels: "comics on Kobo",
+  paperterm: "a computer terminal on Kobo",
+  readlater: "Wallabag articles on Kobo",
+  sidekick: "answer coding-agent prompts on Kobo",
+  vault: "your notes on Kobo",
+  "zotero-reader": "your paper library on Kobo"
+};
+const pageTitle = app => {
+  const phrase = titlePhrases[app.id];
+  return phrase
+    ? `${app.display_name}: ${phrase} | Cobalt`
+    : `${app.display_name} for Kobo e-readers | Cobalt`;
+};
+const screenshotFor = app => {
+  const screenshot = screenshots[app.id];
+  return screenshot || [
+    "store.png",
+    `${app.display_name} available from the signed Cobalt Apps Catalog`
+  ];
+};
+const appsRoot = resolve(root, "docs/apps");
+for (const app of catalog.apps) {
+  if (
+    typeof app.id !== "string"
+    || app.id.length === 0
+    || app.id.length > 32
+    || !/^[a-z][a-z0-9-]*$/.test(app.id)
+    || app.id.endsWith("-")
+    || app.id.includes("--")
+  ) {
+    throw new Error(`invalid app id: ${String(app.id)}`);
+  }
+}
+const appIds = new Set([...catalog.apps, ...systemApps].map(app => app.id));
+
+mkdirSync(appsRoot, { recursive: true });
+for (const entry of readdirSync(appsRoot, { withFileTypes: true })) {
+  if (entry.isDirectory() && !appIds.has(entry.name)) {
+    rmSync(resolve(appsRoot, entry.name), { recursive: true });
+  }
+}
+
+const escape = value => value
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;");
+const jsonLd = value => JSON.stringify(value, null, 2).replaceAll("<", "\\u003c");
+
+// A listing with one thumbnail tells a visitor nothing about what the app is
+// like to use. Any app that published extra captures under its own media
+// directory gets them as a gallery.
+const galleryShots = id => {
+  try {
+    return readdirSync(resolve(root, "docs/media/site/apps", id))
+      .filter(file => /\.(png|jpg)$/.test(file))
+      .sort();
+  } catch {
+    return [];
+  }
+};
+const shotCaption = file => {
+  const words = file
+    .replace(/\.(png|jpg)$/, "")
+    .replace(/^\d+[-_]/, "")
+    .replaceAll("-", " ")
+    .replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+// Gallery images load lazily, so without their size the page jumps as each
+// one arrives. A PNG keeps its size at a fixed offset; a JPEG keeps it in the
+// first start-of-frame segment, which is found by walking the segments.
+const imageSize = path => {
+  const bytes = readFileSync(path);
+  if (path.endsWith(".png")) return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+  let offset = 2;
+  while (offset + 9 < bytes.length) {
+    const marker = bytes[offset + 1];
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+      return [bytes.readUInt16BE(offset + 7), bytes.readUInt16BE(offset + 5)];
+    }
+    offset += 2 + bytes.readUInt16BE(offset + 2);
+  }
+  throw new Error(`${path} has no JPEG frame header`);
+};
+// A file name is a fallback caption. An app can say what each screen shows,
+// and which screens lead, in captions.json beside the images.
+const galleryCaptions = id => {
+  const path = resolve(root, "docs/media/site/apps", id, "captions.json");
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+};
+const gallery = (app, name) => {
+  const shots = galleryShots(app.id);
+  if (shots.length < 2) return "";
+  const captions = galleryCaptions(app.id);
+  // Captioned screens lead, in the order captions.json lists them.
+  const order = Object.keys(captions);
+  const rank = file => (order.includes(file) ? order.indexOf(file) : order.length);
+  shots.sort((a, b) => rank(a) - rank(b));
+  const figures = shots
+    .map(file => {
+      const [width, height] = imageSize(resolve(root, "docs/media/site/apps", app.id, file));
+      const caption = escape(captions[file] ?? shotCaption(file));
+      return `      <figure><img src="../../media/site/apps/${app.id}/${file}" width="${width}" height="${height}" loading="lazy" alt="${name}: ${caption}"><figcaption>${caption}</figcaption></figure>`;
+    })
+    .join("\n");
+  return `
+  <section class="gallery" aria-label="${name} screenshots">
+    <div class="strip">
+${figures}
+    </div>
+  </section>`;
+};
+const sourceLink = app => {
+  const dir = sourceDirFor(app.id);
+  return dir
+    ? `\n      <p class="source"><a href="https://github.com/BandarLabs/Cobalt/tree/main/${dir}/${app.id}">Source code on GitHub</a></p>`
+    : "";
+};
+// Some release notes describe repository work, such as a README or a test
+// fixture, rather than anything a reader would notice. They are rewritten or
+// hidden here, keyed by version, so each override lapses when that app ships
+// its next version and its own note takes over. null hides the section.
+const releaseNoteOverrides = {
+  "backgammon@0.1.8": null,
+  "grimoire@0.1.3": null,
+  "morse@1.0.14": null,
+  "paperterm@0.1.9": null,
+  "sudoku@1.0.14": null
+};
+const releaseNote = app => {
+  const key = `${app.id}@${app.version}`;
+  return key in releaseNoteOverrides ? releaseNoteOverrides[key] : app.release_notes;
+};
+const whatsNew = app => {
+  const note = releaseNote(app);
+  return note
+    ? `
+  <section class="whats-new">
+    <h2>New in ${escape(app.version)}</h2>
+    <p>${escape(note)}</p>
+  </section>`
+    : "";
+};
+const scriptHash = value => createHash("sha256").update(value).digest("base64");
+const pageDescription = app => {
+  if (app.page_description === undefined) return app.summary;
+  if (
+    typeof app.page_description !== "string"
+    || app.page_description.trim().length === 0
+    || app.page_description.length > 512
+  ) {
+    throw new Error(`${app.id} page_description must be a non-empty string of at most 512 characters`);
+  }
+  return app.page_description;
+};
+const installableDescription = app =>
+  `${pageDescription(app)} Install it on a supported Kobo e-reader with Cobalt.`;
+const systemDescription = app =>
+  `${app.summary} Included with Cobalt on supported Kobo e-readers.`;
+const appSchema = (app, canonical, screenshot, screenshotAlt) => ({
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: app.display_name,
+      description: pageDescription(app),
+      url: canonical,
+      image: {
+        "@type": "ImageObject",
+        url: `https://bandarlabs.github.io/Cobalt/media/site/apps/${screenshot}`,
+        width: 1072,
+        height: 1448,
+        caption: screenshotAlt
+      },
+      applicationSuite: "Cobalt",
+      applicationCategory: schemaCategoryFor(app),
+      operatingSystem: "Cobalt on supported Kobo e-readers",
+      ...(app.version ? { softwareVersion: app.version } : {}),
+      isAccessibleForFree: true,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      installUrl: canonical,
+      ...(sourceDirFor(app.id)
+        ? { sameAs: `https://github.com/BandarLabs/Cobalt/tree/main/${sourceDirFor(app.id)}/${app.id}` }
+        : {})
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Cobalt",
+          item: "https://bandarlabs.github.io/Cobalt/"
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Apps",
+          item: "https://bandarlabs.github.io/Cobalt/#apps"
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: app.display_name,
+          item: canonical
+        }
+      ]
+    }
+  ]
+});
+
+for (const app of catalog.apps) {
+  const id = escape(app.id);
+  const name = escape(app.display_name);
+  const summary = escape(pageDescription(app));
+  const description = escape(installableDescription(app));
+  const capabilities = app.capabilities.length
+    ? app.capabilities.map(escape).join(", ")
+    : "No additional permissions";
+  const canonical = `https://bandarlabs.github.io/Cobalt/apps/${id}/`;
+  const [screenshot, screenshotAlt] = screenshotFor(app);
+  const image = `https://bandarlabs.github.io/Cobalt/media/site/apps/${screenshot}`;
+  const structuredData = jsonLd(appSchema(app, canonical, screenshot, screenshotAlt));
+  const structuredDataHash = scriptHash(structuredData);
+  const prerequisites = setupPanel(app);
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escape(pageTitle(app))}</title>
+<meta name="description" content="${description}">
+<link rel="canonical" href="${canonical}">
+<link rel="icon" href="../../logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escape(pageTitle(app))}">
+<meta property="og:description" content="${description}">
+<meta property="og:url" content="${canonical}">
+<meta property="og:site_name" content="Cobalt">
+<meta property="og:image" content="${image}">
+<meta property="og:image:width" content="1072">
+<meta property="og:image:height" content="1448">
+<meta property="og:image:alt" content="${escape(screenshotAlt)}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${escape(pageTitle(app))}">
+<meta name="twitter:description" content="${description}">
+<meta name="twitter:image" content="${image}">
+<meta name="twitter:image:alt" content="${escape(screenshotAlt)}">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-${structuredDataHash}'; style-src 'self'; img-src 'self'; connect-src https://cobalt-install-relay.anandabhishek.workers.dev; base-uri 'none'; form-action 'self'">
+<script type="application/ld+json">${structuredData}</script>
+<link rel="stylesheet" href="../install.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="../../"><img src="../../logo.svg" alt="Cobalt" width="81" height="34"></a>
+    <nav class="top" aria-label="Main navigation">
+      <a class="active" href="../../#apps">Apps</a>
+      <a href="../../developers.html">Developers</a>
+      <a href="../../faq.html">FAQ</a>
+      <a href="../../#store">Store</a>
+      <a href="../../#install">Install</a>
+      <a href="../../#contributing">Contributing</a>
+      <a href="https://github.com/BandarLabs/Cobalt">GitHub</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" data-app-id="${id}" data-minimum-cobalt-version="${escape(app.minimum_cobalt_version)}">
+  <div class="app-hero">
+    <div class="app-copy">
+      <p class="eyebrow">${escape(categoryFor(app))}</p>
+      <h1>${name}</h1>
+      <p class="summary">${summary}</p>
+      <dl class="facts">
+        <div><dt>Version</dt><dd>${escape(app.version)}</dd></div>
+        <div><dt>Permissions</dt><dd>${capabilities}</dd></div>
+        <div><dt>Requires</dt><dd>Cobalt ${escape(app.minimum_cobalt_version)}</dd></div>
+      </dl>
+      <a class="cta" href="#setup-panel">Install on your Kobo</a>${sourceLink(app)}
+    </div>
+    <figure class="app-shot">
+      <img src="../../media/site/apps/${screenshot}" width="1072" height="1448" alt="${escape(screenshotAlt)}">
+    </figure>
+  </div>${gallery(app, name)}${whatsNew(app)}${prerequisites}
+  <section class="panel get-cobalt" id="setup-panel">
+    <div class="get-cobalt-copy">
+      <p class="eyebrow">New to Cobalt?</p>
+      <h2>Install Cobalt from your browser</h2>
+      <p>Plug your Kobo into this computer and install Cobalt in about a minute. After that, apps install over Wi-Fi.</p>
+      <p class="fine">Works in Chrome, Edge and Opera. <a href="https://github.com/BandarLabs/Cobalt/blob/main/docs/DEVICES.md#device-support-matrix">Check your Kobo is supported</a>.</p>
+    </div>
+    <a class="get-cobalt-go" href="../../install/">Install Cobalt<span aria-hidden="true">&#8594;</span></a>
+  </section>
+  <section class="panel" id="pair-panel">
+    <p class="eyebrow">Already have Cobalt?</p>
+    <h2>Link your Kobo to install</h2>
+    <p>On your Kobo, open <strong>App Store</strong>, tap the globe in the top bar and choose <strong>Link browser</strong>. Scan the QR code, or enter the pairing code and verification key.</p>
+    <form id="pair-form">
+      <div class="field">
+        <label for="pair-code">Pairing code</label>
+        <input id="pair-code" name="code" inputmode="text" autocomplete="one-time-code" maxlength="8" required>
+      </div>
+      <div class="field" id="pair-secret-field">
+        <label for="pair-secret">Verification key</label>
+        <input class="secret" id="pair-secret" name="secret" inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="45" required>
+      </div>
+      <button type="submit">Link Kobo</button>
+    </form>
+    <p class="status" id="pair-status" role="status" aria-live="polite"></p>
+  </section>
+  <section class="panel" id="install-panel" hidden>
+    <h2>Install on <span id="device-name">your Kobo</span></h2>
+    <p>Your Kobo checks the app's signature before installing it.</p>
+    <div class="actions">
+      <button type="button" id="install">Install ${name}</button>
+      <button type="button" id="forget" class="secondary">Forget this Kobo</button>
+    </div>
+    <p class="status" id="install-status" role="status" aria-live="polite"></p>
+  </section>
+  <aside class="community">
+    <strong>Want another Kobo app?</strong>
+    Request it, suggest a feature or report a bug in
+    <a href="https://www.reddit.com/r/CobaltForKobo/">r/CobaltForKobo</a>.
+  </aside>
+</main>
+<footer>
+  <div class="wrap">
+    <span>Cobalt · AGPL-3.0</span>
+    <nav aria-label="Footer navigation">
+      <a href="../../">Home</a>
+      <a href="https://www.reddit.com/r/CobaltForKobo/">Community</a>
+      <a href="https://github.com/BandarLabs/Cobalt">GitHub</a>
+    </nav>
+  </div>
+</footer>
+<script src="../install.js" defer></script>
+</body>
+</html>
+`;
+  const output = resolve(root, "docs/apps", app.id, "index.html");
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, html);
+}
+
+for (const app of systemApps) {
+  const id = escape(app.id);
+  const name = escape(app.display_name);
+  const summary = escape(app.summary);
+  const description = escape(systemDescription(app));
+  const canonical = `https://bandarlabs.github.io/Cobalt/apps/${id}/`;
+  const [screenshot, screenshotAlt] = screenshotFor(app);
+  const image = `https://bandarlabs.github.io/Cobalt/media/site/apps/${screenshot}`;
+  const structuredData = jsonLd(appSchema(app, canonical, screenshot, screenshotAlt));
+  const structuredDataHash = scriptHash(structuredData);
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escape(pageTitle(app))}</title>
+<meta name="description" content="${description}">
+<link rel="canonical" href="${canonical}">
+<link rel="icon" href="../../logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escape(pageTitle(app))}">
+<meta property="og:description" content="${description}">
+<meta property="og:url" content="${canonical}">
+<meta property="og:site_name" content="Cobalt">
+<meta property="og:image" content="${image}">
+<meta property="og:image:width" content="1072">
+<meta property="og:image:height" content="1448">
+<meta property="og:image:alt" content="${escape(screenshotAlt)}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${escape(pageTitle(app))}">
+<meta name="twitter:description" content="${description}">
+<meta name="twitter:image" content="${image}">
+<meta name="twitter:image:alt" content="${escape(screenshotAlt)}">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${structuredDataHash}'; style-src 'self'; img-src 'self'; base-uri 'none'">
+<script type="application/ld+json">${structuredData}</script>
+<link rel="stylesheet" href="../install.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="../../"><img src="../../logo.svg" alt="Cobalt" width="81" height="34"></a>
+    <nav class="top" aria-label="Main navigation">
+      <a class="active" href="../../#apps">Apps</a>
+      <a href="../../developers.html">Developers</a>
+      <a href="../../faq.html">FAQ</a>
+      <a href="../../#store">Store</a>
+      <a href="../../#install">Install</a>
+      <a href="../../#contributing">Contributing</a>
+      <a href="https://github.com/BandarLabs/Cobalt">GitHub</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <div class="app-hero">
+    <div class="app-copy">
+      <p class="eyebrow">Cobalt system app</p>
+      <h1>${name}</h1>
+      <p class="summary">${summary}</p>
+      <div class="meta"><span>Included with Cobalt</span></div>${sourceLink(app)}
+    </div>
+    <figure class="app-shot">
+      <img src="../../media/site/apps/${screenshot}" width="1072" height="1448" alt="${escape(screenshotAlt)}">
+    </figure>
+  </div>
+  <section class="panel setup">
+    <p class="eyebrow">Included with Cobalt</p>
+    <h2>No separate install</h2>
+    <p>${name} is installed with Cobalt.</p>
+    <a class="button-link" href="../../#install">Set up Cobalt</a>
+  </section>
+  <aside class="community">
+    <strong>Want another Kobo app?</strong>
+    Request it, suggest a feature or report a bug in
+    <a href="https://www.reddit.com/r/CobaltForKobo/">r/CobaltForKobo</a>.
+  </aside>
+</main>
+<footer>
+  <div class="wrap">
+    <span>Cobalt · AGPL-3.0</span>
+    <nav aria-label="Footer navigation">
+      <a href="../../">Home</a>
+      <a href="https://www.reddit.com/r/CobaltForKobo/">Community</a>
+      <a href="https://github.com/BandarLabs/Cobalt">GitHub</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
+`;
+  const output = resolve(root, "docs/apps", app.id, "index.html");
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, html);
+}
+
+const sitemapUrls = [
+  "https://bandarlabs.github.io/Cobalt/",
+  "https://bandarlabs.github.io/Cobalt/developers.html",
+  "https://bandarlabs.github.io/Cobalt/faq.html",
+  "https://bandarlabs.github.io/Cobalt/sdk.html",
+  ...[...catalog.apps, ...systemApps].map(
+    app => `https://bandarlabs.github.io/Cobalt/apps/${app.id}/`
+  )
+];
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${sitemapUrls.map(url => `  <url><loc>${url}</loc></url>`).join("\n")}
+</urlset>
+`;
+writeFileSync(resolve(root, "docs/sitemap.xml"), sitemap);
+
+// The landing page used to carry a hand-written excerpt of the catalog, which
+// drifted until twenty-six shipped apps were missing from it. The grid is now
+// derived from the same manifests the app pages come from, so an app that
+// ships is an app the site shows.
+const gridApps = [
+  ...systemApps,
+  ...[...catalog.apps].sort((a, b) => a.display_name.localeCompare(b.display_name))
+];
+const gridCard = app => {
+  const [screenshot, screenshotAlt] = screenshotFor(app);
+  return `      <div class="app">
+        <a class="shot" href="apps/${app.id}/"><img src="media/site/apps/${screenshot}" width="1072" height="1448" loading="lazy" alt="${escape(screenshotAlt)}"></a>
+        <h3><a href="apps/${app.id}/">${escape(app.display_name)}</a></h3>
+        <p>${escape(app.summary)}</p>
+      </div>`;
+};
+const indexPath = resolve(root, "docs/index.html");
+const indexHtml = readFileSync(indexPath, "utf8");
+const gridStart = "<!-- apps-grid:start -->";
+const gridEnd = "<!-- apps-grid:end -->";
+const startIndex = indexHtml.indexOf(gridStart);
+const endIndex = indexHtml.indexOf(gridEnd);
+if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+  throw new Error(`docs/index.html is missing its ${gridStart} / ${gridEnd} markers`);
+}
+writeFileSync(
+  indexPath,
+  `${indexHtml.slice(0, startIndex + gridStart.length)}\n${gridApps
+    .map(gridCard)
+    .join("\n")}\n      ${indexHtml.slice(endIndex)}`
+);
+
+// The README's hand-written table had drifted to two Store apps out of
+// thirty-four. This table is derived, so publishing an app lists it.
+const storeApps = [...catalog.apps].sort((a, b) =>
+  a.display_name.localeCompare(b.display_name)
+);
+const readmeCell = app => {
+  const [screenshot, screenshotAlt] = screenshotFor(app);
+  const href = `apps/${app.id}/README.md`;
+  return `<td width="33%" valign="top"><a href="${href}"><img width="230" src="docs/media/site/apps/${screenshot}" alt="${escape(screenshotAlt)}"></a><br><b><a href="${href}">${escape(app.display_name)}</a></b><br>${escape(app.summary)}</td>`;
+};
+const readmeRows = [];
+for (let index = 0; index < storeApps.length; index += 3) {
+  const row = storeApps.slice(index, index + 3).map(readmeCell);
+  while (row.length < 3) row.push("<td></td>");
+  readmeRows.push(`<tr>\n${row.join("\n")}\n</tr>`);
+}
+const readmeTable = `<table>\n${readmeRows.join("\n")}\n</table>`;
+const readmePath = resolve(root, "README.md");
+const readmeText = readFileSync(readmePath, "utf8");
+const storeStart = "<!-- store-apps:start -->";
+const storeEnd = "<!-- store-apps:end -->";
+const storeStartIndex = readmeText.indexOf(storeStart);
+const storeEndIndex = readmeText.indexOf(storeEnd);
+if (storeStartIndex === -1 || storeEndIndex === -1 || storeEndIndex < storeStartIndex) {
+  throw new Error(`README.md is missing its ${storeStart} / ${storeEnd} markers`);
+}
+writeFileSync(
+  readmePath,
+  `${readmeText.slice(0, storeStartIndex + storeStart.length)}\n${readmeTable}\n${readmeText.slice(storeEndIndex)}`
+);

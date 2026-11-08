@@ -1,0 +1,2638 @@
+//! Preparing a stock reader over USB, before there is any way in.
+//!
+//! Every other command in this tool needs a network address and an SSH server.
+//! A reader out of its box has neither, and no way to get either: `start.sh`
+//! needs a shell to run it, and a `NickelMenu` entry needs `NickelMenu`. So the
+//! first install has to happen over the USB cable, against a filesystem that
+//! the reader itself is not running from.
+//!
+//! # What this is allowed to touch
+//!
+//! Only the book partition, the FAT volume that appears when the cable is
+//! plugged in. Nothing here writes to the system partition, and nothing here
+//! is extracted as root.
+//!
+//! That rule is worth stating plainly because the obvious way to do this
+//! violates it. Dropping a `KoboRoot.tgz` into `.kobo/` makes the firmware
+//! unpack it **as root, at `/`, at the next boot**, which is how every other
+//! Kobo modification is distributed. It is also the one mechanism on the
+//! device that can leave it unbootable: a bad path in that archive overwrites
+//! part of the running system, and there is no recovery short of a firmware
+//! reflash. Cobalt's archive is confined to `.adds/cobalt` and would be
+//! harmless, but the mechanism does not check that, the archive does.
+//!
+//! So this does not use it. [`write_payload`] copies the same files straight
+//! into `.adds/cobalt` on the mounted volume, which is a plain folder copy the
+//! reader never elevates. The worst outcome of a setup that goes wrong is a
+//! folder to delete.
+//!
+//! # What that costs
+//!
+//! A folder copy does not trigger the firmware's update-and-restart, so the
+//! reader has to be restarted by hand for [`enable_ssh`] to take effect. That
+//! is one button held down, in exchange for never handing the boot script an
+//! archive. It is the right trade.
+
+#[path = "setup_settings.rs"]
+mod settings_record;
+
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+use std::fs;
+use std::net::Ipv4Addr;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Duration;
+
+/// The folder a reader's own files live in, relative to the mounted volume.
+pub const SYSTEM_FOLDER: &str = ".kobo";
+
+/// Where Cobalt is installed, relative to the mounted volume.
+pub const INSTALL_FOLDER: &str = ".adds/cobalt";
+// The current/next/previous names and owner-folder list deliberately match
+// kobod's OTA transaction. USB setup can therefore recover the same directory
+// swap states instead of inventing a parallel layout.
+const STAGING_FOLDER: &str = ".adds/cobalt.next";
+const PREVIOUS_FOLDER: &str = ".adds/cobalt.prev";
+const OWNER_HOLD_FOLDER: &str = ".adds/cobalt.owner";
+const RECOVERY_PREFIX: &str = ".adds/cobalt.recovery.";
+const OTA_JOURNALS: [&str; 2] = [
+    ".adds/.cobalt-update-transaction",
+    ".adds/.cobalt-update-transaction.new",
+];
+const TRANSACTION_MARKER: &str = ".managed-complete";
+const OWNER_FOLDERS: &[&str] = &["secrets", "trust", "state", "data", "apps", "store"];
+
+/// The firmware's own marker for a disabled SSH server.
+///
+/// Firmware 4.42 and later ship a server and gate it on the name of this file,
+/// which is the whole reason this command can exist without installing one.
+pub const SSH_DISABLED: &str = ".kobo/ssh-disabled";
+
+/// The same marker, renamed to let the server start.
+pub const SSH_ENABLED: &str = ".kobo/ssh-enabled";
+
+/// The reader's own settings file, in Qt's INI dialect.
+pub const SETTINGS: &str = ".kobo/Kobo/Kobo eReader.conf";
+
+/// The settings this command writes, as section, key and value.
+///
+/// Both are the reader's own settings, applied by the reader's own code. That
+/// is the whole rule for this list: nothing here may make Cobalt a second
+/// owner of the radio or of power, which is the mistake that cost this project
+/// a device once already.
+///
+/// `ForceWifiOn` keeps the radio up once the reader is awake. On its own that
+/// is not enough, because the reader does not merely let the radio idle, it
+/// suspends the whole device, and a suspended device answers nothing. The
+/// suspend is requested by nickel itself, so no wake lock can prevent it; the
+/// only lever is nickel's own timer. `AutoSleepMinutes` is that timer, and
+/// ninety minutes is long enough to install, deploy and test without the
+/// device going out from under you mid-session.
+///
+/// Neither key is guessed. `AutoSleepMinutes` was found by enumerating the key
+/// strings beside the `PowerSettings` type information in `libnickel`, then
+/// confirmed on hardware: the reader reported it as supported, and a device
+/// that had been suspending for ninety-three per cent of its life stayed awake
+/// for thirty-eight unattended minutes afterwards. `kobo setup --undo` restores
+/// their original values when a setup record is available, and the reader's own Energy saving screen overrides them at any time.
+pub const SETTINGS_APPLIED: &[(&str, &str, &str)] = &[
+    ("DeveloperSettings", "ForceWifiOn", "true"),
+    ("PowerOptions", "AutoSleepMinutes", "90"),
+];
+
+/// A mounted reader, and what it says it is.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Mounted {
+    /// The mount point of the book partition.
+    pub volume: PathBuf,
+    /// Full serial, whose first four characters are the model code.
+    pub serial: String,
+    /// Firmware version string.
+    pub firmware: String,
+}
+
+impl Mounted {
+    /// The four-character model code, which is what a device profile matches.
+    #[must_use]
+    pub fn model_code(&self) -> &str {
+        self.serial.get(..4).unwrap_or_default()
+    }
+
+    /// A one-line description of what was found.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        format!(
+            "{} at {} · firmware {}",
+            self.model_code(),
+            self.volume.display(),
+            self.firmware
+        )
+    }
+}
+
+/// Resolves USB-visible identity through the shared device profile table.
+///
+/// A mounted book partition exposes only the serial prefix and firmware. That
+/// is enough to select one reviewed profile because each entry in
+/// [`kobo_profile::SUPPORTED_PROFILES`] claims a model and a firmware branch,
+/// and no two claim the same pair. Panel geometry and kernel identity are
+/// checked again by the runtime before it can write to a display.
+///
+/// # Errors
+///
+/// Returns a hardware- or firmware-specific refusal, or an ambiguity error if
+/// profile data ever stops being unique.
+pub fn install_profile(reader: &Mounted) -> Result<&'static kobo_profile::DeviceProfile, String> {
+    let hardware = kobo_profile::SUPPORTED_PROFILES
+        .iter()
+        .copied()
+        .filter(|profile| profile.serial_prefix == reader.model_code())
+        .collect::<Vec<_>>();
+    if hardware.is_empty() {
+        return Err(format!(
+            "unsupported Kobo hardware: model code {} has no reviewed Cobalt profile",
+            reader.model_code()
+        ));
+    }
+    // Checked before the model's own branches, and named for the reason rather
+    // than the symptom. Falling through to "reviewed branches: 4.45" would be
+    // true and would send an owner looking for a 4.45 build of a reader that
+    // Kobo has moved on from, when the answer is that nothing can start Cobalt
+    // there at all.
+    if !kobo_profile::launchable_generation(&reader.firmware) {
+        return Err(format!(
+            "firmware {} cannot start Cobalt: NickelMenu is the only way in from the \
+             reader's own menus and it does not hook the {}.x firmware, so an installation \
+             here could never be launched",
+            reader.firmware,
+            reader.firmware.split('.').next().unwrap_or("that")
+        ));
+    }
+    let matching = hardware
+        .iter()
+        .copied()
+        .filter(|profile| profile.accepts_firmware(&reader.firmware))
+        .collect::<Vec<_>>();
+    match matching.as_slice() {
+        [profile] if profile.write_ready => Ok(*profile),
+        [profile] => Err(format!(
+            "{} ({}) is not enabled for installation: {}",
+            profile.model,
+            profile.id,
+            kobo_profile::WRITE_EVIDENCE_PENDING
+        )),
+        [] => {
+            let supported = hardware
+                .iter()
+                .flat_map(|profile| profile.firmware_branches())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(format!(
+                "unsupported firmware {} on {}; reviewed branches: {}",
+                reader.firmware, hardware[0].model, supported
+            ))
+        }
+        _ => Err(format!(
+            "ambiguous device profiles for {} on firmware {}; refusing to guess",
+            reader.model_code(),
+            reader.firmware
+        )),
+    }
+}
+
+/// Reads the four comma-separated facts the firmware records about itself.
+///
+/// The file is a single line of the form `serial,…,firmware,…`. Only the first
+/// and third fields mean anything here, and a short line yields empty strings
+/// rather than an error, because a reader that has been reset mid-write is
+/// still a reader worth naming.
+#[must_use]
+pub fn parse_version(line: &str) -> (String, String) {
+    let mut fields = line.trim().split(',');
+    let serial = fields.next().unwrap_or_default().trim().to_owned();
+    let firmware = fields.nth(1).unwrap_or_default().trim().to_owned();
+    (serial, firmware)
+}
+
+/// True when a serial is recognisably a Kobo's.
+///
+/// Every known Kobo serial begins with `N` or `P` and three digits. This is the same test
+/// [`crate::connect::Identity::is_kobo`] applies over the network, kept
+/// separate because the evidence arrives by a different route.
+#[must_use]
+pub fn is_kobo_serial(serial: &str) -> bool {
+    let bytes = serial.as_bytes();
+    bytes.len() >= 4
+        && (bytes[0] == b'N' || bytes[0] == b'P')
+        && bytes[1..4].iter().all(u8::is_ascii_digit)
+}
+
+/// Every place a removable volume is mounted on this operating system.
+///
+/// Not every entry is a reader, and most of the time none of them are. The
+/// filtering is [`mounted_readers`]'s job.
+#[must_use]
+pub fn mount_roots() -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        vec![PathBuf::from("/Volumes")]
+    } else {
+        let mut roots = vec![PathBuf::from("/media"), PathBuf::from("/run/media")];
+        if let Ok(user) = std::env::var("USER") {
+            roots.push(Path::new("/media").join(&user));
+            roots.push(Path::new("/run/media").join(&user));
+        }
+        roots.push(PathBuf::from("/mnt"));
+        roots
+    }
+}
+
+/// Every mounted reader this machine can see.
+///
+/// A volume qualifies when it has a readable `.kobo/version` naming a Kobo
+/// serial. That file is the firmware's, not ours, so this recognises a reader
+/// that has never had Cobalt on it, which is the only kind this command is
+/// for.
+#[must_use]
+pub fn mounted_readers() -> Vec<Mounted> {
+    let mut found = Vec::new();
+    for root in mount_roots() {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if let Some(reader) = read_reader(&entry.path()) {
+                found.push(reader);
+            }
+        }
+    }
+    found.sort_by(|left, right| left.volume.cmp(&right.volume));
+    found.dedup_by(|left, right| left.volume == right.volume);
+    found
+}
+
+/// Identifies one volume, if it is a reader at all.
+#[must_use]
+pub fn read_reader(volume: &Path) -> Option<Mounted> {
+    let line = fs::read_to_string(volume.join(SYSTEM_FOLDER).join("version")).ok()?;
+    let (serial, firmware) = parse_version(&line);
+    is_kobo_serial(&serial).then(|| Mounted {
+        volume: volume.to_owned(),
+        serial,
+        firmware,
+    })
+}
+
+/// What enabling the firmware's SSH server did, or why it could not be done.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Ssh {
+    /// The marker was renamed. The server starts at the next boot.
+    Enabled,
+    /// It was already enabled, by this command or by hand.
+    AlreadyEnabled,
+    /// Neither marker exists, so this firmware has no server to enable.
+    Unsupported,
+}
+
+impl Ssh {
+    /// What to tell the owner about this outcome.
+    #[must_use]
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::Enabled => "SSH enabled (starts at the next restart)",
+            Self::AlreadyEnabled => "SSH was already enabled",
+            Self::Unsupported => {
+                "SSH not available: this firmware has no ssh-disabled marker, so it \
+                 predates the built-in server. Update the reader from its own \
+                 settings and run this again."
+            }
+        }
+    }
+}
+
+/// Renames the firmware's marker so its SSH server starts at the next boot.
+///
+/// This is the firmware's documented mechanism, described by the marker file
+/// itself, and it is undone by renaming the file back. Nothing is installed.
+///
+/// # Errors
+///
+/// When the rename fails, which on a FAT volume means the cable was pulled or
+/// the volume is mounted read-only.
+pub fn enable_ssh(volume: &Path) -> Result<Ssh, String> {
+    let disabled = volume.join(SSH_DISABLED);
+    let enabled = volume.join(SSH_ENABLED);
+    if enabled.exists() {
+        return Ok(Ssh::AlreadyEnabled);
+    }
+    if !disabled.exists() {
+        return Ok(Ssh::Unsupported);
+    }
+    fs::rename(&disabled, &enabled)
+        .map_err(|error| format!("rename {}: {error}", disabled.display()))?;
+    Ok(Ssh::Enabled)
+}
+
+/// Puts the SSH marker back, leaving the reader as it shipped.
+///
+/// # Errors
+///
+/// When the rename fails.
+pub fn disable_ssh(volume: &Path) -> Result<bool, String> {
+    let disabled = volume.join(SSH_DISABLED);
+    let enabled = volume.join(SSH_ENABLED);
+    if !enabled.exists() {
+        return Ok(false);
+    }
+    fs::rename(&enabled, &disabled)
+        .map_err(|error| format!("rename {}: {error}", enabled.display()))?;
+    Ok(true)
+}
+
+/// Sets one key in one section of a Qt INI file, preserving everything else.
+///
+/// The reader's settings file holds several hundred keys it wrote itself, and
+/// a setup command that reformats them is a setup command that loses one. So
+/// this is a line editor, not a parser: every line it does not recognise comes
+/// out exactly as it went in, in the same order.
+#[must_use]
+pub fn set_setting(text: &str, section: &str, key: &str, value: &str) -> String {
+    let header = format!("[{section}]");
+    let assignment = format!("{key}={value}");
+    let mut out: Vec<String> = Vec::new();
+    let mut inside = false;
+    let mut written = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if inside && !written {
+                push_into_section(&mut out, assignment.clone());
+                written = true;
+            }
+            inside = trimmed == header;
+            out.push(line.to_owned());
+            continue;
+        }
+        if inside && !written && names_key(line, key) {
+            out.push(assignment.clone());
+            written = true;
+            continue;
+        }
+        out.push(line.to_owned());
+    }
+
+    if !written {
+        if inside {
+            push_into_section(&mut out, assignment);
+        } else {
+            if !out.last().is_none_or(|last| last.trim().is_empty()) {
+                out.push(String::new());
+            }
+            out.push(header);
+            out.push(assignment);
+        }
+    }
+
+    let mut joined = out.join("\n");
+    joined.push('\n');
+    joined
+}
+
+/// Removes one key from one section, leaving everything else alone.
+#[must_use]
+pub fn clear_setting(text: &str, section: &str, key: &str) -> String {
+    let header = format!("[{section}]");
+    let mut out: Vec<String> = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            inside = trimmed == header;
+        } else if inside && names_key(line, key) {
+            continue;
+        }
+        out.push(line.to_owned());
+    }
+    let mut joined = out.join("\n");
+    joined.push('\n');
+    joined
+}
+
+/// True when a line assigns the named key.
+fn names_key(line: &str, key: &str) -> bool {
+    line.split_once('=')
+        .is_some_and(|(name, _)| name.trim() == key)
+}
+
+/// Appends to a section that has just ended, above any blank lines closing it.
+fn push_into_section(out: &mut Vec<String>, assignment: String) {
+    let mut blanks = 0;
+    while out
+        .last()
+        .is_some_and(|last| last.trim().is_empty() && blanks < out.len())
+    {
+        out.pop();
+        blanks += 1;
+    }
+    out.push(assignment);
+    for _ in 0..blanks {
+        out.push(String::new());
+    }
+}
+
+/// Applies [`SETTINGS_APPLIED`] to the reader's settings file.
+///
+/// Returns the keys that were changed. A file that already holds every value
+/// is left untouched, so a second run reports nothing rather than rewriting.
+///
+/// # Errors
+///
+/// When the settings file cannot be read or written.
+pub fn apply_settings(volume: &Path) -> Result<Vec<String>, String> {
+    settings_record::edit(volume, true)
+}
+
+/// Copies this machine's trust roots onto the reader, returning their names.
+///
+/// `kobo-sidekickd init` drops its authority in `~/.config/kobo/trust`,
+/// where every host runtime already looks. A reader being set up gets the
+/// same files, into the same folder `kobo trust set` writes, so pairing with
+/// the daemon needs no second command and no second cable session. Best
+/// effort, like the menu entry: the install succeeded either way, and
+/// `kobo trust set` remains for a root that has to travel by itself.
+#[must_use]
+pub fn carry_trust_roots(volume: &Path) -> Vec<String> {
+    let Some(source) = host_trust_directory() else {
+        return Vec::new();
+    };
+    carry_trust_from(&source, volume)
+}
+
+/// The names [`carry_trust_roots`] would carry, for the dry run to say.
+#[must_use]
+pub fn host_trust_names() -> Vec<String> {
+    host_trust_directory().map_or_else(Vec::new, |source| {
+        valid_roots(&source)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    })
+}
+
+/// Where this machine keeps the trust roots its own tooling made.
+fn host_trust_directory() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(
+        PathBuf::from(home)
+            .join(".config")
+            .join("kobo")
+            .join("trust"),
+    )
+}
+
+/// The testable inside of [`carry_trust_roots`]: everything but where home is.
+fn carry_trust_from(source: &Path, volume: &Path) -> Vec<String> {
+    let destination = volume.join(INSTALL_FOLDER).join("trust");
+    let mut carried = Vec::new();
+    for (name, text) in valid_roots(source) {
+        if fs::create_dir_all(&destination).is_err() {
+            break;
+        }
+        if fs::write(destination.join(format!("{name}.pem")), &text).is_ok() {
+            carried.push(name);
+        }
+    }
+    carried
+}
+
+/// Every certificate in `source`, by name, in name order.
+///
+/// Only what is actually a certificate is returned; the runtime would ignore
+/// anything else, but a stray file has no business travelling at all.
+fn valid_roots(source: &Path) -> Vec<(String, String)> {
+    let Ok(entries) = fs::read_dir(source) else {
+        return Vec::new();
+    };
+    let mut roots = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("pem") {
+            continue;
+        }
+        let Some(name) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        if kobo_net::pem::certificates(&text).is_empty() {
+            continue;
+        }
+        roots.push((name.to_owned(), text));
+    }
+    roots.sort();
+    roots
+}
+
+/// Restores original values for [`SETTINGS_APPLIED`], preserving later owner changes.
+///
+/// # Errors
+///
+/// When the settings file cannot be read or written.
+pub fn revert_settings(volume: &Path) -> Result<Vec<String>, String> {
+    settings_record::edit(volume, false)
+}
+
+/// Copies Cobalt into `.adds/cobalt` on a mounted reader.
+///
+/// This is a plain folder copy onto the book partition. The member list is
+/// checked before anything is written (the same check the archive builder
+/// applies) so a member naming a path outside the install root writes nothing
+/// at all rather than writing what it can and then failing.
+///
+/// # Errors
+///
+/// When a member lies outside the install root, or the volume cannot be
+/// written to.
+pub fn write_payload(members: &[crate::package::Member], volume: &Path) -> Result<usize, String> {
+    crate::package::check(members)?;
+    refuse_managed_owner_folders(members)?;
+    recover_payload_transaction(volume)?;
+    let adds = volume.join(".adds");
+    fs::create_dir_all(&adds).map_err(|error| format!("{}: {error}", adds.display()))?;
+    crate::bootstrap::install(volume)?;
+    let stage = volume.join(STAGING_FOLDER);
+    if stage.exists() {
+        fs::remove_dir_all(&stage).map_err(|error| format!("{}: {error}", stage.display()))?;
+    }
+    crate::package::write_install_tree(members, &stage)?;
+    verify_payload_at(members, &stage)?;
+    fs::write(stage.join(TRANSACTION_MARKER), b"complete\n")
+        .map_err(|error| format!("write transaction marker: {error}"))?;
+    activate_staged(&adds, &mut |_| Ok(()))?;
+    if let Err(error) = verify_payload(members, volume) {
+        let rollback = rollback_activation(&adds, &mut |_| Ok(()));
+        return Err(with_rollback(&error, rollback));
+    }
+    let previous = volume.join(PREVIOUS_FOLDER);
+    if previous.exists() {
+        fs::remove_dir_all(&previous).map_err(|error| {
+            format!(
+                "remove verified previous payload {}: {error}",
+                previous.display()
+            )
+        })?;
+    }
+    Ok(members
+        .iter()
+        .filter(|member| !crate::package::is_launch_bootstrap(member))
+        .count())
+}
+
+fn refuse_managed_owner_folders(members: &[crate::package::Member]) -> Result<(), String> {
+    for member in members {
+        if crate::package::is_launch_bootstrap(member) {
+            continue;
+        }
+        let relative = member_relative(member)?;
+        let first = relative.split('/').next().unwrap_or_default();
+        if OWNER_FOLDERS.contains(&first) {
+            return Err(format!(
+                "release member {:?} overlaps owner-managed folder {first:?}",
+                member.path
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ActivationStep {
+    HoldOwner(&'static str),
+    RemovePrevious,
+    RetireCurrent,
+    ActivateStaged,
+    RestoreOwner(&'static str),
+    RollbackNew,
+    RollbackPrevious,
+    RollbackOwner(&'static str),
+}
+
+fn activate_staged(
+    adds: &Path,
+    step: &mut impl FnMut(ActivationStep) -> Result<(), String>,
+) -> Result<(), String> {
+    let current = adds.join("cobalt");
+    let staging = adds.join("cobalt.next");
+    let previous = adds.join("cobalt.prev");
+    let holder = adds.join("cobalt.owner");
+    if !staging.join(TRANSACTION_MARKER).is_file() {
+        return Err("staged Cobalt payload is incomplete".to_owned());
+    }
+    if holder.exists() {
+        return Err(format!(
+            "{} still holds an interrupted owner-data transaction",
+            holder.display()
+        ));
+    }
+    fs::create_dir(&holder).map_err(|error| format!("{}: {error}", holder.display()))?;
+
+    if current.exists() {
+        for &folder in OWNER_FOLDERS {
+            let source = current.join(folder);
+            if source.exists() {
+                if let Err(error) = rename_step(
+                    &source,
+                    &holder.join(folder),
+                    ActivationStep::HoldOwner(folder),
+                    step,
+                ) {
+                    let rollback = restore_owner_folders(
+                        &holder,
+                        &current,
+                        ActivationStep::RollbackOwner,
+                        step,
+                    );
+                    return Err(with_rollback(&error, rollback));
+                }
+            }
+        }
+        if previous.exists() {
+            if let Err(error) = step(ActivationStep::RemovePrevious) {
+                let rollback =
+                    restore_owner_folders(&holder, &current, ActivationStep::RollbackOwner, step);
+                return Err(with_rollback(&error, rollback));
+            }
+            if let Err(error) = fs::remove_dir_all(&previous)
+                .map_err(|error| format!("remove {}: {error}", previous.display()))
+            {
+                let rollback =
+                    restore_owner_folders(&holder, &current, ActivationStep::RollbackOwner, step);
+                return Err(with_rollback(&error, rollback));
+            }
+        }
+        if let Err(error) = rename_step(&current, &previous, ActivationStep::RetireCurrent, step) {
+            let rollback =
+                restore_owner_folders(&holder, &current, ActivationStep::RollbackOwner, step);
+            return Err(with_rollback(&error, rollback));
+        }
+    }
+
+    if let Err(error) = rename_step(&staging, &current, ActivationStep::ActivateStaged, step) {
+        let rollback = rollback_activation(adds, step);
+        return Err(with_rollback(&error, rollback));
+    }
+
+    if let Err(error) = restore_owner_folders(&holder, &current, ActivationStep::RestoreOwner, step)
+    {
+        let rollback = rollback_activation(adds, step);
+        return Err(with_rollback(&error, rollback));
+    }
+    remove_empty_directory(&holder)?;
+    Ok(())
+}
+
+fn rollback_activation(
+    adds: &Path,
+    step: &mut impl FnMut(ActivationStep) -> Result<(), String>,
+) -> Result<(), String> {
+    let current = adds.join("cobalt");
+    let staging = adds.join("cobalt.next");
+    let previous = adds.join("cobalt.prev");
+    let holder = adds.join("cobalt.owner");
+    if current.exists() && current.join(TRANSACTION_MARKER).is_file() {
+        restore_owner_folders(&current, &holder, ActivationStep::RollbackOwner, step)?;
+        rename_step(&current, &staging, ActivationStep::RollbackNew, step)?;
+    }
+    if !current.exists() && previous.exists() {
+        rename_step(&previous, &current, ActivationStep::RollbackPrevious, step)?;
+    }
+    restore_owner_folders(&holder, &current, ActivationStep::RollbackOwner, step)?;
+    remove_empty_directory(&holder)
+}
+
+fn rename_step(
+    source: &Path,
+    destination: &Path,
+    operation: ActivationStep,
+    step: &mut impl FnMut(ActivationStep) -> Result<(), String>,
+) -> Result<(), String> {
+    step(operation)?;
+    fs::rename(source, destination).map_err(|error| {
+        format!(
+            "rename {} to {}: {error}",
+            source.display(),
+            destination.display()
+        )
+    })
+}
+
+fn restore_owner_folders(
+    source_root: &Path,
+    destination_root: &Path,
+    operation: fn(&'static str) -> ActivationStep,
+    step: &mut impl FnMut(ActivationStep) -> Result<(), String>,
+) -> Result<(), String> {
+    if !source_root.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(destination_root)
+        .map_err(|error| format!("{}: {error}", destination_root.display()))?;
+    for &folder in OWNER_FOLDERS {
+        let source = source_root.join(folder);
+        if !source.exists() {
+            continue;
+        }
+        let destination = destination_root.join(folder);
+        if destination.exists() {
+            merge_owner_tree(&source, &destination)?;
+        } else {
+            rename_step(&source, &destination, operation(folder), step)?;
+        }
+    }
+    Ok(())
+}
+
+fn merge_owner_tree(source: &Path, destination: &Path) -> Result<(), String> {
+    let source_type = fs::symlink_metadata(source)
+        .map_err(|error| format!("inspect {}: {error}", source.display()))?
+        .file_type();
+    if source_type.is_symlink() {
+        return Err(format!(
+            "owner data {} is a symbolic link; refusing to follow it",
+            source.display()
+        ));
+    }
+    let destination_type = fs::symlink_metadata(destination)
+        .ok()
+        .map(|value| value.file_type());
+    if destination_type.is_some_and(|kind| kind.is_symlink()) {
+        return Err(format!(
+            "owner data destination {} is a symbolic link; refusing to follow it",
+            destination.display()
+        ));
+    }
+    if source_type.is_dir() && destination_type.is_some_and(|kind| kind.is_dir()) {
+        for entry in
+            fs::read_dir(source).map_err(|error| format!("read {}: {error}", source.display()))?
+        {
+            let entry = entry.map_err(|error| format!("read {}: {error}", source.display()))?;
+            merge_owner_tree(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+        remove_empty_directory(source)
+    } else if source_type.is_file() && destination_type.is_some_and(|kind| kind.is_file()) {
+        let source_bytes =
+            fs::read(source).map_err(|error| format!("read {}: {error}", source.display()))?;
+        let destination_bytes = fs::read(destination)
+            .map_err(|error| format!("read {}: {error}", destination.display()))?;
+        if source_bytes != destination_bytes {
+            return Err(format!(
+                "owner data exists with different bytes at {} and {}; refusing to overwrite either",
+                source.display(),
+                destination.display()
+            ));
+        }
+        fs::remove_file(source).map_err(|error| format!("remove {}: {error}", source.display()))
+    } else if !destination.exists() {
+        fs::rename(source, destination).map_err(|error| {
+            format!(
+                "move owner data {} to {}: {error}",
+                source.display(),
+                destination.display()
+            )
+        })
+    } else {
+        Err(format!(
+            "owner data has conflicting file types at {} and {}",
+            source.display(),
+            destination.display()
+        ))
+    }
+}
+
+fn remove_empty_directory(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut entries =
+        fs::read_dir(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    if entries.next().is_some() {
+        return Err(format!(
+            "{} still contains owner data; leaving it for recovery",
+            path.display()
+        ));
+    }
+    fs::remove_dir(path).map_err(|error| format!("remove {}: {error}", path.display()))
+}
+
+fn with_rollback(error: &str, rollback: Result<(), String>) -> String {
+    match rollback {
+        Ok(()) => format!("{error}; activation rolled back"),
+        Err(rollback) => format!(
+            "{error}; rollback was incomplete ({rollback}); rerun setup to recover before writing"
+        ),
+    }
+}
+
+/// Recovers any interrupted directory transaction before a new USB setup.
+///
+/// The current installation is always preferred when present. If the commit
+/// window left it absent, the complete previous installation is restored
+/// before a staged first install is considered. Owner folders are merged
+/// without overwriting differing bytes.
+pub fn recover_payload_transaction(volume: &Path) -> Result<(), String> {
+    let adds = volume.join(".adds");
+    let current = volume.join(INSTALL_FOLDER);
+    let staging = volume.join(STAGING_FOLDER);
+    let previous = volume.join(PREVIOUS_FOLDER);
+    let holder = volume.join(OWNER_HOLD_FOLDER);
+    if !adds.exists() {
+        return Ok(());
+    }
+    if !current.exists() {
+        if previous.exists() {
+            fs::rename(&previous, &current).map_err(|error| {
+                format!(
+                    "recover {} as {}: {error}",
+                    previous.display(),
+                    current.display()
+                )
+            })?;
+        } else if staging.join(TRANSACTION_MARKER).is_file() {
+            fs::rename(&staging, &current).map_err(|error| {
+                format!(
+                    "recover {} as {}: {error}",
+                    staging.display(),
+                    current.display()
+                )
+            })?;
+        }
+    }
+    if current.exists() {
+        restore_owner_folders(
+            &holder,
+            &current,
+            ActivationStep::RollbackOwner,
+            &mut |_| Ok(()),
+        )?;
+        if previous.exists() {
+            restore_owner_folders(
+                &previous,
+                &current,
+                ActivationStep::RollbackOwner,
+                &mut |_| Ok(()),
+            )?;
+        }
+        if staging.exists() {
+            fs::remove_dir_all(&staging)
+                .map_err(|error| format!("remove {}: {error}", staging.display()))?;
+        }
+    }
+    if holder.exists() {
+        remove_empty_directory(&holder)?;
+    }
+    Ok(())
+}
+
+/// Reads back everything that was written and compares it byte for byte.
+///
+/// Writes to a FAT volume over USB are buffered by the host, and a cable
+/// pulled at the wrong moment leaves a file that exists, has a plausible size,
+/// and is not what was sent. On a reader that surfaces as a program which
+/// starts and immediately dies, with nothing to read afterwards because the
+/// volume is gone. So the bytes are read back while the volume is still
+/// mounted and still ours, which is the only moment this can be checked at.
+///
+/// # Errors
+///
+/// When a file is missing, short, or different, naming which, because the
+/// answer determines whether to run setup again or replace the cable.
+pub fn verify_payload(members: &[crate::package::Member], volume: &Path) -> Result<(), String> {
+    let destination = volume.join(INSTALL_FOLDER);
+    verify_payload_at(members, &destination)
+}
+
+fn verify_payload_at(members: &[crate::package::Member], destination: &Path) -> Result<(), String> {
+    for member in members {
+        if crate::package::is_launch_bootstrap(member) {
+            continue;
+        }
+        let relative = member_relative(member)?;
+        let path = destination.join(relative);
+        let written =
+            fs::read(&path).map_err(|error| format!("read back {}: {error}", path.display()))?;
+        if written.len() != member.bytes.len() {
+            return Err(format!(
+                "{} was written short: {} bytes on the reader, {} sent",
+                path.display(),
+                written.len(),
+                member.bytes.len()
+            ));
+        }
+        if written != member.bytes {
+            return Err(format!(
+                "{} differs from what was sent; the volume may be failing",
+                path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn member_relative(member: &crate::package::Member) -> Result<&str, String> {
+    member
+        .path
+        .strip_prefix(crate::package::INSTALL_ROOT_PREFIX)
+        .ok_or_else(|| format!("{:?} is outside the install root", member.path))
+}
+
+/// What setup undo removed and what recoverable owner data it retained.
+#[derive(Debug, Default, Eq, PartialEq)]
+pub struct Removal {
+    pub removed: bool,
+    pub recoveries: Vec<String>,
+    pub quarantines: Vec<String>,
+}
+
+/// The name the welcome note lands under in the reader's library, beside the
+/// owner's own books, so the first reconnect shows something new to open.
+pub const SAMPLE_NAME: &str = "Welcome from Cobalt.txt";
+
+/// The original welcome note a first-time setup sends.
+///
+/// Deliberately short and deliberately deletable: it exists so a first
+/// success is something the owner can see and open, not to document the
+/// install. It says what setup did in owner language and points at the one
+/// next step.
+#[must_use]
+pub fn sample_text() -> &'static str {
+    "Welcome from Cobalt\n\
+     \n\
+     This note arrived with the Cobalt setup, so there is something new to open\n\
+     the first time this reader reconnects. Nothing depends on it; delete it\n\
+     whenever you like.\n\
+     \n\
+     What setup did:\n\
+     - Installed Cobalt under .adds/cobalt. Leave that folder alone.\n\
+     - Staged a NickelMenu entry for Cobalt, unless you asked it not to.\n\
+     - Left your books, settings and annotations untouched.\n\
+     \n\
+     Next: connect this reader to Wi-Fi, then run `kobo devices` on the computer\n\
+     that set it up. Running `kobo` with no arguments there walks through photos,\n\
+     feeds and the rest.\n"
+}
+
+/// Sends the welcome note to a mounted reader.
+///
+/// Written like any other file of the install and synced before the eject,
+/// but never allowed to fail one: a reader with Cobalt and without the note
+/// is still set up, so the caller reports a failure and carries on.
+pub fn write_sample(volume: &Path) -> Result<PathBuf, String> {
+    let path = volume.join(SAMPLE_NAME);
+    fs::write(&path, sample_text())
+        .map_err(|error| format!("{} cannot be written: {error}", path.display()))?;
+    let file = fs::File::open(&path)
+        .map_err(|error| format!("{} cannot be synced: {error}", path.display()))?;
+    file.sync_all()
+        .map_err(|error| format!("{} cannot be synced: {error}", path.display()))?;
+    Ok(path)
+}
+
+/// Removes an installed Cobalt from a mounted reader while moving every owner
+/// folder into a bounded sibling recovery directory first.
+///
+/// # Errors
+///
+/// When the folder exists but cannot be removed.
+pub fn remove_payload(volume: &Path) -> Result<Removal, String> {
+    let adds = volume.join(".adds");
+    let folders = [
+        volume.join(INSTALL_FOLDER),
+        volume.join(STAGING_FOLDER),
+        volume.join(PREVIOUS_FOLDER),
+        volume.join(OWNER_HOLD_FOLDER),
+    ];
+    let mut outcome = Removal::default();
+    for installed in folders {
+        if preserve_owner_folders(&installed, &adds, &mut outcome.recoveries)? {
+            outcome.removed = true;
+        }
+    }
+    for journal in OTA_JOURNALS {
+        let path = volume.join(journal);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_file() || metadata.file_type().is_symlink() => {
+                fs::remove_file(&path)
+                    .map_err(|error| format!("remove {}: {error}", path.display()))?;
+                outcome.removed = true;
+            }
+            Ok(_) => {
+                return Err(format!(
+                    "refusing non-file update journal {}",
+                    path.display()
+                ))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("inspect {}: {error}", path.display())),
+        }
+    }
+    if adds.exists() {
+        sync_directory(&adds)?;
+    }
+    outcome.removed |= crate::bootstrap::remove(volume)?;
+    for relative in std::iter::once(".adds/cobalt.unusable".to_owned())
+        .chain((0..8).map(|index| format!(".adds/cobalt.unusable.{index}")))
+        .chain((0..32).map(|index| format!("{RECOVERY_PREFIX}{index}")))
+    {
+        let path = volume.join(&relative);
+        if fs::symlink_metadata(&path).is_ok() {
+            if relative.starts_with(RECOVERY_PREFIX) {
+                if !outcome.recoveries.contains(&relative) {
+                    outcome.recoveries.push(relative);
+                }
+            } else {
+                outcome.quarantines.push(relative);
+            }
+        }
+    }
+    Ok(outcome)
+}
+
+fn preserve_owner_folders(
+    installed: &Path,
+    adds: &Path,
+    recoveries: &mut Vec<String>,
+) -> Result<bool, String> {
+    match fs::symlink_metadata(installed) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => {
+            return Err(format!(
+                "refusing non-directory payload {}",
+                installed.display()
+            ))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("inspect {}: {error}", installed.display())),
+    }
+    let mut owners = Vec::new();
+    for folder in OWNER_FOLDERS {
+        let path = installed.join(folder);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_dir() => owners.push((folder, path)),
+            Ok(_) => return Err(format!("refusing unsafe owner folder {}", path.display())),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("inspect {}: {error}", path.display())),
+        }
+    }
+    if !owners.is_empty() {
+        let volume = adds
+            .parent()
+            .ok_or_else(|| format!("{} has no volume parent", adds.display()))?;
+        let (relative, recovery) = (0..32)
+            .find_map(|index| {
+                let relative = format!("{RECOVERY_PREFIX}{index}");
+                let path = volume.join(&relative);
+                match fs::symlink_metadata(&path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        Some((relative, path))
+                    }
+                    _ => None,
+                }
+            })
+            .ok_or("all bounded Cobalt owner-data recovery slots are occupied")?;
+        fs::create_dir(&recovery)
+            .map_err(|error| format!("create {}: {error}", recovery.display()))?;
+        sync_directory(adds)?;
+        for (folder, source) in owners {
+            let destination = recovery.join(folder);
+            fs::rename(&source, &destination).map_err(|error| {
+                format!(
+                    "preserve {} as {}: {error}",
+                    source.display(),
+                    destination.display()
+                )
+            })?;
+            sync_directory(installed)?;
+            sync_directory(&recovery)?;
+        }
+        recoveries.push(relative);
+    }
+    fs::remove_dir_all(installed)
+        .map_err(|error| format!("remove {}: {error}", installed.display()))?;
+    sync_directory(adds)?;
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> Result<(), String> {
+    fs::File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("sync {}: {error}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// Flushes the volume and ejects it, so the reader remounts its own storage.
+///
+/// A reader will not look at the book partition again until the cable is
+/// logically disconnected, so an install that is never ejected is an install
+/// the reader has not seen.
+///
+/// # Errors
+///
+/// When the eject tool is missing or refuses, usually because a terminal is
+/// still sitting in a directory on the volume.
+pub fn eject(volume: &Path) -> Result<(), String> {
+    let _ = Command::new("sync").status();
+    if is_wsl() {
+        return Err(format!(
+            "{} is mounted through WSL. Close files using it, then use Windows \
+             'Safely Remove Hardware' or eject the Kobo in File Explorer; WSL did not eject it",
+            volume.display()
+        ));
+    }
+    if !cfg!(target_os = "macos") {
+        return Err(format!(
+            "eject {} yourself, then restart the reader",
+            volume.display()
+        ));
+    }
+
+    let output = Command::new("diskutil")
+        .arg("eject")
+        .arg(volume)
+        .output()
+        .map_err(|error| format!("diskutil: {error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "diskutil eject {} failed: {}",
+        volume.display(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
+}
+
+#[must_use]
+pub fn is_wsl() -> bool {
+    std::env::var_os("WSL_INTEROP").is_some()
+        || fs::read_to_string("/proc/sys/kernel/osrelease")
+            .or_else(|_| fs::read_to_string("/proc/version"))
+            .is_ok_and(|value| value.to_ascii_lowercase().contains("microsoft"))
+}
+
+/// What a completed setup did, in the order it did it.
+#[derive(Clone, Debug, Default)]
+pub struct Report {
+    /// Files written into `.adds/cobalt`.
+    pub installed: usize,
+    /// What became of the SSH server.
+    pub ssh: Option<Ssh>,
+    /// What became of this machine's key, when one was asked for.
+    pub key: Option<Result<(crate::authorize::Key, crate::authorize::Staged), String>>,
+    /// Settings keys that changed.
+    pub settings: Vec<String>,
+    /// Trust roots carried over from this machine's own trust directory.
+    pub trust: Vec<String>,
+    /// What became of the reader's own menu entry, when one was asked for.
+    pub menu: Option<Result<crate::menu::Menu, String>>,
+    /// Whether the volume was ejected.
+    pub ejected: bool,
+    /// Whether the command will wait for the restarted reader itself.
+    pub waiting: bool,
+}
+
+impl Report {
+    /// The whole of what happened, and how to undo each part of it.
+    #[must_use]
+    #[cfg(test)]
+    pub fn describe(&self, volume: &Path) -> String {
+        self.describe_with_firmware(volume, None)
+    }
+
+    /// The completed report with the menu location for the mounted firmware.
+    #[must_use]
+    pub fn describe_for(&self, reader: &Mounted) -> String {
+        self.describe_with_firmware(&reader.volume, Some(&reader.firmware))
+    }
+
+    fn describe_with_firmware(&self, volume: &Path, firmware: Option<&str>) -> String {
+        let mut text = String::new();
+        let _ = writeln!(text, "\nSet up {}:", volume.display());
+        let _ = writeln!(
+            text,
+            "  · {} files installed into {INSTALL_FOLDER}",
+            self.installed
+        );
+        let _ = writeln!(
+            text,
+            "  · stable launcher installed at {}",
+            crate::bootstrap::RELATIVE_PATH
+        );
+        if let Some(ssh) = self.ssh {
+            let _ = writeln!(text, "  · {}", ssh.describe());
+        }
+        match &self.key {
+            Some(Ok((key, staged))) => {
+                let _ = writeln!(text, "  · {}", describe_key(*key, *staged));
+            }
+            // Reported, not raised. Everything else worked, and a key can be
+            // installed on the next run once whatever holds the slot is gone.
+            Some(Err(error)) => {
+                let _ = writeln!(text, "  · this machine's key was not installed: {error}");
+            }
+            None => {}
+        }
+        if self.settings.is_empty() {
+            let _ = writeln!(text, "  · settings already as wanted");
+        } else {
+            let _ = writeln!(text, "  · settings set: {}", self.settings.join(", "));
+        }
+        if !self.trust.is_empty() {
+            let _ = writeln!(
+                text,
+                "  · trust roots carried over: {}",
+                self.trust.join(", ")
+            );
+        }
+        match &self.menu {
+            Some(Ok(menu)) => {
+                let _ = writeln!(text, "  · {}", menu.describe());
+            }
+            // Reported, not raised. The install itself succeeded, and Cobalt
+            // still starts from start.sh over SSH without any menu entry.
+            Some(Err(error)) => {
+                let _ = writeln!(text, "  · no menu entry: {error}");
+            }
+            None => {}
+        }
+        let _ = writeln!(
+            text,
+            "  · {}",
+            if self.ejected {
+                "volume ejected"
+            } else {
+                "volume left mounted"
+            }
+        );
+        if !self.ejected {
+            let _ = writeln!(
+                text,
+                "  · safely eject it from the host before disconnecting the USB cable"
+            );
+        }
+        text.push_str(&next_steps_for(
+            self.waiting,
+            self.staged_an_archive(),
+            firmware,
+        ));
+        text
+    }
+
+    /// Whether anything was left for the firmware to extract as root.
+    ///
+    /// Both the menu plugin and this machine's key are staged the same way, so
+    /// either one makes the "nothing was extracted as root" wording false.
+    fn staged_an_archive(&self) -> Staged {
+        let plugin = matches!(self.menu, Some(Ok(crate::menu::Menu::Staged)));
+        let key = matches!(
+            self.key,
+            Some(Ok((
+                _,
+                crate::authorize::Staged::Written | crate::authorize::Staged::Merged
+            )))
+        );
+        match (plugin, key) {
+            (true, true) => Staged::PluginAndKey,
+            (true, false) => Staged::Plugin,
+            (false, true) => Staged::Key,
+            (false, false) => Staged::Nothing,
+        }
+    }
+}
+
+/// What was done with this machine's key, in one line.
+fn describe_key(key: crate::authorize::Key, staged: crate::authorize::Staged) -> String {
+    let origin = match key {
+        crate::authorize::Key::Created => "a key was created for this machine and",
+        crate::authorize::Key::Existing => "this machine's key",
+    };
+    match staged {
+        crate::authorize::Staged::Written | crate::authorize::Staged::Merged => format!(
+            "{origin} will be accepted by the reader after it restarts. This replaces \
+             root's authorized_keys rather than adding to it, because that file is on \
+             the root filesystem and USB cannot read it back. Another machine that had \
+             access will need to run this again from its own desk."
+        ),
+        crate::authorize::Staged::SlotTaken => format!(
+            "{origin} was not installed: another archive is already waiting in \
+             .kobo/KoboRoot.tgz. Restart the reader to let it be taken, then run \
+             'kobo setup --enable-ssh --no-menu' again."
+        ),
+    }
+}
+
+/// What the owner has to do, and what to do if they want none of this.
+///
+/// The third step differs by whether this command is about to do it for them.
+/// Telling somebody to run `kobo devices` and then running it for them reads
+/// as though one of the two did not happen.
+#[must_use]
+#[cfg(test)]
+pub fn next_steps(waiting: bool, staged: Staged) -> String {
+    next_steps_for(waiting, staged, None)
+}
+
+fn next_steps_for(waiting: bool, staged: Staged, firmware: Option<&str>) -> String {
+    let finding = if waiting {
+        "  4. This command is waiting for it, and will print its address when it\n\
+         \x20    appears. Ctrl-C stops the wait; nothing on the reader depends on it."
+    } else {
+        "  4. Find it with 'kobo devices', then 'kobo deploy' works from here on."
+    };
+    let menu = firmware.map_or_else(
+        || "Open the Kobo menu and choose Cobalt.".to_owned(),
+        |version| {
+            if firmware_at_least(version, [4, 23, 15_505]) {
+                "Open the bottom-right Kobo menu and choose Cobalt.".to_owned()
+            } else {
+                "Open the top-left Kobo menu and choose Cobalt.".to_owned()
+            }
+        },
+    );
+    format!(
+        "{}{}{finding}\n  5. {menu}{NEXT_STEPS_TAIL}",
+        staged.scope(),
+        staged.restart()
+    )
+}
+
+fn firmware_at_least(value: &str, minimum: [u64; 3]) -> bool {
+    let parts = value
+        .split('.')
+        .take(3)
+        .map(|part| part.parse::<u64>().unwrap_or(0))
+        .collect::<Vec<_>>();
+    parts.len() == 3 && [parts[0], parts[1], parts[2]] >= minimum
+}
+
+/// What ended up in the single archive the firmware extracts as root.
+///
+/// Named rather than counted, because this paragraph is the one part of the
+/// report an owner cannot check with a file manager, and a paragraph that
+/// describes NickelMenu on a reader that only received a key is worse than no
+/// paragraph at all.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Staged {
+    /// Nothing. Everything went to the book partition.
+    Nothing,
+    /// The plugin alone, on a reader that asked for no key.
+    Plugin,
+    /// This machine's key alone, on a reader that already had the plugin.
+    Key,
+    /// Both, because there is only one slot and they had to travel together.
+    PluginAndKey,
+}
+
+impl Staged {
+    fn scope(self) -> &'static str {
+        match self {
+            Self::Nothing => UNTOUCHED_SCOPE,
+            Self::Plugin => PLUGIN_SCOPE,
+            Self::Key => KEY_SCOPE,
+            Self::PluginAndKey => PLUGIN_AND_KEY_SCOPE,
+        }
+    }
+
+    /// Whether the owner has to restart the reader, or the firmware will.
+    fn restart(self) -> &'static str {
+        if self == Self::Nothing {
+            RESTART_BY_HAND
+        } else {
+            RESTARTS_ITSELF
+        }
+    }
+}
+
+/// What was written, when the only thing written was the book partition.
+const UNTOUCHED_SCOPE: &str = "
+Nothing was written outside the book partition, and nothing was extracted as
+root. To undo all of it safely: 'kobo setup --undo'.
+";
+
+/// What was written, when the plugin was staged and no key was asked for.
+///
+/// Said plainly because it is the one thing this command does that the owner
+/// cannot undo with a file manager. The archive was listed before it was
+/// written and contains only NickelMenu's plugin and its documentation, but it
+/// is still the firmware that extracts it, and it still extracts it as root.
+const PLUGIN_SCOPE: &str = "
+One archive was staged for the firmware to extract as root at the next restart:
+NickelMenu, checked first to contain nothing but its own plugin and its own
+documentation. Everything else was written to the book partition. NickelMenu
+removes itself if it fails to start, so it cannot leave the reader unable to
+boot. To undo all of it: 'kobo setup --undo'.
+";
+
+/// What was written, when the reader already had the plugin.
+const KEY_SCOPE: &str = "
+One archive was staged for the firmware to extract as root at the next restart:
+this machine's public key, and nothing else. It becomes root's authorized_keys
+(written to both /root/.ssh and /.ssh, so it is found whether the reader keeps
+root's home at /root or at /), which is the file the reader's SSH server reads
+to decide who may log in. Everything else was written to the book partition. To
+undo all of it: 'kobo setup --undo'.
+";
+
+/// What was written, on a reader receiving both. The usual first-time case.
+const PLUGIN_AND_KEY_SCOPE: &str = "
+One archive was staged for the firmware to extract as root at the next restart,
+holding two things, because the firmware extracts one archive and both had to
+travel in it: NickelMenu, checked first to contain nothing but its own plugin
+and its own documentation, and this machine's public key, which becomes root's
+authorized_keys (written to both /root/.ssh and /.ssh, so it is found whether
+root's home is /root or /) and is the file the reader's SSH server reads to
+decide who may log in. Everything else was written to the book partition.
+NickelMenu removes itself if it fails to start, so it cannot leave the reader
+unable to boot. To undo all of it: 'kobo setup --undo'.
+";
+
+/// Everything above the step that differs.
+const RESTART_BY_HAND: &str = "
+Next, on the reader:
+
+  1. After the host has safely ejected it, disconnect the USB cable.
+  2. Restart it. Hold the power button until it powers off, then press it
+     again. The SSH server only starts at boot.
+  3. Join it to Wi-Fi if it is not already.
+";
+
+/// The same, for a reader that was left an archive.
+///
+/// Measured rather than assumed: ejecting a reader with an archive waiting
+/// makes the firmware show its Updating screen, take the archive, and reboot,
+/// with nobody touching the power button. Telling somebody to restart a reader
+/// that has already restarted reads as though the command did not work.
+const RESTARTS_ITSELF: &str = "
+Next, on the reader:
+
+  1. After the host has safely ejected it, disconnect the USB cable.
+  2. It restarts by itself: ejecting leaves the archive where the firmware
+     looks, so it shows its Updating screen, takes it, and reboots. The SSH
+     server starts with that boot.
+  3. Join it to Wi-Fi if it is not already.
+";
+
+/// Everything below it.
+const NEXT_STEPS_TAIL: &str = "
+
+Cobalt itself is started from the Cobalt entry in the reader's own menu, or
+from .adds/cobalt-launch.sh. Starting it stops the reader and takes the
+screen; a restart always returns to the stock reader.
+
+After a restart, leave the home screen alone for one minute before opening the
+menu. NickelMenu uses that window as a boot-loop failsafe and disables itself
+after an interrupted startup.
+
+The reader is also set to stay awake for ninety minutes rather than a few, so
+that it is still reachable when you come back to it. That costs battery. The
+reader's own Energy saving screen changes it back at any time, as does
+'kobo setup --undo'.
+
+That undo removes the managed Cobalt trees, .adds/cobalt-launch.sh, and the
+exact Cobalt NickelMenu entry. It moves owner folders to
+.adds/cobalt.recovery.N first and leaves .adds/cobalt.unusable[.N] quarantines
+for inspection, so recoverable data is never silently deleted.
+";
+
+/// How long a restarted reader is given to come back on the network.
+///
+/// A Kobo takes about a minute to boot and another to join Wi-Fi, and somebody
+/// who walked away to fetch the cable takes longer than both. Five minutes is
+/// long enough not to give up on a working reader and short enough that a
+/// forgotten terminal is not still sweeping an hour later.
+pub const WAIT_LIMIT: Duration = Duration::from_secs(300);
+
+/// How long between sweeps while waiting.
+pub const WAIT_INTERVAL: Duration = Duration::from_secs(10);
+
+/// What a look at one newly-arrived address concluded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// It answered as a reader.
+    Reader,
+    /// It answered, and is some other machine.
+    Other,
+    /// It could not be asked yet. A reader accepts connections while it is
+    /// still booting, well before it will hold a conversation.
+    Unknown,
+}
+
+/// What came back from waiting for a restarted reader.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Arrival {
+    /// One address that was not answering before is answering now, and said it
+    /// was a reader.
+    Found(Ipv4Addr),
+    /// Several did, so this will not guess which is the wanted one.
+    Several(Vec<Ipv4Addr>),
+    /// No reader answered before the limit ran out. Carries any addresses that
+    /// did appear and turned out to be something else, so that nothing
+    /// happening and the wrong machine arriving can be told apart.
+    TimedOut(Vec<Ipv4Addr>),
+}
+
+/// Waits for a reader to start answering on the SSH port that was not
+/// answering when the wait began.
+///
+/// Two things narrow it down. The first is *change* (it was off the network a
+/// moment ago and is on it now) which alone rules out the machine this is
+/// running on, the router and a NAS, since those were all there at the start.
+/// Change is necessary and is not sufficient: a laptop waking from sleep
+/// mid-wait is also a newcomer, and naming it as the reader sends somebody to
+/// install on a stranger's machine.
+///
+/// So each newcomer is asked what it is. An earlier attempt guessed from the
+/// SSH banner instead, on the assumption that a Kobo runs Dropbear. The reader
+/// this was written for runs OpenSSH 8.9 (the same server a laptop runs) so
+/// the banner cannot tell them apart, and that check rejected the very device
+/// it was meant to find. Asking costs a login, which a just-booted reader
+/// gives away: its firmware clears root's password at every boot and permits
+/// empty ones.
+///
+/// `sweep` returns everything answering right now, `probe` asks one address
+/// what it is, and `pause` waits out one interval and returns false when there
+/// is no time left. All three are passed in so the whole of the decision can be
+/// tested without a network.
+pub fn wait_for_reader(
+    mut sweep: impl FnMut() -> Vec<Ipv4Addr>,
+    mut probe: impl FnMut(Ipv4Addr) -> Verdict,
+    mut pause: impl FnMut() -> bool,
+) -> Arrival {
+    let baseline: BTreeSet<Ipv4Addr> = sweep().into_iter().collect();
+    let mut settled: BTreeSet<Ipv4Addr> = BTreeSet::new();
+    let mut passed_over: Vec<Ipv4Addr> = Vec::new();
+    while pause() {
+        let mut arrived: Vec<Ipv4Addr> = sweep()
+            .into_iter()
+            .filter(|address| !baseline.contains(address) && !settled.contains(address))
+            .collect();
+        arrived.sort_unstable();
+        arrived.dedup();
+        let mut readers = Vec::new();
+        for address in arrived {
+            match probe(address) {
+                // Not a verdict, and deliberately not settled. Asking again
+                // next round is the whole point of there being a third answer:
+                // a booting reader accepts a connection minutes before it will
+                // answer a question, and writing it off here would lose the
+                // device for the rest of the wait.
+                Verdict::Unknown => {}
+                Verdict::Reader => {
+                    settled.insert(address);
+                    readers.push(address);
+                }
+                Verdict::Other => {
+                    settled.insert(address);
+                    passed_over.push(address);
+                }
+            }
+        }
+        match readers.len() {
+            0 => {}
+            1 => return Arrival::Found(readers[0]),
+            _ => return Arrival::Several(readers),
+        }
+    }
+    Arrival::TimedOut(passed_over)
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    use super::mount_roots;
+    use super::{
+        carry_trust_from, clear_setting, install_profile, is_kobo_serial, next_steps,
+        next_steps_for, parse_version, set_setting, wait_for_reader, Arrival, Mounted, Report, Ssh,
+        Staged, Verdict, INSTALL_FOLDER, SETTINGS_APPLIED, SSH_DISABLED, SSH_ENABLED,
+    };
+    use std::net::Ipv4Addr;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn the_machines_trust_roots_ride_along_with_a_setup() {
+        let root = std::env::temp_dir().join(format!("kobo-setup-trust-{}", std::process::id()));
+        let _ignored = std::fs::remove_dir_all(&root);
+        let source = root.join("trust");
+        let volume = root.join("volume");
+        std::fs::create_dir_all(&source).expect("source folder");
+        std::fs::create_dir_all(&volume).expect("volume folder");
+        // One certificate, one imposter with the right extension, one
+        // unrelated file: only the certificate travels.
+        std::fs::write(
+            source.join("sidekick.pem"),
+            "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n",
+        )
+        .expect("certificate");
+        std::fs::write(source.join("notes.pem"), "not a certificate").expect("imposter");
+        std::fs::write(source.join("readme.txt"), "hello").expect("stray file");
+
+        let carried = carry_trust_from(&source, &volume);
+        assert_eq!(carried, vec!["sidekick".to_owned()]);
+        let installed = volume.join(INSTALL_FOLDER).join("trust");
+        assert!(installed.join("sidekick.pem").exists());
+        assert!(!installed.join("notes.pem").exists());
+        assert!(!installed.join("readme.txt").exists());
+        let _ignored = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_machine_without_trust_roots_carries_none_and_writes_nothing() {
+        let root = std::env::temp_dir().join(format!("kobo-setup-notrust-{}", std::process::id()));
+        let _ignored = std::fs::remove_dir_all(&root);
+        let volume = root.join("volume");
+        std::fs::create_dir_all(&volume).expect("volume folder");
+        assert!(carry_trust_from(&root.join("missing"), &volume).is_empty());
+        assert!(!volume.join(INSTALL_FOLDER).join("trust").exists());
+        let _ignored = std::fs::remove_dir_all(&root);
+    }
+
+    fn address(last: u8) -> Ipv4Addr {
+        Ipv4Addr::new(192, 168, 1, last)
+    }
+
+    /// Sweeps that return each of `rounds` in turn, then the last one forever.
+    fn sweeps(rounds: Vec<Vec<u8>>) -> impl FnMut() -> Vec<Ipv4Addr> {
+        let mut index = 0;
+        move || {
+            let round = rounds[index.min(rounds.len() - 1)].clone();
+            index += 1;
+            round.into_iter().map(address).collect()
+        }
+    }
+
+    /// A clock that allows exactly `limit` more rounds.
+    fn rounds(limit: usize) -> impl FnMut() -> bool {
+        let mut left = limit;
+        move || {
+            let more = left > 0;
+            left = left.saturating_sub(1);
+            more
+        }
+    }
+
+    /// A probe for which every address is a reader.
+    fn all_readers() -> impl FnMut(Ipv4Addr) -> Verdict {
+        |_| Verdict::Reader
+    }
+
+    /// A probe for which only `readers` are readers and the rest are ordinary
+    /// machines.
+    fn only(readers: Vec<u8>) -> impl FnMut(Ipv4Addr) -> Verdict {
+        move |seen| {
+            if readers.iter().any(|last| address(*last) == seen) {
+                Verdict::Reader
+            } else {
+                Verdict::Other
+            }
+        }
+    }
+
+    #[test]
+    fn a_machine_already_on_the_network_is_not_mistaken_for_the_reader() {
+        // The router, this laptop and a NAS all answer on 22 the whole time.
+        // None of them restarted, so none of them is what was waited for, even
+        // though a banner check would have accepted all three.
+        let arrival = wait_for_reader(sweeps(vec![vec![1, 5, 40]]), all_readers(), rounds(4));
+        assert_eq!(arrival, Arrival::TimedOut(Vec::new()));
+    }
+
+    #[test]
+    fn the_one_address_that_joined_is_the_answer() {
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1, 5], vec![1, 5], vec![1, 5, 22]]),
+            all_readers(),
+            rounds(4),
+        );
+        assert_eq!(arrival, Arrival::Found(address(22)));
+    }
+
+    #[test]
+    fn two_arrivals_at_once_are_reported_rather_than_guessed_between() {
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 22, 23]]),
+            all_readers(),
+            rounds(4),
+        );
+        assert_eq!(arrival, Arrival::Several(vec![address(22), address(23)]));
+    }
+
+    #[test]
+    fn a_machine_that_drops_off_while_waiting_is_not_an_arrival() {
+        // Fewer answering than before is still nothing new answering.
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1, 5, 40], vec![1]]),
+            all_readers(),
+            rounds(3),
+        );
+        assert_eq!(arrival, Arrival::TimedOut(Vec::new()));
+    }
+
+    #[test]
+    fn the_wait_gives_up_rather_than_sweeping_for_ever() {
+        let mut taken = 0;
+        let arrival = wait_for_reader(
+            || {
+                taken += 1;
+                Vec::new()
+            },
+            all_readers(),
+            rounds(3),
+        );
+        assert_eq!(arrival, Arrival::TimedOut(Vec::new()));
+        assert_eq!(taken, 4, "one baseline sweep and one per allowed round");
+    }
+
+    #[test]
+    fn a_laptop_waking_from_sleep_mid_wait_is_not_named_as_the_reader() {
+        // Change alone named .10, which was a machine that had woken up.
+        let arrival = wait_for_reader(sweeps(vec![vec![1], vec![1, 10]]), only(vec![]), rounds(4));
+        assert_eq!(arrival, Arrival::TimedOut(vec![address(10)]));
+    }
+
+    #[test]
+    fn a_reader_arriving_after_some_other_machine_is_still_found() {
+        // Passing one over must not end the wait, or the reader that comes up
+        // half a minute later is never seen.
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 10], vec![1, 10, 22]]),
+            only(vec![22]),
+            rounds(5),
+        );
+        assert_eq!(arrival, Arrival::Found(address(22)));
+    }
+
+    #[test]
+    fn an_address_that_answered_is_only_probed_once() {
+        let mut asked = Vec::new();
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 10]]),
+            |seen| {
+                asked.push(seen);
+                Verdict::Other
+            },
+            rounds(4),
+        );
+        assert_eq!(arrival, Arrival::TimedOut(vec![address(10)]));
+        assert_eq!(
+            asked,
+            vec![address(10)],
+            "it stays in view but is not re-probed"
+        );
+    }
+
+    #[test]
+    fn an_address_that_said_nothing_is_asked_again() {
+        // A Kobo accepts a connection while booting before its SSH server will
+        // talk. Reading one silence as a verdict would lose the reader for the
+        // rest of the wait.
+        let mut asked = 0;
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 22]]),
+            |_| {
+                asked += 1;
+                if asked < 3 {
+                    Verdict::Unknown
+                } else {
+                    Verdict::Reader
+                }
+            },
+            rounds(5),
+        );
+        assert_eq!(arrival, Arrival::Found(address(22)));
+        assert_eq!(asked, 3, "asked again each round until it answered");
+    }
+
+    #[test]
+    fn only_the_reader_among_several_arrivals_is_named() {
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 10, 22]]),
+            only(vec![22]),
+            rounds(4),
+        );
+        assert_eq!(arrival, Arrival::Found(address(22)));
+    }
+
+    #[test]
+    fn a_reader_that_runs_the_same_ssh_server_as_a_laptop_is_still_found() {
+        // The reader this was written for runs OpenSSH 8.9, exactly as an
+        // ordinary Linux machine does. Nothing about the wait may depend on
+        // the two being distinguishable without asking.
+        let arrival = wait_for_reader(
+            sweeps(vec![vec![1], vec![1, 10, 22]]),
+            only(vec![22]),
+            rounds(4),
+        );
+        assert_eq!(arrival, Arrival::Found(address(22)));
+    }
+
+    #[test]
+    fn a_reader_that_restarts_itself_is_not_told_to_restart() {
+        // Watched on hardware: the reader was ejected, showed its Updating
+        // screen, took the archive and rebooted, with nobody touching the
+        // power button. The instruction to hold it down described work that
+        // was already done.
+        for staged in [Staged::Plugin, Staged::Key, Staged::PluginAndKey] {
+            let text = next_steps(false, staged);
+            assert!(text.contains("restarts by itself"), "{text}");
+            assert!(!text.contains("Hold the power button"), "{text}");
+        }
+
+        let untouched = next_steps(false, Staged::Nothing);
+        assert!(untouched.contains("Hold the power button"), "{untouched}");
+    }
+
+    #[test]
+    fn menu_instructions_follow_the_firmware_generation() {
+        assert!(next_steps_for(false, Staged::Nothing, Some("4.45.23697"))
+            .contains("bottom-right Kobo menu"));
+        assert!(next_steps_for(false, Staged::Nothing, Some("4.22.15190"))
+            .contains("top-left Kobo menu"));
+        assert!(next_steps_for(false, Staged::Nothing, Some("4.45.23697"))
+            .contains("leave the home screen alone for one minute"));
+    }
+
+    #[test]
+    fn the_staged_paragraph_names_what_was_actually_staged() {
+        // Found on a real reader: it had NickelMenu already, so only the key
+        // was staged, and the report still described the archive as
+        // NickelMenu's plugin and documentation. This paragraph is the one
+        // part an owner cannot check with a file manager, so it has to be
+        // about the archive that exists.
+        let key_only = next_steps(false, Staged::Key);
+        assert!(key_only.contains("authorized_keys"), "{key_only}");
+        assert!(
+            !key_only.contains("NickelMenu, checked first"),
+            "{key_only}"
+        );
+
+        let plugin_only = next_steps(false, Staged::Plugin);
+        assert!(plugin_only.contains("NickelMenu"), "{plugin_only}");
+        assert!(!plugin_only.contains("authorized_keys"), "{plugin_only}");
+
+        let both = next_steps(false, Staged::PluginAndKey);
+        assert!(both.contains("NickelMenu"), "{both}");
+        assert!(both.contains("authorized_keys"), "{both}");
+        assert!(both.contains("one archive"), "{both}");
+
+        let neither = next_steps(false, Staged::Nothing);
+        assert!(neither.contains("nothing was extracted as"), "{neither}");
+    }
+
+    #[test]
+    fn the_report_picks_the_paragraph_from_what_it_did() {
+        let report = |menu, key| Report {
+            installed: 19,
+            ssh: Some(Ssh::Enabled),
+            key,
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu,
+            ejected: true,
+            waiting: false,
+        };
+        let staged_key = Some(Ok((
+            crate::authorize::Key::Existing,
+            crate::authorize::Staged::Written,
+        )));
+        assert_eq!(
+            report(Some(Ok(crate::menu::Menu::Added)), staged_key.clone()).staged_an_archive(),
+            Staged::Key
+        );
+        assert_eq!(
+            report(Some(Ok(crate::menu::Menu::Staged)), None).staged_an_archive(),
+            Staged::Plugin
+        );
+        assert_eq!(
+            report(Some(Ok(crate::menu::Menu::Staged)), staged_key).staged_an_archive(),
+            Staged::PluginAndKey
+        );
+        assert_eq!(
+            report(Some(Ok(crate::menu::Menu::Unchanged)), None).staged_an_archive(),
+            Staged::Nothing
+        );
+    }
+
+    #[test]
+    fn the_reader_is_not_told_to_go_looking_for_it_while_this_is_looking_for_it() {
+        assert!(next_steps(true, Staged::Nothing).contains("waiting for it"));
+        assert!(!next_steps(true, Staged::Nothing).contains("Find it with"));
+        assert!(next_steps(false, Staged::Nothing).contains("Find it with 'kobo devices'"));
+        for waiting in [true, false] {
+            let text = next_steps(waiting, Staged::Nothing);
+            assert!(text.contains("kobo setup --undo"), "undo is always offered");
+            assert!(
+                text.contains("Restart it"),
+                "the restart is always asked for"
+            );
+            assert!(
+                text.contains("ninety minutes"),
+                "the sleep change is declared"
+            );
+        }
+    }
+
+    #[test]
+    fn the_welcome_note_lands_beside_the_library_and_is_deletable() {
+        let volume = std::env::current_dir()
+            .expect("working directory")
+            .join("target")
+            .join(format!("kobo-sample-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&volume);
+        std::fs::create_dir_all(&volume).expect("a volume");
+        let path = super::write_sample(&volume).expect("the note writes");
+        assert_eq!(path.file_name().unwrap(), super::SAMPLE_NAME);
+        let text = std::fs::read_to_string(&path).expect("the note reads back");
+        assert!(text.contains("delete it"), "{text}");
+        assert!(text.contains("Wi-Fi"), "{text}");
+        assert!(
+            !text.contains("ssh"),
+            "owner copy stays free of plumbing: {text}"
+        );
+        let _ = std::fs::remove_dir_all(&volume);
+    }
+
+    #[test]
+    fn a_version_line_yields_the_serial_and_the_firmware() {
+        let (serial, firmware) =
+            parse_version("N365410043013,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000\n");
+        assert_eq!(serial, "N365410043013");
+        assert_eq!(firmware, "4.45.23697");
+    }
+
+    #[test]
+    fn usb_identity_resolves_through_the_shared_profile_table() {
+        let reader = Mounted {
+            volume: PathBuf::from("/Volumes/KOBOeReader"),
+            serial: "N365410043013".to_owned(),
+            firmware: "4.45.23697".to_owned(),
+        };
+        let profile = install_profile(&reader).expect("supported");
+        assert_eq!(profile.model, "Kobo Clara BW");
+        assert_eq!(profile.device_code, 391);
+        assert_eq!(profile.id, "clara-bw-391");
+    }
+
+    #[test]
+    fn unsupported_hardware_and_firmware_are_refused_before_writes() {
+        let reader = |serial: &str, firmware: &str| Mounted {
+            volume: PathBuf::from("/Volumes/KOBOeReader"),
+            serial: serial.to_owned(),
+            firmware: firmware.to_owned(),
+        };
+        assert!(install_profile(&reader("N999000000000", "4.45.23697"))
+            .expect_err("hardware")
+            .contains("unsupported Kobo hardware"));
+        // A branch this model was never measured on, but one NickelMenu can
+        // still hook. Held at 4.x deliberately: a version from another
+        // generation is refused earlier and for a different reason, and using
+        // one here would test that refusal twice and this one never.
+        let refusal =
+            install_profile(&reader("N365000000000", "4.20.11000")).expect_err("firmware");
+        assert!(refusal.contains("unsupported firmware"));
+        assert!(
+            refusal.contains("4.45"),
+            "a refusal has to name the branch that would have been taken: {refusal}"
+        );
+    }
+
+    #[test]
+    fn installation_refuses_a_firmware_generation_that_could_never_be_launched() {
+        // Installing here would succeed and leave the owner with a payload no
+        // menu entry can reach, so the refusal names NickelMenu rather than
+        // sending them to look for a 4.45 build of a reader that has none.
+        let reader = Mounted {
+            volume: PathBuf::from("/Volumes/KOBOeReader"),
+            serial: "N365410043013".to_owned(),
+            firmware: "5.0.24000".to_owned(),
+        };
+        let refusal = install_profile(&reader).expect_err("5.x cannot be launched");
+        assert!(refusal.contains("NickelMenu"), "{refusal}");
+        assert!(!refusal.contains("reviewed branches"), "{refusal}");
+    }
+
+    #[test]
+    fn installation_accepts_a_later_build_on_a_reviewed_branch() {
+        // A mounted volume is all `kobo setup` can see, so this gate is a
+        // second one, separate from the runtime's, and it used to pin the
+        // build number on its own. A wave Kobo pushed unasked would otherwise
+        // refuse a first install onto hardware that is fully reviewed.
+        let reader = Mounted {
+            volume: PathBuf::from("/Volumes/KOBOeReader"),
+            serial: "N365410043013".to_owned(),
+            firmware: "4.45.23792".to_owned(),
+        };
+        assert_eq!(
+            install_profile(&reader).expect("supported").id,
+            "clara-bw-391"
+        );
+    }
+
+    #[test]
+    fn a_truncated_version_line_is_not_an_error() {
+        let (serial, firmware) = parse_version("N365410043013");
+        assert_eq!(serial, "N365410043013");
+        assert!(firmware.is_empty());
+    }
+
+    #[test]
+    fn only_a_known_prefix_and_three_digits_is_a_reader() {
+        assert!(is_kobo_serial("N365410043013"));
+        assert!(is_kobo_serial("P365410043013"));
+        assert!(!is_kobo_serial("Macintosh HD"));
+        assert!(!is_kobo_serial("N36"));
+        assert!(!is_kobo_serial("NABC410043013"));
+        assert!(!is_kobo_serial("PABC410043013"));
+        assert!(!is_kobo_serial("Q365410043013"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_mount_discovery_includes_wsl_drive_roots() {
+        assert!(mount_roots().contains(&PathBuf::from("/mnt")));
+    }
+
+    #[test]
+    fn an_existing_key_is_replaced_in_place_and_nothing_else_moves() {
+        let before = "[ApplicationPreferences]\nCurrentLocale=en_US\n\n[DeveloperSettings]\nForceWifiOn=false\n\n[PowerOptions]\nAutoColorEnabled=true\n";
+        let after = set_setting(before, "DeveloperSettings", "ForceWifiOn", "true");
+        assert!(after.contains("ForceWifiOn=true"));
+        assert!(!after.contains("ForceWifiOn=false"));
+        assert!(after.contains("CurrentLocale=en_US"));
+        assert!(after.contains("AutoColorEnabled=true"));
+        assert_eq!(after.lines().count(), before.lines().count());
+    }
+
+    #[test]
+    fn a_missing_key_joins_its_section_rather_than_starting_a_new_one() {
+        let before = "[DeveloperSettings]\nSomething=1\n\n[PowerOptions]\nAutoColorEnabled=true\n";
+        let after = set_setting(before, "DeveloperSettings", "ForceWifiOn", "true");
+        assert_eq!(after.matches("[DeveloperSettings]").count(), 1);
+        let developer = after.find("[DeveloperSettings]").expect("section");
+        let power = after.find("[PowerOptions]").expect("section");
+        let key = after.find("ForceWifiOn=true").expect("key");
+        assert!(developer < key && key < power, "{after}");
+    }
+
+    #[test]
+    fn a_missing_section_is_appended_whole() {
+        let before = "[PowerOptions]\nAutoColorEnabled=true\n";
+        let after = set_setting(before, "DeveloperSettings", "ForceWifiOn", "true");
+        assert!(
+            after.contains("[DeveloperSettings]\nForceWifiOn=true"),
+            "{after}"
+        );
+        assert!(after.contains("AutoColorEnabled=true"));
+    }
+
+    #[test]
+    fn an_empty_settings_file_gains_exactly_one_section() {
+        let after = set_setting("", "DeveloperSettings", "ForceWifiOn", "true");
+        assert_eq!(after, "[DeveloperSettings]\nForceWifiOn=true\n");
+    }
+
+    #[test]
+    fn setting_a_value_that_is_already_set_changes_nothing() {
+        let before = "[DeveloperSettings]\nForceWifiOn=true\n";
+        assert_eq!(
+            set_setting(before, "DeveloperSettings", "ForceWifiOn", "true"),
+            before
+        );
+    }
+
+    #[test]
+    fn a_key_of_the_same_name_in_another_section_is_left_alone() {
+        let before = "[Other]\nForceWifiOn=false\n\n[DeveloperSettings]\nX=1\n";
+        let after = set_setting(before, "DeveloperSettings", "ForceWifiOn", "true");
+        assert!(after.contains("[Other]\nForceWifiOn=false"), "{after}");
+        assert_eq!(after.matches("ForceWifiOn").count(), 2);
+    }
+
+    #[test]
+    fn clearing_removes_only_the_named_key() {
+        let before = "[DeveloperSettings]\nForceWifiOn=true\nSomething=1\n";
+        let after = clear_setting(before, "DeveloperSettings", "ForceWifiOn");
+        assert!(!after.contains("ForceWifiOn"));
+        assert!(after.contains("Something=1"));
+        assert!(after.contains("[DeveloperSettings]"));
+    }
+
+    #[test]
+    fn setting_then_clearing_returns_the_original() {
+        let before = "[ApplicationPreferences]\nCurrentLocale=en_US\n\n[PowerOptions]\nAutoColorEnabled=true\n";
+        let set = set_setting(before, "DeveloperSettings", "ForceWifiOn", "true");
+        let cleared = clear_setting(&set, "DeveloperSettings", "ForceWifiOn");
+        assert!(cleared.contains("CurrentLocale=en_US"));
+        assert!(!cleared.contains("ForceWifiOn"));
+    }
+
+    #[test]
+    fn the_ssh_markers_differ_only_in_the_last_word() {
+        assert_eq!(SSH_DISABLED.replace("disabled", "enabled"), SSH_ENABLED);
+    }
+
+    #[test]
+    fn nothing_this_command_writes_leaves_the_book_partition() {
+        assert!(!INSTALL_FOLDER.starts_with('/'));
+        assert!(!SSH_ENABLED.starts_with('/'));
+        for (section, key, _) in SETTINGS_APPLIED {
+            assert!(!section.is_empty() && !key.is_empty());
+        }
+    }
+
+    #[test]
+    fn every_setting_this_command_writes_can_be_taken_back_off_again() {
+        // A stock file, in the shape the reader writes: sections it already
+        // has, sections it does not, and keys around the ones being changed.
+        let before = "[ApplicationPreferences]\nCurrentLocale=en_US\n\n\
+                      [PowerOptions]\nAutoColorEnabled=true\nFrontLightLevel=7\n";
+        let mut after = before.to_owned();
+        for (section, key, value) in SETTINGS_APPLIED {
+            after = set_setting(&after, section, key, value);
+        }
+        for (section, key, value) in SETTINGS_APPLIED {
+            assert!(after.contains(&format!("{key}={value}")), "{after}");
+            // In its own section, not appended to whichever came last.
+            let header = after.find(&format!("[{section}]")).expect("section");
+            let assignment = after.find(&format!("{key}={value}")).expect("key");
+            assert!(header < assignment, "{key} landed outside {section}");
+        }
+        // Keys the reader owns are untouched throughout.
+        assert!(after.contains("FrontLightLevel=7"));
+        assert!(after.contains("CurrentLocale=en_US"));
+
+        let mut undone = after;
+        for (section, key, _) in SETTINGS_APPLIED {
+            undone = clear_setting(&undone, section, key);
+        }
+        for (_, key, _) in SETTINGS_APPLIED {
+            assert!(!undone.contains(key), "{key} survived the undo: {undone}");
+        }
+        assert!(undone.contains("FrontLightLevel=7"));
+    }
+
+    #[test]
+    fn the_reader_is_kept_awake_long_enough_to_work_on_it() {
+        // The whole point of the setup is that the device is reachable after
+        // it is put down. A value small enough to suspend mid-deploy would
+        // leave that broken in a way only hardware would show.
+        let minutes: u32 = SETTINGS_APPLIED
+            .iter()
+            .find(|(section, key, _)| *section == "PowerOptions" && *key == "AutoSleepMinutes")
+            .expect("the sleep timer is set")
+            .2
+            .parse()
+            .expect("a number of minutes");
+        assert!(
+            minutes >= 60,
+            "the reader would sleep after {minutes} minutes"
+        );
+    }
+
+    #[test]
+    fn an_unsupported_firmware_says_what_to_do_about_it() {
+        assert!(Ssh::Unsupported.describe().contains("Update the reader"));
+        assert!(Ssh::Enabled.describe().contains("next restart"));
+    }
+
+    #[test]
+    fn a_report_names_every_change_and_how_to_undo_them() {
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: None,
+            settings: vec!["DeveloperSettings/ForceWifiOn".to_owned()],
+            trust: vec!["sidekick".to_owned()],
+            menu: None,
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(text.contains("13 files"));
+        assert!(text.contains("SSH enabled"));
+        assert!(text.contains("ForceWifiOn"));
+        assert!(text.contains("trust roots carried over: sidekick"));
+        assert!(text.contains("--undo"));
+        assert!(text.contains(".adds/cobalt-launch.sh"));
+        assert!(text.contains(".adds/cobalt.recovery.N"));
+        assert!(text.contains(".adds/cobalt.unusable[.N]"));
+        assert!(text.contains("exact Cobalt NickelMenu entry"));
+        assert!(text.contains("nothing was extracted as\nroot"), "{text}");
+    }
+
+    #[test]
+    fn a_report_that_staged_an_archive_stops_claiming_nothing_was_extracted() {
+        // The claim is the point. It is true of every other thing this command
+        // does, and staging KoboRoot.tgz is the one case where it is not.
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: None,
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu: Some(Ok(crate::menu::Menu::Staged)),
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(!text.contains("nothing was extracted as"), "{text}");
+        assert!(text.contains("extract as root"), "{text}");
+        assert!(
+            text.contains("cannot leave the reader unable to\nboot"),
+            "{text}"
+        );
+        assert!(text.contains("--undo"), "{text}");
+    }
+
+    #[test]
+    fn a_report_that_installed_a_key_stops_claiming_nothing_was_extracted() {
+        // The key is staged the same way the menu plugin is, so it makes the
+        // same claim false. Reporting it as though nothing left the book
+        // partition would be the one untruth in this whole report.
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: Some(Ok((
+                crate::authorize::Key::Created,
+                crate::authorize::Staged::Written,
+            ))),
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu: None,
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(!text.contains("nothing was extracted as"), "{text}");
+        assert!(
+            text.contains("a key was created for this machine"),
+            "{text}"
+        );
+        assert!(text.contains("after it restarts"), "{text}");
+    }
+
+    #[test]
+    fn a_key_that_could_not_be_staged_says_what_to_do_about_it() {
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: Some(Ok((
+                crate::authorize::Key::Existing,
+                crate::authorize::Staged::SlotTaken,
+            ))),
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu: None,
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(
+            text.contains("another archive is already waiting"),
+            "{text}"
+        );
+        assert!(text.contains("--enable-ssh --no-menu"), "{text}");
+        // Nothing of ours was staged, so the claim is still true.
+        assert!(text.contains("nothing was extracted as\nroot"), "{text}");
+    }
+
+    #[test]
+    fn a_key_that_failed_is_reported_without_failing_the_install() {
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: Some(Err("ssh-keygen refused".to_owned())),
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu: None,
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(text.contains("13 files"), "{text}");
+        assert!(
+            text.contains("was not installed: ssh-keygen refused"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_report_that_only_wrote_the_entry_keeps_the_claim() {
+        let report = Report {
+            installed: 13,
+            ssh: Some(Ssh::Enabled),
+            key: None,
+            settings: Vec::new(),
+            trust: Vec::new(),
+            menu: Some(Ok(crate::menu::Menu::Added)),
+            ejected: true,
+            waiting: false,
+        };
+        let text = report.describe(&PathBuf::from("/Volumes/KOBOeReader"));
+        assert!(text.contains("nothing was extracted as\nroot"), "{text}");
+    }
+
+    #[test]
+    fn what_was_written_is_read_back_and_compared() {
+        use super::{verify_payload, write_payload};
+        use crate::package::{Member, INSTALL_ROOT};
+
+        let root = std::env::temp_dir().join(format!("kobo-setup-readback-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("temporary volume");
+        let members = vec![Member {
+            path: format!("{INSTALL_ROOT}/bin/kobod"),
+            bytes: b"a whole binary".to_vec(),
+            program: true,
+        }];
+
+        assert_eq!(write_payload(&members, &root).expect("write"), 1);
+        verify_payload(&members, &root).expect("what was written reads back");
+        let owner_state = root.join(INSTALL_FOLDER).join("apps/state.db");
+        std::fs::create_dir_all(owner_state.parent().expect("parent")).expect("state folder");
+        std::fs::write(&owner_state, b"owner state").expect("state");
+        assert_eq!(write_payload(&members, &root).expect("rerun"), 1);
+        assert!(!root.join(super::PREVIOUS_FOLDER).exists());
+        assert_eq!(
+            std::fs::read(&owner_state).expect("preserved"),
+            b"owner state",
+            "files outside the signed platform member list survive updates"
+        );
+
+        let installed = root.join(INSTALL_FOLDER).join("bin/kobod");
+        std::fs::write(&installed, b"a whole").expect("truncate");
+        let error = verify_payload(&members, &root).expect_err("a short file is caught");
+        assert!(error.contains("written short"), "{error}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn undo_preserves_owner_data_and_reports_quarantines() {
+        let root = std::env::current_dir()
+            .expect("working directory")
+            .join("target")
+            .join(format!("kobo-safe-undo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".adds/cobalt/secrets")).expect("current owner data");
+        std::fs::write(root.join(".adds/cobalt/secrets/token"), "secret").expect("secret");
+        std::fs::create_dir_all(root.join(".adds/cobalt.prev/trust")).expect("previous owner data");
+        std::fs::write(root.join(".adds/cobalt.prev/trust/root.pem"), "trust").expect("trust");
+        std::fs::create_dir_all(root.join(".adds/cobalt.owner/state")).expect("held owner data");
+        std::fs::write(root.join(".adds/cobalt.owner/state/session"), "state").expect("state");
+        std::fs::create_dir_all(root.join(".adds/cobalt.next")).expect("staging");
+        std::fs::create_dir_all(root.join(".adds/cobalt.unusable.0/data")).expect("quarantine");
+        std::fs::write(
+            root.join(".adds/cobalt.unusable.0/data/kept"),
+            "quarantined",
+        )
+        .expect("quarantined data");
+        std::fs::create_dir_all(root.join(".adds/nm")).expect("NickelMenu");
+        std::fs::write(
+            root.join(".adds/nm/menu"),
+            "before\nmenu_item :main :Cobalt :cmd_spawn :quiet:/mnt/onboard/.adds/cobalt-launch.sh\nafter\n",
+        )
+        .expect("menu");
+        crate::bootstrap::install(&root).expect("bootstrap");
+
+        let removal = super::remove_payload(&root).expect("safe undo");
+        let menu = crate::menu::remove(&root).expect("remove exact menu entry");
+
+        assert!(removal.removed);
+        assert_eq!(
+            removal.recoveries,
+            vec![
+                ".adds/cobalt.recovery.0",
+                ".adds/cobalt.recovery.1",
+                ".adds/cobalt.recovery.2"
+            ]
+        );
+        assert_eq!(removal.quarantines, vec![".adds/cobalt.unusable.0"]);
+        assert!(menu.entry);
+        assert_eq!(
+            std::fs::read_to_string(root.join(".adds/cobalt.recovery.0/secrets/token"))
+                .expect("preserved secret"),
+            "secret"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(".adds/cobalt.recovery.1/trust/root.pem"))
+                .expect("preserved trust"),
+            "trust"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(".adds/cobalt.recovery.2/state/session"))
+                .expect("preserved state"),
+            "state"
+        );
+        for tree in [
+            ".adds/cobalt",
+            ".adds/cobalt.next",
+            ".adds/cobalt.prev",
+            ".adds/cobalt.owner",
+        ] {
+            assert!(!root.join(tree).exists(), "{tree} survived");
+        }
+        assert!(!root.join(crate::bootstrap::RELATIVE_PATH).exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join(".adds/nm/menu")).expect("menu"),
+            "before\nafter\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(".adds/cobalt.unusable.0/data/kept"))
+                .expect("quarantine"),
+            "quarantined"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn transaction_fixture(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "kobo-setup-transaction-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let adds = root.join(".adds");
+        std::fs::create_dir_all(adds.join("cobalt/state")).expect("old state");
+        std::fs::create_dir_all(adds.join("cobalt/apps/example")).expect("old app");
+        std::fs::write(adds.join("cobalt/start.sh"), b"old managed").expect("old managed");
+        std::fs::write(adds.join("cobalt/state/settings"), b"owner state").expect("state");
+        std::fs::write(adds.join("cobalt/apps/example/data"), b"owner app").expect("app");
+        std::fs::create_dir_all(adds.join("cobalt.prev")).expect("previous");
+        std::fs::write(adds.join("cobalt.prev/start.sh"), b"older managed").expect("previous");
+        std::fs::create_dir_all(adds.join("cobalt.next")).expect("staging");
+        std::fs::write(adds.join("cobalt.next/start.sh"), b"new managed").expect("new managed");
+        std::fs::write(
+            adds.join("cobalt.next").join(super::TRANSACTION_MARKER),
+            b"complete\n",
+        )
+        .expect("marker");
+        root
+    }
+
+    fn assert_owner_data(root: &Path) {
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("state/settings")).expect("state"),
+            b"owner state"
+        );
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("apps/example/data")).expect("app"),
+            b"owner app"
+        );
+    }
+
+    #[test]
+    fn every_activation_failure_rolls_back_without_mixing_managed_files() {
+        use super::ActivationStep;
+
+        let failures = [
+            ActivationStep::HoldOwner("state"),
+            ActivationStep::RemovePrevious,
+            ActivationStep::RetireCurrent,
+            ActivationStep::ActivateStaged,
+            ActivationStep::RestoreOwner("apps"),
+        ];
+        for failure in failures {
+            let root = transaction_fixture(&format!("{failure:?}"));
+            let adds = root.join(".adds");
+            let mut failed = false;
+            let error = super::activate_staged(&adds, &mut |step| {
+                if !failed && step == failure {
+                    failed = true;
+                    Err(format!("injected failure at {step:?}"))
+                } else {
+                    Ok(())
+                }
+            })
+            .expect_err("activation fails");
+            assert!(error.contains("activation rolled back"), "{error}");
+            super::recover_payload_transaction(&root).expect("recovery");
+            assert_eq!(
+                std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("managed"),
+                b"old managed",
+                "failure at {failure:?} mixed managed versions"
+            );
+            assert_owner_data(&root);
+
+            let staging = root.join(super::STAGING_FOLDER);
+            std::fs::create_dir_all(&staging).expect("restage");
+            std::fs::write(staging.join("start.sh"), b"new managed").expect("new managed");
+            std::fs::write(staging.join(super::TRANSACTION_MARKER), b"complete\n").expect("marker");
+            super::activate_staged(&adds, &mut |_| Ok(())).expect("safe rerun");
+            assert_eq!(
+                std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("managed"),
+                b"new managed"
+            );
+            assert_owner_data(&root);
+            let _ = std::fs::remove_dir_all(root);
+        }
+    }
+
+    #[test]
+    fn failed_rollback_is_recovered_on_the_next_run() {
+        use super::ActivationStep;
+
+        let root = transaction_fixture("rollback-previous");
+        let adds = root.join(".adds");
+        let error = super::activate_staged(&adds, &mut |step| {
+            if matches!(
+                step,
+                ActivationStep::ActivateStaged | ActivationStep::RollbackPrevious
+            ) {
+                Err(format!("injected failure at {step:?}"))
+            } else {
+                Ok(())
+            }
+        })
+        .expect_err("rollback fails");
+        assert!(error.contains("rollback was incomplete"), "{error}");
+        assert!(!root.join(INSTALL_FOLDER).exists());
+        super::recover_payload_transaction(&root).expect("rerun recovery");
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("managed"),
+            b"old managed"
+        );
+        assert_owner_data(&root);
+        let _ = std::fs::remove_dir_all(root);
+
+        let root = transaction_fixture("rollback-new");
+        let adds = root.join(".adds");
+        let error = super::activate_staged(&adds, &mut |step| {
+            if matches!(
+                step,
+                ActivationStep::RestoreOwner("apps") | ActivationStep::RollbackNew
+            ) {
+                Err(format!("injected failure at {step:?}"))
+            } else {
+                Ok(())
+            }
+        })
+        .expect_err("rollback fails");
+        assert!(error.contains("rollback was incomplete"), "{error}");
+        super::recover_payload_transaction(&root).expect("rerun completes committed transaction");
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("managed"),
+            b"new managed"
+        );
+        assert_owner_data(&root);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn post_activation_verification_failure_can_restore_the_previous_tree() {
+        let root = transaction_fixture("post-verify");
+        let adds = root.join(".adds");
+        super::activate_staged(&adds, &mut |_| Ok(())).expect("activate new");
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("new"),
+            b"new managed"
+        );
+        super::rollback_activation(&adds, &mut |_| Ok(())).expect("rollback after readback");
+        assert_eq!(
+            std::fs::read(root.join(INSTALL_FOLDER).join("start.sh")).expect("old"),
+            b"old managed"
+        );
+        assert_owner_data(&root);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_release_cannot_claim_owner_managed_folders() {
+        let member = crate::package::Member {
+            path: format!("{}/state/settings", crate::package::INSTALL_ROOT),
+            bytes: b"replacement".to_vec(),
+            program: false,
+        };
+        assert!(super::refuse_managed_owner_folders(&[member])
+            .expect_err("owner overlap")
+            .contains("owner-managed"));
+    }
+
+    #[test]
+    fn a_found_reader_names_its_model_and_where_it_is() {
+        let reader = Mounted {
+            volume: PathBuf::from("/Volumes/KOBOeReader"),
+            serial: "N365410043013".to_owned(),
+            firmware: "4.45.23697".to_owned(),
+        };
+        assert_eq!(reader.model_code(), "N365");
+        assert!(reader.summary().contains("/Volumes/KOBOeReader"));
+        assert!(reader.summary().contains("4.45.23697"));
+        assert!(!reader.summary().contains("N365410043013"));
+    }
+}

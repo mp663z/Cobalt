@@ -1,0 +1,10 @@
+# Library and its setlists after a seeded push.
+wait-for Library
+clean
+shot library
+tap Setlists
+wait-for New setlist
+clean
+shot setlists
+tap Library
+wait-for Library
