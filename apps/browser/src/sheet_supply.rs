@@ -99,7 +99,8 @@ impl SheetSupply {
         } else if census.links.iter().any(|link| {
             // The net layer is https-only and refuses plain http before connecting, so a census-admitted http
             // link is settled here instead of costing a task that cannot succeed. Fail closed, no upgrade.
-            link.as_ref().is_none_or(|url| url.scheme() != kobo_web_document::Scheme::Https)
+            link.as_ref()
+                .is_none_or(|url| url.scheme() != kobo_web_document::Scheme::Https)
         }) {
             Some(Why::Unfetchable)
         } else {
@@ -115,7 +116,11 @@ impl SheetSupply {
         }
         let max_bytes = u32::try_from(budget.max_sheet_bytes).unwrap_or(u32::MAX);
         for (index, link) in census.links.iter().enumerate() {
-            let url = link.as_ref().expect("checked above").without_fragment().to_string();
+            let url = link
+                .as_ref()
+                .expect("checked above")
+                .without_fragment()
+                .to_string();
             let task = context.spawn(Task::Fetch {
                 url,
                 offset: 0,

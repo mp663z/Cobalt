@@ -15,7 +15,9 @@ use crate::box_tree::{BoxKind, BoxTree};
 use crate::computed_style::FontStyle;
 use crate::css_text_page::{paint_direct_text_blocks, FontProvider, NormalLineMetrics, PageError};
 use crate::display_list::DisplayList;
-use crate::font_family::{select_run_family, FaceCoverage, FamilyId, FamilyView, RunRefusal};
+use crate::font_family::{
+    select_run_family, FaceCatalog, FaceCoverage, FamilyId, FamilyView, Generic, Lookup, RunRefusal,
+};
 use crate::inline_lines::GlyphBitmap;
 
 /// A coverage catalog that can also hand out the single-face provider it proves for a family.
@@ -47,15 +49,52 @@ pub enum PageRefusal {
 /// Delegating adaptor so painters taking `&impl FontProvider` can run against a catalog-owned face.
 pub struct DynFace<'a>(pub &'a dyn FontProvider);
 impl FontProvider for DynFace<'_> {
-    fn face_sha256_hex(&self) -> Option<String> { self.0.face_sha256_hex() }
-    fn bold_face_sha256_hex(&self) -> Option<String> { self.0.bold_face_sha256_hex() }
-    fn has_glyph(&self, c: char, bold: bool) -> Option<bool> { self.0.has_glyph(c, bold) }
-    fn normal_line_metrics(&self, size: u32, bold: bool) -> Option<NormalLineMetrics> { self.0.normal_line_metrics(size, bold) }
-    fn normal_line_gap(&self, size: u32, bold: bool) -> Option<u32> { self.0.normal_line_gap(size, bold) }
-    fn advance(&self, c: char, size: u32, bold: bool) -> Option<u32> { self.0.advance(c, size, bold) }
-    fn line_height(&self, size: u32, bold: bool) -> Option<u32> { self.0.line_height(size, bold) }
-    fn baseline_offset(&self, size: u32, bold: bool) -> Option<i32> { self.0.baseline_offset(size, bold) }
-    fn raster(&self, c: char, size: u32, bold: bool) -> Option<GlyphBitmap> { self.0.raster(c, size, bold) }
+    fn face_sha256_hex(&self) -> Option<String> {
+        self.0.face_sha256_hex()
+    }
+    fn bold_face_sha256_hex(&self) -> Option<String> {
+        self.0.bold_face_sha256_hex()
+    }
+    fn has_glyph(&self, c: char, bold: bool) -> Option<bool> {
+        self.0.has_glyph(c, bold)
+    }
+    fn normal_line_metrics(&self, size: u32, bold: bool) -> Option<NormalLineMetrics> {
+        self.0.normal_line_metrics(size, bold)
+    }
+    fn normal_line_gap(&self, size: u32, bold: bool) -> Option<u32> {
+        self.0.normal_line_gap(size, bold)
+    }
+    fn advance(&self, c: char, size: u32, bold: bool) -> Option<u32> {
+        self.0.advance(c, size, bold)
+    }
+    fn line_height(&self, size: u32, bold: bool) -> Option<u32> {
+        self.0.line_height(size, bold)
+    }
+    fn baseline_offset(&self, size: u32, bold: bool) -> Option<i32> {
+        self.0.baseline_offset(size, bold)
+    }
+    fn raster(&self, c: char, size: u32, bold: bool) -> Option<GlyphBitmap> {
+        self.0.raster(c, size, bold)
+    }
+}
+
+/// Borrowed coverage view of a `FamilyFaces` catalog. It delegates only, and exists so no `dyn FamilyFaces` to
+/// `dyn FaceCoverage` upcast is needed: that coercion is not stable on the pinned 1.85.1 toolchain.
+struct CoverageView<'a>(&'a dyn FamilyFaces);
+
+impl FaceCatalog for CoverageView<'_> {
+    fn lookup(&self, lowercase_name: &str) -> Lookup {
+        self.0.lookup(lowercase_name)
+    }
+    fn generic(&self, generic: Generic) -> Option<FamilyId> {
+        self.0.generic(generic)
+    }
+}
+
+impl FaceCoverage for CoverageView<'_> {
+    fn covers(&self, family: FamilyId, character: char, bold: bool) -> Option<bool> {
+        self.0.covers(family, character, bold)
+    }
 }
 
 fn probe(ch: char) -> Option<char> {
@@ -96,7 +135,8 @@ pub fn select_uniform_family(
         let text = node.text.as_deref().unwrap_or("");
         let probed: Option<String> = text.chars().map(probe).collect();
         let probed = probed.ok_or(PageRefusal::NonAscii)?;
-        let id = select_run_family(list, catalog, &probed, bold).map_err(PageRefusal::Run)?;
+        let id = select_run_family(list, &CoverageView(catalog), &probed, bold)
+            .map_err(PageRefusal::Run)?;
         // A genuinely empty text box (no characters at all; whitespace-only is NOT empty) takes no part in the
         // uniform-id vote. Its style, key, parent and family-resolution checks above still apply, and its box
         // keeps contributing to layout/strut exactly as in the existing painter.

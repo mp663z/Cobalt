@@ -532,7 +532,9 @@ pub fn parse_style_tree_with_pinned_font_family(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, false, true)
+    parse_style_tree_in(
+        bytes, sheets, limits, media, budget, false, false, false, true,
+    )
 }
 
 /// Host-side census of the external stylesheets the parse will ask the caller to supply through `sheets`, resolved
@@ -574,7 +576,11 @@ pub fn host_stylesheet_links(
         }
     }
     let sink = parser.finish();
-    let dropped = sink.dropped_attributes.get().saturating_add(sink.merged_attributes_dropped.get()) > 0;
+    let dropped = sink
+        .dropped_attributes
+        .get()
+        .saturating_add(sink.merged_attributes_dropped.get())
+        > 0;
     let nodes = sink.into_nodes();
     style_tree::host_sheet_links_in(&nodes, media, page, !cut && !dropped)
 }

@@ -586,13 +586,14 @@ impl Browser {
                 produce,
             );
         }
-        // Linked sheets are fetched only when the CSS stage is enabled; production never is, so it
-        // starts no extra task. The result is held for the future pipeline and changes nothing on screen.
-        if self.css.is_enabled() {
+        // Linked sheets are fetched only when the CSS stage is enabled AND admission left a candidate (a refused
+        // page never costs a fetch); production is never enabled, so it starts no extra task. The result is held for the future pipeline and changes nothing on screen.
+        if self.css.is_enabled() && self.css.candidate_held() {
             let media = u32::try_from(metrics.width)
                 .ok()
                 .and_then(kobo_web_document::MediaContext::new);
-            let census = kobo_web_document::host_stylesheet_links(bytes, url, &Limits::DEFAULT, media);
+            let census =
+                kobo_web_document::host_stylesheet_links(bytes, url, &Limits::DEFAULT, media);
             self.sheets.begin(context, &census);
         }
         let page = match (url.fragment(), place) {

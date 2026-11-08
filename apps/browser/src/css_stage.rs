@@ -302,6 +302,15 @@ impl CssStage {
         self.enabled
     }
 
+    /// Whether the last admission left a page that can still be a candidate (not refused, not cleared). Sheet
+    /// supply starts only for such a page: a refused page's sheets are never fetched.
+    pub(crate) const fn candidate_held(&self) -> bool {
+        matches!(
+            self.stage,
+            Stage::PreliminarySemanticCandidate | Stage::Preparing { .. } | Stage::Ready { .. }
+        )
+    }
+
     /// An enabled seam driven by `preparation`, for tests.
     #[cfg(test)]
     pub(crate) fn with_preparation(preparation: Box<dyn Preparation>) -> Self {

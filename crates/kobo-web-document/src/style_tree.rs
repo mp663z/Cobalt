@@ -971,7 +971,12 @@ pub(crate) fn host_sheet_links_in(
         }
         stack.extend(nodes[handle].children.iter().rev());
     }
-    let mut out = HostSheetLinks { links: Vec::new(), data_links: 0, unknown_media: 0, complete };
+    let mut out = HostSheetLinks {
+        links: Vec::new(),
+        data_links: 0,
+        unknown_media: 0,
+        complete,
+    };
     let mut stack = vec![DOCUMENT];
     while let Some(handle) = stack.pop() {
         stack.extend(nodes[handle].children.iter().rev());
@@ -982,7 +987,9 @@ pub(crate) fn host_sheet_links_in(
             continue;
         }
         let rel = css::attribute(nodes, handle, "rel").unwrap_or("");
-        if !rel.split_whitespace().any(|part| part.eq_ignore_ascii_case("stylesheet"))
+        if !rel
+            .split_whitespace()
+            .any(|part| part.eq_ignore_ascii_case("stylesheet"))
             || css::attribute(nodes, handle, "disabled").is_some()
         {
             continue;
@@ -996,7 +1003,11 @@ pub(crate) fn host_sheet_links_in(
             }
         }
         let href = css::attribute(nodes, handle, "href");
-        if href.is_some_and(|h| h.as_bytes().get(..5).is_some_and(|p| p.eq_ignore_ascii_case(b"data:"))) {
+        if href.is_some_and(|h| {
+            h.as_bytes()
+                .get(..5)
+                .is_some_and(|p| p.eq_ignore_ascii_case(b"data:"))
+        }) {
             out.data_links += 1;
             continue;
         }
