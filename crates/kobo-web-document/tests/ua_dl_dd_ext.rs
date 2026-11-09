@@ -96,15 +96,13 @@ fn computed_rtl_dd_and_other_u1_guards_still_refuse() {
 #[test]
 fn neighbour_audited_elements_still_refuse_and_default_entry_is_unchanged() {
     for body in [
-        "<ul><li>t</li></ul>",
-        "<ol><li>t</li></ol>",
         "<blockquote>t</blockquote>",
         "<figure>t</figure>",
         "<h3>t</h3>",
         "<pre>t</pre>",
         "<address>t</address>",
         "<cite>t</cite>",
-        "<dl><dd><ul><li>x</li></ul></dd></dl>",
+        // ul/ol removed: their UA defaults are now modelled (admission-by-supply), see `ua_lists_ext`.
     ] {
         assert!(ext("", body).unsupported, "must still refuse: {body}");
     }
@@ -155,11 +153,9 @@ fn former_missing_property_shapes_are_admitted_per_element() {
 #[test]
 fn neighbour_missing_property_shapes_still_refuse() {
     for (css, body) in [
-        ("ul{margin:0}", "<ul><li>t</li></ul>"),
-        ("ol{padding-left:0}", "<ol><li>t</li></ol>"),
+        // ul/ol shapes removed: no longer audited (modelled UA defaults; revert returns the UA value).
         ("h3{font-size:10px}", "<h3>t</h3>"),
         ("address{display:block}", "<address>t</address>"),
-        ("ul{margin-top:revert}", "<ul><li>t</li></ul>"),
         ("blockquote{margin-top:0}", "<blockquote>t</blockquote>"),
     ] {
         assert!(ext(css, body).unsupported, "must still refuse: {css}");

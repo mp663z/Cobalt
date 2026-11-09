@@ -674,6 +674,48 @@ impl StyleTree {
                     source_order: 0,
                 });
             }
+            // CANDIDATE (extended-CSS opt-in entry only; default entry byte-for-byte unchanged). Chrome's UA sheet:
+            // `ul, ol { margin-block: 1em; padding-inline-start: 40px }`, margins zeroed when any dl/ul/ol/menu/dir
+            // ANCESTOR exists (same UA rule group and the same ancestor walk as dl below). Margins are 1em resolved
+            // against the element's OWN computed font size (whole px, exact); padding-left is the physical mapping
+            // of padding-inline-start, valid only for horizontal-tb + ltr: `dir` attributes are refused upstream and
+            // a computed RTL ul/ol is refused below (mirroring dd). Admission-by-supply: the required-props audit
+            // drops its ul/ol arm in the same gated change, so ul/ol join the dl/dt/dd wildcard class. List markers
+            // (disc/decimal) stay unmodelled (the ListStyleType supply above is unchanged); no paint/readiness scope.
+            if ext_selectors && matches!(name.local.as_ref(), "ul" | "ol") {
+                let mut list_ancestor = false;
+                let mut up = parent;
+                while let Some(i) = up {
+                    if matches!(
+                        tree.nodes[i].tag.as_str(),
+                        "dl" | "ul" | "ol" | "menu" | "dir"
+                    ) {
+                        list_ancestor = true;
+                        break;
+                    }
+                    up = tree.nodes[i].parent;
+                }
+                if !list_ancestor {
+                    for property in [Property::MarginTop, Property::MarginBottom] {
+                        declarations.push(Declaration {
+                            property,
+                            value: Value::Margin(Margin::Em(10_000)),
+                            origin: Origin::UserAgent,
+                            important: false,
+                            specificity: (0, 0, 0),
+                            source_order: 0,
+                        });
+                    }
+                }
+                declarations.push(Declaration {
+                    property: Property::PaddingLeft,
+                    value: Value::Padding(40),
+                    origin: Origin::UserAgent,
+                    important: false,
+                    specificity: (0, 0, 0),
+                    source_order: 0,
+                });
+            }
             if name.local.as_ref() == "p" {
                 // The HTML user-agent sheet gives paragraphs 1em vertical
                 // margins; the cascade resolves the em against each
@@ -867,9 +909,10 @@ impl StyleTree {
                     "blockquote" | "figure" => Some(&[Property::MarginTop, Property::MarginBottom, Property::MarginLeft, Property::MarginRight]),
                     "code" | "samp" | "kbd" | "tt" => Some(&[Property::FontFamily]),
                     "small" | "big" => Some(&[Property::FontSize]),
-                    "ul" | "ol" => Some(&[Property::MarginTop, Property::MarginBottom, Property::PaddingLeft]),
                     // dl/dt/dd have no arm on purpose (U2): their defaults are modelled (ext-only UA-origin declarations plus the
                     // computed-RTL dd refusal), so they fall to the wildcard `Some(&[])` and need no author declaration.
+                    // ul/ol join that class in the same gated change that supplies their UA defaults above
+                    // (margin-block 1em when no list ancestor, padding-inline-start 40px, computed-RTL refused).
                     "address" => Some(&[Property::Display, Property::FontStyle]),
                     "cite" | "dfn" | "var" => Some(&[Property::FontStyle]),
                     "pre" | "sub" | "sup" | "button" | "textarea" | "select" | "details" | "summary" | "fieldset"
@@ -905,7 +948,7 @@ impl StyleTree {
             // non-initial value is refused rather than guessed.
             let refused = rem_refused
                 || (ext_selectors
-                    && name.local.as_ref() == "dd"
+                    && matches!(name.local.as_ref(), "dd" | "ul" | "ol")
                     && style.direction == crate::computed_style::Direction::Rtl)
                 || style.positioned.content != crate::computed_style::Content::Normal
                 || style.line_height == Some(0)

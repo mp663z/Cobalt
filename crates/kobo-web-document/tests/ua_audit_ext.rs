@@ -25,8 +25,8 @@ fn cases() -> Vec<(&'static str, &'static str, &'static str, Vec<&'static str>)>
         ("figure", "<figure>t</figure>", "figure{margin:0}", vec!["figure{margin-top:0;margin-bottom:0;margin-left:0}"]),
         ("small", "<small>t</small>", "small{font-size:13px}", vec![]),
         ("big", "<big>t</big>", "big{font-size:19px}", vec![]),
-        ("ul", "<ul><li>t</li></ul>", "ul{margin:0;padding:0;list-style-type:none}", vec!["ul{margin:0;list-style-type:none}", "ul{padding:0;list-style-type:none}", "ul{margin-top:0;padding:0;list-style-type:none}"]),
-        ("ol", "<ol><li>t</li></ol>", "ol{margin:0;padding:0;list-style-type:none}", vec!["ol{margin:0;list-style-type:none}", "ol{padding:0;list-style-type:none}"]),
+        // ul/ol are no longer audited: their UA defaults are modelled (ext-only UA-origin supply,
+        // admission-by-supply), so they fall to the wildcard arm like dl/dt/dd. See `ua_lists_ext`.
         ("address", "<address>t</address>", "address{display:block;font-style:normal}", vec!["address{display:block}", "address{font-style:normal}"]),
         ("cite", "<cite>t</cite>", "cite{font-style:normal}", vec![]),
         ("dfn", "<dfn>t</dfn>", "dfn{font-style:normal}", vec![]),
@@ -111,9 +111,8 @@ fn author_revert_hands_back_to_the_unmodelled_ua_sheet_and_refuses() {
         ("h1{font-size:revert;font-weight:700;margin:0}", "<h1>t</h1>"),
         ("h1{font-size:32px;font-weight:700;margin-top:revert;margin-bottom:0}", "<h1>t</h1>"),
         ("h1{margin:0;font-size:32px;font-weight:700}h1{margin:revert}", "<h1>t</h1>"),
-        ("ul{margin:revert;padding:revert;list-style:none}", "<ul><li>t</li></ul>"),
-        ("ul{margin:0;padding:revert;list-style:none}", "<ul><li>t</li></ul>"),
-        ("ul{margin:0;padding:0;list-style:none}ul{padding-left:revert}", "<ul><li>t</li></ul>"),
+        // ul/ol revert cases removed: their UA sheet is now modelled, so revert returns the modelled
+        // values (16px margins, 40px padding-left at the default font size) instead of refusing.
         ("blockquote{margin:revert}", "<blockquote>t</blockquote>"),
         ("address{display:block;font-style:revert}", "<address>t</address>"),
         ("small{font-size:revert}", "<small>t</small>"),
