@@ -75,7 +75,9 @@ fn everything_else_fails_closed() {
     for css in [
         ".p::after{content:\"x\";display:block}",
         ".p::after{content:attr(href)}",
-        ".p::before{content:\"\";display:block;clear:both}",
+        ".p::before{content:\"x\";display:block}",
+        ".p::before{content:attr(href)}",
+        ".p::before::after{content:\"\"}",
         ".p:after{content:\"\";display:block}",
         ".p::first-line{color:#f00}",
         ".p{--c:both}.p::after{content:\"\";display:block;clear:var(--c)}",
@@ -110,6 +112,79 @@ fn pixel(list: &DisplayList, x: i32, y: i32) -> Option<Rgb> {
         }
     }
     hit
+}
+
+/// `::before` mirrors `::after`: the generated box is the FIRST child of the
+/// originating element, with its own cascaded style.
+#[test]
+fn before_box_is_the_first_child_with_its_own_cascaded_style() {
+    const GOV_B: &str = ".p::before{content:\"\";display:block;clear:both}";
+    let t = ext(&format!(".p{{color:#f00}}{GOV_B}"), BODY);
+    assert!(!t.unsupported && !t.truncated);
+    let g = node(&t, "::before");
+    let p = t.nodes[g].parent.expect("originating element");
+    assert_eq!(t.nodes[p].children.len(), 2, "::before and f");
+    let first = *t.nodes[p].children.first().unwrap();
+    assert_eq!(t.nodes[first].tag, "::before");
+    assert_eq!(t.nodes[first].parent, Some(p));
+    // Index PRECEDES the originating element's subtree.
+    assert!(
+        first < t.nodes[p].children[1],
+        "before index precedes real child"
+    );
+    let s = t.nodes[first].style;
+    assert_eq!(s.display, kobo_web_document::computed_style::Display::Block);
+    assert_eq!(s.color, 0xff_00_00, "inherits from the originating element");
+    // One element with BOTH: before, real children, after.
+    let t = ext(&format!("{GOV_B}{GOV}"), BODY);
+    let p = node(&t, "div");
+    let tags: Vec<&str> = t.nodes[p]
+        .children
+        .iter()
+        .map(|&c| t.nodes[c].tag.as_str())
+        .collect();
+    assert_eq!(tags, ["::before", "div", "::after"]);
+}
+
+/// Pixel evidence of ORDER: a painted `::before` block sits ABOVE the real
+/// content, pushing it down; the same page without the rule paints the real
+/// content at the top.
+#[test]
+fn generated_before_boxes_stay_closed_to_both_painters() {
+    // Mirror of the durable ::after review regression (E2 REVIEW FAIL c728c185):
+    // a generated ordinary block is paintable by NEITHER painter. The same
+    // confinement applies to ::before (box_tree generated flag covers both
+    // families).
+    let t = ext(
+        ".p{width:400px;background:#ccc}.f{height:50px;background:#f00}.p::before{content:\"\";display:block;height:20px;background:#0f0}",
+        "<div class=p><div class=f></div></div>",
+    );
+    assert!(!t.unsupported && !t.truncated);
+    let bt = BoxTree::from_style(&t);
+    assert!(
+        paint_backgrounds(&bt, 785, 600).is_err(),
+        "default painter closed"
+    );
+    assert!(
+        paint_backgrounds_float_kernel(&bt, 785, 600).is_err(),
+        "kernel painter closed"
+    );
+    // The kernel's cleared child is always the SECOND child of its parent;
+    // a ::before is always the FIRST child, so no current kernel shape admits
+    // a generated ::before: [cleared ::before, float] is refused by both.
+    let k = ext(
+        ".p{width:400px;background:#ccc}.f{float:left;width:100px;height:50px;background:#f00}.p::before{content:\"\";display:block;clear:both}",
+        "<div class=p><div class=f></div></div>",
+    );
+    assert!(!k.unsupported && !k.truncated);
+    let btk = BoxTree::from_style(&k);
+    assert!(paint_backgrounds(&btk, 785, 600).is_err());
+    assert!(
+        paint_backgrounds_float_kernel(&btk, 785, 600).is_err(),
+        "::before cannot be the kernel cleared child"
+    );
+    // Painting a ::before shape needs a reviewed painter extension; until then
+    // every painter stays closed to it, exactly like a non-kernel ::after.
 }
 
 /// Chrome 156 floatkernel-e2/ctx a1-a6 (whole-image, 0 diffs) and b6 (4px ::after).

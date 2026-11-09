@@ -36,8 +36,9 @@ pub struct CssBox {
     pub style: Computed,
     /// Original DOM text. White-space processing belongs to line layout.
     pub text: Option<String>,
-    /// EXPERIMENTAL: a generated `::after` box (extended-CSS entry). Paintable only as the
-    /// cleared child of the confined float kernel by the explicit kernel painter.
+    /// EXPERIMENTAL: a generated `::before`/`::after` box (extended-CSS entry).
+    /// Paintable only as the cleared child of the confined float kernel by the
+    /// explicit kernel painter.
     pub(crate) generated: bool,
 }
 
@@ -2479,7 +2480,9 @@ impl BoxTree {
                 children: Vec::new(),
                 style,
                 text: node.text.clone(),
-                generated: node.tag == "::after",
+                // Same generated-box paint confinement for both pseudo families:
+                // kernel-cleared only, by the explicit kernel painter.
+                generated: node.tag == "::after" || node.tag == "::before",
             });
             if let Some(parent) = parent {
                 tree.boxes[parent].children.push(index);

@@ -189,7 +189,16 @@ impl StyleTree {
         sheets: &[Vec<u8>],
         media: Option<crate::media_query::MediaContext>,
     ) -> Self {
-        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false, false, false, None)
+        Self::from_dom_with(
+            nodes,
+            sheets,
+            media,
+            SupplyBudget::CANONICAL,
+            false,
+            false,
+            false,
+            None,
+        )
     }
 
     #[allow(clippy::too_many_lines)] // One bounded tree walk retains parentage and cascade.
@@ -206,27 +215,46 @@ impl StyleTree {
         let mut tree = Self::default();
         tree.ext = ext_selectors;
         let mut fam = crate::font_family::FamilyTable::new();
-        let (rules, deferred_table, incomplete, claimed) =
-            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors, text_deco, family_bind, &mut fam, snapshot);
+        let (rules, deferred_table, incomplete, claimed) = matched_rules(
+            nodes,
+            sheets,
+            &mut tree.diagnostics,
+            media,
+            budget,
+            ext_selectors,
+            text_deco,
+            family_bind,
+            &mut fam,
+            snapshot,
+        );
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
-        let mut stack = vec![(DOCUMENT, None::<usize>, Computed::INITIAL, Rc::new(Map::new()))];
+        let mut stack = vec![(
+            DOCUMENT,
+            None::<usize>,
+            Computed::INITIAL,
+            Rc::new(Map::new()),
+        )];
         let mut match_work = 0_usize;
         let mut var_map_bytes = 0_usize;
         let mut root_font_px: u32 = 16;
-        // EXTENDED-CSS `::after` boxes. Pending entries sit on the stack BELOW the
-        // originating element's children, so a generated box is the LAST child and
-        // its index follows the element's whole subtree.
+        // EXTENDED-CSS generated boxes (`::before`/`::after`). ONE pending list
+        // for both families, sharing one GENERATED sentinel space and one
+        // aggregate MAX_GENERATED bound; the bool is `is_before` (tag only).
+        // Stack placement (LIFO) decides child position: a pending entry pushed
+        // BEFORE the real children pops AFTER them (LAST child, ::after); one
+        // pushed AFTER the real children pops FIRST (FIRST child, ::before).
         const GENERATED: usize = usize::MAX / 2;
         const MAX_GENERATED: usize = 64;
-        let mut pending_after: Vec<Computed> = Vec::new();
+        let mut pending: Vec<(bool, Computed)> = Vec::new();
         while let Some((handle, parent, inherited, inherited_vars)) = stack.pop() {
             if handle >= GENERATED {
-                let style = pending_after[handle - GENERATED];
-                // Generated boxes are bounded separately (MAX_GENERATED) and never
-                // spend the DOM node cap that real nodes are checked against.
-                if tree.nodes.len() >= nodes.len() + pending_after.len() {
+                let (is_before, style) = pending[handle - GENERATED];
+                // Generated boxes are bounded separately (MAX_GENERATED over BOTH
+                // families) and never spend the DOM node cap that real nodes are
+                // checked against.
+                if tree.nodes.len() >= nodes.len() + pending.len() {
                     tree.truncated = true;
                     tree.diagnostics.record(RefusalReason::RetainedNodes);
                     break;
@@ -237,7 +265,7 @@ impl StyleTree {
                     inline_attributes: false,
                     parent,
                     children: Vec::new(),
-                    tag: "::after".to_owned(),
+                    tag: if is_before { "::before" } else { "::after" }.to_owned(),
                     text: None,
                     style,
                 });
@@ -247,7 +275,7 @@ impl StyleTree {
                 continue;
             }
             if let Data::Text(text) = &nodes[handle].data {
-                if tree.nodes.len() >= nodes.len() + pending_after.len() {
+                if tree.nodes.len() >= nodes.len() + pending.len() {
                     tree.truncated = true;
                     tree.diagnostics.record(RefusalReason::RetainedNodes);
                     break;
@@ -273,7 +301,7 @@ impl StyleTree {
                 }
                 continue;
             };
-            if tree.nodes.len() >= nodes.len() + pending_after.len() || match_work >= MAX_MATCH_WORK {
+            if tree.nodes.len() >= nodes.len() + pending.len() || match_work >= MAX_MATCH_WORK {
                 tree.diagnostics.record(if match_work >= MAX_MATCH_WORK {
                     RefusalReason::MatchWork
                 } else {
@@ -291,7 +319,7 @@ impl StyleTree {
             for rule in &rules {
                 // Pseudo rules never select an element here; they are charged exactly
                 // once, in the pseudo pass below.
-                if rule.selector.pseudo_after {
+                if rule.selector.pseudo != crate::css::Pseudo::None {
                     continue;
                 }
                 match_work += 1;
@@ -333,12 +361,18 @@ impl StyleTree {
             if tree.truncated {
                 break;
             }
-            // `::after` rules whose ORIGINATING element is this one. Deferred (var())
-            // and rem-valued declarations are not resolved for pseudo-elements: refuse.
+            // Pseudo-element rules whose ORIGINATING element is this one. Deferred
+            // (var()) and rem-valued declarations are not resolved for
+            // pseudo-elements: refuse.
             let mut pseudo_decls: Vec<Declaration> = Vec::new();
+            let mut pseudo_decls_before: Vec<Declaration> = Vec::new();
             let mut pseudo_hit = false;
+            let mut pseudo_hit_before = false;
             let mut pseudo_bad = false;
-            for rule in rules.iter().filter(|r| r.selector.pseudo_after) {
+            for rule in rules
+                .iter()
+                .filter(|r| r.selector.pseudo != crate::css::Pseudo::None)
+            {
                 match_work += 1;
                 if match_work > MAX_MATCH_WORK {
                     tree.diagnostics.record(RefusalReason::MatchWork);
@@ -353,10 +387,17 @@ impl StyleTree {
                     }
                     Some(false) => {}
                     Some(true) => {
-                        pseudo_hit = true;
-                        // Only block-container originating elements. Replaced and void
-                        // elements (img, input, br, ...) generate no ::after in Chrome;
-                        // anything outside the allowlist refuses rather than guesses.
+                        let is_before = rule.selector.pseudo == crate::css::Pseudo::Before;
+                        if is_before {
+                            pseudo_hit_before = true;
+                        } else {
+                            pseudo_hit = true;
+                        }
+                        // CONSERVATIVE LIMIT (not a Chrome claim): only
+                        // block-container originating elements generate boxes
+                        // here. Chrome CAN generate on other elements (e.g. a
+                        // span); anything outside this allowlist refuses
+                        // rather than guesses.
                         let allowed = matches!(
                             &nodes[handle].data,
                             Data::Element { name, .. }
@@ -369,7 +410,12 @@ impl StyleTree {
                         if rule.deferred.is_some() || !allowed {
                             pseudo_bad = true;
                         } else {
-                            pseudo_decls.push(Declaration {
+                            let decls = if is_before {
+                                &mut pseudo_decls_before
+                            } else {
+                                &mut pseudo_decls
+                            };
+                            decls.push(Declaration {
                                 property: rule.property,
                                 value: rule.value,
                                 origin: Origin::Author,
@@ -378,7 +424,7 @@ impl StyleTree {
                                 source_order: rule.source_order,
                             });
                             // Same boundary as an element: the 256th matched declaration refuses.
-                            if pseudo_decls.len() == MAX_DECLARATIONS_PER_ELEMENT {
+                            if decls.len() == MAX_DECLARATIONS_PER_ELEMENT {
                                 tree.diagnostics.record(RefusalReason::MatchedDeclarations);
                                 tree.truncated = true;
                                 break;
@@ -822,44 +868,75 @@ impl StyleTree {
             if let Some(parent) = parent {
                 tree.nodes[parent].children.push(index);
             }
+            let mut before_handle: Option<(usize, Computed)> = None;
             if pseudo_bad {
                 tree.diagnostics.record(RefusalReason::CssDeclaration);
                 tree.unsupported = true;
-            } else if pseudo_hit {
-                // Same normalisation and validation as an element's own cascade.
-                let pseudo_rem_refused = normalize_rem(&mut pseudo_decls, root_font_px);
-                let pstyle = Computed::cascade(Some(style), &pseudo_decls);
-                let pseudo_refused = pseudo_rem_refused
-                    || pstyle.line_height == Some(0)
-                    || pstyle.font_size == 0
-                    || crate::computed_style::length_em_unresolved(pstyle.width)
-                    || crate::computed_style::length_em_unresolved(pstyle.height)
-                    || [pstyle.padding_top, pstyle.padding_right, pstyle.padding_bottom, pstyle.padding_left]
-                        .contains(&crate::computed_style::PADDING_UNREPRESENTABLE);
-                if pseudo_refused {
-                    tree.diagnostics.record(RefusalReason::ComputedValue);
-                    tree.unsupported = true;
-                }
-                // content normal/none: no box. content "": a box unless display:none.
-                if pstyle.positioned.content == crate::computed_style::Content::Empty
-                    && pstyle.display != Display::None
-                {
-                    if pending_after.len() >= MAX_GENERATED {
-                        tree.diagnostics.record(RefusalReason::RetainedNodes);
-                        tree.truncated = true;
-                        break;
+            } else {
+                // One shared cascade/push path per family, both bounded by the
+                // ONE aggregate MAX_GENERATED over `pending` (both families).
+                for (is_before, hit, decls) in [
+                    (true, pseudo_hit_before, &mut pseudo_decls_before),
+                    (false, pseudo_hit, &mut pseudo_decls),
+                ] {
+                    if !hit {
+                        continue;
                     }
-                    pending_after.push(pstyle);
-                    stack.push((
-                        GENERATED + pending_after.len() - 1,
-                        Some(index),
-                        pstyle,
-                        Rc::clone(&vars_now),
-                    ));
+                    // Same normalisation and validation as an element's own cascade.
+                    let pseudo_rem_refused = normalize_rem(decls, root_font_px);
+                    let pstyle = Computed::cascade(Some(style), decls);
+                    let pseudo_refused = pseudo_rem_refused
+                        || pstyle.line_height == Some(0)
+                        || pstyle.font_size == 0
+                        || crate::computed_style::length_em_unresolved(pstyle.width)
+                        || crate::computed_style::length_em_unresolved(pstyle.height)
+                        || [
+                            pstyle.padding_top,
+                            pstyle.padding_right,
+                            pstyle.padding_bottom,
+                            pstyle.padding_left,
+                        ]
+                        .contains(&crate::computed_style::PADDING_UNREPRESENTABLE);
+                    if pseudo_refused {
+                        tree.diagnostics.record(RefusalReason::ComputedValue);
+                        tree.unsupported = true;
+                    }
+                    // content normal/none: no box. content "": a box unless display:none.
+                    if pstyle.positioned.content == crate::computed_style::Content::Empty
+                        && pstyle.display != Display::None
+                    {
+                        if pending.len() >= MAX_GENERATED {
+                            tree.diagnostics.record(RefusalReason::RetainedNodes);
+                            tree.truncated = true;
+                            break;
+                        }
+                        pending.push((is_before, pstyle));
+                        // LIFO placement: the ::after entry goes on the stack NOW
+                        // (below the real children pushed afterwards) so it pops
+                        // LAST; the ::before entry is pushed after the children
+                        // (see below) so it pops FIRST.
+                        if is_before {
+                            before_handle = Some((GENERATED + pending.len() - 1, pstyle));
+                        } else {
+                            stack.push((
+                                GENERATED + pending.len() - 1,
+                                Some(index),
+                                pstyle,
+                                Rc::clone(&vars_now),
+                            ));
+                        }
+                    }
                 }
+            }
+            if tree.truncated {
+                break;
             }
             for &child in nodes[handle].children.iter().rev() {
                 stack.push((child, Some(index), style, Rc::clone(&vars_now)));
+            }
+            // ::before pops FIRST: pushed after the real children.
+            if let Some((gen, pstyle)) = before_handle {
+                stack.push((gen, Some(index), pstyle, Rc::clone(&vars_now)));
             }
         }
         tree.diagnostics.retained_nodes = tree.nodes.len();
@@ -4855,10 +4932,10 @@ const INITIAL_NOOPS: &[(&str, &str)] = &[
 mod link_state_tests {
     use crate::style_diagnostics::RefusalReason;
     use crate::{
-        Limits, SupplyBudget, parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors,
-        parse_style_tree_with_state,
+        parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors,
+        parse_style_tree_with_state, Limits, SupplyBudget,
     };
-    use crate::{HistoryState, SnapshotState, style_tree::StyleTree};
+    use crate::{style_tree::StyleTree, HistoryState, SnapshotState};
 
     const FRESH: SnapshotState = SnapshotState {
         history: Some(HistoryState::FreshNoHistory),
@@ -4917,7 +4994,11 @@ mod link_state_tests {
             .filter(|n| n.tag == "a")
             .map(|n| n.style.font_size)
             .collect();
-        assert_eq!(a_sizes, [33, 33, 16], "html href, html empty href, html no href");
+        assert_eq!(
+            a_sizes,
+            [33, 33, 16],
+            "html href, html empty href, html no href"
+        );
         let area = t
             .nodes
             .iter()
@@ -4946,7 +5027,11 @@ mod link_state_tests {
                 Some(RefusalReason::CssDeclaration),
                 "{body}"
             );
-            let svg_a = t.nodes.iter().find(|n| n.tag == "a").expect("svg a retained");
+            let svg_a = t
+                .nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .expect("svg a retained");
             assert_eq!(svg_a.style.font_size, 16, "{body}");
         }
     }
@@ -4960,7 +5045,15 @@ mod link_state_tests {
         );
         let t = state(&h);
         assert!(!t.unsupported);
-        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 33);
+        assert_eq!(
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .unwrap()
+                .style
+                .font_size,
+            33
+        );
     }
 
     #[test]
@@ -4982,7 +5075,14 @@ mod link_state_tests {
 
     #[test]
     fn other_state_pseudos_stay_refused_under_state_entry() {
-        for pseudo in [":visited", ":hover", ":active", ":focus", ":focus-visible", ":focus-within"] {
+        for pseudo in [
+            ":visited",
+            ":hover",
+            ":active",
+            ":focus",
+            ":focus-visible",
+            ":focus-within",
+        ] {
             let h = sheet(
                 &format!("a{pseudo}{{font-size:33px}}"),
                 "<a href=https://x>one</a>",
@@ -5022,7 +5122,15 @@ mod link_state_tests {
             t.diagnostics.first_reason(),
             Some(RefusalReason::CssSelector)
         );
-        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+        assert_eq!(
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .unwrap()
+                .style
+                .font_size,
+            16
+        );
         // Default entry: byte-unchanged refusal behavior.
         let d = default(&h);
         assert!(d.unsupported);
@@ -5030,7 +5138,15 @@ mod link_state_tests {
             d.diagnostics.first_reason(),
             Some(RefusalReason::CssSelector)
         );
-        assert_eq!(d.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+        assert_eq!(
+            d.nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .unwrap()
+                .style
+                .font_size,
+            16
+        );
     }
 
     fn state_with(html: &str, snapshot: &SnapshotState) -> StyleTree {
@@ -5054,12 +5170,36 @@ mod link_state_tests {
         // never match: the correct CSS semantic for a quiescent capture.
         let t = state_with(&h, &QUIESCENT);
         assert!(!t.unsupported);
-        assert_eq!(t.nodes.iter().find(|n| n.tag == "div").unwrap().style.font_size, 16);
-        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+        assert_eq!(
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .font_size,
+            16
+        );
+        assert_eq!(
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .unwrap()
+                .style
+                .font_size,
+            16
+        );
         // Both guarantees present: same outcome for the pointer family.
         let t = state_with(&h, &BOTH);
         assert!(!t.unsupported);
-        assert_eq!(t.nodes.iter().find(|n| n.tag == "div").unwrap().style.font_size, 16);
+        assert_eq!(
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "div")
+                .unwrap()
+                .style
+                .font_size,
+            16
+        );
     }
 
     #[test]
@@ -5068,26 +5208,41 @@ mod link_state_tests {
         let h = sheet("div:hover{font-size:33px}", "<div>one</div>");
         let t = state_with(&h, &FRESH);
         assert!(t.unsupported);
-        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
         // An input-only guarantee does NOT enroll :link.
         let h = sheet("a:link{font-size:33px}", "<a href=https://x>one</a>");
         let t = state_with(&h, &QUIESCENT);
         assert!(t.unsupported);
-        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
         // No snapshot at all: :hover/:active fail closed like any unguaranteed state.
         let h = sheet("div:hover{font-size:33px}", "<div>one</div>");
         let t = ext(&h);
         assert!(t.unsupported);
-        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
         let d = default(&h);
         assert!(d.unsupported);
-        assert_eq!(d.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        assert_eq!(
+            d.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
     }
 
     #[test]
     fn repeated_hover_active_compounds_are_grammar_bound_refusals() {
         for selector in ["a:hover:hover", "a:active:active", "a:link:hover"] {
-            let h = sheet(&format!("{selector}{{font-size:33px}}"), "<a href=https://x>one</a>");
+            let h = sheet(
+                &format!("{selector}{{font-size:33px}}"),
+                "<a href=https://x>one</a>",
+            );
             let t = state_with(&h, &BOTH);
             assert!(t.unsupported, "{selector}");
             assert_eq!(
@@ -5096,5 +5251,141 @@ mod link_state_tests {
                 "{selector}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod before_after_tests {
+    use crate::style_diagnostics::RefusalReason;
+    use crate::{
+        parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors, style_tree::StyleTree,
+        Limits, SupplyBudget,
+    };
+    fn ext(html: &str) -> StyleTree {
+        parse_style_tree_with_inline_sheets_and_selectors(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+        )
+    }
+    fn sheet(css: &str, body: &str) -> String {
+        format!("<!doctype html><html><head><style>{css}</style></head><body>{body}</body></html>")
+    }
+    fn child_tags(t: &StyleTree, tag: &str) -> Vec<String> {
+        let (i, n) = t
+            .nodes
+            .iter()
+            .enumerate()
+            .find(|(_, n)| n.tag == tag)
+            .expect("parent retained");
+        n.children.iter().map(|&c| t.nodes[c].tag.clone()).collect()
+    }
+
+    #[test]
+    fn before_box_is_first_child_and_after_last_on_one_element() {
+        let h = sheet(
+            "div::before{content:\"\"} div::after{content:\"\"}",
+            "<div><p>real</p></div>",
+        );
+        let t = ext(&h);
+        assert!(!t.unsupported);
+        assert_eq!(child_tags(&t, "div"), ["::before", "p", "::after"]);
+    }
+
+    #[test]
+    fn before_content_gate_mirrors_after() {
+        // normal/none: no box; "": a box; display:none + "": no box.
+        let h = sheet("div::before{content:\"\"}", "<div><p>real</p></div>");
+        let t = ext(&h);
+        assert!(!t.unsupported);
+        assert_eq!(child_tags(&t, "div"), ["::before", "p"]);
+        for content in ["normal", "none"] {
+            let h = sheet(
+                &format!("div::before{{content:{content}}}"),
+                "<div><p>real</p></div>",
+            );
+            let t = ext(&h);
+            assert!(!t.unsupported, "{content}");
+            assert_eq!(child_tags(&t, "div"), ["p"], "{content}");
+        }
+        let h = sheet(
+            "div::before{content:\"\";display:none}",
+            "<div><p>real</p></div>",
+        );
+        let t = ext(&h);
+        assert_eq!(child_tags(&t, "div"), ["p"]);
+    }
+
+    #[test]
+    fn before_text_content_still_refused_at_intake() {
+        // Only ""/normal/none are admitted; text content stays an unknown
+        // declaration (no new content capability in this increment).
+        let h = sheet("div::before{content:\"x\"}", "<div><p>real</p></div>");
+        let t = ext(&h);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssDeclaration)
+        );
+    }
+
+    #[test]
+    fn non_block_container_originating_element_refuses() {
+        // CONSERVATIVE LIMIT, not a Chrome claim: Chrome CAN generate on a
+        // span; anything outside the block-container allowlist refuses here.
+        let h = sheet("span::before{content:\"\"}", "<p><span>x</span></p>");
+        let t = ext(&h);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssDeclaration)
+        );
+    }
+
+    #[test]
+    fn generated_cap_is_aggregate_across_both_families() {
+        // 65 ::before boxes: the 65th refuses (MAX_GENERATED = 64, shared).
+        let body = "<div></div>".repeat(65);
+        let h = sheet("div::before{content:\"\"}", &body);
+        let t = ext(&h);
+        assert!(t.truncated);
+        assert!(t.diagnostics.first_reason().is_some());
+        // 33 elements x (::before + ::after) = 66 > 64: aggregate cap, no
+        // per-family bypass.
+        let body = "<div></div>".repeat(33);
+        let h = sheet("div::before{content:\"\"} div::after{content:\"\"}", &body);
+        let t = ext(&h);
+        assert!(t.truncated);
+        // 32 elements x 2 = 64 exactly: within the bound.
+        let body = "<div></div>".repeat(32);
+        let h = sheet("div::before{content:\"\"} div::after{content:\"\"}", &body);
+        let t = ext(&h);
+        assert!(!t.truncated);
+    }
+
+    #[test]
+    fn default_entry_still_refuses_before() {
+        // Byte-unchanged default behavior: `content` is checked before the
+        // selector loop, so the unknown declaration reports first (the
+        // ::before selector is refused too) - same as the pristine base.
+        let h = sheet("div::before{content:\"\"}", "<div><p>real</p></div>");
+        let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
+        assert!(d.unsupported);
+        assert_eq!(
+            d.diagnostics.first_reason(),
+            Some(RefusalReason::CssDeclaration)
+        );
+        let d = parse_style_tree(
+            b"<!doctype html><style>div::before{font-size:33px}</style><div>x</div>",
+            &[],
+            &Limits::DEFAULT,
+        );
+        assert!(d.unsupported);
+        assert_eq!(
+            d.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
     }
 }

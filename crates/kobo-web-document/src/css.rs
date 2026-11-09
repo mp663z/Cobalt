@@ -99,9 +99,17 @@ pub(crate) struct Selector {
     pub(crate) specificity: (u16, u16, u16),
     /// Extended (opt-in) grammar: backtracking matcher, bounded by fuel.
     ext: bool,
-    /// Extended grammar only: the subject is the `::after` pseudo-element of the
-    /// element the steps match. Never matches an element itself.
-    pub(crate) pseudo_after: bool,
+    /// Extended grammar only: the subject is a `::before`/`::after`
+    /// pseudo-element of the element the steps match. Never matches an element
+    /// itself.
+    pub(crate) pseudo: Pseudo,
+}
+/// Pseudo-element subject of an extended-grammar selector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Pseudo {
+    None,
+    Before,
+    After,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Relation {
@@ -324,7 +332,7 @@ pub(crate) fn selector(input: &str) -> Option<Selector> {
         steps: parsed,
         specificity,
         ext: false,
-        pseudo_after: false,
+        pseudo: Pseudo::None,
     })
 }
 fn simple(part: &str) -> Option<Simple> {
@@ -552,26 +560,31 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
         return None;
     }
     // A pseudo-element is only legal as the LAST part of the selector, and only
-    // `::after` (the single-colon legacy form, `::before` and every other
-    // pseudo-element stay refused). `::after` alone is not accepted.
+    // an exact trailing `::before` or `::after` (the single-colon legacy forms
+    // and every other pseudo-element stay refused). A bare pseudo-element
+    // selector is not accepted.
     let trimmed = input.trim_end();
-    if trimmed.len() >= 7 && trimmed.is_char_boundary(trimmed.len() - 7) {
-        let (head, tail) = trimmed.split_at(trimmed.len() - 7);
-        if tail.eq_ignore_ascii_case("::after") {
-            let head = head.trim_end_matches(|c: char| c.is_ascii_whitespace());
-            if head.is_empty() || head.len() != trimmed[..trimmed.len() - 7].len() {
-                // `a ::after` means `a *::after`; refuse rather than guess.
-                return None;
+    for (suffix, pseudo) in [("::after", Pseudo::After), ("::before", Pseudo::Before)] {
+        let n = suffix.len();
+        if trimmed.len() >= n && trimmed.is_char_boundary(trimmed.len() - n) {
+            let (head, tail) = trimmed.split_at(trimmed.len() - n);
+            if tail.eq_ignore_ascii_case(suffix) {
+                let head = head.trim_end_matches(|c: char| c.is_ascii_whitespace());
+                if head.is_empty() || head.len() != trimmed[..trimmed.len() - n].len() {
+                    // `a ::after` means `a *::after`; refuse rather than guess.
+                    return None;
+                }
+                let mut inner = selector_ext(head)?;
+                if inner.pseudo != Pseudo::None || inner.has_state() {
+                    // A second pseudo-element or any state pseudo-class on a
+                    // pseudo-element selector is out of scope (a grammar bound,
+                    // not an invalid-CSS claim).
+                    return None;
+                }
+                inner.pseudo = pseudo;
+                inner.specificity.2 += 1;
+                return Some(inner);
             }
-            let mut inner = selector_ext(head)?;
-            if inner.pseudo_after || inner.has_state() {
-                // State pseudo-classes on a ::after selector are out of scope
-                // (a grammar bound, not an invalid-CSS claim).
-                return None;
-            }
-            inner.pseudo_after = true;
-            inner.specificity.2 += 1;
-            return Some(inner);
         }
     }
     let b = input.as_bytes();
@@ -605,19 +618,27 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
             _ => return None,
         }
     }
-    let specificity = steps.iter().fold((0_u16, 0_u16, 0_u16), |(ids, classes, types), (part, _)| {
-        (
-            ids + u16::from(part.id.is_some()),
-            classes
-                + u16::try_from(part.classes.len() + part.attrs.len()).unwrap_or(16)
-                + u16::from(part.root)
-                + u16::from(part.structural_n)
-                + u16::from(part.state.is_some()),
-            types + u16::from(part.tag.is_some()),
-        )
-    });
+    let specificity =
+        steps
+            .iter()
+            .fold((0_u16, 0_u16, 0_u16), |(ids, classes, types), (part, _)| {
+                (
+                    ids + u16::from(part.id.is_some()),
+                    classes
+                        + u16::try_from(part.classes.len() + part.attrs.len()).unwrap_or(16)
+                        + u16::from(part.root)
+                        + u16::from(part.structural_n)
+                        + u16::from(part.state.is_some()),
+                    types + u16::from(part.tag.is_some()),
+                )
+            });
     steps.reverse();
-    Some(Selector { steps, specificity, ext: true, pseudo_after: false })
+    Some(Selector {
+        steps,
+        specificity,
+        ext: true,
+        pseudo: Pseudo::None,
+    })
 }
 const EXT_FUEL: u32 = 4096;
 const MAX_SIBLINGS: usize = 4096;
@@ -691,7 +712,7 @@ impl Selector {
     /// `None` means the bounded matcher ran out of fuel or met an oversize
     /// sibling list: the caller must refuse, never treat it as a mismatch.
     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
-        if self.pseudo_after {
+        if self.pseudo != Pseudo::None {
             return Some(false);
         }
         self.matches_originating_checked(nodes, handle)
@@ -944,7 +965,7 @@ mod link_matcher_pin {
     //! (`style_tree::link_state_tests::link_never_matches_svg_a_in_v1`) is what
     //! fails loudly and forces explicit review of SVG `:link` at that moment.
     use super::*;
-    use html5ever::{LocalName, QualName, ns};
+    use html5ever::{ns, LocalName, QualName};
     fn doc_with(elements: Vec<Node>) -> Vec<Node> {
         let mut nodes = vec![Node {
             data: Data::Document,
@@ -971,13 +992,13 @@ mod link_matcher_pin {
     #[test]
     fn link_matches_only_html_a_area_with_href_at_the_matcher() {
         let nodes = doc_with(vec![
-            el(ns!(html), "a", &[("href", "https://x")]),      // 1: match
-            el(ns!(html), "a", &[("href", "")]),              // 2: empty href counts
-            el(ns!(html), "a", &[]),                           // 3: no href
-            el(ns!(html), "area", &[("href", "https://y")]),  // 4: match
-            el(ns!(svg), "a", &[("href", "https://z")]),      // 5: SVG narrowed out
-            el(ns!(svg), "a", &[("href", "https://w")]),      // 6: flattened xlink shape
-            el(ns!(html), "map", &[("href", "https://m")]),   // 7: wrong element
+            el(ns!(html), "a", &[("href", "https://x")]), // 1: match
+            el(ns!(html), "a", &[("href", "")]),          // 2: empty href counts
+            el(ns!(html), "a", &[]),                      // 3: no href
+            el(ns!(html), "area", &[("href", "https://y")]), // 4: match
+            el(ns!(svg), "a", &[("href", "https://z")]),  // 5: SVG narrowed out
+            el(ns!(svg), "a", &[("href", "https://w")]),  // 6: flattened xlink shape
+            el(ns!(html), "map", &[("href", "https://m")]), // 7: wrong element
         ]);
         // Bare `:link`: the element predicate alone decides, no tag filter.
         let sel = selector_ext(":link").expect(":link parses in the ext grammar");
@@ -1006,7 +1027,11 @@ mod link_matcher_pin {
             let sel = selector_ext(text).expect(text);
             assert!(sel.has_state(), "{text}");
             for h in 1..nodes.len() {
-                assert_eq!(sel.matches_checked(&nodes, h), Some(false), "{text} on node {h}");
+                assert_eq!(
+                    sel.matches_checked(&nodes, h),
+                    Some(false),
+                    "{text} on node {h}"
+                );
             }
         }
     }
@@ -1275,18 +1300,47 @@ mod ext_selector_tests {
     fn after_pseudo_element_grammar_is_extended_only_trailing_and_exact() {
         let ext = |s: &str| super::selector_ext(s);
         let p = ext("div.p::after").expect("extended accepts a trailing ::after");
-        assert!(p.pseudo_after);
+        assert!(p.pseudo == super::Pseudo::After);
         // Specificity: (0,1,1) for div.p plus one type for the pseudo-element.
         assert_eq!(p.specificity, (0, 1, 2));
-        assert_eq!(ext("DIV.p::AFTER").map(|s| s.pseudo_after), Some(true));
+        assert_eq!(
+            ext("DIV.p::AFTER").map(|s| s.pseudo),
+            Some(super::Pseudo::After)
+        );
         for bad in [
-            "::after", "a ::after", "a::before", "a:after", "a::after::after", "a::after b",
-            "a::first-line", "a::after,b", "a::afterx", "a:hover::after",
+            "::after",
+            "a ::after",
+            "a:after",
+            "a::after::after",
+            "a::after b",
+            "a::first-line",
+            "a::after,b",
+            "a::afterx",
+            "a:hover::after",
+        ] {
+            assert!(ext(bad).is_none(), "{bad}");
+        }
+        // `::before` mirrors `::after` exactly: trailing, exact, one only.
+        let b = ext("div.p::before").expect("extended accepts a trailing ::before");
+        assert!(b.pseudo == super::Pseudo::Before);
+        assert_eq!(b.specificity, (0, 1, 2));
+        assert_eq!(
+            ext("DIV.p::BEFORE").map(|s| s.pseudo),
+            Some(super::Pseudo::Before)
+        );
+        for bad in [
+            "::before",
+            "a ::before",
+            "a:before",
+            "a::before::after",
+            "a::before b",
+            "a::beforex",
+            "a:hover::before",
         ] {
             assert!(ext(bad).is_none(), "{bad}");
         }
         // The legacy grammar never accepts a pseudo-element.
         assert!(super::selector("div.p::after").is_none());
-        assert!(!ext("a").unwrap().pseudo_after);
+        assert!(ext("a").unwrap().pseudo == super::Pseudo::None);
     }
 }
