@@ -31,6 +31,7 @@ fn d(x: Display) -> &'static str {
     }
 }
 #[test]
+#[ignore = "env-driven evidence runner (needs U1_DIR and U2_OUT); run with --ignored on COPY fixtures"]
 fn matrix2() {
     let dir = std::env::var("U1_DIR").unwrap();
     let mut files: Vec<_> = std::fs::read_dir(&dir)

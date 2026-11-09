@@ -7,6 +7,7 @@ use kobo_web_document::{box_tree::BoxTree, computed_style::{Display, Margin}, cs
 fn m(x: Margin) -> String { match x { Margin::Px(p) => format!("{p}px"), Margin::Auto => "auto".into(), Margin::Percent(p) => format!("pct({p})"), Margin::Em(e) => format!("em({e})") } }
 fn d(x: Display) -> &'static str { match x { Display::Block => "block", Display::Inline => "inline", Display::None => "none", Display::InlineBlock => "inline-block", Display::ListItem => "list-item", Display::Flex => "flex" } }
 #[test]
+#[ignore = "env-driven evidence runner (needs U1_DIR and U2_OUT); run with --ignored on COPY fixtures"]
 fn matrix() {
     let dir = std::env::var("U1_DIR").unwrap();
     let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().and_then(|x| x.to_str()) == Some("html")).collect();
