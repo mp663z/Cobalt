@@ -42,6 +42,17 @@ pub struct CssBox {
     pub(crate) generated: bool,
 }
 
+/// Which explicit paint consumer is validating a tree. `Default` refuses all
+/// generated boxes; `FloatKernel` admits only the confined cleared generated
+/// child; `GeneratedBlock` admits only `generated_block_admitted` ordinary
+/// generated blocks under a tree-global float/clear refusal.
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub(crate) enum PaintMode {
+    Default,
+    FloatKernel,
+    GeneratedBlock,
+}
+
 #[derive(Default, Clone)]
 pub struct BoxTree {
     pub boxes: Vec<CssBox>,
@@ -400,6 +411,91 @@ impl BoxTree {
     /// True for the `clear:both` second child of a valid kernel (variant A shape). Its
     /// zero used height is exempt from the generic empty-block refusal (margins are
     /// zero by the kernel gate, so nothing can collapse through it).
+    /// EXPERIMENTAL generated-block admission (extended-CSS entry only), the
+    /// predicate P of the reviewed kernel-B contract. Mirrors the `plain` /
+    /// `zero_edges` expressions in `float_kernel` (above) DELIBERATELY
+    /// duplicated, so the accepted kernel source stays byte-unchanged.
+    /// Symmetric across `::before`/`::after`; one failure refuses the tree.
+    fn generated_block_admitted(&self, index: usize) -> bool {
+        let Some(b) = self.boxes.get(index) else {
+            return false;
+        };
+        let s = &b.style;
+        let zero_edges = [s.margin_top, s.margin_right, s.margin_bottom, s.margin_left]
+            .iter()
+            .all(|m| *m == Margin::Px(0))
+            && s.padding_top == 0
+            && s.padding_right == 0
+            && s.padding_bottom == 0
+            && s.padding_left == 0
+            && s.decor.used_border() == [0; 4]
+            && !s.decor.has_painted_border();
+        let predicate = b.kind == BoxKind::Block
+            && s.positioned.position == Position::Static
+            && s.direction == Direction::Ltr
+            && s.box_sizing == BoxSizing::ContentBox
+            && s.display == Display::Block
+            && b.children.is_empty()
+            && zero_edges
+            && matches!(s.height, Length::Px(h) if h > 0)
+            && matches!(s.width, Length::Auto | Length::Px(_))
+            // Kernel-B contract pin R2: min/max width must be unconstrained.
+            && s.min_width == Length::Auto
+            && s.max_width == Length::Auto;
+        if !predicate {
+            return false;
+        }
+        // A generated box is never a root; refuse defensively.
+        let Some(parent) = b.parent else {
+            return false;
+        };
+        // Text-mixing rule (source-grounded form of the contract's
+        // any-retained-text-sibling pin): mixed-content normalization can lift
+        // a retained text box (including whitespace-only) into an anonymous
+        // wrapper, so a raw box-tree sibling check can miss it. Find the
+        // ORIGINATING box (nearest ancestor with a DOM source) and refuse if
+        // ANY of its descendants carries text or is not a Block box (this also
+        // refuses anonymous wrappers, which only exist under mixed content).
+        let mut orig = parent;
+        while self.boxes[orig].source.is_none() {
+            match self.boxes[orig].parent {
+                Some(p) => orig = p,
+                None => return false,
+            }
+        }
+        let mut stack = self.boxes[orig].children.clone();
+        while let Some(d) = stack.pop() {
+            if d == index {
+                continue;
+            }
+            let db = &self.boxes[d];
+            if db.text.is_some() || db.kind != BoxKind::Block {
+                return false;
+            }
+            stack.extend_from_slice(&db.children);
+        }
+        // Full ancestor walk: every ancestor up to the root is a static Block
+        // with display Block; non-root ancestors are also LTR content-box.
+        // Kernel-B contract pin R1: the root itself is NOT unconditionally exempt -
+        // it must still be kind Block + display Block + position Static.
+        let mut up = Some(parent);
+        while let Some(a) = up {
+            let ab = &self.boxes[a];
+            let is_root = ab.parent.is_none();
+            let ok = ab.kind == BoxKind::Block
+                && ab.style.display == Display::Block
+                && ab.style.positioned.position == Position::Static
+                && (is_root
+                    || (ab.style.direction == Direction::Ltr
+                        && ab.style.box_sizing == BoxSizing::ContentBox));
+            if !ok {
+                return false;
+            }
+            up = ab.parent;
+        }
+        true
+    }
+
     pub(crate) fn is_kernel_cleared(&self, index: usize) -> bool {
         self.boxes.get(index).is_some_and(|b| {
             b.style.positioned.clear == Clear::Both
@@ -2282,7 +2378,26 @@ impl BoxTree {
     /// positioned layer (App. E). The text painter (css_text_page) and the decorated background painter pass true; every
     /// other consumer (the padding/content rectangle primitives) refuses `position:relative` here (fail-closed).
     pub(crate) fn paint_structure_valid_layers(&self, limit: usize, allow_float_kernel: bool, allow_relative: bool) -> bool {
-        if !allow_relative && self.boxes.iter().any(|b| b.style.positioned.position == Position::Relative) {
+        let mode = if allow_float_kernel {
+            PaintMode::FloatKernel
+        } else {
+            PaintMode::Default
+        };
+        self.paint_structure_valid_layers_mode(limit, mode, allow_relative)
+    }
+
+    pub(crate) fn paint_structure_valid_layers_mode(
+        &self,
+        limit: usize,
+        mode: PaintMode,
+        allow_relative: bool,
+    ) -> bool {
+        if !allow_relative
+            && self
+                .boxes
+                .iter()
+                .any(|b| b.style.positioned.position == Position::Relative)
+        {
             return false;
         }
         let count = self.boxes.len();
@@ -2290,17 +2405,31 @@ impl BoxTree {
             return false;
         }
         // Float/clear have diagnostic layout geometry. Only the explicit background
-        // float-kernel painter (`allow_float_kernel`) orders floats above in-flow
+        // float-kernel painter (`FloatKernel`) orders floats above in-flow
         // block backgrounds (CSS 2.2 App. E); every other paint consumer refuses
         // them here, as does the kernel painter outside a single confined kernel.
-        if self.has_float_or_clear() && !(allow_float_kernel && !self.unsupported && self.float_clear_confined()) {
+        // The generated-block entry refuses float/clear tree-globally instead.
+        if self.has_float_or_clear()
+            && !(mode == PaintMode::FloatKernel && !self.unsupported && self.float_clear_confined())
+        {
             return false;
         }
-        // A generated ::after box is only paintable as the cleared child of the confined
-        // float kernel, by the explicit kernel painter. Every other consumer, and every
-        // other placement, refuses it here.
+        // Generated boxes (`::before`/`::after`): the DEFAULT consumer refuses
+        // them all; the explicit kernel painter admits only the cleared child of
+        // the confined float kernel; the explicit generated-block entry admits
+        // only `generated_block_admitted` ordinary blocks (symmetric across both
+        // families). Every other placement refuses here.
         if self.boxes.iter().enumerate().any(|(i, b)| {
-            b.generated && !(allow_float_kernel && !self.unsupported && self.is_kernel_cleared(i))
+            b.generated
+                && match mode {
+                    PaintMode::Default => true,
+                    PaintMode::FloatKernel => self.unsupported || !self.is_kernel_cleared(i),
+                    PaintMode::GeneratedBlock => {
+                        self.unsupported
+                            || self.has_float_or_clear()
+                            || !self.generated_block_admitted(i)
+                    }
+                }
         }) {
             return false;
         }

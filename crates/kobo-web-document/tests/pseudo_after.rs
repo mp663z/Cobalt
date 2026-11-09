@@ -3,15 +3,24 @@
 //! pseudo-element or content value refuses. Not adopted.
 use kobo_web_document::{
     box_tree::BoxTree,
-    css_background::{paint_backgrounds, paint_backgrounds_float_kernel},
+    css_background::{
+        paint_backgrounds, paint_backgrounds_float_kernel, paint_backgrounds_generated_block,
+    },
     display_list::{Command, DisplayList, Rgb},
-    parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors, style_tree::StyleTree,
+    parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors,
+    style_tree::StyleTree,
     Limits, SupplyBudget,
 };
 
 fn ext(css: &str, body: &str) -> StyleTree {
     let html = format!("<!doctype html><style>body{{margin:0}}{css}</style>{body}");
-    parse_style_tree_with_inline_sheets_and_selectors(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL)
+    parse_style_tree_with_inline_sheets_and_selectors(
+        html.as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+    )
 }
 fn legacy(css: &str, body: &str) -> StyleTree {
     let html = format!("<!doctype html><style>body{{margin:0}}{css}</style>{body}");
@@ -183,8 +192,147 @@ fn generated_before_boxes_stay_closed_to_both_painters() {
         paint_backgrounds_float_kernel(&btk, 785, 600).is_err(),
         "::before cannot be the kernel cleared child"
     );
-    // Painting a ::before shape needs a reviewed painter extension; until then
-    // every painter stays closed to it, exactly like a non-kernel ::after.
+    assert!(
+        paint_backgrounds_generated_block(&btk, 785, 600).is_err(),
+        "generated-block refuses any float/clear tree-globally"
+    );
+}
+
+/// Kernel-B pixel evidence: the generated-block entry paints [::before, real,
+/// ::after] in tree order with exact integer rect offsets and colors.
+#[test]
+fn generated_block_entry_paints_before_real_after_in_order() {
+    let t = ext(
+        ".p{width:200px;background:#ccc}.f{height:30px;background:#f00}\
+         .p::before{content:\"\";display:block;height:20px;background:#0f0}\
+         .p::after{content:\"\";display:block;height:20px;background:#00f}",
+        "<div class=p><div class=f></div></div>",
+    );
+    assert!(!t.unsupported && !t.truncated);
+    let bt = BoxTree::from_style(&t);
+    let list = paint_backgrounds_generated_block(&bt, 400, 300).expect("generated-block paints");
+    // Exact integer band boundaries (body margin 0 from the helper):
+    // ::before y0..20 green, real y20..50 red, ::after y50..70 blue, .p grey
+    // underneath, nothing past width 200 or height 70.
+    assert_eq!(pixel(&list, 100, 0), Some(Rgb(0, 255, 0)));
+    assert_eq!(pixel(&list, 100, 19), Some(Rgb(0, 255, 0)));
+    assert_eq!(pixel(&list, 100, 20), Some(Rgb(255, 0, 0)));
+    assert_eq!(pixel(&list, 100, 49), Some(Rgb(255, 0, 0)));
+    assert_eq!(pixel(&list, 100, 50), Some(Rgb(0, 0, 255)));
+    assert_eq!(pixel(&list, 100, 69), Some(Rgb(0, 0, 255)));
+    assert_eq!(pixel(&list, 199, 10), Some(Rgb(0, 255, 0)));
+    assert_eq!(pixel(&list, 200, 10), None, "no fill past the 200px parent");
+    assert_eq!(pixel(&list, 100, 70), None, "no fill past the 70px parent");
+    // Default and kernel painters stay closed to the same tree.
+    assert!(paint_backgrounds(&bt, 400, 300).is_err());
+    assert!(paint_backgrounds_float_kernel(&bt, 400, 300).is_err());
+    // Symmetric: an ::after-only ordinary block paints under the same entry.
+    let a = ext(
+        ".p{width:200px;background:#ccc}.f{height:30px;background:#f00}.p::after{content:\"\";display:block;height:20px;background:#00f}",
+        "<div class=p><div class=f></div></div>",
+    );
+    let la = paint_backgrounds_generated_block(&BoxTree::from_style(&a), 400, 300)
+        .expect("after-only paints");
+    assert_eq!(pixel(&la, 100, 29), Some(Rgb(255, 0, 0)));
+    assert_eq!(pixel(&la, 100, 30), Some(Rgb(0, 0, 255)));
+    // Transparent/absent generated background: ADMITTED as a no-op fill (the
+    // .p background shows through the ::before band).
+    let n = ext(
+        ".p{width:200px;background:#ccc}.f{height:30px;background:#f00}.p::before{content:\"\";display:block;height:20px}",
+        "<div class=p><div class=f></div></div>",
+    );
+    let ln =
+        paint_backgrounds_generated_block(&BoxTree::from_style(&n), 400, 300).expect("no-op admit");
+    assert_eq!(
+        pixel(&ln, 100, 10),
+        Some(Rgb(204, 204, 204)),
+        "empty generated band shows the parent background"
+    );
+    assert_eq!(pixel(&ln, 100, 20), Some(Rgb(255, 0, 0)));
+}
+
+/// Kernel-B refusal pins: every gate of the contract fails closed.
+#[test]
+fn generated_block_entry_refusal_pins() {
+    let base = ".p{width:200px;background:#ccc}.f{height:30px;background:#f00}";
+    let body = "<div class=p><div class=f></div></div>";
+    let gen = ".p::before{content:\"\";display:block;height:20px;background:#0f0}";
+    let refuses = |css: &str, body: &str, why: &str| {
+        let t = ext(css, body);
+        assert!(!t.unsupported && !t.truncated, "{why}: tree must parse");
+        assert!(
+            paint_backgrounds_generated_block(&BoxTree::from_style(&t), 400, 300).is_err(),
+            "{why}"
+        );
+    };
+    // float/clear anywhere in the tree (global refusal).
+    refuses(
+        &format!(".p{{width:200px;background:#ccc}}.f{{float:left;width:100px;height:30px;background:#f00}}{gen}"),
+        body,
+        "float present anywhere refuses",
+    );
+    // nonzero margin on the generated box (zero-edges).
+    refuses(
+        &format!("{base}{gen}").replace("background:#0f0", "background:#0f0;margin-left:1px"),
+        body,
+        "generated nonzero margin refuses",
+    );
+    // min-width clamp on the generated box (R2).
+    refuses(
+        &format!("{base}{gen}").replace("background:#0f0", "background:#0f0;min-width:10px"),
+        body,
+        "generated min-width refuses",
+    );
+    // retained text sibling (visible).
+    refuses(
+        &format!("{base}{gen}"),
+        "<div class=p>x<div class=f></div></div>",
+        "text sibling refuses",
+    );
+    // Source-grounded whitespace rule: whitespace-only text is DROPPED at box
+    // construction (never a retained sibling box, same as every painter), so
+    // the tree admits and the order is intact; any RETAINED text refuses
+    // (covered above). Assert the structure, not just the paint result.
+    let ws = ext(
+        &format!("{base}{gen}"),
+        "<div class=p> <div class=f></div></div>",
+    );
+    assert!(!ws.unsupported && !ws.truncated);
+    let wsb = BoxTree::from_style(&ws);
+    let p_box = wsb
+        .boxes
+        .iter()
+        .position(|b| b.children.len() == 2)
+        .expect("originating box");
+    assert!(
+        wsb.boxes[p_box]
+            .children
+            .iter()
+            .all(|&c| wsb.boxes[c].text.is_none()),
+        "no retained whitespace text box under the originating element"
+    );
+    let wl =
+        paint_backgrounds_generated_block(&wsb, 400, 300).expect("whitespace dropped, admitted");
+    assert_eq!(pixel(&wl, 100, 10), Some(Rgb(0, 255, 0)));
+    assert_eq!(pixel(&wl, 100, 30), Some(Rgb(255, 0, 0)));
+    // auto (absent) height on the generated box.
+    refuses(
+        &format!("{base}.p::before{{content:\"\";display:block;background:#0f0}}"),
+        body,
+        "generated auto height refuses",
+    );
+    // non-plain ancestor (relative parent).
+    refuses(
+        &format!(".p{{position:relative;width:200px;background:#ccc}}.f{{height:30px;background:#f00}}{gen}"),
+        body,
+        "relative ancestor refuses",
+    );
+    // R1: the root itself must be Block/Block/Static.
+    refuses(
+        &format!("html{{position:relative}}{base}{gen}"),
+        body,
+        "relative root refuses",
+    );
 }
 
 /// Chrome 156 floatkernel-e2/ctx a1-a6 (whole-image, 0 diffs) and b6 (4px ::after).

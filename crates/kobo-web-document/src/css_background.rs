@@ -4,9 +4,10 @@
 //! unsupported layouts rather than returning a plausible partial page. Text,
 //! images, default margins and general block/inline layout remain unpainted.
 
-use crate::box_tree::{BoxTree, VerticalPass, WidthPass};
+use crate::box_tree::{BoxTree, PaintMode, VerticalPass, WidthPass};
 use crate::css_paint_bridge::{
-    paint_decorated_rectangles, paint_decorated_rectangles_float_kernel, BridgeError, FillSpec,
+    paint_decorated_rectangles, paint_decorated_rectangles_float_kernel,
+    paint_decorated_rectangles_generated_block, BridgeError, FillSpec,
 };
 use crate::display_list::{DisplayList, Rgb};
 
@@ -20,7 +21,7 @@ pub fn paint_backgrounds(
     viewport_width: u32,
     viewport_height: u32,
 ) -> Result<DisplayList, BridgeError> {
-    paint_backgrounds_inner(tree, viewport_width, viewport_height, false)
+    paint_backgrounds_inner(tree, viewport_width, viewport_height, PaintMode::Default)
 }
 
 /// EXPERIMENTAL explicit entry: like [`paint_backgrounds`] but admits the bounded
@@ -36,14 +37,43 @@ pub fn paint_backgrounds_float_kernel(
     viewport_width: u32,
     viewport_height: u32,
 ) -> Result<DisplayList, BridgeError> {
-    paint_backgrounds_inner(tree, viewport_width, viewport_height, true)
+    paint_backgrounds_inner(
+        tree,
+        viewport_width,
+        viewport_height,
+        PaintMode::FloatKernel,
+    )
+}
+
+/// EXPERIMENTAL explicit entry: like [`paint_backgrounds`] but admits ordinary
+/// generated `::before`/`::after` BLOCK boxes under the reviewed kernel-B
+/// contract: symmetric predicate (Block/static/LTR/content-box, empty
+/// children, zero edges, nonzero px height, auto-or-px width, min/max-width
+/// auto), plain static ancestors (root: Block+Block+Static), no retained text
+/// sibling (whitespace included), tree-global float/clear refusal. Backgrounds
+/// only; a transparent/absent generated background is an admitted no-op.
+/// Default and float-kernel entries are unchanged.
+///
+/// # Errors
+/// As [`paint_backgrounds`].
+pub fn paint_backgrounds_generated_block(
+    tree: &BoxTree,
+    viewport_width: u32,
+    viewport_height: u32,
+) -> Result<DisplayList, BridgeError> {
+    paint_backgrounds_inner(
+        tree,
+        viewport_width,
+        viewport_height,
+        PaintMode::GeneratedBlock,
+    )
 }
 
 fn paint_backgrounds_inner(
     tree: &BoxTree,
     viewport_width: u32,
     viewport_height: u32,
-    float_kernel: bool,
+    mode: PaintMode,
 ) -> Result<DisplayList, BridgeError> {
     // A root with `display: none` generates no boxes, and it does not
     // propagate its background (CSS Backgrounds 3, special backgrounds), so
@@ -55,7 +85,7 @@ fn paint_backgrounds_inner(
     // which intentionally assume indices from BoxTree::from_style.
     // List-item markers are visible content, even when the item is empty.
     // A rectangle-only painter must not silently omit them.
-    if !tree.paint_structure_valid_layers(crate::display_list::MAX_COMMANDS, float_kernel, true)
+    if !tree.paint_structure_valid_layers_mode(crate::display_list::MAX_COMMANDS, mode, true)
         || tree
             .boxes
             .iter()
@@ -95,10 +125,10 @@ fn paint_backgrounds_inner(
             })
         })
         .collect();
-    let paint = if float_kernel {
-        paint_decorated_rectangles_float_kernel
-    } else {
-        paint_decorated_rectangles
+    let paint = match mode {
+        PaintMode::FloatKernel => paint_decorated_rectangles_float_kernel,
+        PaintMode::GeneratedBlock => paint_decorated_rectangles_generated_block,
+        PaintMode::Default => paint_decorated_rectangles,
     };
     let local = paint(
         tree,

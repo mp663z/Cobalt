@@ -36,8 +36,12 @@ pub enum BridgeError {
     Allocation,
 }
 
-fn validate_tree(tree: &BoxTree, float_kernel: bool, allow_relative: bool) -> Result<(), BridgeError> {
-    if tree.paint_structure_valid_layers(MAX_BRIDGE_BOXES, float_kernel, allow_relative) {
+fn validate_tree(
+    tree: &BoxTree,
+    mode: crate::box_tree::PaintMode,
+    allow_relative: bool,
+) -> Result<(), BridgeError> {
+    if tree.paint_structure_valid_layers_mode(MAX_BRIDGE_BOXES, mode, allow_relative) {
         Ok(())
     } else {
         Err(BridgeError::Unsupported)
@@ -73,7 +77,7 @@ pub fn paint_padding_rectangles(
         viewport_height,
         fills,
         PaintArea::Padding,
-        false,
+        crate::box_tree::PaintMode::Default,
     )
 }
 
@@ -95,7 +99,7 @@ pub(crate) fn paint_decorated_rectangles(
         viewport_height,
         fills,
         PaintArea::Decorated,
-        false,
+        crate::box_tree::PaintMode::Default,
     )
 }
 
@@ -117,7 +121,31 @@ pub(crate) fn paint_decorated_rectangles_float_kernel(
         viewport_height,
         fills,
         PaintArea::Decorated,
-        true,
+        crate::box_tree::PaintMode::FloatKernel,
+    )
+}
+
+/// Explicit generated-block entry for the background painter only: same
+/// decorated painter, validating generated ordinary blocks under the
+/// generated-block paint mode (symmetric `::before`/`::after`; tree-global
+/// float/clear refusal).
+pub(crate) fn paint_decorated_rectangles_generated_block(
+    tree: &BoxTree,
+    widths: &WidthPass,
+    vertical: &VerticalPass,
+    viewport_width: u32,
+    viewport_height: u32,
+    fills: &[FillSpec],
+) -> Result<DisplayList, BridgeError> {
+    paint_rectangles(
+        tree,
+        widths,
+        vertical,
+        viewport_width,
+        viewport_height,
+        fills,
+        PaintArea::Decorated,
+        crate::box_tree::PaintMode::GeneratedBlock,
     )
 }
 
@@ -150,7 +178,7 @@ pub fn paint_content_rectangles(
         viewport_height,
         fills,
         PaintArea::Content,
-        false,
+        crate::box_tree::PaintMode::Default,
     )
 }
 
@@ -163,7 +191,7 @@ fn paint_rectangles(
     viewport_height: u32,
     fills: &[FillSpec],
     area: PaintArea,
-    float_kernel: bool,
+    mode: crate::box_tree::PaintMode,
 ) -> Result<DisplayList, BridgeError> {
     let count = tree.boxes.len();
     if count > MAX_BRIDGE_BOXES {
@@ -203,7 +231,7 @@ fn paint_rectangles(
     {
         return Err(BridgeError::Unsupported);
     }
-    validate_tree(tree, float_kernel, area == PaintArea::Decorated)?;
+    validate_tree(tree, mode, area == PaintArea::Decorated)?;
     // VerticalPass has a deliberately narrow domain. Do not turn its output
     // into paint if styles carry edges this bridge has not implemented.
     if tree.boxes.iter().any(|node| {
@@ -233,7 +261,7 @@ fn paint_rectangles(
                     }
                     flex
                 })
-                || float_kernel
+                || mode == crate::box_tree::PaintMode::FloatKernel
                 || tree.roots.first() == Some(&i)
                 || tree.roots.first().and_then(|&r| tree.boxes[r].children.first()) == Some(&i)
                 || {
@@ -297,11 +325,25 @@ fn paint_rectangles(
     };
     let mut owner: Vec<Option<usize>> = vec![None; count];
     for i in 0..count {
-        owner[i] = tree.boxes[i].parent.and_then(|p| if positioned(p) { Some(p) } else { owner.get(p).copied().flatten() });
+        owner[i] = tree.boxes[i].parent.and_then(|p| {
+            if positioned(p) {
+                Some(p)
+            } else {
+                owner.get(p).copied().flatten()
+            }
+        });
     }
     let mut order: Vec<usize> = (0..count)
-        .filter(|&i| !positioned(i) && owner[i].is_none() && !(float_kernel && tree.is_kernel_float(i)))
-        .chain((0..count).filter(|&i| float_kernel && tree.is_kernel_float(i) && owner[i].is_none()))
+        .filter(|&i| {
+            !positioned(i)
+                && owner[i].is_none()
+                && !(mode == crate::box_tree::PaintMode::FloatKernel && tree.is_kernel_float(i))
+        })
+        .chain((0..count).filter(|&i| {
+            mode == crate::box_tree::PaintMode::FloatKernel
+                && tree.is_kernel_float(i)
+                && owner[i].is_none()
+        }))
         .collect();
     for p in (0..count).filter(|&i| positioned(i)) {
         order.push(p);
