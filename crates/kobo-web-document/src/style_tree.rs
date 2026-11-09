@@ -447,7 +447,11 @@ impl StyleTree {
             // their own). Elements not listed are NOT audited here.
             declarations.push(Declaration {
                 property: Property::Display,
-                value: Value::Display(ua_display(&name.local)),
+                value: Value::Display(if ext_selectors {
+                    ua_display_ext(&name.local)
+                } else {
+                    ua_display(&name.local)
+                }),
                 origin: Origin::UserAgent,
                 important: false,
                 specificity: (0, 0, 0),
@@ -559,6 +563,48 @@ impl StyleTree {
                 declarations.push(Declaration {
                     property: Property::FontStyle,
                     value: Value::FontStyle(FontStyle::Italic),
+                    origin: Origin::UserAgent,
+                    important: false,
+                    specificity: (0, 0, 0),
+                    source_order: 0,
+                });
+            }
+            // CANDIDATE (U1, extended-CSS opt-in entry only; default entry byte-for-byte unchanged). Chrome's UA sheet:
+            // `dl { display:block; margin-block:1em }` (0 when any dl/ul/ol/menu/dir ANCESTOR exists), `dt { display:block }`,
+            // `dd { display:block; margin-inline-start:40px }`. Display comes from ua_display_ext (single declaration above).
+            // The dd 40px is physical margin-left, valid only for horizontal-tb + ltr: a computed RTL dd is refused below, and
+            // non-horizontal-tb writing modes / `dir` attributes are refused by their existing paths. The required-props
+            // audit below is deliberately UNCHANGED in this batch (these declarations are UserAgent origin and cannot satisfy it).
+            if ext_selectors && name.local.as_ref() == "dl" {
+                let mut list_ancestor = false;
+                let mut up = parent;
+                while let Some(i) = up {
+                    if matches!(
+                        tree.nodes[i].tag.as_str(),
+                        "dl" | "ul" | "ol" | "menu" | "dir"
+                    ) {
+                        list_ancestor = true;
+                        break;
+                    }
+                    up = tree.nodes[i].parent;
+                }
+                if !list_ancestor {
+                    for property in [Property::MarginTop, Property::MarginBottom] {
+                        declarations.push(Declaration {
+                            property,
+                            value: Value::Margin(Margin::Em(10_000)),
+                            origin: Origin::UserAgent,
+                            important: false,
+                            specificity: (0, 0, 0),
+                            source_order: 0,
+                        });
+                    }
+                }
+            }
+            if ext_selectors && name.local.as_ref() == "dd" {
+                declarations.push(Declaration {
+                    property: Property::MarginLeft,
+                    value: Value::Margin(Margin::Px(40)),
                     origin: Origin::UserAgent,
                     important: false,
                     specificity: (0, 0, 0),
@@ -715,6 +761,9 @@ impl StyleTree {
             // `content` is meaningful only on a pseudo-element; on an element any
             // non-initial value is refused rather than guessed.
             let refused = rem_refused
+                || (ext_selectors
+                    && name.local.as_ref() == "dd"
+                    && style.direction == crate::computed_style::Direction::Rtl)
                 || style.positioned.content != crate::computed_style::Content::Normal
                 || style.line_height == Some(0)
                 || style.font_size == 0
@@ -882,6 +931,15 @@ fn normalize_rem(declarations: &mut [Declaration], root_font_px: u32) -> bool {
         }
     }
     rem_refused
+}
+
+/// Extended-CSS entry only: `ua_display` plus Chrome's block display for exactly `dl`, `dt`, `dd`.
+/// address/hr/q and every other tag are unchanged. The default entry keeps using `ua_display`.
+fn ua_display_ext(tag: &str) -> Display {
+    match tag {
+        "dl" | "dt" | "dd" => Display::Block,
+        _ => ua_display(tag),
+    }
 }
 
 fn ua_display(tag: &str) -> Display {
