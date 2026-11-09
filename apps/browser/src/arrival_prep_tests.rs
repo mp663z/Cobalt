@@ -585,7 +585,7 @@ fn rem_font_size_paints_identically_to_resolved_px_and_fractional_refuses() {
 
 // ---- fl77: arrival byte binding ----
 
-use crate::css_stage::ArrivalSource;
+use crate::css_stage::{self, ArrivalSource};
 
 fn ready_binding(runner: &AppRunner<Browser>) -> Binding {
     runner
@@ -695,31 +695,92 @@ fn capture_refuses_over_the_ceiling_and_a_big_arrival_is_never_bound() {
 
 #[test]
 fn the_retained_source_never_outlives_admission_or_navigation() {
+    use crate::arrival_observation::ObservationInput;
+    // Through the one constructor: parse captures, admit_test_parsed moves the pair, source dies on return.
     let mut runner = producer_runner();
-    let doc = kobo_web_document::parse_document(
+    let url = Url::parse("https://example.test/life").expect("url");
+    let parsed = css_stage::ParsedArrival::parse(
         FIXTURE,
-        &Url::parse("https://example.test/life").expect("url"),
-        &kobo_web_document::Limits::DEFAULT,
+        &url,
+        true,
+        ObservationInput::Markup { len: FIXTURE.len() },
+        false,
     );
-    let source = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
-    let weak = source.weak();
     let drops = std::rc::Rc::clone(&runner.app().frame_drops);
-    runner
+    let weak = {
+        let probe = ArrivalSource::capture(FIXTURE, 2 << 20).expect("fits");
+        probe.weak()
+    };
+    assert!(weak.upgrade().is_none(), "a dropped source is gone");
+    let doc = runner
         .app_mut()
         .css
-        .admit_test_sourced(&doc, &SYNTHETIC_METRICS, false, Some(source), |a| {
-            arrival_prep::prepare_real_frame(FIXTURE, a, &drops)
+        .admit_test_parsed(parsed, &SYNTHETIC_METRICS, false, |a| {
+            // Capture a Weak to the Admission's own buffer while it is alive.
+            let w = a
+                .source()
+                .expect("enabled arrival carries its source")
+                .weak();
+            WEAK.with(|c| *c.borrow_mut() = Some(w));
+            assert!(a.consumed().is_some());
+            arrival_prep::prepare_real_frame_consumed(FIXTURE, a, a.consumed(), &drops)
         });
+    let w = WEAK.with(|c| c.borrow_mut().take()).expect("weak taken");
     assert!(runner.app().css.ready_payload().is_some());
-    assert!(
-        weak.upgrade().is_none(),
-        "dropped when preparation returned"
+    assert_eq!(
+        runner
+            .app()
+            .css
+            .ready_payload()
+            .unwrap()
+            .diagnostics()
+            .binding,
+        Binding::SameBufferAsDocumentParse
     );
-    // Actual arrival then navigation: nothing retains the buffer.
+    assert!(w.upgrade().is_none(), "dropped when admission returned");
+    assert!(!doc.title.as_deref().unwrap_or("").is_empty());
+    // Actual arrival then navigation: nothing retains the buffer (Weak from the observed admission).
     go(&mut runner, "https://example.test/nav");
     arrive(&mut runner, FIXTURE);
     runner.app_mut().css.clear();
     assert!(runner.app().css.ready_payload().is_none());
+}
+
+thread_local! {
+    static WEAK: std::cell::RefCell<Option<std::rc::Weak<[u8]>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[test]
+fn real_preparation_is_a_preparation_but_production_installs_null() {
+    use crate::arrival_observation::ObservationInput;
+    let drops = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    // Compiled type implements the seam: driven through the ordinary (non-producer) admit_parsed path.
+    let mut stage = CssStage::with_preparation(Box::new(arrival_prep::RealPreparation {
+        drops: std::rc::Rc::clone(&drops),
+    }));
+    let url = Url::parse("https://example.test/real").expect("url");
+    let parsed = css_stage::ParsedArrival::parse(
+        FIXTURE,
+        &url,
+        stage.is_enabled(),
+        ObservationInput::Markup { len: FIXTURE.len() },
+        false,
+    );
+    let _doc = stage.admit_parsed(parsed, &SYNTHETIC_METRICS, false);
+    assert_eq!(
+        stage.ready_payload().expect("Ready").diagnostics().binding,
+        Binding::SameBufferAsDocumentParse
+    );
+    // No source (disabled capture) is the NullPreparation refusal, not a paint.
+    let mut stage = CssStage::with_preparation(Box::new(arrival_prep::RealPreparation {
+        drops: std::rc::Rc::clone(&drops),
+    }));
+    let doc = kobo_web_document::parse_document(FIXTURE, &url, &kobo_web_document::Limits::DEFAULT);
+    stage.admit(&doc, &SYNTHETIC_METRICS, false);
+    assert!(stage.ready_payload().is_none());
+    // Production installs Null and is disabled.
+    let production = CssStage::production();
+    assert!(!production.is_enabled());
 }
 
 #[test]

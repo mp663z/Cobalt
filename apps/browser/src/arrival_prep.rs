@@ -2,8 +2,9 @@
 //! real boundary yields a REAL preparation artifact OWNED BY THE STAGE -
 //! the `DisplayList`, the RGBA raster, FIXED diagnostics and a session
 //! SNAPSHOT - via the real style run, the real engine paint path and the
-//! accepted 115 native font session. Everything here is cfg(test); the
-//! frame is never displayed, and production is byte-for-byte unchanged.
+//! accepted 115 native font session. The code is compiled in the app's normal
+//! graph (fl78) but production installs NullPreparation and enables nothing;
+//! the frame is never displayed. Compilation is not runtime integration.
 //!
 //! Honest seam: this producer is generic pairing plumbing. It cannot
 //! prove the bytes it paints are the bytes the semantic reader parsed;
@@ -12,7 +13,7 @@
 //! This is not B0, production activation, device/sim parity, a
 //! source-identity guarantee or resource/budget adoption.
 
-#![cfg(test)]
+#![allow(dead_code)] // Compiled, not installed: production uses NullPreparation.
 
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -25,7 +26,7 @@ use kobo_web_document::display_list::{DisplayList, Error as DisplayError, Rgb, M
 use kobo_web_document::style_diagnostics::StyleDiagnostics;
 use kobo_web_document::{parse_style_tree, Limits};
 
-use crate::css_stage::{Admission, FrameHandle, PrepOutcome, Refusal};
+use crate::css_stage::{Admission, FrameHandle, PrepOutcome, Preparation, Refusal};
 use crate::native_font_adapter::NativeFontAdapter;
 
 /// The explicit payload ceiling: RGBA bytes for the largest paintable
@@ -247,4 +248,20 @@ pub(crate) fn prepare_real_frame_consumed(
         Rc::clone(drops),
         payload,
     )))
+}
+
+/// The real preparation as a `Preparation`: reads ONLY the arrival source the Admission carries (made at
+/// creation from the actual parse). No source means the same refusal NullPreparation gives. Compiled in the normal
+/// graph; production never installs it (CssStage::production uses NullPreparation) and nothing enables the stage.
+pub(crate) struct RealPreparation {
+    pub(crate) drops: Rc<RefCell<Vec<u64>>>,
+}
+
+impl Preparation for RealPreparation {
+    fn prepare(&mut self, admission: &Admission) -> PrepOutcome {
+        if admission.source().is_none() {
+            return PrepOutcome::Refused(Refusal::Preparation);
+        }
+        prepare_real_frame_consumed(&[], admission, admission.consumed(), &self.drops)
+    }
 }

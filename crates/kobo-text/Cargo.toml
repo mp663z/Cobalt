@@ -20,4 +20,9 @@ workspace = true
 [features]
 # TEST/DIAGNOSTIC ONLY: native font session for the paint-proof lane.
 # Off in the normal production graph; see the 114 contract.
-diagnostic-font-session = []
+diagnostic-font-session = ["native-font-session"]
+# Internal font-session capability; compiled when explicitly selected by the app. Compilation does not enable
+# preparation or rendering. Snapshot and limit APIs remain diagnostic and define no device or production policy.
+# Narrower than `diagnostic-font-session`: it compiles ONLY the native session module (bundled_face_pair stays
+# behind the diagnostic feature). Amends the 114 build-graph contract ("off in the normal production graph").
+native-font-session = []

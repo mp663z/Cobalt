@@ -42,7 +42,9 @@ use std::sync::Mutex;
 
 #[cfg(feature = "diagnostic-font-session")]
 pub mod bundled_face_pair;
-#[cfg(feature = "diagnostic-font-session")]
+// Internal font-session capability; compiled when explicitly selected by the app. Compilation does not enable
+// preparation or rendering. Snapshot and limit APIs remain diagnostic and define no device or production policy.
+#[cfg(feature = "native-font-session")]
 pub mod diagnostic_font_session;
 
 use fontdue::{Font, FontSettings};

@@ -94,11 +94,9 @@ pub(crate) enum Refusal {
 #[derive(Debug)]
 pub(crate) struct FrameHandle {
     id: u64,
-    #[cfg(test)]
     drops: Option<std::rc::Rc<std::cell::RefCell<Vec<u64>>>>,
     /// The producer mode's real artifact (116). The fake seam leaves this
     /// `None`: its tests prove caller wiring and ownership, not pixels.
-    #[cfg(test)]
     payload: Option<crate::arrival_prep::FramePayload>,
 }
 
@@ -114,7 +112,6 @@ impl FrameHandle {
 
     /// A frame carrying the real artifact; the id is the admission's
     /// generation, distinct for every fresh arrival.
-    #[cfg(test)]
     pub(crate) fn new_with_payload(
         id: u64,
         drops: std::rc::Rc<std::cell::RefCell<Vec<u64>>>,
@@ -133,13 +130,11 @@ impl FrameHandle {
     }
 
     /// Borrows the owned artifact; the payload is never cloned out.
-    #[cfg(test)]
     pub(crate) fn payload(&self) -> Option<&crate::arrival_prep::FramePayload> {
         self.payload.as_ref()
     }
 }
 
-#[cfg(test)]
 impl Drop for FrameHandle {
     fn drop(&mut self) {
         if let Some(drops) = &self.drops {
@@ -166,13 +161,11 @@ impl Fingerprint {
     }
 
     /// The moment's metrics, for the producer's preflight and diagnostics.
-    #[cfg(test)]
     pub(crate) fn metrics(&self) -> &DisplayMetrics {
         &self.metrics
     }
 
     /// The moment's colour flag, for the producer's diagnostics.
-    #[cfg(test)]
     pub(crate) fn colour(&self) -> bool {
         self.colour
     }
@@ -210,14 +203,21 @@ pub(crate) struct Admission {
     pub(crate) fingerprint: Fingerprint,
     /// The arriving bytes, when (and only when) the stage is enabled and the arrival fit the input ceiling. Set
     /// at Admission creation from the value `show_document_noted` threaded in; never filled afterwards.
-    #[allow(dead_code)] // Read by the test producer only.
+    #[allow(dead_code)] // Read by the real preparation and the test producer.
     source: Option<ArrivalSource>,
+    /// (address, length) of the slice the actual parse consumed; Some only together with `source`.
+    consumed: Option<(usize, usize)>,
 }
 
 impl Admission {
     /// The retained arrival bytes, if any.
     pub(crate) fn source(&self) -> Option<&ArrivalSource> {
         self.source.as_ref()
+    }
+
+    /// The parse's consumed-slice record, set at creation.
+    pub(crate) fn consumed(&self) -> Option<(usize, usize)> {
+        self.consumed
     }
 }
 
@@ -259,6 +259,7 @@ impl Admission {
             generation,
             fingerprint: Fingerprint::new(metrics, colour),
             source: None,
+            consumed: None,
         }
     }
 
@@ -273,6 +274,7 @@ impl Admission {
             generation,
             fingerprint: Fingerprint::new(metrics, colour),
             source,
+            consumed: None,
         }
     }
 }
@@ -284,8 +286,80 @@ pub(crate) enum PrepOutcome {
     Refused(Refusal),
     /// Producer mode's named host refusal: the stage records the host
     /// reason in its test diagnostics and enters `Refused(reason)`.
-    #[cfg(test)]
     RefusedNamed(Refusal, crate::arrival_prep::HostRefusal),
+}
+
+/// One arrival's parse: the semantic `Document` and, when the stage is enabled and the arrival fits the input
+/// ceiling, the owned source the parse (and, in tests, the observation) actually consumed, plus that slice's
+/// (address, length). Private fields and one constructor, so a Document and a source can only be paired here.
+/// The disabled path is the exact existing `parse_document(bytes, ..)` call with no capture and no allocation.
+pub(crate) struct ParsedArrival {
+    document: Document,
+    source: Option<ArrivalSource>,
+    consumed: Option<(usize, usize)>,
+    #[cfg(test)]
+    observation: Option<crate::arrival_observation::ArrivalObservation>,
+}
+
+impl ParsedArrival {
+    #[cfg(not(test))]
+    pub(crate) fn parse(bytes: &[u8], url: &kobo_web_document::Url, enabled: bool) -> Self {
+        let limits = kobo_web_document::Limits::DEFAULT;
+        let source = enabled
+            .then(|| ArrivalSource::capture(bytes, limits.max_input_bytes))
+            .flatten();
+        let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
+        let document = kobo_web_document::parse_document(parse_bytes, url, &limits);
+        let consumed = source
+            .as_ref()
+            .map(|s| (s.as_slice().as_ptr() as usize, s.as_slice().len()));
+        Self {
+            document,
+            source,
+            consumed,
+        }
+    }
+
+    /// Test build: the same parse through the one-borrow observation wrapper, which records the slice it
+    /// consumed; that observed record (not a recomputation) is the anchor.
+    #[cfg(test)]
+    pub(crate) fn parse(
+        bytes: &[u8],
+        url: &kobo_web_document::Url,
+        enabled: bool,
+        input: crate::arrival_observation::ObservationInput,
+        old_loaded_present: bool,
+    ) -> Self {
+        let limits = kobo_web_document::Limits::DEFAULT;
+        let source = enabled
+            .then(|| ArrivalSource::capture(bytes, limits.max_input_bytes))
+            .flatten();
+        let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
+        let (document, observation) = crate::arrival_observation::observe(
+            parse_bytes,
+            url,
+            &limits,
+            input,
+            old_loaded_present,
+        );
+        let consumed = source.as_ref().map(|_| observation.consumed);
+        Self {
+            document,
+            source,
+            consumed,
+            observation: Some(observation),
+        }
+    }
+
+    /// The parsed document, for the reader's own title and pagination before admission.
+    pub(crate) fn document(&self) -> &Document {
+        &self.document
+    }
+
+    #[cfg(test)]
+    pub(crate) fn take_observation(&mut self) -> crate::arrival_observation::ArrivalObservation {
+        self.observation.take().expect("observed once")
+    }
 }
 
 /// The seam a real styled pipeline will fill. Production never installs
@@ -333,7 +407,6 @@ pub(crate) struct CssStage {
     fingerprint: Option<Fingerprint>,
     /// TEST-ONLY: the most recent named host refusal, if any. Numbers may
     /// persist in test state; pixels never do.
-    #[cfg(test)]
     last_host_refusal: Option<crate::arrival_prep::HostRefusal>,
 }
 
@@ -348,7 +421,6 @@ impl CssStage {
             fingerprint: None,
             #[cfg(test)]
             producer: false,
-            #[cfg(test)]
             last_host_refusal: None,
         }
     }
@@ -415,17 +487,36 @@ impl CssStage {
     /// enabled, is reached exactly once per admission. In test builds the
     /// boundary uses `admit_test`; the fake-seam tests drive this directly.
     pub(crate) fn admit(&mut self, document: &Document, metrics: &DisplayMetrics, colour: bool) {
-        self.admit_sourced(document, metrics, colour, None);
+        self.admit_with(document, metrics, colour, None, None);
     }
 
-    /// [`admit`](Self::admit) with the arrival bytes `show_document_noted` captured. The source goes into the
-    /// Admission at its creation and nowhere else; the gate, its order and every refusal are the same code.
-    pub(crate) fn admit_sourced(
+    /// Admits the arrival's own parsed `Document`, moving its captured source into the Admission at creation.
+    /// Returns the Document for the caller to install; the source is dropped before this returns (the
+    /// synchronous admission boundary), never stored in the stage or the reader. The pair cannot be built outside
+    /// [`ParsedArrival::parse`].
+    pub(crate) fn admit_parsed(
+        &mut self,
+        parsed: ParsedArrival,
+        metrics: &DisplayMetrics,
+        colour: bool,
+    ) -> Document {
+        let ParsedArrival {
+            document,
+            source,
+            consumed,
+            ..
+        } = parsed;
+        self.admit_with(&document, metrics, colour, source, consumed);
+        document
+    }
+
+    fn admit_with(
         &mut self,
         document: &Document,
         metrics: &DisplayMetrics,
         colour: bool,
         source: Option<ArrivalSource>,
+        consumed: Option<(usize, usize)>,
     ) {
         if let BeginAdmit::Preparing {
             generation,
@@ -436,6 +527,7 @@ impl CssStage {
                 generation,
                 fingerprint,
                 source,
+                consumed,
             });
             self.finish(generation, outcome);
         }
@@ -473,14 +565,35 @@ impl CssStage {
         }
     }
 
-    /// Test producer entry: the captured arrival bytes (if any) go into the Admission at creation.
+    /// Test producer entry for the arrival's own `ParsedArrival` (source and consumed record go into the
+    /// Admission at creation). Returns the Document, source dropped before return.
     #[cfg(test)]
-    pub(crate) fn admit_test_sourced(
+    pub(crate) fn admit_test_parsed(
+        &mut self,
+        parsed: ParsedArrival,
+        metrics: &DisplayMetrics,
+        colour: bool,
+        produce: impl FnOnce(&Admission) -> PrepOutcome,
+    ) -> Document {
+        let ParsedArrival {
+            document,
+            source,
+            consumed,
+            ..
+        } = parsed;
+        self.admit_test_with(&document, metrics, colour, source, consumed, produce);
+        document
+    }
+
+    /// Hand-built pairing for negative controls only.
+    #[cfg(test)]
+    pub(crate) fn admit_test_with(
         &mut self,
         document: &Document,
         metrics: &DisplayMetrics,
         colour: bool,
         source: Option<ArrivalSource>,
+        consumed: Option<(usize, usize)>,
         produce: impl FnOnce(&Admission) -> PrepOutcome,
     ) {
         let BeginAdmit::Preparing {
@@ -494,6 +607,7 @@ impl CssStage {
             generation,
             fingerprint,
             source,
+            consumed,
         };
         let outcome = if self.producer {
             produce(&admission)
@@ -517,7 +631,6 @@ impl CssStage {
         self.stage = match outcome {
             PrepOutcome::Ready(frame) => Stage::Ready { frame, generation },
             PrepOutcome::Refused(reason) => Stage::Refused(reason),
-            #[cfg(test)]
             PrepOutcome::RefusedNamed(reason, host) => {
                 self.last_host_refusal = Some(host);
                 Stage::Refused(reason)
@@ -557,6 +670,7 @@ impl CssStage {
             generation,
             fingerprint,
             source: None,
+            consumed: None,
         });
         self.stage = match outcome {
             PrepOutcome::Ready(frame) => Stage::Ready { frame, generation },
@@ -573,10 +687,7 @@ impl CssStage {
     pub(crate) fn clear(&mut self) {
         self.stage = Stage::Disabled;
         self.fingerprint = None;
-        #[cfg(test)]
-        {
-            self.last_host_refusal = None;
-        }
+        self.last_host_refusal = None;
     }
 
     /// Forgets the frame when the moment it was measured for has passed:

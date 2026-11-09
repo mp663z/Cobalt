@@ -1,11 +1,16 @@
-//! TEST/DIAGNOSTIC ONLY: a native font session for the paint-proof lane.
+//! Internal font-session capability; compiled when explicitly selected by the app. Compilation does not enable
+//! preparation or rendering. Snapshot and limit APIs remain diagnostic and define no device or production policy.
+//!
+//! A native font session for the paint-proof lane.
 //!
 //! Built from the licensed AtkinsonHyperlegible-Regular bytes compiled into
 //! this crate ([`crate::TEXT_FONT`], OFL 1.1). This is the same native
 //! implementation (fontdue data and raster path), NOT the installed
 //! typesetter instance, which is unreachable behind the boxed global. The
-//! NORMAL, no-feature graph carries nothing of this module; the browser
-//! reaches it through a dev-dependency feature and a `cfg(test)` adapter.
+//! module is compiled by the `native-font-session` feature (also implied by
+//! `diagnostic-font-session`); the default no-feature graph carries nothing of
+//! it. The browser selects the narrow feature in its normal dependencies; its
+//! production seam still installs NullPreparation.
 //!
 //! Contract (114 v3 + 115 review): integer CSS px only, no ambient size
 //! conversion; ASCII graphic plus SPACE/NBSP only; regular only (bold is one

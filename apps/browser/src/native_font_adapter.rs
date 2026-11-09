@@ -1,4 +1,4 @@
-//! TEST-ONLY adapter: the single point where the browser's tests meet the
+//! Adapter (compiled in the normal graph since fl78; used only by the not-installed real preparation and tests): the single point where the browser's tests meet the
 //! kobo-text diagnostic font session and the engine's `FontProvider` trait.
 //! The session never names the trait; the engine never names the session;
 //! this adapter is the whole seam. Any session error becomes `None` here,
@@ -6,7 +6,7 @@
 //! Not the installed typesetter instance; licensed bytes only (OFL 1.1,
 //! AtkinsonHyperlegible-Regular, see kobo-text/fonts).
 
-#![cfg(test)]
+#![allow(dead_code)] // Compiled, not installed (fl78).
 
 use kobo_text::diagnostic_font_session::{NativeFontLimits, NativeFontSession, NativeFontSnapshot};
 use kobo_web_document::css_text_page::FontProvider;

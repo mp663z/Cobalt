@@ -10,6 +10,7 @@ publish = false
 kobo-browser-core = { path = "../../crates/kobo-browser" }
 kobo-image = { path = "../../crates/kobo-image" }
 kobo-sdk = { path = "../../crates/kobo-sdk" }
+kobo-text = { path = "../../crates/kobo-text", features = ["native-font-session"] }
 kobo-web-document = { path = "../../crates/kobo-web-document" }
 kobo-web-layout = { path = "../../crates/kobo-web-layout" }
 

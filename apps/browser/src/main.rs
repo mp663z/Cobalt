@@ -15,8 +15,6 @@ use kobo_sdk::{
     action_id, ActionId, Context, DisplayMetrics, Glyph, Header, Heartbeat, KoboApp, ScreenBuilder,
     StoreResult, Task, TaskError, TaskId, TaskOutcome,
 };
-#[cfg(not(test))]
-use kobo_web_document::parse_document;
 use kobo_web_document::{Document, Field, Limits, Url};
 use kobo_web_layout::{
     link_action, page_screen_with_metrics, picture_handle, pieces, Paginator, Piece,
@@ -510,36 +508,30 @@ impl Browser {
         // A new document replaces any staged frame before it is parsed.
         self.css.clear();
         self.sheets.clear(context);
-        // Enabled stage only: own a copy of the arrival (<= the input ceiling) BEFORE the parse, so the parse and
-        // preparation read one buffer. Disabled keeps the exact existing call and allocates nothing.
-        let source = if self.css.is_enabled() {
-            css_stage::ArrivalSource::capture(bytes, Limits::DEFAULT.max_input_bytes)
-        } else {
-            None
-        };
-        let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
+        // The arrival's parse. Enabled stage only: it owns a copy (<= the input ceiling) that the parse and
+        // preparation both read. Disabled keeps the exact existing call and allocates nothing.
         #[cfg(not(test))]
-        let document = parse_document(parse_bytes, url, &Limits::DEFAULT);
-        // TEST-ONLY: the same parse, through the one-borrow observation
-        // wrapper; the returned Document continues the normal flow.
+        let parsed = css_stage::ParsedArrival::parse(bytes, url, self.css.is_enabled());
         #[cfg(test)]
-        let (document, consumed) = {
+        let mut parsed = {
             let input = self
                 .observation_input
                 .take()
                 .unwrap_or(arrival_observation::ObservationInput::Markup { len: bytes.len() });
-            let (document, observation) = arrival_observation::observe(
-                parse_bytes,
+            css_stage::ParsedArrival::parse(
+                bytes,
                 url,
-                &Limits::DEFAULT,
+                self.css.is_enabled(),
                 input,
                 self.loaded.is_some(),
-            );
-            let consumed = observation.consumed;
-            self.last_observation = Some(observation);
-            self.observation_count += 1;
-            (document, consumed)
+            )
         };
+        #[cfg(test)]
+        {
+            self.last_observation = Some(parsed.take_observation());
+            self.observation_count += 1;
+        }
+        let document = parsed.document();
         let mut title = document
             .title
             .clone()
@@ -549,7 +541,33 @@ impl Browser {
             // so a copy reopened further in still says what it is.
             title = format!("Saved: {title}");
         }
-        let (paginator, lead) = paginator_for(&document, note.as_deref());
+        let (paginator, lead) = paginator_for(document, note.as_deref());
+        // Admission consumes the arrival's own parse (document + the source it was parsed from) and hands the
+        // document back, so the retained source is dropped here, before the reader is built: production records
+        // eligibility and stops, never publishing.
+        let metrics = context.metrics();
+        let colour = self.pictures.colour();
+        #[cfg(not(test))]
+        let document = self.css.admit_parsed(parsed, &metrics, colour);
+        // TEST-ONLY (116 v3): the SAME admission through the ONE private
+        // local producer entry. The non-escaping closure borrows the SAME
+        // arriving `bytes` only as the no-source fallback; with a source the
+        // preparer reads the Admission's captured buffer and the parse's
+        // consumed record decides the binding.
+        #[cfg(test)]
+        let document = {
+            let drops = std::rc::Rc::clone(&self.frame_drops);
+            let produce = move |admission: &css_stage::Admission| {
+                arrival_prep::prepare_real_frame_consumed(
+                    bytes,
+                    admission,
+                    admission.consumed(),
+                    &drops,
+                )
+            };
+            self.css
+                .admit_test_parsed(parsed, &metrics, colour, produce)
+        };
         let (restore, place) = self
             .history
             .current()
@@ -566,42 +584,6 @@ impl Browser {
             note,
             full: None,
         });
-        // Admission borrows the parsed document and the current moment;
-        // production records eligibility and stops, never publishing.
-        let metrics = context.metrics();
-        let colour = self.pictures.colour();
-        #[cfg(not(test))]
-        self.css.admit_sourced(
-            &self.loaded.as_ref().expect("just loaded").document,
-            &metrics,
-            colour,
-            source,
-        );
-        // TEST-ONLY (116 v3): the SAME admission through the ONE private
-        // local producer entry. The non-escaping closure borrows the SAME
-        // arriving `bytes`; this reviewed callsite is the only place live
-        // bytes are associated with an admission - admit_test itself is
-        // generic plumbing and proves no byte/Document identity, so the
-        // artifact records Binding::Unestablished.
-        #[cfg(test)]
-        {
-            let drops = std::rc::Rc::clone(&self.frame_drops);
-            let produce = move |admission: &css_stage::Admission| {
-                arrival_prep::prepare_real_frame_consumed(
-                    bytes,
-                    admission,
-                    Some(consumed),
-                    &drops,
-                )
-            };
-            self.css.admit_test_sourced(
-                &self.loaded.as_ref().expect("just loaded").document,
-                &metrics,
-                colour,
-                source,
-                produce,
-            );
-        }
         // Linked sheets are fetched only when the CSS stage is enabled AND admission left a candidate (a refused
         // page never costs a fetch); production is never enabled, so it starts no extra task. The result is held for the future pipeline and changes nothing on screen.
         if self.css.is_enabled() && self.css.candidate_held() {
