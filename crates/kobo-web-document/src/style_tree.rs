@@ -724,9 +724,8 @@ impl StyleTree {
                     "code" | "samp" | "kbd" | "tt" => Some(&[Property::FontFamily]),
                     "small" | "big" => Some(&[Property::FontSize]),
                     "ul" | "ol" => Some(&[Property::MarginTop, Property::MarginBottom, Property::PaddingLeft]),
-                    "dl" => Some(&[Property::Display, Property::MarginTop, Property::MarginBottom]),
-                    "dt" => Some(&[Property::Display]),
-                    "dd" => Some(&[Property::Display, Property::MarginLeft]),
+                    // dl/dt/dd have no arm on purpose (U2): their defaults are modelled (ext-only UA-origin declarations plus the
+                    // computed-RTL dd refusal), so they fall to the wildcard `Some(&[])` and need no author declaration.
                     "address" => Some(&[Property::Display, Property::FontStyle]),
                     "cite" | "dfn" | "var" => Some(&[Property::FontStyle]),
                     "pre" | "sub" | "sup" | "button" | "textarea" | "select" | "details" | "summary" | "fieldset"

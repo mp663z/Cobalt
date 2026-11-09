@@ -27,9 +27,6 @@ fn cases() -> Vec<(&'static str, &'static str, &'static str, Vec<&'static str>)>
         ("big", "<big>t</big>", "big{font-size:19px}", vec![]),
         ("ul", "<ul><li>t</li></ul>", "ul{margin:0;padding:0;list-style-type:none}", vec!["ul{margin:0;list-style-type:none}", "ul{padding:0;list-style-type:none}", "ul{margin-top:0;padding:0;list-style-type:none}"]),
         ("ol", "<ol><li>t</li></ol>", "ol{margin:0;padding:0;list-style-type:none}", vec!["ol{margin:0;list-style-type:none}", "ol{padding:0;list-style-type:none}"]),
-        ("dl", "<dl>t</dl>", "dl{display:block;margin:0}", vec!["dl{margin:0}", "dl{display:block}"]),
-        ("dt", "<dl style='display:block;margin:0'><dt>t</dt></dl>", "dt{display:block}", vec![]),
-        ("dd", "<dl style='display:block;margin:0'><dd>t</dd></dl>", "dd{display:block;margin-left:0}", vec!["dd{display:block}", "dd{margin-left:0}"]),
         ("address", "<address>t</address>", "address{display:block;font-style:normal}", vec!["address{display:block}", "address{font-style:normal}"]),
         ("cite", "<cite>t</cite>", "cite{font-style:normal}", vec![]),
         ("dfn", "<dfn>t</dfn>", "dfn{font-style:normal}", vec![]),
@@ -118,7 +115,6 @@ fn author_revert_hands_back_to_the_unmodelled_ua_sheet_and_refuses() {
         ("ul{margin:0;padding:revert;list-style:none}", "<ul><li>t</li></ul>"),
         ("ul{margin:0;padding:0;list-style:none}ul{padding-left:revert}", "<ul><li>t</li></ul>"),
         ("blockquote{margin:revert}", "<blockquote>t</blockquote>"),
-        ("dd{display:revert;margin-left:0}", "<dl style='display:block;margin:0'><dd>t</dd></dl>"),
         ("address{display:block;font-style:revert}", "<address>t</address>"),
         ("small{font-size:revert}", "<small>t</small>"),
     ] {
