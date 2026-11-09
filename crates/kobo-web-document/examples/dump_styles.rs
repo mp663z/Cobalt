@@ -9,7 +9,10 @@ fn main() {
         "default" => kobo_web_document::parse_style_tree(&bytes, &[], &limits),
         "state" => kobo_web_document::parse_style_tree_with_state(
             &bytes, &[], &limits, None, kobo_web_document::SupplyBudget::CANONICAL,
-            &kobo_web_document::SnapshotState { history: kobo_web_document::HistoryState::FreshNoHistory },
+            &kobo_web_document::SnapshotState {
+                history: Some(kobo_web_document::HistoryState::FreshNoHistory),
+                input: Some(kobo_web_document::InputState::QuiescentCapture),
+            },
         ),
         other => panic!("bad mode {other}"),
     };

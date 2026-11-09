@@ -1303,22 +1303,15 @@ fn matched_rules(
                     unsupported = true;
                     continue;
                 };
-                // State pseudo-classes (`:link`): NO absent-state path. A rule
-                // carrying one is enrolled only under the caller's explicit
-                // `SnapshotState { history: FreshNoHistory }` guarantee (the
-                // caller's written assertion of a fresh profile / no prior
-                // navigation, never engine inference). Without it the rule
+                // State pseudo-classes: NO absent-state path. A rule carrying
+                // one is enrolled only when the caller's explicit SnapshotState
+                // covers EVERY state member, with history and input scoped
+                // independently (`:link` needs FreshNoHistory; `:hover`/`:active`
+                // need QuiescentCapture). Without the matching guarantee the rule
                 // fails closed exactly like an unparseable selector; unknown
-                // history is never treated as fresh and link styles are
+                // state is never treated as guaranteed and state styles are
                 // neither applied nor silently dropped under uncertainty.
-                if selector.has_state()
-                    && !matches!(
-                        snapshot,
-                        Some(crate::css::SnapshotState {
-                            history: crate::css::HistoryState::FreshNoHistory,
-                        })
-                    )
-                {
+                if selector.has_state() && !selector.state_satisfied_by(snapshot) {
                     diagnostics.record(RefusalReason::CssSelector);
                     unsupported = true;
                     continue;
@@ -4868,7 +4861,16 @@ mod link_state_tests {
     use crate::{HistoryState, SnapshotState, style_tree::StyleTree};
 
     const FRESH: SnapshotState = SnapshotState {
-        history: HistoryState::FreshNoHistory,
+        history: Some(HistoryState::FreshNoHistory),
+        input: None,
+    };
+    const QUIESCENT: SnapshotState = SnapshotState {
+        history: None,
+        input: Some(crate::InputState::QuiescentCapture),
+    };
+    const BOTH: SnapshotState = SnapshotState {
+        history: Some(HistoryState::FreshNoHistory),
+        input: Some(crate::InputState::QuiescentCapture),
     };
 
     fn state(html: &str) -> StyleTree {
@@ -5029,5 +5031,70 @@ mod link_state_tests {
             Some(RefusalReason::CssSelector)
         );
         assert_eq!(d.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+    }
+
+    fn state_with(html: &str, snapshot: &SnapshotState) -> StyleTree {
+        parse_style_tree_with_state(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            snapshot,
+        )
+    }
+
+    #[test]
+    fn hover_active_enroll_only_under_quiescent_and_never_match() {
+        let h = sheet(
+            "div:hover{font-size:33px} a:active{font-size:44px}",
+            "<div>one</div><a href=https://x>two</a>",
+        );
+        // Under QuiescentCapture the rules ENROLL (parsed, guaranteed) and
+        // never match: the correct CSS semantic for a quiescent capture.
+        let t = state_with(&h, &QUIESCENT);
+        assert!(!t.unsupported);
+        assert_eq!(t.nodes.iter().find(|n| n.tag == "div").unwrap().style.font_size, 16);
+        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+        // Both guarantees present: same outcome for the pointer family.
+        let t = state_with(&h, &BOTH);
+        assert!(!t.unsupported);
+        assert_eq!(t.nodes.iter().find(|n| n.tag == "div").unwrap().style.font_size, 16);
+    }
+
+    #[test]
+    fn history_and_input_guarantees_are_independently_scoped() {
+        // A link-only guarantee does NOT enroll :hover/:active.
+        let h = sheet("div:hover{font-size:33px}", "<div>one</div>");
+        let t = state_with(&h, &FRESH);
+        assert!(t.unsupported);
+        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        // An input-only guarantee does NOT enroll :link.
+        let h = sheet("a:link{font-size:33px}", "<a href=https://x>one</a>");
+        let t = state_with(&h, &QUIESCENT);
+        assert!(t.unsupported);
+        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        // No snapshot at all: :hover/:active fail closed like any unguaranteed state.
+        let h = sheet("div:hover{font-size:33px}", "<div>one</div>");
+        let t = ext(&h);
+        assert!(t.unsupported);
+        assert_eq!(t.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+        let d = default(&h);
+        assert!(d.unsupported);
+        assert_eq!(d.diagnostics.first_reason(), Some(RefusalReason::CssSelector));
+    }
+
+    #[test]
+    fn repeated_hover_active_compounds_are_grammar_bound_refusals() {
+        for selector in ["a:hover:hover", "a:active:active", "a:link:hover"] {
+            let h = sheet(&format!("{selector}{{font-size:33px}}"), "<a href=https://x>one</a>");
+            let t = state_with(&h, &BOTH);
+            assert!(t.unsupported, "{selector}");
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector),
+                "{selector}"
+            );
+        }
     }
 }

@@ -52,7 +52,7 @@ pub mod url;
 use html5ever::tendril::TendrilSink;
 
 pub use media_query::MediaContext;
-pub use css::{HistoryState, SnapshotState};
+pub use css::{HistoryState, InputState, SnapshotState};
 pub use style_tree::SupplyBudget;
 pub use url::{Scheme, Url, UrlError};
 
@@ -490,16 +490,22 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
 
 /// CANDIDATE, opt-in, unadopted (EXPERIMENTAL, private research): like
 /// [`parse_style_tree_with_inline_sheets_and_selectors`], plus the state
-/// pseudo-class `:link` under an explicit caller [`SnapshotState`] guarantee.
-/// The guarantee is MANDATORY at this entry (there is no absent-state path):
-/// `HistoryState::FreshNoHistory` is the caller's written assertion of a fresh
-/// profile / no prior navigation, never engine inference. Under it, `:link`
-/// matches an HTML-namespace `a`/`area` that has an `href` attribute (any
-/// value, including empty); SVG `a` is narrowed out in v1 because the DOM
-/// flattens `xlink:href` to the local name `href`. `:visited`, `:hover`,
-/// `:active`, the focus family and every other pseudo-class stay refused, as
-/// does `:link` at every other entry (fail-closed selector refusal). Default
-/// entries are byte-unchanged.
+/// pseudo-classes `:link`, `:hover` and `:active` under explicit caller
+/// [`SnapshotState`] guarantees. A guarantee is MANDATORY per state family
+/// (there is no absent-state path) and the two families are independently
+/// scoped: `HistoryState::FreshNoHistory` (the caller's written assertion of
+/// a fresh profile / no prior navigation) enrolls only `:link`;
+/// `InputState::QuiescentCapture` (the caller's written assertion that no
+/// pointer is over the viewport, no key is held or activating, and no touch
+/// contact exists) enrolls only `:hover`/`:active`. Under FreshNoHistory,
+/// `:link` matches an HTML-namespace `a`/`area` that has an `href` attribute
+/// (any value, including empty); SVG `a` is narrowed out in v1 because the
+/// DOM flattens `xlink:href` to the local name `href`. Under
+/// QuiescentCapture, `:hover` and `:active` never match - the correct CSS
+/// semantic for a quiescent capture. `:visited`, the focus family and every
+/// other pseudo-class stay refused, as does any state pseudo-class at every
+/// other entry (fail-closed selector refusal). Default entries are
+/// byte-unchanged.
 #[must_use]
 pub fn parse_style_tree_with_state(
     bytes: &[u8],

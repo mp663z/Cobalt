@@ -11,9 +11,13 @@ const MAX_STEPS: usize = 8;
 /// Explicit caller-asserted snapshot state for state pseudo-classes (ext
 /// entries only). The engine never infers this state: a caller passes it only
 /// when it can guarantee it, and the guarantee is a written caller contract.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// History and input guarantees are INDEPENDENTLY scoped: a link-only
+/// guarantee never enrolls `:hover`/`:active`, and an input-only guarantee
+/// never enrolls `:link`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SnapshotState {
-    pub history: HistoryState,
+    pub history: Option<HistoryState>,
+    pub input: Option<InputState>,
 }
 /// History guarantees a caller can explicitly assert. v1: only a fresh profile
 /// with no prior navigation. Without an explicit guarantee, `:link` fails
@@ -24,13 +28,32 @@ pub enum HistoryState {
     /// href-present hyperlink element is unvisited.
     FreshNoHistory,
 }
+/// Input guarantees a caller can explicitly assert. The guarantee is the
+/// caller's written contract about the capture environment (backed by a fresh
+/// desktop profile, no touch emulation, a fresh page, and no real Input
+/// dispatch in the capture path); it is not proven by the absence of input
+/// dispatch alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputState {
+    /// The caller guarantees ALL of: no pointer position over any part of the
+    /// viewport (covers a stationary pointer), no key held and no activation
+    /// in progress on any element (covers keyboard-driven `:active`), and no
+    /// active touch contact. Under this guarantee `:hover` and `:active`
+    /// never match - that is the CSS semantic given the state.
+    QuiescentCapture,
+}
 /// State pseudo-classes the extended grammar can represent.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StatePseudo {
-    /// `:link`: an unvisited hyperlink. Enrolled only under
-    /// `SnapshotState { history: FreshNoHistory }`; matching is then the DOM
+    /// `:link`: an unvisited hyperlink. Enrolled only under an explicit
+    /// `HistoryState::FreshNoHistory` guarantee; matching is then the DOM
     /// predicate (href-present == unvisited under the guarantee).
     Link,
+    /// `:hover` / `:active`: enrolled only under an explicit
+    /// `InputState::QuiescentCapture` guarantee; under that guarantee they
+    /// never match (the correct semantic, not a silent never-match).
+    Hover,
+    Active,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Simple {
@@ -484,19 +507,26 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
                 let lowered = token.to_ascii_lowercase();
                 match lowered.as_str() {
                     "root" if !simple.root => simple.root = true,
-                    // `:link`: at most one state pseudo-class per compound. A
-                    // repeated `:link` (`a:link:link`) falls through to the
-                    // refusal arm: our bounded grammar refuses the repetition
-                    // as a grammar bound, NOT a claim that the CSS is invalid.
+                    // State pseudo-classes: at most one per compound. A
+                    // repetition (`a:link:link`, `a:hover:hover`) falls
+                    // through to the refusal arm: our bounded grammar refuses
+                    // the repetition as a grammar bound, NOT a claim that the
+                    // CSS is invalid.
                     "link" if simple.state.is_none() => {
                         simple.state = Some(StatePseudo::Link);
+                    }
+                    "hover" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::Hover);
+                    }
+                    "active" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::Active);
                     }
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
                     _ => return None,
                 }
-                if lowered != "root" && lowered != "link" {
+                if !matches!(lowered.as_str(), "root" | "link" | "hover" | "active") {
                     if simple.structural_n >= 8 {
                         return None;
                     }
@@ -534,7 +564,9 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
                 return None;
             }
             let mut inner = selector_ext(head)?;
-            if inner.pseudo_after {
+            if inner.pseudo_after || inner.has_state() {
+                // State pseudo-classes on a ::after selector are out of scope
+                // (a grammar bound, not an invalid-CSS claim).
                 return None;
             }
             inner.pseudo_after = true;
@@ -668,6 +700,29 @@ impl Selector {
     pub(crate) fn has_state(&self) -> bool {
         self.steps.iter().any(|(simple, _)| simple.state.is_some())
     }
+    /// Every state pseudo-class in the selector is covered by the caller's
+    /// explicit guarantee. History and input are scoped independently: a
+    /// link-only guarantee does not enroll `:hover`/`:active`, and an
+    /// input-only guarantee does not enroll `:link`.
+    pub(crate) fn state_satisfied_by(&self, snapshot: Option<&SnapshotState>) -> bool {
+        self.steps.iter().all(|(simple, _)| match simple.state {
+            None => true,
+            Some(StatePseudo::Link) => matches!(
+                snapshot,
+                Some(SnapshotState {
+                    history: Some(HistoryState::FreshNoHistory),
+                    ..
+                })
+            ),
+            Some(StatePseudo::Hover | StatePseudo::Active) => matches!(
+                snapshot,
+                Some(SnapshotState {
+                    input: Some(InputState::QuiescentCapture),
+                    ..
+                })
+            ),
+        })
+    }
     /// For a `::after` selector: does the ORIGINATING element match the steps?
     pub(crate) fn matches_originating_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
         if !self.ext {
@@ -791,6 +846,10 @@ impl Simple {
         match self.state {
             None => {}
             Some(StatePseudo::Link) if link_href(nodes, handle) => {}
+            // `:hover`/`:active`: enrolled only under QuiescentCapture, and
+            // under that guarantee they NEVER match - the correct CSS semantic
+            // for a quiescent capture, not a silent never-match. Any future
+            // non-quiescent InputState variant must revisit this arm.
             Some(_) => return false,
         }
         if self.root
@@ -931,6 +990,25 @@ mod link_matcher_pin {
         // Case 6 stands in for a flattened `xlink:href`: its stored attribute
         // IS the local name "href", yet it cannot match - provenance
         // ambiguity is exactly why SVG is narrowed out in v1.
+    }
+
+    #[test]
+    fn hover_active_never_match_any_element_at_the_matcher() {
+        // Under the only input guarantee (QuiescentCapture) :hover/:active
+        // never match: pin the matcher arm so a future InputState variant must
+        // deliberately revisit it.
+        let nodes = doc_with(vec![
+            el(ns!(html), "div", &[]),
+            el(ns!(html), "a", &[("href", "https://x")]),
+            el(ns!(svg), "rect", &[]),
+        ]);
+        for text in [":hover", ":active", "div:hover", "a:active"] {
+            let sel = selector_ext(text).expect(text);
+            assert!(sel.has_state(), "{text}");
+            for h in 1..nodes.len() {
+                assert_eq!(sel.matches_checked(&nodes, h), Some(false), "{text} on node {h}");
+            }
+        }
     }
 }
 
