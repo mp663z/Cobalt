@@ -2063,11 +2063,14 @@ pub(crate) fn properties_with(
                 }
             }
             "font-family" => {
-                // Retention is not provider binding. Keep the existing whole
-                // render refusal even for a recognized generic/global value.
-                unsupported = true;
+                // Retention is not provider binding. The existing whole-render
+                // refusal stays for every value except the one narrow ext-entry
+                // admission below.
                 match parse_keyword(value) {
-                    Some(v) => Some((Property::FontFamily, v)),
+                    Some(v) => {
+                        unsupported = true;
+                        Some((Property::FontFamily, v))
+                    }
                     None => {
                         let generic = match value {
                             "serif" => Some(crate::computed_style::GenericFamily::Serif),
@@ -2077,7 +2080,30 @@ pub(crate) fn properties_with(
                         };
                         // Interned retention of the (lowercased, trimmed) declared list. Only values that
                         // already produced a FontFamily value before keep producing one (no new acceptance).
-                        generic.map(|g| (Property::FontFamily, Value::FontFamily(Some(g), fam.intern(value))))
+                        let produced = generic.map(|g| {
+                            (
+                                Property::FontFamily,
+                                Value::FontFamily(Some(g), fam.intern(value)),
+                            )
+                        });
+                        // CANDIDATE (ext entries only: em_font == ext_selectors at
+                        // both block_entries call sites): exactly the generic
+                        // `sans-serif` keyword with successful internment drops the
+                        // refusal. Intern failure keeps BOTH the old produced value
+                        // (key None) AND the refusal - that corner is unchanged.
+                        // Named families, multi-item lists, global keywords, serif
+                        // and monospace keep the existing refusal. Painting is
+                        // untouched: retained families still paint only through the
+                        // family-bound painter with proven face hashes.
+                        unsupported = !matches!(
+                            (em_font, generic, &produced),
+                            (
+                                true,
+                                Some(crate::computed_style::GenericFamily::SansSerif),
+                                Some((_, Value::FontFamily(_, Some(_))))
+                            )
+                        );
+                        produced
                     }
                 }
             }
