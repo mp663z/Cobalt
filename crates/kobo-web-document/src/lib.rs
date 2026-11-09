@@ -52,6 +52,7 @@ pub mod url;
 use html5ever::tendril::TendrilSink;
 
 pub use media_query::MediaContext;
+pub use css::{HistoryState, SnapshotState};
 pub use style_tree::SupplyBudget;
 pub use url::{Scheme, Url, UrlError};
 
@@ -414,7 +415,7 @@ pub fn parse_style_tree(
     sheets: &[Vec<u8>],
     limits: &Limits,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, false, false)
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, false, false, None)
 }
 
 /// Like [`parse_style_tree`] but evaluates supported `@media` width queries
@@ -427,7 +428,7 @@ pub fn parse_style_tree_with_media(
     limits: &Limits,
     media: MediaContext,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false, false, false, false)
+    parse_style_tree_in(bytes, sheets, limits, Some(media), SupplyBudget::CANONICAL, false, false, false, false, None)
 }
 
 /// Like [`parse_style_tree_with_media`] with an explicit [`SupplyBudget`].
@@ -442,7 +443,7 @@ pub fn parse_style_tree_with_supply(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, false, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, false, false, None)
 }
 
 /// CANDIDATE, opt-in, unadopted: like [`parse_style_tree_with_supply`], but an
@@ -459,7 +460,7 @@ pub fn parse_style_tree_with_inline_sheets(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, true, false, false, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, false, false, false, None)
 }
 
 /// CANDIDATE, opt-in, unadopted: [`parse_style_tree_with_inline_sheets`] plus an
@@ -484,7 +485,31 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true, false, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true, false, false, None)
+}
+
+/// CANDIDATE, opt-in, unadopted (EXPERIMENTAL, private research): like
+/// [`parse_style_tree_with_inline_sheets_and_selectors`], plus the state
+/// pseudo-class `:link` under an explicit caller [`SnapshotState`] guarantee.
+/// The guarantee is MANDATORY at this entry (there is no absent-state path):
+/// `HistoryState::FreshNoHistory` is the caller's written assertion of a fresh
+/// profile / no prior navigation, never engine inference. Under it, `:link`
+/// matches an HTML-namespace `a`/`area` that has an `href` attribute (any
+/// value, including empty); SVG `a` is narrowed out in v1 because the DOM
+/// flattens `xlink:href` to the local name `href`. `:visited`, `:hover`,
+/// `:active`, the focus family and every other pseudo-class stay refused, as
+/// does `:link` at every other entry (fail-closed selector refusal). Default
+/// entries are byte-unchanged.
+#[must_use]
+pub fn parse_style_tree_with_state(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+    media: Option<MediaContext>,
+    budget: SupplyBudget,
+    snapshot: &SnapshotState,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(bytes, sheets, limits, media, budget, true, true, false, false, Some(snapshot))
 }
 
 /// CANDIDATE, opt-in, unadopted (EXPERIMENTAL): [`parse_style_tree`] plus acceptance of
@@ -497,7 +522,7 @@ pub fn parse_style_tree_with_text_decoration(
     sheets: &[Vec<u8>],
     limits: &Limits,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, true, false)
+    parse_style_tree_in(bytes, sheets, limits, None, SupplyBudget::CANONICAL, false, false, true, false, None)
 }
 
 /// CANDIDATE, opt-in, unadopted (EXPERIMENTAL): [`parse_style_tree_with_supply`] plus the
@@ -512,7 +537,7 @@ pub fn parse_style_tree_with_supply_and_text_decoration(
     media: Option<MediaContext>,
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
-    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, true, false)
+    parse_style_tree_in(bytes, sheets, limits, media, budget, false, false, true, false, None)
 }
 
 /// CANDIDATE, opt-in, unadopted (EXPERIMENTAL, private research): like
@@ -533,7 +558,7 @@ pub fn parse_style_tree_with_pinned_font_family(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, false, false, false, true,
+        bytes, sheets, limits, media, budget, false, false, false, true, None,
     )
 }
 
@@ -601,6 +626,7 @@ fn parse_style_tree_in(
     ext_selectors: bool,
     text_deco: bool,
     family_bind: bool,
+    snapshot: Option<&SnapshotState>,
 ) -> style_tree::StyleTree {
     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
     let mut warnings = Vec::new();
@@ -664,7 +690,7 @@ fn parse_style_tree_in(
     if quirks != html5ever::interface::QuirksMode::NoQuirks {
         diagnostics.record(style_diagnostics::RefusalReason::Quirks);
     }
-    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget, ext_selectors, text_deco, family_bind);
+    let mut tree = style_tree::StyleTree::from_dom_with(&nodes, sheets, media, budget, ext_selectors, text_deco, family_bind, snapshot);
     // Exact host-supply handshake, only on the fully parsed and fully claimed
     // path: the input was not cut short (a truncated DOM is a partial link
     // census, not an inventory) and the engine's own link walk met no
@@ -748,7 +774,7 @@ mod pinned_family_generated {
     }
     fn run(css: &str, body: &str) -> (bool, Option<bool>, usize) {
         let html = format!("<!doctype html><style>html,body,div,p{{margin:0}}div{{line-height:20px}}{css}</style>{body}");
-        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, true);
+        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, true, None);
         if s.unsupported {
             return (true, None, 0);
         }
@@ -776,11 +802,11 @@ mod pinned_family_generated {
         // unreachable here); and the empty-content page's bound refusal is compared to the
         // family-less twin through the ordinary painter.
         let html = "<!doctype html><style>html,body,div,p{margin:0}div{line-height:20px} div::after{content:\"x\"}</style><div>ab</div>";
-        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, false);
+        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, false, None);
         println!("content x, no family, family_bind=false: unsupported={}", s.unsupported);
         assert!(s.unsupported, "generated text content refuses independent of the family");
         let html = "<!doctype html><style>html,body,div,p{margin:0}div{line-height:20px} div::after{content:\"\"}</style><div>ab</div>";
-        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, false);
+        let s = parse_style_tree_in(html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, true, true, false, false, None);
         let ordinary = crate::css_text_page::paint_direct_text_blocks(&BoxTree::from_style(&s), 200, 100, &Face).is_ok();
         println!("empty content, family-less twin, ordinary painter ok={ordinary}");
         assert_eq!(painted4 == Some(true), ordinary, "family binding must not change the empty-content outcome");

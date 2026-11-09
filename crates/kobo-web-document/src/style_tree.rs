@@ -189,7 +189,7 @@ impl StyleTree {
         sheets: &[Vec<u8>],
         media: Option<crate::media_query::MediaContext>,
     ) -> Self {
-        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false, false, false)
+        Self::from_dom_with(nodes, sheets, media, SupplyBudget::CANONICAL, false, false, false, None)
     }
 
     #[allow(clippy::too_many_lines)] // One bounded tree walk retains parentage and cascade.
@@ -201,12 +201,13 @@ impl StyleTree {
         ext_selectors: bool,
         text_deco: bool,
         family_bind: bool,
+        snapshot: Option<&crate::css::SnapshotState>,
     ) -> Self {
         let mut tree = Self::default();
         tree.ext = ext_selectors;
         let mut fam = crate::font_family::FamilyTable::new();
         let (rules, deferred_table, incomplete, claimed) =
-            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors, text_deco, family_bind, &mut fam);
+            matched_rules(nodes, sheets, &mut tree.diagnostics, media, budget, ext_selectors, text_deco, family_bind, &mut fam, snapshot);
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
@@ -1100,6 +1101,7 @@ fn matched_rules(
     text_deco: bool,
     family_bind: bool,
     fam: &mut crate::font_family::FamilyTable,
+    snapshot: Option<&crate::css::SnapshotState>,
 ) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
     let mut rules = Vec::new();
     let mut deferred_table: Vec<Deferred> = Vec::new();
@@ -1301,6 +1303,26 @@ fn matched_rules(
                     unsupported = true;
                     continue;
                 };
+                // State pseudo-classes (`:link`): NO absent-state path. A rule
+                // carrying one is enrolled only under the caller's explicit
+                // `SnapshotState { history: FreshNoHistory }` guarantee (the
+                // caller's written assertion of a fresh profile / no prior
+                // navigation, never engine inference). Without it the rule
+                // fails closed exactly like an unparseable selector; unknown
+                // history is never treated as fresh and link styles are
+                // neither applied nor silently dropped under uncertainty.
+                if selector.has_state()
+                    && !matches!(
+                        snapshot,
+                        Some(crate::css::SnapshotState {
+                            history: crate::css::HistoryState::FreshNoHistory,
+                        })
+                    )
+                {
+                    diagnostics.record(RefusalReason::CssSelector);
+                    unsupported = true;
+                    continue;
+                }
                 for entry in &properties {
                     let (property, value, important, deferred) = match *entry {
                         Entry::Typed(p, v, i) => (p, v, i, None),
@@ -4835,3 +4857,177 @@ const INITIAL_NOOPS: &[(&str, &str)] = &[
     ("resize", "none"),
     ("quotes", "auto"),
 ];
+
+#[cfg(test)]
+mod link_state_tests {
+    use crate::style_diagnostics::RefusalReason;
+    use crate::{
+        Limits, SupplyBudget, parse_style_tree, parse_style_tree_with_inline_sheets_and_selectors,
+        parse_style_tree_with_state,
+    };
+    use crate::{HistoryState, SnapshotState, style_tree::StyleTree};
+
+    const FRESH: SnapshotState = SnapshotState {
+        history: HistoryState::FreshNoHistory,
+    };
+
+    fn state(html: &str) -> StyleTree {
+        parse_style_tree_with_state(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            &FRESH,
+        )
+    }
+    fn ext(html: &str) -> StyleTree {
+        parse_style_tree_with_inline_sheets_and_selectors(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+        )
+    }
+    fn default(html: &str) -> StyleTree {
+        parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT)
+    }
+    fn sheet(css: &str, body: &str) -> String {
+        format!("<!doctype html><html><head><style>{css}</style></head><body>{body}</body></html>")
+    }
+
+    #[test]
+    fn link_matches_only_html_href_elements_under_fresh_guarantee() {
+        // Paired synthetic computed styles: non-empty href, empty (valueless)
+        // href, no href, area with href. Only the HTML a/area elements WITH an
+        // href attribute match.
+        let h = sheet(
+            "a:link{font-size:33px} area:link{font-size:44px}",
+            "<a href=\"https://x\">one</a><a href>two</a><a>three</a>\
+             <map><area href=\"https://y\"></map>",
+        );
+        let t = state(&h);
+        assert!(!t.unsupported);
+        let a_sizes: Vec<u32> = t
+            .nodes
+            .iter()
+            .filter(|n| n.tag == "a")
+            .map(|n| n.style.font_size)
+            .collect();
+        assert_eq!(a_sizes, [33, 33, 16], "html href, html empty href, html no href");
+        let area = t
+            .nodes
+            .iter()
+            .find(|n| n.tag == "area")
+            .expect("area retained");
+        assert_eq!(area.style.font_size, 44);
+    }
+
+    #[test]
+    fn link_never_matches_svg_a_in_v1() {
+        // SVG a is narrowed out: the DOM flattens `xlink:href` to local `href`
+        // (dom.rs keep_attrs), so an SVG href's provenance is ambiguous. NOTE:
+        // the ext entry already refuses SVG content with a pre-existing
+        // CssDeclaration refusal (unrelated to :link; verified identical on
+        // `p{font-size:33px}` over bare `<svg><a>`), so `unsupported` here is
+        // that pre-existing refusal, not the state enrollment gate.
+        for body in [
+            "<svg><a href=\"https://z\">four</a></svg>",
+            "<svg><a xlink:href=\"https://w\">five</a></svg>",
+        ] {
+            let h = sheet("a:link{font-size:33px}", body);
+            let t = state(&h);
+            assert!(t.unsupported, "{body}");
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssDeclaration),
+                "{body}"
+            );
+            let svg_a = t.nodes.iter().find(|n| n.tag == "a").expect("svg a retained");
+            assert_eq!(svg_a.style.font_size, 16, "{body}");
+        }
+    }
+
+    #[test]
+    fn link_counts_as_a_class_for_specificity() {
+        // a:link is (0,1,1) and beats the lone class .x (0,1,0).
+        let h = sheet(
+            ".x{font-size:22px} a:link{font-size:33px}",
+            "<a class=x href=https://y>one</a>",
+        );
+        let t = state(&h);
+        assert!(!t.unsupported);
+        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 33);
+    }
+
+    #[test]
+    fn link_applies_to_compounds_and_combinators() {
+        let h = sheet(
+            "div > a.x:link[href]{font-size:33px}",
+            "<div><a class=x href=https://y>one</a></div><a class=x href=https://y>two</a>",
+        );
+        let t = state(&h);
+        assert!(!t.unsupported);
+        let sizes: Vec<u32> = t
+            .nodes
+            .iter()
+            .filter(|n| n.tag == "a")
+            .map(|n| n.style.font_size)
+            .collect();
+        assert_eq!(sizes, [33, 16]);
+    }
+
+    #[test]
+    fn other_state_pseudos_stay_refused_under_state_entry() {
+        for pseudo in [":visited", ":hover", ":active", ":focus", ":focus-visible", ":focus-within"] {
+            let h = sheet(
+                &format!("a{pseudo}{{font-size:33px}}"),
+                "<a href=https://x>one</a>",
+            );
+            let t = state(&h);
+            assert!(t.unsupported, "{pseudo}");
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector),
+                "{pseudo}"
+            );
+        }
+    }
+
+    #[test]
+    fn repeated_link_compound_is_a_grammar_bound_refusal() {
+        // `a:link:link` is valid CSS; the bounded grammar admits at most one
+        // state pseudo-class per compound and REFUSES the repetition. This is
+        // a grammar bound, not a claim that the CSS is invalid.
+        let h = sheet("a:link:link{font-size:33px}", "<a href=https://x>one</a>");
+        let t = state(&h);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+    }
+
+    #[test]
+    fn link_fails_closed_without_the_guarantee() {
+        let h = sheet("a:link{font-size:33px}", "<a href=https://x>one</a>");
+        // Ext entry WITHOUT a snapshot: no absent-state path; the rule is
+        // refused at enrollment exactly like an unparseable selector.
+        let t = ext(&h);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+        assert_eq!(t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+        // Default entry: byte-unchanged refusal behavior.
+        let d = default(&h);
+        assert!(d.unsupported);
+        assert_eq!(
+            d.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+        assert_eq!(d.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size, 16);
+    }
+}

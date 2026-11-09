@@ -8,6 +8,30 @@ const MAX_RULES: usize = 1024;
 const MAX_SELECTORS: usize = 16;
 const MAX_STEPS: usize = 8;
 
+/// Explicit caller-asserted snapshot state for state pseudo-classes (ext
+/// entries only). The engine never infers this state: a caller passes it only
+/// when it can guarantee it, and the guarantee is a written caller contract.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SnapshotState {
+    pub history: HistoryState,
+}
+/// History guarantees a caller can explicitly assert. v1: only a fresh profile
+/// with no prior navigation. Without an explicit guarantee, `:link` fails
+/// closed at rule enrollment exactly like an unparseable selector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HistoryState {
+    /// The caller guarantees a fresh profile / no prior navigation, so every
+    /// href-present hyperlink element is unvisited.
+    FreshNoHistory,
+}
+/// State pseudo-classes the extended grammar can represent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum StatePseudo {
+    /// `:link`: an unvisited hyperlink. Enrolled only under
+    /// `SnapshotState { history: FreshNoHistory }`; matching is then the DOM
+    /// predicate (href-present == unvisited under the guarantee).
+    Link,
+}
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Simple {
     tag: Option<String>,
@@ -15,6 +39,8 @@ struct Simple {
     classes: Vec<String>,
     /// `:root`: the document element (the parent is the Document node).
     root: bool,
+    /// Extended grammar only: at most one state pseudo-class (`:link` in v1).
+    state: Option<StatePseudo>,
     /// Extended grammar only: type selectors compare ASCII case-insensitively
     /// (Chrome matches `linearGradient` and `lineargradient` on SVG elements) and
     /// class tokens split on ASCII whitespace only.
@@ -316,6 +342,7 @@ fn simple(part: &str) -> Option<Simple> {
         id,
         classes,
         root,
+        state: None,
         ext: false,
         attrs: Vec::new(),
         structural: 0,
@@ -409,6 +436,7 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
         id: None,
         classes: Vec::new(),
         root: false,
+        state: None,
         ext: true,
         attrs: Vec::new(),
         structural: 0,
@@ -453,14 +481,22 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
             }
             b':' => {
                 let (token, next) = take_ident(s, at + 1);
-                match token.to_ascii_lowercase().as_str() {
+                let lowered = token.to_ascii_lowercase();
+                match lowered.as_str() {
                     "root" if !simple.root => simple.root = true,
+                    // `:link`: at most one state pseudo-class per compound. A
+                    // repeated `:link` (`a:link:link`) falls through to the
+                    // refusal arm: our bounded grammar refuses the repetition
+                    // as a grammar bound, NOT a claim that the CSS is invalid.
+                    "link" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::Link);
+                    }
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
                     _ => return None,
                 }
-                if token.to_ascii_lowercase() != "root" {
+                if lowered != "root" && lowered != "link" {
                     if simple.structural_n >= 8 {
                         return None;
                     }
@@ -474,9 +510,13 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
     (at > start).then_some((simple, at))
 }
 /// Opt-in grammar: compounds of type/`*`/`#id`/`.class`/`[attr op value]`/
-/// `:root`/`:first-child`/`:last-child`/`:only-child`, joined by descendant,
-/// `>`, `+` and `~`. State pseudo-classes, functional pseudo-classes,
-/// pseudo-elements, namespaces, escapes and case flags are refused.
+/// `:root`/`:first-child`/`:last-child`/`:only-child` and the state
+/// pseudo-class `:link`, joined by descendant, `>`, `+` and `~`. Every other
+/// state pseudo-class (`:visited`, `:hover`, `:active`, the focus family),
+/// functional pseudo-classes, pseudo-elements, namespaces, escapes and case
+/// flags are refused. A parsed `:link` is only ENROLLED under an explicit
+/// caller `SnapshotState` guarantee (see `matched_rules`); otherwise the rule
+/// fails closed there exactly like an unparseable selector.
 pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
     if input.is_empty() || input.len() > 256 {
         return None;
@@ -539,7 +579,8 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
             classes
                 + u16::try_from(part.classes.len() + part.attrs.len()).unwrap_or(16)
                 + u16::from(part.root)
-                + u16::from(part.structural_n),
+                + u16::from(part.structural_n)
+                + u16::from(part.state.is_some()),
             types + u16::from(part.tag.is_some()),
         )
     });
@@ -622,6 +663,10 @@ impl Selector {
             return Some(false);
         }
         self.matches_originating_checked(nodes, handle)
+    }
+    /// Any state pseudo-class anywhere in the selector (ext grammar only).
+    pub(crate) fn has_state(&self) -> bool {
+        self.steps.iter().any(|(simple, _)| simple.state.is_some())
     }
     /// For a `::after` selector: does the ORIGINATING element match the steps?
     pub(crate) fn matches_originating_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
@@ -719,11 +764,35 @@ impl Selector {
         true
     }
 }
+/// `:link` under an enrolled `FreshNoHistory` guarantee: an HTML-namespace
+/// `a` or `area` element that HAS an `href` attribute (any value, including
+/// empty). Under the guarantee href-present == unvisited, so this is genuine
+/// `:link`, not `:any-link`; matching never consults or infers history.
+/// SVG `a` is narrowed OUT in v1: the DOM sink flattens `xlink:href` to the
+/// local name `href` (dom.rs `keep_attrs`, `attr_namespace_discarded`), so an
+/// SVG `href`'s provenance is ambiguous and no honest per-node match exists.
+/// Narrowing an unsupported case, not a bogus localname guess.
+fn link_href(nodes: &[Node], handle: Handle) -> bool {
+    let Data::Element { name, attrs, .. } = &nodes[handle].data else {
+        return false;
+    };
+    if name.ns != html5ever::ns!(html) || !matches!(&*name.local, "a" | "area") {
+        return false;
+    }
+    attrs
+        .iter()
+        .any(|(key, _)| (&**key).eq_ignore_ascii_case("href"))
+}
 impl Simple {
     fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
         let Data::Element { name, .. } = &nodes[handle].data else {
             return false;
         };
+        match self.state {
+            None => {}
+            Some(StatePseudo::Link) if link_href(nodes, handle) => {}
+            Some(_) => return false,
+        }
         if self.root
             && !nodes[handle]
                 .parent
@@ -808,6 +877,63 @@ mod tests {
 }
 
 #[cfg(test)]
+mod link_matcher_pin {
+    //! WRONG-MATCH defense at the matcher level only: `:link` never matches a
+    //! non-HTML element. This test locks that matching limitation; it does NOT
+    //! guard the under-match direction. If the document-level SVG refusal is
+    //! ever lifted, the separate document-refusal regression test
+    //! (`style_tree::link_state_tests::link_never_matches_svg_a_in_v1`) is what
+    //! fails loudly and forces explicit review of SVG `:link` at that moment.
+    use super::*;
+    use html5ever::{LocalName, QualName, ns};
+    fn doc_with(elements: Vec<Node>) -> Vec<Node> {
+        let mut nodes = vec![Node {
+            data: Data::Document,
+            parent: None,
+            children: (1..=elements.len()).collect(),
+        }];
+        nodes.extend(elements);
+        nodes
+    }
+    fn el(ns_uri: html5ever::Namespace, local: &str, attrs: &[(&str, &str)]) -> Node {
+        Node {
+            data: Data::Element {
+                name: QualName::new(None, ns_uri, local.into()),
+                attrs: attrs
+                    .iter()
+                    .map(|(k, v)| (LocalName::from(*k), (*v).to_owned()))
+                    .collect(),
+                template: None,
+            },
+            parent: Some(0),
+            children: vec![],
+        }
+    }
+    #[test]
+    fn link_matches_only_html_a_area_with_href_at_the_matcher() {
+        let nodes = doc_with(vec![
+            el(ns!(html), "a", &[("href", "https://x")]),      // 1: match
+            el(ns!(html), "a", &[("href", "")]),              // 2: empty href counts
+            el(ns!(html), "a", &[]),                           // 3: no href
+            el(ns!(html), "area", &[("href", "https://y")]),  // 4: match
+            el(ns!(svg), "a", &[("href", "https://z")]),      // 5: SVG narrowed out
+            el(ns!(svg), "a", &[("href", "https://w")]),      // 6: flattened xlink shape
+            el(ns!(html), "map", &[("href", "https://m")]),   // 7: wrong element
+        ]);
+        // Bare `:link`: the element predicate alone decides, no tag filter.
+        let sel = selector_ext(":link").expect(":link parses in the ext grammar");
+        assert!(sel.has_state());
+        let matched: Vec<bool> = (1..nodes.len())
+            .map(|h| sel.matches_checked(&nodes, h))
+            .collect::<Option<Vec<_>>>()
+            .expect("within fuel");
+        assert_eq!(matched, [true, true, false, true, false, false, false]);
+        // Case 6 stands in for a flattened `xlink:href`: its stored attribute
+        // IS the local name "href", yet it cannot match - provenance
+        // ambiguity is exactly why SVG is narrowed out in v1.
+    }
+}
+
 mod selector_control {
     //! Control harness (ignored by default): prints, per selector, the preorder
     //! element indices the extended matcher selects, for comparison with Chrome's
