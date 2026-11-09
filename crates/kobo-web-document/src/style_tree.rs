@@ -1074,6 +1074,22 @@ fn normalize_rem(declarations: &mut [Declaration], root_font_px: u32) -> bool {
                     None => rem_refused = true,
                 }
             }
+            Value::MaxWidthRem(tt) | Value::MinWidthRem(tt) | Value::MinHeightRem(tt) => {
+                let product = u64::from(tt) * u64::from(root_font_px);
+                let px = (product % 10_000 == 0)
+                    .then(|| u32::try_from(product / 10_000).ok())
+                    .flatten();
+                match px {
+                    Some(px) => {
+                        declaration.value = match declaration.value {
+                            Value::MaxWidthRem(_) => Value::MaxWidth(Length::Px(px)),
+                            Value::MinWidthRem(_) => Value::MinWidth(Length::Px(px)),
+                            _ => Value::MinHeight(Length::Px(px)),
+                        };
+                    }
+                    None => rem_refused = true,
+                }
+            }
             Value::Padding(v)
                 if v & crate::computed_style::PADDING_REM_FLAG != 0
                     && v & crate::computed_style::PADDING_EM_FLAG == 0
@@ -2189,7 +2205,7 @@ pub(crate) fn properties_with(
             "min-height" if em_font => match parse_width(value) {
                 Some(l @ Length::Px(n)) if n > 0 => Some((Property::MinHeight, Value::MinHeight(l))),
                 Some(Length::Auto) | Some(Length::Px(0)) => Some((Property::MinHeight, Value::MinHeight(Length::Auto))),
-                _ => None,
+                _ => parse_rem(value).map(|tt| (Property::MinHeight, Value::MinHeightRem(tt))),
             },
             // CANDIDATE (ext only, FL18): `column-gap`/`gap` as ONE non-negative px value or `normal` (=0). Only a single-line
             // LTR row flex container reads it (flex_row_items); `gap` is a single-value shorthand here, so row-gap is not
@@ -2246,10 +2262,36 @@ pub(crate) fn properties_with(
                 .or_else(|| match parse_width(value) { Some(Length::Px(n)) if n <= 10_000 => Some(Value::OutlineOffset(n)), _ => None })
                 .map(|value| (Property::OutlineOffset, value)),
             "min-width" => parse_keyword(value)
-                .or_else(|| match parse_width(value) { Some(l @ (Length::Auto | Length::Px(_))) => Some(Value::MinWidth(l)), _ => None })
+                .or_else(|| match parse_width(value) {
+                    Some(l @ (Length::Auto | Length::Px(_))) => Some(Value::MinWidth(l)),
+                    _ => None,
+                })
+                .or_else(|| {
+                    if em_font {
+                        parse_rem(value).map(Value::MinWidthRem)
+                    } else {
+                        None
+                    }
+                })
                 .map(|value| (Property::MinWidth, value)),
             "max-width" => parse_keyword(value)
-                .or_else(|| match if value == "none" { Some(Length::Auto) } else { parse_width(value) } { Some(l @ (Length::Auto | Length::Px(_))) => Some(Value::MaxWidth(l)), _ => None })
+                .or_else(|| {
+                    match if value == "none" {
+                        Some(Length::Auto)
+                    } else {
+                        parse_width(value)
+                    } {
+                        Some(l @ (Length::Auto | Length::Px(_))) => Some(Value::MaxWidth(l)),
+                        _ => None,
+                    }
+                })
+                .or_else(|| {
+                    if em_font {
+                        parse_rem(value).map(Value::MaxWidthRem)
+                    } else {
+                        None
+                    }
+                })
                 .map(|value| (Property::MaxWidth, value)),
             "height" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Height))

@@ -345,6 +345,12 @@ pub enum Value {
     WidthRem(u32),
     /// CANDIDATE FL36 (ext only): `height:<n>rem`, same contract as `WidthRem`.
     HeightRem(u32),
+    /// CANDIDATE (ext only): `max-width:<n>rem` in ten-thousandths; the style tree rewrites it to `MaxWidth(Px)` or refuses.
+    MaxWidthRem(u32),
+    /// CANDIDATE (ext only): `min-width:<n>rem`, same contract as `MaxWidthRem`.
+    MinWidthRem(u32),
+    /// CANDIDATE (ext only): `min-height:<n>rem`, same contract as `MaxWidthRem`.
+    MinHeightRem(u32),
     Direction(Direction),
     TextAlign(TextAlign),
     /// `true` only for an explicit `list-style-type: none`; `false` is the unmodelled default marker.
@@ -974,6 +980,12 @@ impl Computed {
                 // an absurd percentage keeps any downstream use refusing instead of reading 0.
                 Value::WidthRem(_) if property == Property::Width => computed.width = Length::Percent(u32::MAX),
                 Value::HeightRem(_) if property == Property::Height => computed.height = Length::Percent(u32::MAX),
+                // Unresolved rem min/max never reaches a real tree (rewritten or refused before the
+                // cascade); the absurd-percentage marker is NOT width-clamp-admitted (Px only) and
+                // trips the stray gates, keeping any downstream use refusing.
+                Value::MaxWidthRem(_) if property == Property::MaxWidth => computed.max_width = Length::Percent(u32::MAX),
+                Value::MinWidthRem(_) if property == Property::MinWidth => computed.min_width = Length::Percent(u32::MAX),
+                Value::MinHeightRem(_) if property == Property::MinHeight => computed.min_height = Length::Percent(u32::MAX),
                 Value::MarginRem(_) => {
                     // Unresolved rem never reaches a real tree (the style tree rewrites or refuses it);
                     // keep the inexact-em marker so downstream geometry refuses instead of using 0.
