@@ -708,6 +708,45 @@ fn structural_ok(nodes: &[Node], handle: Handle, bits: u8) -> bool {
         && (bits & 2 == 0 || last == Some(handle))
         && (bits & 4 == 0 || (first == Some(handle) && last == Some(handle)))
 }
+/// Ext-entry match prefilter bucket key: a provable conjunct of the
+/// selector's RIGHTMOST compound, normalized EXACTLY as the matcher compares
+/// (attribute names always ASCII-insensitive per `AttrSel::matches`, ext tag
+/// names ASCII-insensitive per `Simple::matches`, class tokens and id values
+/// exact). `Universal` is the conservative fallback for anything not proven
+/// (root-only, bare state/structural, `*`): a candidate for every element,
+/// never a rejection.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum PrefilterKey {
+    Id(String),
+    Class(String),
+    AttrName(String),
+    Tag(String),
+    Universal,
+}
+impl Selector {
+    /// Extraction order id > class > attr > tag > universal over the rightmost
+    /// compound (conjunctive: any one conjunct is a sound filter). Only used
+    /// for ext-entry parses, where every sheet selector is ext grammar, so the
+    /// ext folding above is the only normalization that ever runs.
+    pub(crate) fn prefilter_key(&self) -> PrefilterKey {
+        let Some((simple, _)) = self.steps.first() else {
+            return PrefilterKey::Universal;
+        };
+        if let Some(id) = &simple.id {
+            return PrefilterKey::Id(id.clone());
+        }
+        if let Some(class) = simple.classes.first() {
+            return PrefilterKey::Class(class.clone());
+        }
+        if let Some(attr) = simple.attrs.first() {
+            return PrefilterKey::AttrName(attr.name.to_ascii_lowercase());
+        }
+        if let Some(tag) = &simple.tag {
+            return PrefilterKey::Tag(tag.to_ascii_lowercase());
+        }
+        PrefilterKey::Universal
+    }
+}
 impl Selector {
     /// `None` means the bounded matcher ran out of fuel or met an oversize
     /// sibling list: the caller must refuse, never treat it as a mismatch.

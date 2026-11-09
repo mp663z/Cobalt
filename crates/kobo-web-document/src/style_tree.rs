@@ -9,15 +9,64 @@ use crate::computed_style::{Shadow, Clear, Float,
     Margin, Origin, Position, Property, TextAlign, Value,
 };
 use crate::css;
-use crate::dom::{Data, Node, DOCUMENT};
-use crate::style_diagnostics::{RefusalReason, StyleDiagnostics};
 use crate::custom_props::{self, Def, Map};
+use crate::dom::{Data, Handle, Node, DOCUMENT};
+use crate::style_diagnostics::{RefusalReason, StyleDiagnostics};
 use crate::style_syntax;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
 const MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
 const MAX_RULES: usize = 4096;
+
+/// Ext-entry prefilter candidate keys for one element, normalized EXACTLY as
+/// the matcher compares (css.rs): tag folded ASCII-lowercase, attribute names
+/// folded ASCII-lowercase, class tokens split on the 5 ASCII whitespace chars
+/// and compared case-sensitively, id via the exact-name `attribute()` lookup.
+/// Duplicates are removed so each bucket is consulted at most once per
+/// element (exactly one charge per candidate rule; `class="a a"` oracle).
+/// `Universal` is appended by the caller, not stored here.
+fn ext_element_keys(nodes: &[Node], handle: Handle) -> Vec<css::PrefilterKey> {
+    let mut keys: Vec<css::PrefilterKey> = Vec::new();
+    let Data::Element { name, attrs, .. } = &nodes[handle].data else {
+        return keys;
+    };
+    let mut push = |key: css::PrefilterKey| {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    };
+    push(css::PrefilterKey::Tag((&*name.local).to_ascii_lowercase()));
+    if let Some(id) = css::attribute(nodes, handle, "id") {
+        push(css::PrefilterKey::Id(id.to_owned()));
+    }
+    if let Some(class) = css::attribute(nodes, handle, "class") {
+        // Candidate class keys are the UNION of BOTH tokenizations, deduped:
+        // the ext matcher splits on ASCII whitespace, the base matcher on
+        // Unicode whitespace (str::split_whitespace), and neither token set is
+        // a superset of the other ("a\u{00A0}b" ASCII-splits to one whole
+        // token, Unicode-splits to "a","b"). Preserving whole ASCII tokens AND
+        // Unicode subtokens covers both matcher grammars and any future
+        // grammar that admits non-ASCII-whitespace bytes inside a class
+        // literal (today unreachable: take_ident admits only [A-Za-z0-9_-],
+        // so no selector can name such a class - proven by oracle). Over-
+        // inclusion is harmless: the matcher still decides the match.
+        for token in class
+            .split(|c: char| matches!(c, ' ' | '\t' | '\n' | '\u{c}' | '\r'))
+            .chain(class.split_whitespace())
+        {
+            if !token.is_empty() {
+                push(css::PrefilterKey::Class(token.to_owned()));
+            }
+        }
+    }
+    for (attr_name, _) in attrs {
+        push(css::PrefilterKey::AttrName(
+            (&**attr_name).to_ascii_lowercase(),
+        ));
+    }
+    keys
+}
 const MAX_MATCH_WORK: usize = 4_000_000;
 /// CANDIDATE: an element's style attribute outranks every selector of the same
 /// importance (CSS Cascade 4: style attribute beats any selector specificity).
@@ -237,6 +286,30 @@ impl StyleTree {
             Rc::new(Map::new()),
         )];
         let mut match_work = 0_usize;
+        // Ext entry only: rightmost-key prefilter over the active rule list
+        // (conditions already resolved at collection). One bucket per rule,
+        // values in ascending collection order. The default entry never builds
+        // or consults it: its candidate set is the identity in collection
+        // order, so the flat scan, per-rule charging and admission are
+        // unchanged by construction. Memory: total stored indices == active
+        // rules (<= MAX_RULES) plus small cloned key strings.
+        let prefilter: Option<std::collections::HashMap<css::PrefilterKey, Vec<u32>>> =
+            ext_selectors.then(|| {
+                let mut map: std::collections::HashMap<css::PrefilterKey, Vec<u32>> =
+                    std::collections::HashMap::new();
+                for (index, rule) in rules.iter().enumerate() {
+                    map.entry(rule.selector.prefilter_key())
+                        .or_default()
+                        .push(u32::try_from(index).unwrap_or(u32::MAX));
+                }
+                map
+            });
+        let identity_candidates: Vec<u32> = if prefilter.is_none() {
+            (0..u32::try_from(rules.len()).unwrap_or(u32::MAX)).collect()
+        } else {
+            Vec::new()
+        };
+        let mut candidates: Vec<u32> = Vec::new();
         let mut var_map_bytes = 0_usize;
         let mut root_font_px: u32 = 16;
         // EXTENDED-CSS generated boxes (`::before`/`::after`). ONE pending list
@@ -316,7 +389,30 @@ impl StyleTree {
             // (deferred index, important, specificity, source order) of matched
             // custom property definitions and var()-bearing declarations.
             let mut hits: Vec<(u32, bool, (u16, u16, u16), u32)> = Vec::new();
-            for rule in &rules {
+            // Candidates in ascending global collection order (sorted+deduped),
+            // so test order, charge order and the declaration-cap trip points are
+            // identical to the flat scan; only guaranteed-false tests are
+            // skipped, which is the intended ext accounting delta. Bounded
+            // allocation: one reused Vec of at most MAX_RULES indices per
+            // element; no DOM data retained.
+            let candidate_slice: &[u32] = if let Some(prefilter) = &prefilter {
+                candidates.clear();
+                for key in ext_element_keys(nodes, handle)
+                    .iter()
+                    .chain(std::iter::once(&css::PrefilterKey::Universal))
+                {
+                    if let Some(v) = prefilter.get(key) {
+                        candidates.extend_from_slice(v);
+                    }
+                }
+                candidates.sort_unstable();
+                candidates.dedup();
+                &candidates
+            } else {
+                &identity_candidates
+            };
+            for &candidate_index in candidate_slice {
+                let rule = &rules[candidate_index as usize];
                 // Pseudo rules never select an element here; they are charged exactly
                 // once, in the pseudo pass below.
                 if rule.selector.pseudo != crate::css::Pseudo::None {
@@ -369,10 +465,11 @@ impl StyleTree {
             let mut pseudo_hit = false;
             let mut pseudo_hit_before = false;
             let mut pseudo_bad = false;
-            for rule in rules
-                .iter()
-                .filter(|r| r.selector.pseudo != crate::css::Pseudo::None)
-            {
+            for &candidate_index in candidate_slice {
+                let rule = &rules[candidate_index as usize];
+                if rule.selector.pseudo == crate::css::Pseudo::None {
+                    continue;
+                }
                 match_work += 1;
                 if match_work > MAX_MATCH_WORK {
                     tree.diagnostics.record(RefusalReason::MatchWork);
