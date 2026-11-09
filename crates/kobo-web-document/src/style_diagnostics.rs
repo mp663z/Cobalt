@@ -74,6 +74,9 @@ pub struct StyleDiagnostics {
     pub dropped_text: bool,
     /// Bytes of oversize `data:text/css` link hrefs retained under an opt-in or measurement cap.
     pub retained_inline_sheet_href_bytes: usize,
+    /// Bytes of oversize resource-reference attribute values (img[src],
+    /// non-data:text/css link[href]) kept under the Barrier-B per-parse budget.
+    pub retained_resource_attr_bytes: usize,
     /// Selector/property pairs retained, not unique selectors or CSS rules.
     pub expanded_declarations: usize,
     pub match_attempts: usize,
@@ -103,6 +106,7 @@ impl StyleDiagnostics {
         self.dropped_attributes = earlier.dropped_attributes;
         self.dropped_text = earlier.dropped_text;
         self.retained_inline_sheet_href_bytes = earlier.retained_inline_sheet_href_bytes;
+        self.retained_resource_attr_bytes = earlier.retained_resource_attr_bytes;
     }
 }
 

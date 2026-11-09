@@ -1,15 +1,17 @@
 //! Opt-in candidate (UNREVIEWED): oversize `link[href^=data:text/css]` retained per parse so the
 //! engine's own strict decoder is the authority; default entries unchanged; all other drops unchanged.
 use kobo_web_document::{
-    parse_style_tree_with_inline_sheets as optin, parse_style_tree_with_supply as plain, style_diagnostics::RefusalReason as R,
-    style_tree::StyleTree, Limits, SupplyBudget,
+    parse_style_tree_with_inline_sheets as optin, parse_style_tree_with_supply as plain,
+    style_diagnostics::RefusalReason as R, style_tree::StyleTree, Limits, SupplyBudget,
 };
 
 fn b64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for c in bytes.chunks(3) {
-        let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
+        let n = (u32::from(c[0]) << 16)
+            | (u32::from(*c.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*c.get(2).unwrap_or(&0));
         out.push(T[(n >> 18) as usize & 63] as char);
         out.push(T[(n >> 12) as usize & 63] as char);
         out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
@@ -89,20 +91,101 @@ fn encoded_bound_is_exactly_four_ceil_third_plus_header_and_decoder_stays_author
 fn other_attributes_and_elements_still_drop_and_count() {
     let h = href(6000, "p{margin-top:7px}");
     let b = budget(8192, 2);
+    // Attributes outside the Barrier-B classes still drop and taint.
     for head in [
         format!("<link rel=stylesheet src=\"{h}\">"),
         format!("<link rel=stylesheet data-x=\"{h}\">"),
         format!("<meta content=\"{h}\">"),
-        format!("<link rel=stylesheet href=\"data:image/png;base64,{}\">", "A".repeat(6000)),
-        format!("<link rel=stylesheet href=\"https://example.test/{}\">", "a".repeat(6000)),
     ] {
         let t = optin(&page(&head), &[], &Limits::DEFAULT, None, b);
         assert!(count(&t, R::DroppedAttributes) >= 1, "{}", &head[..40]);
     }
-    let body = format!("<!doctype html><p>x</p><a href=\"{h}\">l</a><img src=\"{h}\">").into_bytes();
+    // Barrier-B: non-data:text/css link[href] is now RETAINED in full.
+    // rel=stylesheet + retained data:image href: the decoder refuses it as a
+    // sheet (page unsupported) but nothing is dropped.
+    let t = optin(
+        &page(&format!(
+            "<link rel=stylesheet href=\"data:image/png;base64,{}\">",
+            "A".repeat(6000)
+        )),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        b,
+    );
+    assert_eq!(
+        t.diagnostics.dropped_attributes,
+        0,
+        "data:image href retained: {:?}",
+        reasons(&t)
+    );
+    assert!(t.unsupported, "decoder still refuses a non-CSS data sheet");
+    // rel=stylesheet + retained long http href: the link classifier claims it;
+    // with no host sheet supplied the handshake refuses via StylesheetCount,
+    // never DroppedAttributes (Barrier-B pin: refusal reason moves, taint stays).
+    let t = optin(
+        &page(&format!(
+            "<link rel=stylesheet href=\"https://example.test/{}\">",
+            "a".repeat(6000)
+        )),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        b,
+    );
+    assert_eq!(
+        t.diagnostics.dropped_attributes,
+        0,
+        "http href retained: {:?}",
+        reasons(&t)
+    );
+    // The classifier claims the retained href; with no host sheet supplied the
+    // census is incomplete (claimed=None, same as the existing count-refusal
+    // path) and the refusal reason is MissingStylesheet, never DroppedAttributes.
+    assert_eq!(t.host_sheets_claimed, None);
+    assert_eq!(count(&t, R::MissingStylesheet), 1, "{:?}", reasons(&t));
+    assert!(t.unsupported);
+    // Claimed-counter pin: the same retained long http href with the sheet
+    // SUPPLIED claims exactly one host sheet and stays supported.
+    let t = optin(
+        &page(&format!(
+            "<link rel=stylesheet href=\"https://example.test/{}\"><p>x</p>",
+            "a".repeat(6000)
+        )),
+        &["p{margin-top:7px}".as_bytes().to_vec()],
+        &Limits::DEFAULT,
+        None,
+        b,
+    );
+    assert_eq!(t.host_sheets_claimed, Some(1), "{:?}", reasons(&t));
+    assert_eq!(
+        (
+            t.diagnostics.dropped_attributes,
+            t.unsupported,
+            margin_top(&t)
+        ),
+        (0, false, 7),
+        "{:?}",
+        reasons(&t)
+    );
+    let body =
+        format!("<!doctype html><p>x</p><a href=\"{h}\">l</a><img src=\"{h}\">").into_bytes();
     let tb = optin(&body, &[], &Limits::DEFAULT, None, b);
-    assert_eq!(count(&tb, R::DroppedAttributes), 1, "a[href] dropped; img[src] over cap also dropped but counted once per diagnostics record: {:?} attrs={}", reasons(&tb), tb.diagnostics.dropped_attributes);
-    assert_eq!(tb.diagnostics.dropped_attributes, 2);
+    // Barrier-B: img[src] 6000 is retained by the resource budget; only the
+    // deferred a[href] still drops.
+    assert_eq!(
+        count(&tb, R::DroppedAttributes),
+        1,
+        "a[href] dropped: {:?} attrs={}",
+        reasons(&tb),
+        tb.diagnostics.dropped_attributes
+    );
+    assert_eq!(tb.diagnostics.dropped_attributes, 1);
+    assert_eq!(
+        tb.diagnostics.retained_resource_attr_bytes,
+        h.len(),
+        "img[src] retained in full"
+    );
     // 33rd attribute on an otherwise exempt link is still dropped.
     let attrs: String = (0..32).map(|i| format!(" data-{i}=1")).collect();
     let t = optin(&page(&format!("<link{attrs} rel=stylesheet href=\"{h}\">")), &[], &Limits::DEFAULT, None, b);
@@ -194,9 +277,15 @@ fn header_case_charset_media_and_decoder_refusals_are_the_decoders() {
     assert_eq!((t.diagnostics.dropped_attributes, t.unsupported, margin_top(&t)), (0, false, 7), "{:?}", reasons(&t));
     let t = ok(format!("data:text/css;charset=utf-8;base64,{body}"), "");
     assert_eq!((t.diagnostics.dropped_attributes, t.unsupported, margin_top(&t)), (0, false, 7), "{:?}", reasons(&t));
-    // Non-css media type with the css prefix absent: not retained.
+    // Non-css media type with the css prefix absent: Barrier-B retains the
+    // value (resource budget, link[href] not data:text/css); the decoder still
+    // refuses it as a sheet.
     let t = ok(format!("data:text/plain;base64,{body}"), "");
-    assert_eq!(t.diagnostics.dropped_attributes, 1);
+    assert_eq!(
+        t.diagnostics.dropped_attributes, 0,
+        "retained by the resource budget"
+    );
+    assert!(t.unsupported, "decoder refuses a non-CSS data sheet");
     // Retained, then refused by the decoder for other charset / URL-escaped / non-base64 forms.
     for href in [format!("data:text/css;charset=latin1;base64,{body}"), format!("data:text/css,{}", "p%7Bmargin-top:1px%7D".repeat(300))] {
         let t = ok(href, "");

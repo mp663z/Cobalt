@@ -42,6 +42,20 @@ pub struct Node {
 pub const MAX_ATTRIBUTES: usize = 32;
 /// Longest attribute value kept, in bytes. A longer one is dropped whole.
 pub const MAX_ATTRIBUTE_LEN: usize = 2048;
+/// Barrier-B retention budget (ext parse entries): oversize resource-reference
+/// values - img[src], and link[href] NOT starting with data:text/css. (0, 0) is
+/// off and byte-identical to the default behavior; per-parse, never process-global.
+pub const RESOURCE_ATTR_PER_VALUE: usize = 256 * 1024;
+pub const RESOURCE_ATTR_AGGREGATE: usize = 512 * 1024;
+
+/// Shared data:text/css ASCII case-insensitive prefix test (Barrier-B pin P2):
+/// the ONLY split between the stylesheet narrow path and the resource budget.
+pub(crate) fn has_data_text_css_prefix(value: &str) -> bool {
+    value
+        .as_bytes()
+        .get(..13)
+        .is_some_and(|p| p.eq_ignore_ascii_case(b"data:text/css"))
+}
 
 /// MEASUREMENT-ONLY scratch (isolated copy, not for adoption): drop log and a
 /// per-(element,attribute) length exemption. Defaults are off and identical to head7.
@@ -67,6 +81,10 @@ pub struct Sink {
     /// (per-href cap, per-document aggregate cap). (0, 0) is off and byte-identical
     /// to the default behavior. Unlike `measure::*` this is not process-global.
     inline_sheet_href: Cell<(usize, usize)>,
+    /// Barrier-B opt-in per-parse retention of oversize resource-reference values
+    /// (see RESOURCE_ATTR_PER_VALUE); (0, 0) is off and byte-identical to default.
+    resource_attr: Cell<(usize, usize)>,
+    res_attr_bytes: Cell<usize>,
     max_text_bytes: usize,
     pub(crate) errors: Cell<usize>,
     pub(crate) dropped_attributes: Cell<usize>,
@@ -87,6 +105,8 @@ impl Sink {
             text_bytes: Cell::new(0),
             exempt_bytes: Cell::new(0),
             inline_sheet_href: Cell::new((0, 0)),
+            resource_attr: Cell::new((0, 0)),
+            res_attr_bytes: Cell::new(0),
             max_text_bytes,
             errors: Cell::new(0),
             dropped_attributes: Cell::new(0),
@@ -107,6 +127,19 @@ impl Sink {
     /// Bytes of oversize `link[href]` values kept under an opt-in or measurement cap.
     pub(crate) fn retained_oversize_href_bytes(&self) -> usize {
         self.exempt_bytes.get()
+    }
+
+    /// Barrier-B opt-in: keep (whole, not counted as dropped) oversize img[src]
+    /// and non-data:text/css link[href] values up to `per` bytes each and
+    /// `aggregate` bytes per document. Deferred classes (a[href], meta[content],
+    /// source[srcset], path[d], everything else) still drop and taint.
+    pub fn set_resource_attr_caps(&self, per: usize, aggregate: usize) {
+        self.resource_attr.set((per, aggregate));
+    }
+
+    /// Bytes of oversize resource-reference values kept under the Barrier-B budget.
+    pub(crate) fn retained_resource_attr_bytes(&self) -> usize {
+        self.res_attr_bytes.get()
     }
 
     pub fn len(&self) -> usize {
@@ -214,22 +247,55 @@ impl Sink {
             let narrow = sheet_cap > 0
                 && tag == "link"
                 && &*attribute.name.local == "href"
-                && attribute
-                    .value
-                    .as_bytes()
-                    .get(..13)
-                    .is_some_and(|p| p.eq_ignore_ascii_case(b"data:text/css"))
+                && has_data_text_css_prefix(&attribute.value)
                 && attribute.value.len() <= sheet_cap
-                && self.exempt_bytes.get().saturating_add(attribute.value.len()) <= sheet_agg;
+                && self
+                    .exempt_bytes
+                    .get()
+                    .saturating_add(attribute.value.len())
+                    <= sheet_agg;
+            // Barrier-B pin P1: one boolean arm in the SAME combined drop
+            // condition below - no early continue/return; the 32-attribute
+            // count cap always applies. Pin P3: saturating_add aggregate.
+            let (res_per, res_agg) = self.resource_attr.get();
+            let resource = res_per > 0
+                && (tag == "img" && &*attribute.name.local == "src"
+                    || (tag == "link"
+                        && &*attribute.name.local == "href"
+                        && !has_data_text_css_prefix(&attribute.value)))
+                && attribute.value.len() <= res_per
+                && self
+                    .res_attr_bytes
+                    .get()
+                    .saturating_add(attribute.value.len())
+                    <= res_agg;
             let exempt = narrow
+                || resource
                 || (exempt_cap > 0
                     && matches!(
                         (tag, &*attribute.name.local),
                         ("link", "href") | ("img", "src") | ("source", "srcset")
                     )
                     && attribute.value.len() <= exempt_cap);
-            if narrow && attribute.value.len() > MAX_ATTRIBUTE_LEN && existing.len() < MAX_ATTRIBUTES {
-                self.exempt_bytes.set(self.exempt_bytes.get().saturating_add(attribute.value.len()));
+            if narrow
+                && attribute.value.len() > MAX_ATTRIBUTE_LEN
+                && existing.len() < MAX_ATTRIBUTES
+            {
+                self.exempt_bytes.set(
+                    self.exempt_bytes
+                        .get()
+                        .saturating_add(attribute.value.len()),
+                );
+            }
+            if resource
+                && attribute.value.len() > MAX_ATTRIBUTE_LEN
+                && existing.len() < MAX_ATTRIBUTES
+            {
+                self.res_attr_bytes.set(
+                    self.res_attr_bytes
+                        .get()
+                        .saturating_add(attribute.value.len()),
+                );
             }
             if existing.len() >= MAX_ATTRIBUTES
                 || (attribute.value.len() > MAX_ATTRIBUTE_LEN && !exempt)
