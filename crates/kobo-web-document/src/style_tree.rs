@@ -5625,6 +5625,40 @@ mod link_state_tests {
     }
 
     #[test]
+    fn focus_within_two_level_ancestor_chain_actual_path() {
+        // >=2 ancestor chain on the actual enrollment/application path:
+        // the state-bearing compound is TWO descendant steps above the
+        // subject. Under UNFOCUSED the rule enrolls and never matches (deep
+        // node's font unchanged); the plain control rule in the same sheet
+        // applies; without the guarantee the focus rule refuses while the
+        // control rule still applies.
+        let h = sheet(
+            "div:focus-within span b{font-size:33px} i{font-size:44px}",
+            "<div><span><b>one</b></span></div><i>two</i>",
+        );
+        let t = state_with(&h, &UNFOCUSED);
+        assert!(!t.unsupported);
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            16
+        );
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "i").unwrap().style.font_size,
+            44
+        );
+        let t = state_with(&h, &BOTH);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "i").unwrap().style.font_size,
+            44
+        );
+    }
+
+    #[test]
     fn repeated_focus_compounds_are_grammar_bound_refusals() {
         for selector in ["a:focus:focus", "a:focus-visible:focus-within", "a:focus:link"] {
             let h = sheet(
