@@ -296,3 +296,68 @@ fn oversize_sibling_gate_blocks_the_whole_page_at_the_paint_bridge() {
     let err = paint(&tree, &widths, &vertical, &[]).err();
     assert!(err.is_some(), "oversize page must not paint, got {err:?}");
 }
+
+#[test]
+fn oversize_gate_isolates_on_the_truncated_flag_independent_of_box_count() {
+    // Reviewer-requested flag-specific isolation: an oversize DOM sibling
+    // list (4097 > EXT_MAX_SIBLINGS) with a potentially-matching nth rule,
+    // but a TINY box tree (all siblings display:none) - MAX_BRIDGE_BOXES and
+    // every other resource gate stay untripped, so the paint bridge's
+    // refusal can come ONLY from tree.truncated (unsupported and quirks are
+    // asserted false, box count asserted under the cap).
+    let build = |n: usize| {
+        let mut html = String::from(
+            "<!doctype html><style>body{margin:0}i{display:none}i:nth-child(4096){color:#ff0000}p{color:#0000ff}</style><div><p>",
+        );
+        for _ in 0..n {
+            html.push_str("<i></i>");
+        }
+        html.push_str("</p></div>");
+        html
+    };
+    // ABOVE: gate trips, page flagged, bridge refuses on the flag alone.
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        build(4097).as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        kobo_web_document::SupplyBudget::CANONICAL,
+    );
+    assert!(styled.truncated);
+    assert!(!styled.unsupported && !styled.quirks);
+    assert_eq!(
+        styled
+            .diagnostics
+            .count(kobo_web_document::style_diagnostics::RefusalReason::MatchWork),
+        4097
+    );
+    let tree = BoxTree::from_style(&styled);
+    assert!(tree.truncated && !tree.unsupported && !tree.quirks);
+    assert!(
+        tree.boxes.len() <= MAX_BRIDGE_BOXES,
+        "box-count gate must stay untripped: {} boxes",
+        tree.boxes.len()
+    );
+    let widths = WidthPass::from_boxes(&tree, 400);
+    let vertical = VerticalPass::from_boxes(&tree, 400, 600);
+    assert_eq!(
+        paint(&tree, &widths, &vertical, &[]).err(),
+        Some(BridgeError::Unsupported)
+    );
+    // AT the boundary: gate untripped, page complete, no refusal recorded.
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        build(4096).as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        kobo_web_document::SupplyBudget::CANONICAL,
+    );
+    assert!(!styled.truncated);
+    assert_eq!(
+        styled
+            .diagnostics
+            .count(kobo_web_document::style_diagnostics::RefusalReason::MatchWork),
+        0
+    );
+}
+

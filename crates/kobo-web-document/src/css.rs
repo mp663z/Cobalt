@@ -7,7 +7,7 @@ const MAX_BYTES: usize = 64 * 1024;
 const MAX_RULES: usize = 1024;
 const MAX_SELECTORS: usize = 16;
 const MAX_STEPS: usize = 8;
-const EXT_FUEL: u32 = 4096;
+pub(crate) const EXT_FUEL: u32 = 4096;
 const EXT_MAX_SIBLINGS: usize = 4096;
 
 /// Explicit caller-asserted snapshot state for state pseudo-classes (ext
@@ -439,9 +439,9 @@ fn take_ident(s: &str, at: usize) -> (&str, usize) {
 /// (ASCII case-insensitive), a signed integer with ATTACHED sign (`+5` ok,
 /// `- 3` refused), or `[+-]? [0-9]* n [ ws* [+-] ws* [0-9]+ ]?` with `n`
 /// ASCII case-insensitive. A doubled sign (`2n + -1`) is refused - Chrome
-/// refuses it too. Comments (`2n/**/+1`) and escaped n (`\36 e`) ARE valid
-/// CSS but stay refused here as an unsupported SUBSET (a grammar bound, not
-/// an invalid-CSS claim). Bounds: argument <= 32 chars, |A| <= 1024,
+/// refuses it too (probed FALSE). Comments (`2n/**/+1`, probed TRUE) and
+/// escaped n (`\6e `, probed TRUE) ARE valid CSS but stay refused here as
+/// an unsupported SUBSET (a grammar bound, not an invalid-CSS claim). Bounds: argument <= 32 chars, |A| <= 1024,
 /// |B| <= 65535. Every deviation refuses the selector.
 fn nth_child_arg(s: &str, at: usize) -> Option<((i64, i64), usize)> {
     let b = s.as_bytes();
@@ -501,8 +501,8 @@ fn an_plus_b(arg: &str) -> Option<(i64, i64)> {
     let coeff_raw = &t[..n_at];
     let coeff = coeff_raw.trim_matches(ws);
     // The sign/digits must be ATTACHED to `n` (one `n`-dimension token):
-    // `- n + 2` and `2 n` refuse (Chrome refuses `- n + 2`; `2 n` is not a
-    // probed case - fail-closed as the same token-shape bound).
+    // `- n + 2` and `2 n` refuse (both probed FALSE on Chrome 157: the
+    // sign/digits and the `n` must form ONE dimension token).
     if !coeff.is_empty() && coeff_raw != coeff {
         return None;
     }
@@ -912,8 +912,9 @@ impl Selector {
         PrefilterKey::Universal
     }
 }
-/// Why a bounded match refused. `Fuel`: the step budget ran out (a global
-/// work guard - the caller treats the tree as truncated). `OversizeSiblings`:
+/// Why a bounded match refused. `Fuel`: the per-match work budget ran out
+/// (selector steps AND every visited sibling in a scan each cost one unit -
+/// the caller treats the tree as truncated). `OversizeSiblings`:
 /// the element's sibling list exceeds `EXT_MAX_SIBLINGS` (a rule-scoped
 /// guard - only this rule refuses for this element; every other rule and
 /// element is unaffected, and the tree is NOT truncated).
@@ -935,10 +936,27 @@ impl Selector {
         nodes: &[Node],
         handle: Handle,
     ) -> Result<Option<bool>, MatchRefusal> {
+        let mut fuel = EXT_FUEL;
+        self.matches_checked_scoped_budget(nodes, handle, &mut fuel, None)
+    }
+    /// Budgeted form: the caller supplies the per-match fuel (EXT_FUEL) and
+    /// reads back what the match actually consumed (steps + every visited
+    /// sibling in a scan), charging its own global work budget. `position`
+    /// is the walk's O(1) knowledge of the RIGHTMOST element's place in its
+    /// parent's child list: (raw child index, 1-based index among ELEMENT
+    /// siblings). Supplying it makes a rightmost `:nth-child` test and the
+    /// first sibling-combinator transition O(1) - no rescan per rule.
+    pub(crate) fn matches_checked_scoped_budget(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+        fuel: &mut u32,
+        position: Option<(u32, u32)>,
+    ) -> Result<Option<bool>, MatchRefusal> {
         if self.pseudo != Pseudo::None {
             return Ok(Some(false));
         }
-        self.matches_originating_checked_scoped(nodes, handle)
+        self.matches_originating_checked_scoped_budget(nodes, handle, fuel, position)
     }
     /// Any state pseudo-class anywhere in the selector (ext grammar only).
     pub(crate) fn has_state(&self) -> bool {
@@ -990,11 +1008,20 @@ impl Selector {
         nodes: &[Node],
         handle: Handle,
     ) -> Result<Option<bool>, MatchRefusal> {
+        let mut fuel = EXT_FUEL;
+        self.matches_originating_checked_scoped_budget(nodes, handle, &mut fuel, None)
+    }
+    pub(crate) fn matches_originating_checked_scoped_budget(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+        fuel: &mut u32,
+        position: Option<(u32, u32)>,
+    ) -> Result<Option<bool>, MatchRefusal> {
         if !self.ext {
             return Ok(Some(self.matches(nodes, handle)));
         }
-        let mut fuel = EXT_FUEL;
-        self.ext_match(nodes, handle, 0, &mut fuel)
+        self.ext_match(nodes, handle, 0, fuel, position)
     }
     fn ext_match(
         &self,
@@ -1002,24 +1029,38 @@ impl Selector {
         node: Handle,
         index: usize,
         fuel: &mut u32,
+        position: Option<(u32, u32)>,
     ) -> Result<Option<bool>, MatchRefusal> {
         if *fuel == 0 {
             return Err(MatchRefusal::Fuel);
         }
         *fuel -= 1;
         let (simple, relation) = &self.steps[index];
+        // `:nth-child` on this step: the walk supplies the element's index
+        // O(1) for the rightmost step (one fuel unit per test, zero
+        // traversal); any other step scans with every visited sibling
+        // charged to fuel. The oversize gate is O(1) on the borrowed child
+        // slice (no Vec is ever built) and refuses BEFORE any traversal.
         if !simple.nth.is_empty() {
-            if let Some(sibs) = element_siblings(nodes, node) {
-                // Oversize sibling list: this rule REFUSES for this element
-                // (rule-scoped) - never a silent mismatch. The caller records
-                // the precise diagnostic and flags the page truncated, so the
-                // page never paints with a dropped potential match.
-                if sibs.len() > EXT_MAX_SIBLINGS {
-                    return Err(MatchRefusal::OversizeSiblings);
+            let nth_ix = match position.filter(|_| index == 0) {
+                Some((_, element_index)) => {
+                    if let Some(sibs) = element_siblings(nodes, node) {
+                        if sibs.len() > EXT_MAX_SIBLINGS {
+                            return Err(MatchRefusal::OversizeSiblings);
+                        }
+                    }
+                    Some(i64::from(element_index))
                 }
+                None => nth_index_charged(nodes, node, fuel)?,
+            };
+            let Some(nth_ix) = nth_ix else {
+                return Ok(Some(false));
+            };
+            if !simple.nth.iter().all(|&an_b| nth_formula(nth_ix, an_b)) {
+                return Ok(Some(false));
             }
         }
-        if !simple.matches(nodes, node) {
+        if !simple.matches_inner(nodes, node, false) {
             return Ok(Some(false));
         }
         if index + 1 == self.steps.len() {
@@ -1027,13 +1068,13 @@ impl Selector {
         }
         match relation {
             Relation::Child => match nodes[node].parent {
-                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel),
+                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel, None),
                 None => Ok(Some(false)),
             },
             Relation::Descendant => {
                 let mut ancestor = nodes[node].parent;
                 while let Some(candidate) = ancestor {
-                    if self.ext_match(nodes, candidate, index + 1, fuel)? == Some(true) {
+                    if self.ext_match(nodes, candidate, index + 1, fuel, None)? == Some(true) {
                         return Ok(Some(true));
                     }
                     ancestor = nodes[candidate].parent;
@@ -1047,15 +1088,35 @@ impl Selector {
                 if siblings.len() > EXT_MAX_SIBLINGS {
                     return Err(MatchRefusal::OversizeSiblings);
                 }
-                let at = siblings
-                    .iter()
-                    .position(|&n| n == node)
-                    .ok_or(MatchRefusal::Fuel)?;
+                // The walk knows the rightmost element's raw child index
+                // O(1); any deeper step scans, with every visited sibling
+                // charged to fuel.
+                let at = match position.filter(|_| index == 0) {
+                    Some((raw_index, _)) => raw_index as usize,
+                    None => {
+                        let mut found = None;
+                        for (at, &n) in siblings.iter().enumerate() {
+                            if *fuel == 0 {
+                                return Err(MatchRefusal::Fuel);
+                            }
+                            *fuel -= 1;
+                            if n == node {
+                                found = Some(at);
+                                break;
+                            }
+                        }
+                        found.ok_or(MatchRefusal::Fuel)?
+                    }
+                };
                 for &earlier in siblings[..at].iter().rev() {
+                    if *fuel == 0 {
+                        return Err(MatchRefusal::Fuel);
+                    }
+                    *fuel -= 1;
                     if !is_element(nodes, earlier) {
                         continue;
                     }
-                    if self.ext_match(nodes, earlier, index + 1, fuel)? == Some(true) {
+                    if self.ext_match(nodes, earlier, index + 1, fuel, None)? == Some(true) {
                         return Ok(Some(true));
                     }
                     if *relation == Relation::NextSibling {
@@ -1137,6 +1198,9 @@ pub(crate) fn has_autofocus(nodes: &[Node]) -> bool {
 }
 impl Simple {
     fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
+        self.matches_inner(nodes, handle, true)
+    }
+    fn matches_inner(&self, nodes: &[Node], handle: Handle, check_nth: bool) -> bool {
         let Data::Element { name, .. } = &nodes[handle].data else {
             return false;
         };
@@ -1186,38 +1250,77 @@ impl Simple {
             })
         }) && self.attrs.iter().all(|attr| attr.matches(nodes, handle))
             && (self.structural == 0 || structural_ok(nodes, handle, self.structural))
-            && self.nth.iter().all(|&an_b| nth_ok(nodes, handle, an_b))
+            && (!check_nth || self.nth.iter().all(|&an_b| nth_ok(nodes, handle, an_b)))
     }
 }
-/// `:nth-child(An+B)` DOM predicate: 1-based index among ELEMENT siblings in
-/// tree order; text/comment nodes never shift the index. A detached node
-/// follows the existing `structural_ok` convention (it is its own sibling
-/// list, index 1). Match iff index = A*k + B for some integer k >= 0.
-fn nth_ok(nodes: &[Node], handle: Handle, (a, b): (i64, i64)) -> bool {
-    let index = match element_siblings(nodes, handle) {
-        Some(siblings) => {
-            let mut at = 0_i64;
-            let mut found = None;
-            for &sib in siblings {
-                if !is_element(nodes, sib) {
-                    continue;
-                }
-                at += 1;
-                if sib == handle {
-                    found = Some(at);
-                    break;
-                }
-            }
-            let Some(index) = found else { return false };
-            index
-        }
-        None => 1,
-    };
+/// `:nth-child(An+B)` formula check: 1-based index among ELEMENT siblings
+/// matches iff index = A*k + B for some integer k >= 0.
+fn nth_formula(index: i64, (a, b): (i64, i64)) -> bool {
     if a == 0 {
         return index == b;
     }
     let d = index - b;
     d % a == 0 && d / a >= 0
+}
+/// `:nth-child(An+B)` DOM predicate: 1-based index among ELEMENT siblings in
+/// tree order; text/comment nodes never shift the index. A detached node
+/// follows the existing `structural_ok` convention (it is its own sibling
+/// list, index 1).
+fn nth_ok(nodes: &[Node], handle: Handle, an_b: (i64, i64)) -> bool {
+    let index = match element_siblings(nodes, handle) {
+        Some(_) => match nth_index(nodes, handle) {
+            Some(index) => index,
+            None => return false,
+        },
+        None => 1,
+    };
+    nth_formula(index, an_b)
+}
+/// 1-based index among ELEMENT siblings; None when the node is not among its
+/// parent's children (an inconsistent tree is never a match).
+fn nth_index(nodes: &[Node], handle: Handle) -> Option<i64> {
+    let siblings = element_siblings(nodes, handle)?;
+    let mut at = 0_i64;
+    for &sib in siblings {
+        if !is_element(nodes, sib) {
+            continue;
+        }
+        at += 1;
+        if sib == handle {
+            return Some(at);
+        }
+    }
+    None
+}
+/// Budget-charged `nth_index` for callers without the walk's O(1) position:
+/// the oversize gate refuses BEFORE any traversal, then every visited child
+/// (element or not) costs one fuel unit. Detached => Some(1), never charged.
+fn nth_index_charged(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<Option<i64>, MatchRefusal> {
+    let Some(siblings) = element_siblings(nodes, handle) else {
+        return Ok(Some(1));
+    };
+    if siblings.len() > EXT_MAX_SIBLINGS {
+        return Err(MatchRefusal::OversizeSiblings);
+    }
+    let mut at = 0_i64;
+    for &sib in siblings {
+        if *fuel == 0 {
+            return Err(MatchRefusal::Fuel);
+        }
+        *fuel -= 1;
+        if !is_element(nodes, sib) {
+            continue;
+        }
+        at += 1;
+        if sib == handle {
+            return Ok(Some(at));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -1779,6 +1882,48 @@ mod ext_selector_tests {
         let tree = run(false, "<style>p:nth-child(2){background-color:#ff0000}</style><p>a</p><p>b</p>");
         assert!(tree.unsupported);
         assert_eq!(reds(&tree, "p"), [false, false]);
+    }
+    #[test]
+    fn sibling_traversal_is_charged_to_the_global_match_work_budget() {
+        use crate::style_diagnostics::RefusalReason;
+        // NEGATIVE CONTROL (budget exhaustion): 3000 <i> elements, one rule
+        // `span ~ i` whose LaterSibling scan NEVER matches. Before traversal
+        // charging this page cost 3000 match-work units (1 per test); now
+        // each test charges its scanned siblings (element at position p
+        // costs ~2p fuel), so the 4M budget exhausts mid-walk: the tree is
+        // flagged truncated with a MatchWork diagnostic and the page can
+        // never paint with an incomplete style computation. Total sibling
+        // visits are bounded by MAX_MATCH_WORK + EXT_FUEL by construction.
+        let mut html =
+            String::from("<style>span ~ i{background-color:#ff0000}</style><div>");
+        for _ in 0..3000 {
+            html.push_str("<i>x</i>");
+        }
+        html.push_str("</div>");
+        let tree = run(true, &html);
+        assert!(!tree.unsupported);
+        assert!(tree.truncated);
+        assert!(tree.diagnostics.count(RefusalReason::MatchWork) >= 1);
+    }
+    #[test]
+    fn nth_scan_off_the_rightmost_step_is_fuel_charged_and_fails_closed() {
+        use crate::style_diagnostics::RefusalReason;
+        // NEGATIVE CONTROL (nth traversal): nth on a NON-rightmost step gets
+        // no walk position, so its index scan is charged to the per-match
+        // fuel (one unit per visited sibling). The quadratic scan cost of
+        // `i:nth-child(4096) ~ i` over a growing list exhausts EXT_FUEL on a
+        // single match long before position 4096: the refusal is fail-closed
+        // (truncated + MatchWork), never a silent mismatch.
+        let mut html =
+            String::from("<style>i:nth-child(4096) ~ i{background-color:#ff0000}</style><div>");
+        for _ in 0..3000 {
+            html.push_str("<i>x</i>");
+        }
+        html.push_str("</div>");
+        let tree = run(true, &html);
+        assert!(!tree.unsupported);
+        assert!(tree.truncated);
+        assert!(tree.diagnostics.count(RefusalReason::MatchWork) >= 1);
     }
     #[test]
     fn nth_child_oversize_sibling_gate_is_precise_at_the_exact_boundary() {

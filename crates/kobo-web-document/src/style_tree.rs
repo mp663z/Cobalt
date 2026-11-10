@@ -328,6 +328,17 @@ impl StyleTree {
         // itself evaluates EVERY candidate for EVERY element: exact per-pair
         // diagnostics, no unrelated rule lost.
         let mut oversize_dropped = false;
+        // Per-DOM-parent visit counters: (children visited, ELEMENT children
+        // visited). Children are pushed in reverse and popped in child order,
+        // so when an element pops, its counters ARE its O(1) position: raw
+        // child index and 1-based `:nth-child` index. This is what makes a
+        // rightmost nth test and the first sibling-combinator transition
+        // cost one fuel unit with ZERO repeated sibling scans; every other
+        // scan charges its visited siblings to the match fuel, and the walk
+        // charges consumed fuel to match_work (bounded by MAX_MATCH_WORK).
+        // Memory: one entry per parent with visited children (<= node cap).
+        let mut child_positions: std::collections::HashMap<Handle, (u32, u32)> =
+            std::collections::HashMap::new();
         while let Some((handle, parent, inherited, inherited_vars)) = stack.pop() {
             if handle >= GENERATED {
                 let (is_before, style) = pending[handle - GENERATED];
@@ -355,6 +366,9 @@ impl StyleTree {
                 continue;
             }
             if let Data::Text(text) = &nodes[handle].data {
+                if let Some(dom_parent) = nodes[handle].parent {
+                    child_positions.entry(dom_parent).or_default().0 += 1;
+                }
                 if tree.nodes.len() >= nodes.len() + pending.len() {
                     tree.truncated = true;
                     tree.diagnostics.record(RefusalReason::RetainedNodes);
@@ -376,6 +390,11 @@ impl StyleTree {
                 continue;
             }
             let Data::Element { name, attrs, .. } = &nodes[handle].data else {
+                if !matches!(nodes[handle].data, Data::Document) {
+                    if let Some(dom_parent) = nodes[handle].parent {
+                        child_positions.entry(dom_parent).or_default().0 += 1;
+                    }
+                }
                 for &child in nodes[handle].children.iter().rev() {
                     stack.push((child, parent, inherited, Rc::clone(&inherited_vars)));
                 }
@@ -390,6 +409,15 @@ impl StyleTree {
                 tree.truncated = true;
                 break;
             }
+            // O(1) position of THIS element among its DOM parent's children.
+            let position = nodes[handle].parent.map(|dom_parent| {
+                let entry = child_positions.entry(dom_parent).or_default();
+                // (0-based raw child index, 1-based :nth-child element index)
+                let position = (entry.0, entry.1 + 1);
+                entry.0 += 1;
+                entry.1 += 1;
+                position
+            });
             let mut declarations = Vec::new();
             let mut local_deferred: Vec<Deferred> = Vec::new();
             let mut inline_hits: Vec<(u32, bool, (u16, u16, u16), u32)> = Vec::new();
@@ -431,7 +459,20 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                let selected = match rule.selector.matches_checked_scoped(nodes, handle) {
+                let mut fuel = css::EXT_FUEL;
+                let outcome =
+                    rule.selector
+                        .matches_checked_scoped_budget(nodes, handle, &mut fuel, position);
+                // Charge what the match actually consumed (selector steps and
+                // every visited sibling in a scan) to the global work budget;
+                // one unit was already charged for the test itself.
+                match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
+                if match_work > MAX_MATCH_WORK {
+                    tree.diagnostics.record(RefusalReason::MatchWork);
+                    tree.truncated = true;
+                    break;
+                }
+                let selected = match outcome {
                     Ok(Some(selected)) => selected,
                     // Rule-scoped refusal (sibling list over EXT_MAX_SIBLINGS):
                     // this rule does not apply to THIS element. One precise
@@ -502,7 +543,17 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                match rule.selector.matches_originating_checked_scoped(nodes, handle) {
+                let mut fuel = css::EXT_FUEL;
+                let outcome = rule.selector.matches_originating_checked_scoped_budget(
+                    nodes, handle, &mut fuel, position,
+                );
+                match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
+                if match_work > MAX_MATCH_WORK {
+                    tree.diagnostics.record(RefusalReason::MatchWork);
+                    tree.truncated = true;
+                    break;
+                }
+                match outcome {
                     Err(crate::css::MatchRefusal::OversizeSiblings) => {
                         tree.diagnostics.record(RefusalReason::MatchWork);
                         // Same deferred page-completeness flag as the
