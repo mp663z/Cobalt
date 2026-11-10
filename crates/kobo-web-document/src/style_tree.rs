@@ -5540,6 +5540,65 @@ mod link_state_tests {
         let h2 = sheet("p:focus{font-size:33px}", "<p>one</p>");
         let t = state_with(&h2, &UNFOCUSED);
         assert!(!t.unsupported);
+        // The gate strips ONLY the focus guarantee: a plain rule in the same
+        // sheet still applies while the focus rule refuses.
+        let h3 = sheet(
+            "p:focus{font-size:33px} b{font-size:44px}",
+            "<p autofocus>one</p><b>two</b>",
+        );
+        let t = state_with(&h3, &UNFOCUSED);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            44
+        );
+    }
+
+    #[test]
+    fn mixed_family_compounds_refuse_even_with_all_guarantees() {
+        // `:hover:focus` carries two state pseudo-classes in one compound:
+        // a grammar bound (at most one), refused at parse even when every
+        // family guarantee is present.
+        for selector in ["a:hover:focus", "a:focus:hover", "a:focus-visible:focus-within"] {
+            let h = sheet(
+                &format!("{selector}{{font-size:33px}}"),
+                "<a href=https://x>one</a>",
+            );
+            let t = state_with(&h, &ALL);
+            assert!(t.unsupported, "{selector}");
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector),
+                "{selector}"
+            );
+        }
+    }
+
+    #[test]
+    fn focus_within_multilevel_ancestor_enrolls_and_never_matches() {
+        // Multi-level ancestor shape: the state pseudo sits three steps from
+        // the subject. Enrolled under the guarantee, never matches; refused
+        // without it.
+        let h = sheet(
+            "html:focus-within div span{font-size:33px}",
+            "<div><span>one</span></div>",
+        );
+        let t = state_with(&h, &UNFOCUSED);
+        assert!(!t.unsupported);
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "span").unwrap().style.font_size,
+            16
+        );
+        let t = state_with(&h, &BOTH);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
     }
 
     #[test]
