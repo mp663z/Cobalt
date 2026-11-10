@@ -405,11 +405,33 @@ fn extent_check(
     Ok(())
 }
 
+/// The caller's actual colour-scheme input for media evaluation. This is a
+/// host input, never guessed: absent means the engine's legacy absent-context
+/// behavior (`prefers-color-scheme` stays `Unknown`). `Dark` asserts the
+/// caller's actual dark scheme; the engine has no dark context, so evaluation
+/// stays `Unknown` exactly as absent does. Only `Light` changes evaluation,
+/// through the engine's existing `with_light_scheme` assertion.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SchemePreference {
+    Light,
+    Dark,
+}
+
 fn page_budget(
     html: &[u8],
     sheets: &[Vec<u8>],
     width: u32,
     height: u32,
+) -> Result<(kobo_web_document::Limits, kobo_web_document::MediaContext), &'static str> {
+    page_budget_with_scheme(html, sheets, width, height, None)
+}
+
+fn page_budget_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    scheme: Option<SchemePreference>,
 ) -> Result<(kobo_web_document::Limits, kobo_web_document::MediaContext), &'static str> {
     // Reject invalid room before parsing markup or asking a font provider.
     let pixels = usize::try_from(width)
@@ -434,6 +456,12 @@ fn page_budget(
     // Media queries see the same width the page is laid out with; a different
     // width means a new parse. Width is non-zero (checked above).
     let media = kobo_web_document::MediaContext::new(width).ok_or("invalid room budget")?;
+    // Absent and dark inputs both keep the engine's absent-context behavior;
+    // only an actual light assertion enrolls `with_light_scheme`.
+    let media = match scheme {
+        Some(SchemePreference::Light) => media.with_light_scheme(),
+        Some(SchemePreference::Dark) | None => media,
+    };
     Ok((limits, media))
 }
 
@@ -446,7 +474,21 @@ fn build_page_list(
     allow_interactive: bool,
     underline: bool,
 ) -> Result<kobo_web_document::display_list::DisplayList, &'static str> {
-    let (limits, media) = page_budget(html, sheets, width, height)?;
+    build_page_list_with_scheme(html, sheets, width, height, font, allow_interactive, underline, None)
+}
+
+#[allow(clippy::too_many_arguments)] // Experimental boundary; no app state hidden here.
+fn build_page_list_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    allow_interactive: bool,
+    underline: bool,
+    scheme: Option<SchemePreference>,
+) -> Result<kobo_web_document::display_list::DisplayList, &'static str> {
+    let (limits, media) = page_budget_with_scheme(html, sheets, width, height, scheme)?;
     let styled = parse_styled(html, sheets, &limits, media, underline);
     // A picture has no semantic hit targets. Refuse controls/links until
     // a shipping caller can preserve their interactions, even if styled block.
@@ -516,7 +558,22 @@ fn prepare_page_impl(
     allow_interactive: bool,
     underline: bool,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
-    let list = build_page_list(html, sheets, width, height, font, allow_interactive, underline)?;
+    prepare_page_impl_with_scheme(html, sheets, width, height, font, colour, allow_interactive, underline, None)
+}
+
+#[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+fn prepare_page_impl_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+    allow_interactive: bool,
+    underline: bool,
+    scheme: Option<SchemePreference>,
+) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
+    let list = build_page_list_with_scheme(html, sheets, width, height, font, allow_interactive, underline, scheme)?;
     let bounds = list
         .commands()
         .iter()
@@ -551,6 +608,25 @@ pub fn prepare_page_masked(
     colour: Option<bool>,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
     prepare_page_impl(html, sheets, width, height, font, colour, false, false)
+}
+
+/// EXPERIMENTAL, private, unadopted: `prepare_page_masked` plus the caller's
+/// actual colour-scheme input for media evaluation. `None` is byte-identical
+/// to `prepare_page_masked`; see `prepare_page_static_with_scheme` for the
+/// input contract.
+/// # Errors
+/// Refuses exactly as `prepare_page_masked` does.
+#[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+pub fn prepare_page_masked_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+    scheme: Option<SchemePreference>,
+) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
+    prepare_page_impl_with_scheme(html, sheets, width, height, font, colour, false, false, scheme)
 }
 
 /// EXPERIMENTAL, private, unadopted: complete restricted page through the catalog-driven UNIFORM-family path
@@ -616,6 +692,28 @@ pub fn prepare_page_static(
     prepare_page_impl(html, sheets, width, height, font, colour, true, false)
 }
 
+/// EXPERIMENTAL, private, unadopted: `prepare_page_static` plus the caller's
+/// actual colour-scheme input for media evaluation. `None` is byte-identical
+/// to `prepare_page_static`; `Dark` keeps the engine's absent-context
+/// `Unknown` behavior; only an actual `Light` assertion enrolls the engine's
+/// existing `with_light_scheme`. Viewport media already comes from the actual
+/// layout width. Every other refusal applies unchanged; no engine semantics,
+/// admission, cap or default-entry change.
+/// # Errors
+/// Refuses exactly as `prepare_page_static` does.
+#[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+pub fn prepare_page_static_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+    scheme: Option<SchemePreference>,
+) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
+    prepare_page_impl_with_scheme(html, sheets, width, height, font, colour, true, false, scheme)
+}
+
 /// EXPERIMENTAL measurement entry: `prepare_page_masked` plus the restricted
 /// `text-decoration: underline` subset bound to the Chrome 156 / Liberation Serif Regular
 /// profile. The caller must pass that face; refusals of `prepare_page_masked` apply unchanged.
@@ -630,6 +728,25 @@ pub fn prepare_page_underline_masked(
     colour: Option<bool>,
 ) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
     prepare_page_impl(html, sheets, width, height, font, colour, false, true)
+}
+
+/// EXPERIMENTAL, private, unadopted: `prepare_page_underline_masked` plus the
+/// caller's actual colour-scheme input for media evaluation. `None` is
+/// byte-identical to `prepare_page_underline_masked`; see
+/// `prepare_page_static_with_scheme` for the input contract.
+/// # Errors
+/// Refuses exactly as `prepare_page_underline_masked` does, and anything outside the underline profile.
+#[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
+pub fn prepare_page_underline_masked_with_scheme(
+    html: &[u8],
+    sheets: &[Vec<u8>],
+    width: u32,
+    height: u32,
+    font: &impl FontProvider,
+    colour: Option<bool>,
+    scheme: Option<SchemePreference>,
+) -> Result<(PanelFrame, Vec<kobo_web_document::display_list::Rect>), &'static str> {
+    prepare_page_impl_with_scheme(html, sheets, width, height, font, colour, false, true, scheme)
 }
 
 /// All-or-nothing prepare and queue, using one caller-reserved handle.
@@ -1607,6 +1724,53 @@ mod media_width_wiring {
         // An unknown media feature still refuses the whole page.
         let unknown = b"<!doctype html><style>@media (hover:hover){html{background:#fa0000}}</style><body><p>Hi</p></body>";
         assert!(prepare_page(unknown, &[], 300, 80, &face, Some(true)).is_err());
+    }
+
+    #[test]
+    fn colour_scheme_input_is_actual_and_absent_keeps_legacy_unknown() {
+        let face = LocalFace::from_bytes(include_bytes!(
+            "../../../crates/kobo-text/fonts/AtkinsonHyperlegible-Regular.ttf"
+        ))
+        .unwrap();
+        // The gated sheet carries a construct the restricted path refuses, so
+        // the page paints only when the sheet is actually skipped.
+        let gated = b"<!doctype html><html><head><link rel=\"stylesheet\" media=\"(prefers-color-scheme: dark)\" href=\"data:text/css;base64,cCB7IGRpc3BsYXk6IGdyaWQgfQ==\"></head><body><p style='font-size:16px'>Hello world</p></body></html>";
+        // Absent input: media Unknown -> sheet refusal stands (legacy behavior).
+        assert!(prepare_page_static(gated, &[], 200, 80, &face, Some(true)).is_err());
+        // Dark assertion: the engine has no dark context; Unknown stands.
+        assert!(prepare_page_static_with_scheme(
+            gated,
+            &[],
+            200,
+            80,
+            &face,
+            Some(true),
+            Some(SchemePreference::Dark)
+        )
+        .is_err());
+        // Actual light assertion: the dark-gated sheet is skipped, page paints.
+        assert!(prepare_page_static_with_scheme(
+            gated,
+            &[],
+            200,
+            80,
+            &face,
+            Some(true),
+            Some(SchemePreference::Light)
+        )
+        .is_ok());
+        // Absent/Dark/Light are byte-identical on pages with no scheme-gated sheet.
+        let plain = b"<!doctype html><p style='font-size:16px'>Hello world</p>";
+        let base = prepare_page_static(plain, &[], 200, 80, &face, Some(true))
+            .unwrap()
+            .0
+            .pixels;
+        for scheme in [None, Some(SchemePreference::Dark), Some(SchemePreference::Light)] {
+            let (frame, _) =
+                prepare_page_static_with_scheme(plain, &[], 200, 80, &face, Some(true), scheme)
+                    .unwrap();
+            assert_eq!(frame.pixels, base);
+        }
     }
 
     #[test]

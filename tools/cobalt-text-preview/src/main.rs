@@ -2,7 +2,9 @@
 //! Not a general browser renderer, and not substituted for the frozen
 //! background-only benchmark entry point.
 use cobalt_text_preview::{
-    prepare_page_masked, prepare_page_static, prepare_page_underline_masked, LocalFace, PanelFrame,
+    prepare_page_masked, prepare_page_masked_with_scheme, prepare_page_static,
+    prepare_page_static_with_scheme, prepare_page_underline_masked,
+    prepare_page_underline_masked_with_scheme, LocalFace, PanelFrame, SchemePreference,
 };
 use kobo_web_document::{
     box_tree::BoxTree, css_text_page::paint_single_text_page, display_list::Rgb, parse_style_tree,
@@ -24,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut blocks = false;
     let mut static_capture = false;
     let mut underline = false;
+    let mut scheme = None;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--blocks" if !blocks => blocks = true,
@@ -35,6 +38,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--font-bold" if bold_path.is_none() => {
                 bold_path = Some(args.next().ok_or("missing bold font file")?);
+            }
+            // EXPERIMENTAL: the operator's actual colour-scheme input for media
+            // evaluation. Absent keeps the engine's legacy absent-context
+            // behavior; "dark" asserts dark and keeps prefers-color-scheme
+            // Unknown (the engine has no dark context); only "light" enrolls
+            // the engine's existing light assertion.
+            "--color-scheme" if scheme.is_none() => {
+                scheme = Some(match args.next().as_deref() {
+                    Some("light") => SchemePreference::Light,
+                    Some("dark") => SchemePreference::Dark,
+                    _ => return Err("--color-scheme expects light or dark".into()),
+                });
             }
             _ => return Err("unknown or repeated option".into()),
         }
@@ -80,12 +95,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let html = fs::read(html_path)?;
     let frame = if blocks {
-        let (frame, bounds) = if static_capture {
-            prepare_page_static(&html, &[], width, height, &face, Some(true))?
-        } else if underline {
-            prepare_page_underline_masked(&html, &[], width, height, &face, Some(true))?
-        } else {
-            prepare_page_masked(&html, &[], width, height, &face, Some(true))?
+        let (frame, bounds) = match (static_capture, underline, scheme) {
+            (true, _, None) => prepare_page_static(&html, &[], width, height, &face, Some(true))?,
+            (true, _, Some(s)) => {
+                prepare_page_static_with_scheme(&html, &[], width, height, &face, Some(true), Some(s))?
+            }
+            (false, true, None) => {
+                prepare_page_underline_masked(&html, &[], width, height, &face, Some(true))?
+            }
+            (false, true, Some(s)) => prepare_page_underline_masked_with_scheme(
+                &html,
+                &[],
+                width,
+                height,
+                &face,
+                Some(true),
+                Some(s),
+            )?,
+            (false, false, None) => {
+                prepare_page_masked(&html, &[], width, height, &face, Some(true))?
+            }
+            (false, false, Some(s)) => prepare_page_masked_with_scheme(
+                &html,
+                &[],
+                width,
+                height,
+                &face,
+                Some(true),
+                Some(s),
+            )?,
         };
         if let Some(path) = mask_path {
             let mut json = String::from("[");
