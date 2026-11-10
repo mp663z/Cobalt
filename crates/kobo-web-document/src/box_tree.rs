@@ -1126,10 +1126,73 @@ impl HeightPass {
 /// collapsed sibling gaps. A first or last child's edge margin escapes
 /// through the collapse chain instead of extending the height; a box that
 /// could collapse through itself stays unsupported.
+/// Per-node refusal kinds recorded by [`UsedHeightPass`] (CONTAINMENT v1,
+/// reviewer-dispositioned delta5/6, frozen acceptance matrix delta7). The
+/// whole-pass `unsupported` flag stays DERIVED and byte-identical to the
+/// pre-containment value: seed (tree-global kinds only) OR any node refusal.
+/// Subtree-attributable kinds are recorded per node so a clean subtree's
+/// heights compose while a poisoned sibling stays refused; tree-global kinds
+/// (DroppedAttributes, MissingStylesheet, CssDeclaration/CssCondition,
+/// CssScanBudget, Encoding, Quirks, truncations) never appear here - they
+/// remain whole-tree via the seed. InlineBlock/flex/percent stay whole-pass
+/// in v1 by decision (SQ3, census-backed).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct HeightRefusal(u32);
+
+impl HeightRefusal {
+    pub const NONE: Self = Self(0);
+    /// Text/Inline node with no font provider and no page layout supplied.
+    pub const NO_METRICS_PROVIDER: Self = Self(1);
+    /// Text/Inline node with no pure-inline owner block (inline_owner :1788).
+    pub const NO_INLINE_OWNER: Self = Self(2);
+    /// AnonymousBlock/InlineBlock reaching the block composition arm.
+    pub const UNSUPPORTED_KIND: Self = Self(4);
+    /// Flex row height composition failed.
+    pub const FLEX_UNRESOLVED: Self = Self(8);
+    /// Non-auto specified height unresolved (indefinite percentage).
+    pub const INDEFINITE_PERCENT: Self = Self(16);
+    /// Containing width unknown for a block that needs one.
+    pub const NO_WIDTH: Self = Self(32);
+    /// Pure-inline block measured None or zero content height.
+    pub const EMPTY_OR_UNMEASURED: Self = Self(64);
+    /// Kernel float composition failed.
+    pub const FLOAT_UNRESOLVED: Self = Self(128);
+    /// min-height last-child bottom margin would escape (Chrome 156 rule).
+    pub const MIN_HEIGHT_MARGIN_ESCAPE: Self = Self(256);
+    /// Block children composition invalid or height unresolved.
+    pub const COMPOSITION_UNRESOLVED: Self = Self(512);
+    /// Stretch-axis fixup could not resolve a definite height.
+    pub const STRETCH_UNRESOLVED: Self = Self(1024);
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+    #[must_use]
+    pub fn bits(self) -> u32 {
+        self.0
+    }
+}
+
+impl std::ops::BitOr for HeightRefusal {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl std::ops::BitOrAssign for HeightRefusal {
+    fn bitor_assign(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+}
+
 pub struct UsedHeightPass {
     pub heights: Vec<Option<u32>>,
     pub unsupported: bool,
     pub truncated: bool,
+    /// Per-node refusal flags; empty bits mean the node did not refuse.
+    /// Derived invariant (test-pinned): `unsupported == (seed || any refusal)`.
+    pub refusals: Vec<HeightRefusal>,
 }
 
 impl UsedHeightPass {
@@ -1201,30 +1264,35 @@ impl UsedHeightPass {
     ) -> Self {
         let specified = HeightPass::from_boxes(tree, viewport_height);
         let widths = WidthPass::from_boxes(tree, viewport_width);
+        let seed = specified.unsupported || widths.unsupported;
         let mut result = Self {
             heights: specified.heights,
-            unsupported: specified.unsupported || widths.unsupported,
+            unsupported: seed,
             truncated: specified.truncated || widths.truncated,
+            refusals: vec![HeightRefusal::NONE; tree.boxes.len()],
         };
-        if result.unsupported || result.truncated {
+        // CONTAINMENT v1: no early-return on the seed. Composition always runs
+        // so clean subtrees resolve per-block heights on a seed-poisoned tree;
+        // every consumer gates on the whole-pass flags before reading heights
+        // (VerticalPass :1560, css_paint_bridge :290, css_text_page :530), so
+        // the composed values are invisible wherever the bool refuses.
+        if result.truncated {
             return result;
         }
         // A valid box tree is acyclic; reverse traversal puts descendants
         // before parents. Invalid trees are rejected by the paint bridge.
         for (index, node) in tree.boxes.iter().enumerate().rev() {
-            if node.kind == BoxKind::Text {
-                if ((advance.is_none() || line_height.is_none()) && layout.is_none())
-                    || inline_owner(tree, index).is_none()
-                {
+            if node.kind == BoxKind::Text || node.kind == BoxKind::Inline {
+                let no_provider = (advance.is_none() || line_height.is_none()) && layout.is_none();
+                let no_owner = inline_owner(tree, index).is_none();
+                if no_provider || no_owner {
                     result.unsupported = true;
-                }
-                continue;
-            }
-            if node.kind == BoxKind::Inline {
-                if ((advance.is_none() || line_height.is_none()) && layout.is_none())
-                    || inline_owner(tree, index).is_none()
-                {
-                    result.unsupported = true;
+                    if no_provider {
+                        result.refusals[index] |= HeightRefusal::NO_METRICS_PROVIDER;
+                    }
+                    if no_owner {
+                        result.refusals[index] |= HeightRefusal::NO_INLINE_OWNER;
+                    }
                 }
                 continue;
             }
@@ -1259,6 +1327,7 @@ impl UsedHeightPass {
                 };
                 let (Some(line), true) = (line, ok) else {
                     result.unsupported = true;
+                    result.refusals[index] |= HeightRefusal::FLEX_UNRESOLVED;
                     continue;
                 };
                 for &child in &node.children {
@@ -1278,11 +1347,13 @@ impl UsedHeightPass {
                 result.heights[index] = u32::try_from(line).ok().filter(|&l| l > 0);
                 if result.heights[index].is_none() {
                     result.unsupported = true;
+                    result.refusals[index] |= HeightRefusal::FLEX_UNRESOLVED;
                 }
                 continue;
             }
             if !matches!(node.kind, BoxKind::Block | BoxKind::ListItem) {
                 result.unsupported = true;
+                result.refusals[index] |= HeightRefusal::UNSUPPORTED_KIND;
                 continue;
             }
             if result.heights[index].is_some() {
@@ -1301,10 +1372,12 @@ impl UsedHeightPass {
             }
             if node.style.height != Length::Auto {
                 result.unsupported = true; // indefinite percentage
+                result.refusals[index] |= HeightRefusal::INDEFINITE_PERCENT;
                 continue;
             }
             let Some(width) = widths.widths[index].map(|w| w.content) else {
                 result.unsupported = true;
+                result.refusals[index] |= HeightRefusal::NO_WIDTH;
                 continue;
             };
             if !node.children.is_empty()
@@ -1334,6 +1407,7 @@ impl UsedHeightPass {
                 result.heights[index] = measured;
                 if result.heights[index].is_none_or(|height| height == 0) {
                     result.unsupported = true;
+                    result.refusals[index] |= HeightRefusal::EMPTY_OR_UNMEASURED;
                 }
                 continue;
             }
@@ -1350,6 +1424,7 @@ impl UsedHeightPass {
                 };
                 if result.heights[index].is_none() {
                     result.unsupported = true;
+                    result.refusals[index] |= HeightRefusal::FLOAT_UNRESOLVED;
                 }
                 continue;
             }
@@ -1402,6 +1477,7 @@ impl UsedHeightPass {
                     && tree.collapsed_margin(last, false, &widths, viewport_width) != 0
                 {
                     result.unsupported = true;
+                    result.refusals[index] |= HeightRefusal::MIN_HEIGHT_MARGIN_ESCAPE;
                 }
                 if node.style.padding_bottom != 0 || node.parent.is_none() || tree.is_flex_root(index) {
                     content = content.saturating_add(tree.collapsed_margin(
@@ -1419,6 +1495,7 @@ impl UsedHeightPass {
             }
             if result.heights[index].is_none() {
                 result.unsupported = true;
+                result.refusals[index] |= HeightRefusal::COMPOSITION_UNRESOLVED;
             }
         }
         for index in 0..tree.boxes.len() {
@@ -1454,6 +1531,7 @@ impl UsedHeightPass {
             result.heights[index] = used;
             if used.is_none() {
                 result.unsupported = true;
+                result.refusals[index] |= HeightRefusal::STRETCH_UNRESOLVED;
             }
         }
         result
