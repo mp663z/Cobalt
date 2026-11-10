@@ -161,3 +161,122 @@ fn height_refusal_bit_ops() {
     assert_eq!(r | HeightRefusal::NONE, r);
     assert!(HeightRefusal::NONE.is_empty());
 }
+
+
+// ---- delta9: VerticalPass per-node consumption (frozen TEST-MATRIX.md Part D) ----
+use kobo_web_document::box_tree::{VerticalPass, VerticalRefusal};
+
+struct VPass {
+    bt: BoxTree,
+    v: VerticalPass,
+    tags: Vec<String>,
+}
+
+fn vrun(t: &StyleTree) -> VPass {
+    let bt = BoxTree::from_style(t);
+    let v = VerticalPass::from_boxes_with_direct_text(&bt, 800, 600, |_, _, _| Some(8), |_| {
+        Some(18)
+    });
+    let tags = bt
+        .boxes
+        .iter()
+        .map(|b| b.source.map(|s| t.nodes[s].tag.to_string()).unwrap_or_default())
+        .collect();
+    VPass { bt, v, tags }
+}
+
+impl VPass {
+    fn idx(&self, tag: &str) -> usize {
+        self.tags.iter().position(|t| t == tag).expect("tag")
+    }
+    fn text_idx(&self, txt: &str) -> usize {
+        self.bt
+            .boxes
+            .iter()
+            .position(|b| b.text.as_deref() == Some(txt))
+            .expect("text")
+    }
+    fn assert_all_y_none(&self) {
+        assert!(
+            self.v.content_y.iter().all(Option::is_none),
+            "refused tree: fill-gate must keep every content_y None"
+        );
+    }
+}
+
+#[test]
+fn v1_clean_composes_no_flags() {
+    let p = vrun(&ext("<section>alpha</section><article>bravo</article>"));
+    assert!(!p.v.unsupported);
+    assert!(p.v.refusals.iter().all(|r| r.is_empty()));
+    assert_eq!(p.v.content_y[p.idx("section")], Some(0));
+    assert_eq!(p.v.content_y[p.idx("article")], Some(18));
+}
+
+#[test]
+fn v2_color_fail_attribution_no_geometry() {
+    let p = vrun(&ext(
+        "<section>alpha</section><article>bravo <span style='color:#00f'>blue</span></article>",
+    ));
+    assert!(p.v.unsupported);
+    p.assert_all_y_none();
+    // R1c: clean sibling admitted with no bit; poisoned block + ancestor chain NO_HEIGHT.
+    assert_eq!(p.v.refusals[p.idx("section")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.text_idx("alpha")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
+    for t in ["html", "body", "div"] {
+        assert_eq!(p.v.refusals[p.idx(t)], VerticalRefusal::NO_HEIGHT, "{t}");
+    }
+    assert_eq!(p.v.refusals[p.text_idx("blue")], VerticalRefusal::KIND_NOT_ADMITTED);
+}
+
+#[test]
+fn v3_no_inline_owner_attribution() {
+    let p = vrun(&ext("<section>alpha</section><article><div>block</div>loose</article>"));
+    assert!(p.v.unsupported);
+    p.assert_all_y_none();
+    assert_eq!(p.v.refusals[p.idx("section")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.text_idx("block")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
+    assert_eq!(p.v.refusals[p.text_idx("loose")], VerticalRefusal::KIND_NOT_ADMITTED);
+}
+
+#[test]
+fn v4_inline_block_whole_pass_attribution() {
+    let p = vrun(&ext(
+        "<section>alpha</section><article><span style='display:inline-block'>ib</span></article>",
+    ));
+    assert!(p.v.unsupported);
+    p.assert_all_y_none();
+    assert_eq!(p.v.refusals[p.idx("section")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.idx("span")], VerticalRefusal::KIND_NOT_ADMITTED);
+    assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
+}
+
+#[test]
+fn v5_owner_poison_attribution() {
+    let p = vrun(&ext(
+        "<section>alpha</section><article><i>clean</i> <span style='color:#00f'>fail</span></article>",
+    ));
+    assert!(p.v.unsupported);
+    p.assert_all_y_none();
+    assert_eq!(p.v.refusals[p.idx("section")], VerticalRefusal::NONE);
+    assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
+    assert_eq!(p.v.refusals[p.text_idx("clean")], VerticalRefusal::KIND_NOT_ADMITTED);
+}
+
+#[test]
+fn v6_tree_seed_no_attribution() {
+    let t = parse_style_tree(
+        "<!doctype html><link rel=stylesheet href=/a><style>body{margin:0}div,section,article{margin:0;padding:0}</style><div><section>alpha</section><article>bravo</article></div>"
+            .as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+    );
+    let p = vrun(&t);
+    // SQ1: tree-global kinds keep the early-return; nothing composes and NO
+    // per-node attribution is recorded at all.
+    assert!(p.v.unsupported);
+    p.assert_all_y_none();
+    assert!(p.v.refusals.iter().all(|r| r.is_empty()));
+}

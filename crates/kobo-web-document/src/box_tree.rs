@@ -1546,10 +1546,54 @@ impl UsedHeightPass {
 /// an escaped first-child margin is carried in the parent's placement gap.
 /// Unpadded zero-height boxes, inline content, and additional roots
 /// are rejected rather than assigned speculative positions.
+/// Per-node refusal kinds recorded by [`VerticalPass`] (CONTAINMENT delta9,
+/// frozen outcomes TEST-MATRIX.md Part D, written before this code). Recording
+/// only: no consumer reads this field yet. The whole-pass `unsupported` flag
+/// remains IMPERATIVELY MAINTAINED and byte-identical in value; the
+/// equivalence with pre-containment behavior is pinned by the fill-gate below
+/// (any refused node leaves a None content_y, which wipes the whole vector)
+/// plus the Part D fixtures. Structural corruption (parent mismatch, missing
+/// node, bad roots) stays whole-pass with no per-node attribution.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct VerticalRefusal(u32);
+
+impl VerticalRefusal {
+    pub const NONE: Self = Self(0);
+    /// Not a block/list-item/flex box and not a measured inline member.
+    pub const KIND_NOT_ADMITTED: Self = Self(1);
+    /// No usable height (None, or unpadded zero without an allowed reason).
+    pub const NO_HEIGHT: Self = Self(2);
+    /// No resolved width.
+    pub const NO_WIDTH: Self = Self(4);
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+    #[must_use]
+    pub fn bits(self) -> u32 {
+        self.0
+    }
+}
+
+impl std::ops::BitOr for VerticalRefusal {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl std::ops::BitOrAssign for VerticalRefusal {
+    fn bitor_assign(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+}
+
 pub struct VerticalPass {
     pub content_y: Vec<Option<i64>>,
     pub unsupported: bool,
     pub truncated: bool,
+    /// Per-node vertical refusal attribution; empty bits mean admitted.
+    pub refusals: Vec<VerticalRefusal>,
 }
 
 impl VerticalPass {
@@ -1623,6 +1667,7 @@ impl VerticalPass {
             content_y: vec![None; count],
             unsupported: tree.unsupported || tree.stray_min_max_width() || tree.stray_min_height() || tree.stray_overflow_hidden(),
             truncated: tree.truncated,
+            refusals: vec![VerticalRefusal::NONE; count],
         };
         if result.unsupported || result.truncated {
             return result;
@@ -1636,9 +1681,13 @@ impl VerticalPass {
             result.truncated = true;
             return result;
         }
+        // CONTAINMENT delta9: no early-return on the heights/widths flags. The
+        // bool stays imperatively maintained (identical value); the validation
+        // walk runs under it to attribute refusals per node, and the fill-gate
+        // after composition keeps content_y all-None exactly as the
+        // early-return did.
         if heights.unsupported || widths.unsupported {
             result.unsupported = true;
-            return result;
         }
         let root = tree.roots[0];
         let mut seen = vec![false; count];
@@ -1650,22 +1699,42 @@ impl VerticalPass {
             };
             let inline_member = matches!(node.kind, BoxKind::Text | BoxKind::Inline)
                 && inline_owner(tree, index).is_some_and(|owner| heights.heights[owner].is_some());
-            if seen[index]
-                || node.parent != parent
-                || !(matches!(node.kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex) || inline_member)
-                || (!matches!(node.kind, BoxKind::Text | BoxKind::Inline)
-                    && heights.heights[index].is_none_or(|h| {
-                        h == 0
-                            && node.style.padding_top == 0
-                            && node.style.padding_bottom == 0
-                            && !tree.zero_positioned_container(index)
-                            && !tree.is_kernel_cleared(index)
-                    }))
-                || (!matches!(node.kind, BoxKind::Text | BoxKind::Inline)
-                    && widths.widths[index].is_none())
-            {
+            if seen[index] || node.parent != parent {
+                // Structural corruption: whole-pass, no per-node attribution.
                 result.unsupported = true;
                 break;
+            }
+            let is_inline_kind = matches!(node.kind, BoxKind::Text | BoxKind::Inline);
+            let refusal = if !(matches!(node.kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex)
+                || inline_member)
+            {
+                VerticalRefusal::KIND_NOT_ADMITTED
+            } else if !is_inline_kind
+                && heights.heights[index].is_none_or(|h| {
+                    h == 0
+                        && node.style.padding_top == 0
+                        && node.style.padding_bottom == 0
+                        && !tree.zero_positioned_container(index)
+                        && !tree.is_kernel_cleared(index)
+                })
+            {
+                VerticalRefusal::NO_HEIGHT
+            } else if !is_inline_kind && widths.widths[index].is_none() {
+                VerticalRefusal::NO_WIDTH
+            } else {
+                VerticalRefusal::NONE
+            };
+            if !refusal.is_empty() {
+                result.unsupported = true;
+                result.refusals[index] |= refusal;
+                // Keep walking through children so sibling branches and
+                // descendants still get attributed (delta9 Part D).
+                if node.kind != BoxKind::Text {
+                    for &child in node.children.iter().rev() {
+                        stack.push((child, Some(index)));
+                    }
+                }
+                continue;
             }
             seen[index] = true;
             if node.kind == BoxKind::Text {
