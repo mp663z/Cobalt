@@ -58,6 +58,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if mask_path.is_some() && !blocks {
         return Err("--mask-json requires --blocks".into());
     }
+    if scheme.is_some() && !blocks {
+        return Err("--color-scheme requires --blocks (it is only consumed on the masked render paths)".into());
+    }
+    if scheme == Some(SchemePreference::DarkUnknown) {
+        eprintln!(
+            "note: --color-scheme dark: no dark matching exists anywhere; prefers-color-scheme stays Unknown, byte-identical to omitting --color-scheme"
+        );
+    }
     if underline && (!blocks || static_capture) {
         return Err("--underline-chrome156-liberation requires --blocks and no --static-capture".into());
     }
