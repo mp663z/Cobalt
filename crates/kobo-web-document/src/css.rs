@@ -18,6 +18,9 @@ const MAX_STEPS: usize = 8;
 pub struct SnapshotState {
     pub history: Option<HistoryState>,
     pub input: Option<InputState>,
+    /// Focus guarantee, scoped independently of history and input: a
+    /// link-only or quiescent-only guarantee never enrolls the focus family.
+    pub focus: Option<FocusState>,
 }
 /// History guarantees a caller can explicitly assert. v1: only a fresh profile
 /// with no prior navigation. Without an explicit guarantee, `:link` fails
@@ -42,6 +45,27 @@ pub enum InputState {
     /// never match - that is the CSS semantic given the state.
     QuiescentCapture,
 }
+/// Focus guarantees a caller can explicitly assert. v1: only the unfocused
+/// initial capture state. Without an explicit guarantee the focus family
+/// (`:focus`, `:focus-visible`, `:focus-within`) fails closed at rule
+/// enrollment exactly like an unparseable selector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FocusState {
+    /// The caller guarantees ALL of the following, as a written contract:
+    /// (1) the capture URL has no fragment (a fragment can focus a
+    /// `tabindex=-1` target on navigation - measured Chrome 157), (2) a fresh
+    /// profile with no history navigation and no bfcache restore, (3) no real
+    /// or synthetic input dispatch, and (4) no programmatic focus (no script
+    /// in this engine). A fifth condition is ENGINE-ENFORCED, not asserted:
+    /// the DOM must contain no `autofocus` attribute (autofocus focuses the
+    /// element on load - measured Chrome 157); when one is present the engine
+    /// voids this guarantee at enrollment and focus-family rules fail closed
+    /// exactly like the no-guarantee path. Under this guarantee no element is
+    /// focused at capture, so `:focus`, `:focus-visible` and `:focus-within`
+    /// never match - that is the CSS semantic given the state, not a silent
+    /// never-match.
+    UnfocusedInitial,
+}
 /// State pseudo-classes the extended grammar can represent.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StatePseudo {
@@ -54,6 +78,13 @@ pub(crate) enum StatePseudo {
     /// never match (the correct semantic, not a silent never-match).
     Hover,
     Active,
+    /// The focus family: enrolled only under an explicit
+    /// `FocusState::UnfocusedInitial` guarantee (engine-voided when the DOM
+    /// carries `autofocus`); under that guarantee they never match (the
+    /// correct semantic for an unfocused initial capture).
+    Focus,
+    FocusVisible,
+    FocusWithin,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Simple {
@@ -529,12 +560,30 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
                     "active" if simple.state.is_none() => {
                         simple.state = Some(StatePseudo::Active);
                     }
+                    "focus" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::Focus);
+                    }
+                    "focus-visible" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::FocusVisible);
+                    }
+                    "focus-within" if simple.state.is_none() => {
+                        simple.state = Some(StatePseudo::FocusWithin);
+                    }
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
                     _ => return None,
                 }
-                if !matches!(lowered.as_str(), "root" | "link" | "hover" | "active") {
+                if !matches!(
+                    lowered.as_str(),
+                    "root"
+                        | "link"
+                        | "hover"
+                        | "active"
+                        | "focus"
+                        | "focus-visible"
+                        | "focus-within"
+                ) {
                     if simple.structural_n >= 8 {
                         return None;
                     }
@@ -549,12 +598,14 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
 }
 /// Opt-in grammar: compounds of type/`*`/`#id`/`.class`/`[attr op value]`/
 /// `:root`/`:first-child`/`:last-child`/`:only-child` and the state
-/// pseudo-class `:link`, joined by descendant, `>`, `+` and `~`. Every other
-/// state pseudo-class (`:visited`, `:hover`, `:active`, the focus family),
-/// functional pseudo-classes, pseudo-elements, namespaces, escapes and case
-/// flags are refused. A parsed `:link` is only ENROLLED under an explicit
-/// caller `SnapshotState` guarantee (see `matched_rules`); otherwise the rule
-/// fails closed there exactly like an unparseable selector.
+/// pseudo-class `:link`, joined by descendant, `>`, `+` and `~`, plus the
+/// state pseudo-classes `:hover`, `:active`, `:focus`, `:focus-visible` and
+/// `:focus-within`. Every other state pseudo-class (`:visited` and the
+/// rest), functional pseudo-classes, pseudo-elements, namespaces, escapes
+/// and case flags are refused. A parsed state pseudo-class is only ENROLLED
+/// under an explicit caller `SnapshotState` guarantee covering its family
+/// (see `matched_rules`); otherwise the rule fails closed there exactly like
+/// an unparseable selector.
 pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
     if input.is_empty() || input.len() > 256 {
         return None;
@@ -781,6 +832,15 @@ impl Selector {
                     ..
                 })
             ),
+            Some(StatePseudo::Focus | StatePseudo::FocusVisible | StatePseudo::FocusWithin) => {
+                matches!(
+                    snapshot,
+                    Some(SnapshotState {
+                        focus: Some(FocusState::UnfocusedInitial),
+                        ..
+                    })
+                )
+            }
         })
     }
     /// For a `::after` selector: does the ORIGINATING element match the steps?
@@ -898,6 +958,18 @@ fn link_href(nodes: &[Node], handle: Handle) -> bool {
         .iter()
         .any(|(key, _)| (&**key).eq_ignore_ascii_case("href"))
 }
+/// Engine-observable focus-guarantee gate: does any element in the document
+/// carry an `autofocus` attribute? Autofocus focuses the element on load
+/// (measured Chrome 157: `:focus`=1, `:focus-visible`=1, `:focus-within`=3),
+/// so its presence voids a caller's `FocusState::UnfocusedInitial` contract.
+pub(crate) fn has_autofocus(nodes: &[Node]) -> bool {
+    nodes.iter().any(|node| match &node.data {
+        Data::Element { attrs, .. } => attrs
+            .iter()
+            .any(|(key, _)| (&**key).eq_ignore_ascii_case("autofocus")),
+        _ => false,
+    })
+}
 impl Simple {
     fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
         let Data::Element { name, .. } = &nodes[handle].data else {
@@ -906,10 +978,11 @@ impl Simple {
         match self.state {
             None => {}
             Some(StatePseudo::Link) if link_href(nodes, handle) => {}
-            // `:hover`/`:active`: enrolled only under QuiescentCapture, and
-            // under that guarantee they NEVER match - the correct CSS semantic
-            // for a quiescent capture, not a silent never-match. Any future
-            // non-quiescent InputState variant must revisit this arm.
+            // `:hover`/`:active` under QuiescentCapture and the focus family
+            // under UnfocusedInitial NEVER match: the correct CSS semantic
+            // for a quiescent, unfocused capture, not a silent never-match.
+            // Any future non-quiescent InputState or focused FocusState
+            // variant must revisit this arm.
             Some(_) => return false,
         }
         if self.root
@@ -1073,6 +1146,57 @@ mod link_matcher_pin {
                 );
             }
         }
+    }
+
+    #[test]
+    fn focus_family_parses_and_never_matches_any_element_at_the_matcher() {
+        // Under the only focus guarantee (UnfocusedInitial) the focus family
+        // never matches: pin the matcher arm so a future FocusState variant
+        // must deliberately revisit it. Enrollment gating is pinned in
+        // style_tree state tests; here the raw matcher is quarantined.
+        let nodes = doc_with(vec![
+            el(ns!(html), "div", &[]),
+            el(ns!(html), "input", &[("autofocus", "")]),
+            el(ns!(html), "a", &[("href", "https://x")]),
+        ]);
+        for text in [
+            ":focus",
+            ":focus-visible",
+            ":focus-within",
+            "div:focus",
+            "input:focus-visible",
+            "div:focus-within a",
+            ".x:focus",
+        ] {
+            let sel = selector_ext(text).expect(text);
+            assert!(sel.has_state(), "{text}");
+            for h in 1..nodes.len() {
+                assert_eq!(
+                    sel.matches_checked(&nodes, h),
+                    Some(false),
+                    "{text} on node {h}"
+                );
+            }
+        }
+        // Grammar bounds stay fail-closed: repetition, mixing with another
+        // state pseudo-class, and functional wrappers are all refused.
+        for text in ["a:focus:focus", "a:link:focus", ":not(:focus)", "a:focus:hover"] {
+            assert!(selector_ext(text).is_none(), "{text}");
+        }
+    }
+
+    #[test]
+    fn has_autofocus_is_engine_observable() {
+        let with = doc_with(vec![
+            el(ns!(html), "div", &[]),
+            el(ns!(html), "input", &[("AUTOFOCUS", "autofocus")]),
+        ]);
+        assert!(has_autofocus(&with));
+        let without = doc_with(vec![
+            el(ns!(html), "div", &[]),
+            el(ns!(html), "input", &[("type", "text")]),
+        ]);
+        assert!(!has_autofocus(&without));
     }
 }
 

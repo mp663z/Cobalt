@@ -16,6 +16,7 @@ fn main() {
             &kobo_web_document::SnapshotState {
                 history: Some(kobo_web_document::HistoryState::FreshNoHistory),
                 input: Some(kobo_web_document::InputState::QuiescentCapture),
+                focus: None,
             },
         ),
         other => panic!("bad mode {other}"),

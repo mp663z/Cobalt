@@ -51,7 +51,7 @@ pub mod url;
 
 use html5ever::tendril::TendrilSink;
 
-pub use css::{HistoryState, InputState, SnapshotState};
+pub use css::{FocusState, HistoryState, InputState, SnapshotState};
 pub use media_query::MediaContext;
 pub use style_tree::SupplyBudget;
 pub use url::{Scheme, Url, UrlError};
@@ -530,8 +530,13 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
 /// (any value, including empty); SVG `a` is narrowed out in v1 because the
 /// DOM flattens `xlink:href` to the local name `href`. Under
 /// QuiescentCapture, `:hover` and `:active` never match - the correct CSS
-/// semantic for a quiescent capture. `:visited`, the focus family and every
-/// other pseudo-class stay refused, as does any state pseudo-class at every
+/// semantic for a quiescent capture. `FocusState::UnfocusedInitial` (the
+/// caller's written assertion of a fragment-free capture URL, fresh profile,
+/// no history navigation or bfcache restore, no input dispatch and no
+/// programmatic focus, with the engine additionally refusing the guarantee
+/// when the DOM carries `autofocus`) enrolls only the focus family, which
+/// then never matches - the correct CSS semantic for an unfocused initial
+/// capture. `:visited` and every other pseudo-class stay refused, as does any state pseudo-class at every
 /// other entry (fail-closed selector refusal). Default entries are
 /// byte-unchanged.
 #[must_use]

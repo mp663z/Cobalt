@@ -1336,6 +1336,22 @@ fn matched_rules(
     fam: &mut crate::font_family::FamilyTable,
     snapshot: Option<&crate::css::SnapshotState>,
 ) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
+    // Engine-observable focus gate: an `autofocus` attribute anywhere in the
+    // DOM voids the caller's `FocusState::UnfocusedInitial` guarantee (the
+    // browser focuses that element on load). Fail closed: enroll with the
+    // focus guarantee REMOVED, so focus-family rules refuse exactly like the
+    // no-guarantee path. History and input guarantees are unaffected.
+    let gated_snapshot;
+    let snapshot = match snapshot {
+        Some(state) if state.focus.is_some() && crate::css::has_autofocus(nodes) => {
+            gated_snapshot = crate::css::SnapshotState {
+                focus: None,
+                ..*state
+            };
+            Some(&gated_snapshot)
+        }
+        other => other,
+    };
     let mut rules = Vec::new();
     let mut deferred_table: Vec<Deferred> = Vec::new();
     let mut unsupported = false;
@@ -5148,14 +5164,27 @@ mod link_state_tests {
     const FRESH: SnapshotState = SnapshotState {
         history: Some(HistoryState::FreshNoHistory),
         input: None,
+        focus: None,
     };
     const QUIESCENT: SnapshotState = SnapshotState {
         history: None,
         input: Some(crate::InputState::QuiescentCapture),
+        focus: None,
     };
     const BOTH: SnapshotState = SnapshotState {
         history: Some(HistoryState::FreshNoHistory),
         input: Some(crate::InputState::QuiescentCapture),
+        focus: None,
+    };
+    const UNFOCUSED: SnapshotState = SnapshotState {
+        history: None,
+        input: None,
+        focus: Some(crate::FocusState::UnfocusedInitial),
+    };
+    const ALL: SnapshotState = SnapshotState {
+        history: Some(HistoryState::FreshNoHistory),
+        input: Some(crate::InputState::QuiescentCapture),
+        focus: Some(crate::FocusState::UnfocusedInitial),
     };
 
     fn state(html: &str) -> StyleTree {
@@ -5442,6 +5471,115 @@ mod link_state_tests {
             d.diagnostics.first_reason(),
             Some(RefusalReason::CssSelector)
         );
+    }
+
+    #[test]
+    fn focus_family_enrolls_only_under_unfocused_and_never_matches() {
+        // NB: no <input> in these bodies - the ext path has a pre-existing
+        // unrelated CssDeclaration refusal for form controls.
+        let h = sheet(
+            "a:focus{font-size:33px} div:focus-within span{font-size:44px} p:focus-visible{font-size:55px}",
+            "<div><span>one</span></div><a href=https://x>two</a><p>three</p>",
+        );
+        // Under UnfocusedInitial all three rules ENROLL and never match: the
+        // correct CSS semantic for an unfocused initial capture.
+        for snapshot in [&UNFOCUSED, &ALL] {
+            let t = state_with(&h, snapshot);
+            assert!(!t.unsupported);
+            for (tag, size) in [("span", 16), ("a", 16), ("p", 16)] {
+                assert_eq!(
+                    t.nodes.iter().find(|n| n.tag == tag).unwrap().style.font_size,
+                    size,
+                    "{tag}"
+                );
+            }
+        }
+        // History-only, input-only and both non-focus guarantees do NOT
+        // enroll the focus family (independent scoping).
+        for snapshot in [&FRESH, &QUIESCENT, &BOTH] {
+            let t = state_with(&h, snapshot);
+            assert!(t.unsupported);
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector)
+            );
+        }
+        // No snapshot at all and the default entry: fail closed identically.
+        let t = ext(&h);
+        assert!(t.unsupported);
+        let d = default(&h);
+        assert!(d.unsupported);
+        assert_eq!(
+            d.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+    }
+
+    #[test]
+    fn autofocus_in_dom_voids_unfocused_guarantee_engine_side() {
+        // The engine observes `autofocus` itself: with one present, the
+        // caller's UnfocusedInitial guarantee cannot hold and enrollment
+        // fails closed EXACTLY like the absent-guarantee path.
+        let h = sheet(
+            "p:focus{font-size:33px}",
+            "<p autofocus>one</p>",
+        );
+        let gated = state_with(&h, &UNFOCUSED);
+        let absent = state_with(&h, &BOTH);
+        assert!(gated.unsupported);
+        assert_eq!(
+            gated.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
+        assert_eq!(gated.unsupported, absent.unsupported);
+        assert_eq!(
+            gated.diagnostics.first_reason(),
+            absent.diagnostics.first_reason()
+        );
+        // Without the autofocus attribute the same guarantee enrolls.
+        let h2 = sheet("p:focus{font-size:33px}", "<p>one</p>");
+        let t = state_with(&h2, &UNFOCUSED);
+        assert!(!t.unsupported);
+    }
+
+    #[test]
+    fn focus_group_member_is_independently_fail_closed() {
+        // Group semantics: the :focus member enrolls or refuses on its own;
+        // the plain member applies either way (the applying twin).
+        let h = sheet("a:focus, b{font-size:33px}", "<a href=https://x>one</a><b>two</b>");
+        let t = state_with(&h, &UNFOCUSED);
+        assert!(!t.unsupported);
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            33
+        );
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size,
+            16
+        );
+        let t = state_with(&h, &BOTH);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            33
+        );
+    }
+
+    #[test]
+    fn repeated_focus_compounds_are_grammar_bound_refusals() {
+        for selector in ["a:focus:focus", "a:focus-visible:focus-within", "a:focus:link"] {
+            let h = sheet(
+                &format!("{selector}{{font-size:33px}}"),
+                "<a href=https://x>one</a>",
+            );
+            let t = state_with(&h, &ALL);
+            assert!(t.unsupported, "{selector}");
+            assert_eq!(
+                t.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector),
+                "{selector}"
+            );
+        }
     }
 
     #[test]

@@ -14,6 +14,7 @@ use kobo_web_document::{HistoryState, InputState, SnapshotState};
 const SNAPSHOT: SnapshotState = SnapshotState {
     history: Some(HistoryState::FreshNoHistory),
     input: Some(InputState::QuiescentCapture),
+    focus: None,
 };
 fn ext(h: &str) -> kobo_web_document::style_tree::StyleTree {
     parse_style_tree_with_inline_sheets_and_selectors(
