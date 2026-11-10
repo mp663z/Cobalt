@@ -1383,3 +1383,131 @@ mod ext_selector_tests {
         assert!(ext("a").unwrap().pseudo == super::Pseudo::None);
     }
 }
+
+#[cfg(test)]
+mod attribution_harness {
+    //! TEST-ONLY, measurement-only (private research): actual-parser attribution
+    //! of the corpus refused-selector inventory. Calls the real internal parser
+    //! entry points (`selector_ext`, `compound_ext`, `attr_selector`) - never a
+    //! textual proxy - and records the exact failing compound plus the token
+    //! classes present in it. Ambiguity is preserved: a failing compound with
+    //! several unsupported-looking tokens is reported as the SET, not a guess.
+    //! No shipping code; `cargo test -- --ignored` only. Input: /tmp/inv lists.
+    fn compounds_top_level(sel: &str) -> Vec<String> {
+        // Split on top-level combinators/whitespace, paren+bracket aware.
+        // Combinator tokens themselves are grammar terminals in `selector_ext`,
+        // so splitting at this level never crosses a compound boundary.
+        let mut out = Vec::new();
+        let mut cur = String::new();
+        let (mut depth_p, mut depth_b, mut prev_ws) = (0i32, 0i32, false);
+        for c in sel.chars() {
+            match c {
+                '(' => { depth_p += 1; cur.push(c); }
+                ')' => { depth_p -= 1; cur.push(c); }
+                '[' => { depth_b += 1; cur.push(c); }
+                ']' => { depth_b -= 1; cur.push(c); }
+                '>' | '+' | '~' if depth_p == 0 && depth_b == 0 => {
+                    if !cur.trim().is_empty() { out.push(cur.trim().to_string()); }
+                    cur.clear();
+                    prev_ws = false;
+                }
+                c if c.is_ascii_whitespace() && depth_p == 0 && depth_b == 0 => {
+                    if !prev_ws && !cur.trim().is_empty() { out.push(cur.trim().to_string()); cur.clear(); }
+                    prev_ws = true;
+                }
+                _ => { cur.push(c); prev_ws = false; }
+            }
+        }
+        if !cur.trim().is_empty() { out.push(cur.trim().to_string()); }
+        out
+    }
+    fn token_classes(compound: &str) -> Vec<String> {
+        let mut classes = Vec::new();
+        let b = compound.as_bytes();
+        let mut i = 0;
+        while i < b.len() {
+            match b[i] {
+                b':' => {
+                    let double = b.get(i + 1) == Some(&b':');
+                    let start = i + if double { 2 } else { 1 };
+                    let mut j = start;
+                    while j < b.len() && (b[j].is_ascii_alphanumeric() || b[j] == b'-') { j += 1; }
+                    let name = &compound[start..j];
+                    let functional = b.get(j) == Some(&b'(');
+                    let kind = if double { "pseudo-element" } else if functional { "functional-pseudo" } else { "pseudo-class" };
+                    classes.push(format!("{kind}:{name}"));
+                    i = j;
+                }
+                b'[' => {
+                    let end = compound[i..].find(']').map(|k| i + k).unwrap_or(compound.len());
+                    let inner = &compound[i + 1..end];
+                    let flag = inner.contains(" i]") || inner.ends_with(" i") || inner.ends_with(" s");
+                    classes.push(format!("attr:{}", if flag { "with-flag" } else { "plain" }));
+                    i = end;
+                }
+                b'\\' => { classes.push("escape".to_string()); i += 1; }
+                b'#' => { classes.push("id".to_string()); i += 1; }
+                b'.' => { classes.push("class".to_string()); i += 1; }
+                _ => i += 1,
+            }
+        }
+        classes.sort();
+        classes.dedup();
+        classes
+    }
+    /// Attribute one selector through the REAL parser. Returns
+    /// (selector, verdict) where verdict is `parses`, `composition:<why>`,
+    /// `compound:<index>:<token-class-set>`, or `ambiguous:<detail>`.
+    fn attribute(sel: &str) -> (String, String) {
+        if super::selector_ext(sel).is_some() {
+            return (sel.to_string(), "parses".to_string());
+        }
+        // Pseudo-element placement/composition refusals: trailing ::before/::after
+        // handled by selector_ext itself; if the head parses alone, composition failed.
+        for suffix in ["::before", "::after"] {
+            if let Some(head) = sel.strip_suffix(suffix) {
+                if super::selector_ext(head.trim_end()).is_some() {
+                    return (sel.to_string(), format!("composition:state-on-pseudo-element-or-second-pseudo:{suffix}"));
+                }
+            }
+        }
+        let compounds = compounds_top_level(sel);
+        let mut failing = Vec::new();
+        for (idx, compound) in compounds.iter().enumerate() {
+            if super::compound_ext(compound, 0).map(|(_, next)| next) != Some(compound.len()) {
+                failing.push((idx, token_classes(compound)));
+            }
+        }
+        match failing.len() {
+            0 => (sel.to_string(), "ambiguous:compounds-parse-but-selector-refused".to_string()),
+            1 => {
+                let (idx, classes) = failing.into_iter().next().unwrap();
+                (sel.to_string(), format!("compound:{idx}:{}", classes.join("+")))
+            }
+            _ => {
+                let detail: Vec<String> = failing.iter().map(|(i, c)| format!("{i}:{}", c.join("+"))).collect();
+                (sel.to_string(), format!("ambiguous:multiple-failing-compounds:{}", detail.join("|")))
+            }
+        }
+    }
+    #[test]
+    #[ignore = "measurement harness; run explicitly"]
+    fn corpus_refused_selector_attribution() {
+        let dir = std::env::var("ATTRIB_INV_DIR").unwrap_or_else(|_| "/tmp/inv".to_string());
+        for pg in ["gov", "blog", "docs", "news-npr", "wikipedia"] {
+            let path = format!("{dir}/{pg}-still-refused-under-state.txt");
+            let Ok(data) = std::fs::read_to_string(&path) else { continue };
+            let mut histogram: std::collections::BTreeMap<String, usize> = Default::default();
+            let mut n = 0;
+            for line in data.lines().filter(|l| !l.is_empty()) {
+                let (_, verdict) = attribute(line);
+                *histogram.entry(verdict).or_default() += 1;
+                n += 1;
+            }
+            println!("## {pg} total={n}");
+            for (verdict, count) in histogram {
+                println!("   {count:5}  {verdict}");
+            }
+        }
+    }
+}
