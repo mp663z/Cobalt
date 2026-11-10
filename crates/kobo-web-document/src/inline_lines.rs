@@ -1605,6 +1605,14 @@ mod bracket_word_tests {
             "<html><body><p>one <span style='color:#123456;line-height:9px'>two</span></p></body></html>", // colour+line-height
             "<html><body><p>one <span style='color:#123456;background-color:red'>two</span></p></body></html>", // colour+bg
             "<html><body><p>one <span style='color:#123456;border:2px solid transparent'>two</span></p></body></html>", // colour+border
+            // Reviewer-completed (delta10 follow-up): the remaining six frozen E-C3 kinds
+            // combined with colour - coverage is now all 15, not 9/15.
+            "<html><body><p>one <span style='color:#123456;direction:rtl'>two</span></p></body></html>", // colour+rtl
+            "<html><body><p>one <span style='color:#123456;outline:1px solid red'>two</span></p></body></html>", // colour+outline
+            "<html><body><p>one <span style='color:#123456;box-shadow:1px 1px 0 red'>two</span></p></body></html>", // colour+box-shadow
+            "<html><body><p>one <span style='color:#123456;position:relative'>two</span></p></body></html>", // colour+positioned-inline
+            "<html><body><p>one <span style='color:#123456;background-image:url(a),url(b)'>two</span></p></body></html>", // colour+decor-layers
+            "<html><body><p>one <span><abbr style='color:#123456'>two</abbr></span></p></body></html>", // colour+not-phrase
             "<html><body><p style='direction:rtl'>one two</p></body></html>", // RTL block
             "<html><body><p>one <span style='font-style:oblique'>two</span></p></body></html>",
             "<html><body><p>one <span style='display:inline-block'>two</span></p></body></html>",

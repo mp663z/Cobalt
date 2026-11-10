@@ -1423,6 +1423,14 @@ fn e_c3_colour_plus_other_difference_still_refuses() {
         "<p>one <span style='color:#123456;padding:2px'>two</span></p>",
         "<p>one <span style='color:#123456;background-color:red'>two</span></p>",
         "<p>one <span style='color:#123456;border:2px solid transparent'>two</span></p>",
+        // Reviewer-completed (delta10 follow-up): the remaining six frozen E-C3
+        // kinds combined with colour - full 15-kind coverage.
+        "<p>one <span style='color:#123456;direction:rtl'>two</span></p>",
+        "<p>one <span style='color:#123456;outline:1px solid red'>two</span></p>",
+        "<p>one <span style='color:#123456;box-shadow:1px 1px 0 red'>two</span></p>",
+        "<p>one <span style='color:#123456;position:relative'>two</span></p>",
+        "<p>one <span style='color:#123456;background-image:url(a),url(b)'>two</span></p>",
+        "<p>one <span><abbr style='color:#123456'>two</abbr></span></p>",
     ] {
         let boxes = tree(body);
         assert_eq!(

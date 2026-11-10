@@ -881,6 +881,15 @@ fn paint_direct_text_blocks_core(
             )
             .map_err(|_| PageError::Unsupported)?;
             list.append_list(glyphs).map_err(PageError::Paint)?;
+            // CSS 2.1 16.3.1: a decoration takes the colour of the element that ESTABLISHED
+            // it. underline_rect admits only a decorated block whose children are direct
+            // text (which mirrors the block's style), with no decorated ancestor and no
+            // other decorated box - so the establishing element IS this block and
+            // rgb(node.style.color) is the establishing element's resolved colour, not a
+            // block-colour substitution. Every shape where they could diverge (an inline
+            // descendant with its own colour, e.g. a UA-underlined blue link in a black
+            // block) fails underline_rect or the decorated-box count check below and the
+            // whole page refuses (pinned in tests/delta10_underline_colour.rs).
             if node.style.text_decoration != crate::computed_style::TextDecoration::None {
                 let profile = underline.ok_or(PageError::Unsupported)?;
                 let rect = profile.underline_rect(
