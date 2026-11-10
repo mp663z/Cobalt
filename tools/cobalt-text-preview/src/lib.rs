@@ -407,14 +407,23 @@ fn extent_check(
 
 /// The caller's actual colour-scheme input for media evaluation. This is a
 /// host input, never guessed: absent means the engine's legacy absent-context
-/// behavior (`prefers-color-scheme` stays `Unknown`). `Dark` asserts the
-/// caller's actual dark scheme; the engine has no dark context, so evaluation
-/// stays `Unknown` exactly as absent does. Only `Light` changes evaluation,
-/// through the engine's existing `with_light_scheme` assertion.
+/// behavior (`prefers-color-scheme` stays `Unknown`).
+///
+/// LIMITATION, read before choosing a variant: there is NO dark-scheme
+/// matching anywhere in the engine. `DarkUnknown` only records that the
+/// caller's actual scheme is dark; every `prefers-color-scheme` query still
+/// evaluates `Unknown` exactly as when no input is given, so a dark-scheme
+/// caller gets byte-identical behavior to a caller that says nothing. The
+/// variant exists so the caller does not have to lie about its environment to
+/// keep that behavior. Only `LightAsserted` changes evaluation, through the
+/// engine's existing `with_light_scheme` assertion.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SchemePreference {
-    Light,
-    Dark,
+    /// The caller's actual environment is a light colour scheme.
+    LightAsserted,
+    /// The caller's actual environment is dark. No dark matching exists:
+    /// `prefers-color-scheme` stays `Unknown`, byte-identical to no input.
+    DarkUnknown,
 }
 
 fn page_budget(
@@ -459,8 +468,8 @@ fn page_budget_with_scheme(
     // Absent and dark inputs both keep the engine's absent-context behavior;
     // only an actual light assertion enrolls `with_light_scheme`.
     let media = match scheme {
-        Some(SchemePreference::Light) => media.with_light_scheme(),
-        Some(SchemePreference::Dark) | None => media,
+        Some(SchemePreference::LightAsserted) => media.with_light_scheme(),
+        Some(SchemePreference::DarkUnknown) | None => media,
     };
     Ok((limits, media))
 }
@@ -694,11 +703,12 @@ pub fn prepare_page_static(
 
 /// EXPERIMENTAL, private, unadopted: `prepare_page_static` plus the caller's
 /// actual colour-scheme input for media evaluation. `None` is byte-identical
-/// to `prepare_page_static`; `Dark` keeps the engine's absent-context
-/// `Unknown` behavior; only an actual `Light` assertion enrolls the engine's
-/// existing `with_light_scheme`. Viewport media already comes from the actual
-/// layout width. Every other refusal applies unchanged; no engine semantics,
-/// admission, cap or default-entry change.
+/// to `prepare_page_static`. LIMITATION: no dark matching exists;
+/// `SchemePreference::DarkUnknown` keeps `prefers-color-scheme` `Unknown`,
+/// byte-identical to `None`. Only an actual `LightAsserted` input enrolls the
+/// engine's existing `with_light_scheme`. Viewport media already comes from
+/// the actual layout width. Every other refusal applies unchanged; no engine
+/// semantics, admission, cap or default-entry change.
 /// # Errors
 /// Refuses exactly as `prepare_page_static` does.
 #[allow(clippy::too_many_arguments)] // Explicit experimental boundary; no app state hidden here.
@@ -1737,7 +1747,7 @@ mod media_width_wiring {
         let gated = b"<!doctype html><html><head><link rel=\"stylesheet\" media=\"(prefers-color-scheme: dark)\" href=\"data:text/css;base64,cCB7IGRpc3BsYXk6IGdyaWQgfQ==\"></head><body><p style='font-size:16px'>Hello world</p></body></html>";
         // Absent input: media Unknown -> sheet refusal stands (legacy behavior).
         assert!(prepare_page_static(gated, &[], 200, 80, &face, Some(true)).is_err());
-        // Dark assertion: the engine has no dark context; Unknown stands.
+        // DarkUnknown: records the actual dark environment; no dark matching exists, Unknown stands.
         assert!(prepare_page_static_with_scheme(
             gated,
             &[],
@@ -1745,7 +1755,7 @@ mod media_width_wiring {
             80,
             &face,
             Some(true),
-            Some(SchemePreference::Dark)
+            Some(SchemePreference::DarkUnknown)
         )
         .is_err());
         // Actual light assertion: the dark-gated sheet is skipped, page paints.
@@ -1756,7 +1766,7 @@ mod media_width_wiring {
             80,
             &face,
             Some(true),
-            Some(SchemePreference::Light)
+            Some(SchemePreference::LightAsserted)
         )
         .is_ok());
         // Absent/Dark/Light are byte-identical on pages with no scheme-gated sheet.
@@ -1765,7 +1775,7 @@ mod media_width_wiring {
             .unwrap()
             .0
             .pixels;
-        for scheme in [None, Some(SchemePreference::Dark), Some(SchemePreference::Light)] {
+        for scheme in [None, Some(SchemePreference::DarkUnknown), Some(SchemePreference::LightAsserted)] {
             let (frame, _) =
                 prepare_page_static_with_scheme(plain, &[], 200, 80, &face, Some(true), scheme)
                     .unwrap();

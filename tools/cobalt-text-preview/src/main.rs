@@ -40,15 +40,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bold_path = Some(args.next().ok_or("missing bold font file")?);
             }
             // EXPERIMENTAL: the operator's actual colour-scheme input for media
-            // evaluation. Absent keeps the engine's legacy absent-context
-            // behavior; "dark" asserts dark and keeps prefers-color-scheme
-            // Unknown (the engine has no dark context); only "light" enrolls
-            // the engine's existing light assertion.
+            // evaluation. LIMITATION: there is NO dark matching anywhere;
+            // "dark" only records the actual environment and keeps
+            // prefers-color-scheme Unknown, byte-identical to omitting the
+            // flag. Absent keeps the engine's legacy absent-context behavior.
+            // Only "light" enrolls the engine's existing light assertion.
             "--color-scheme" if scheme.is_none() => {
                 scheme = Some(match args.next().as_deref() {
-                    Some("light") => SchemePreference::Light,
-                    Some("dark") => SchemePreference::Dark,
-                    _ => return Err("--color-scheme expects light or dark".into()),
+                    Some("light") => SchemePreference::LightAsserted,
+                    Some("dark") => SchemePreference::DarkUnknown,
+                    _ => return Err("--color-scheme expects light or dark (dark: no dark matching exists; prefers-color-scheme stays Unknown, same as omitting the flag)".into()),
                 });
             }
             _ => return Err("unknown or repeated option".into()),
