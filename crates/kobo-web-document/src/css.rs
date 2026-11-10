@@ -1011,9 +1011,9 @@ impl Selector {
         if !simple.nth.is_empty() {
             if let Some(sibs) = element_siblings(nodes, node) {
                 // Oversize sibling list: this rule REFUSES for this element
-                // (rule-scoped) - never a silent mismatch, never a global
-                // truncation (same fail-closed posture as the sibling
-                // combinators).
+                // (rule-scoped) - never a silent mismatch. The caller records
+                // the precise diagnostic and flags the page truncated, so the
+                // page never paints with a dropped potential match.
                 if sibs.len() > EXT_MAX_SIBLINGS {
                     return Err(MatchRefusal::OversizeSiblings);
                 }
@@ -1578,10 +1578,12 @@ mod ext_selector_tests {
         html.push_str("</div><div><i>x</i><i>y</i></div>");
         let tree = run(true, &html);
         // Rule-scoped refusal: one precise diagnostic per oversize element,
-        // no truncation, no unsupported flag, control rule applies to all,
-        // and the small-list `i + i` still matches its second element (the
-        // gate costs no unrelated rule, inside or outside the oversize list).
-        assert!(!tree.unsupported && !tree.truncated);
+        // no unsupported flag, control rule applies to all, and the
+        // small-list `i + i` still matches its second element (the gate
+        // costs no unrelated rule, inside or outside the oversize list).
+        // The PAGE is flagged truncated (a potential match was dropped), so
+        // the painter refuses it whole.
+        assert!(!tree.unsupported && tree.truncated);
         assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 4100);
         let mut expected = vec![false; 4100];
         expected.extend([false, true]);
@@ -1820,13 +1822,16 @@ mod ext_selector_tests {
         assert_eq!(colors[4095], RED);
         assert_eq!(colors[4096], BLUE);
         // ABOVE (4097 siblings): the nth rule REFUSES for each of the 4097
-        // oversize elements - exactly 4097 precise rule-scoped diagnostics,
-        // tree NOT truncated, NOT unsupported. No silent non-match: the
-        // refusal is recorded, not dropped. No unrelated rule loss: the
-        // control rule still applies to EVERY element including the oversize
-        // ones, and the lone outside element is untouched by the gate.
+        // oversize elements - exactly 4097 precise rule-scoped diagnostics.
+        // No silent non-match: the refusal is recorded, not dropped. No
+        // unrelated rule loss: the control rule still applies to EVERY
+        // element including the oversize ones, and the lone outside element
+        // is untouched by the gate. AND the page is flagged truncated: a
+        // potentially-matching rule was dropped, so this page is incomplete
+        // and the all-or-nothing painter confinement refuses it (negative
+        // paint-path proof in tests/css_paint_bridge.rs).
         let tree = run(true, &build(4097));
-        assert!(!tree.unsupported && !tree.truncated);
+        assert!(!tree.unsupported && tree.truncated);
         assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 4097);
         let colors = backgrounds(&tree);
         assert_eq!(colors.len(), 4098);

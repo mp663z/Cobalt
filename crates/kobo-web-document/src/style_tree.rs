@@ -321,6 +321,13 @@ impl StyleTree {
         const GENERATED: usize = usize::MAX / 2;
         const MAX_GENERATED: usize = 64;
         let mut pending: Vec<(bool, Computed)> = Vec::new();
+        // Set when any rule refused an element on the oversize-sibling gate.
+        // Applied to `tree.truncated` only AFTER the walk, so the delivered
+        // tree keeps the invariant consumers rely on (a MatchWork refusal on
+        // the tree means the page is flagged incomplete) while the walk
+        // itself evaluates EVERY candidate for EVERY element: exact per-pair
+        // diagnostics, no unrelated rule lost.
+        let mut oversize_dropped = false;
         while let Some((handle, parent, inherited, inherited_vars)) = stack.pop() {
             if handle >= GENERATED {
                 let (is_before, style) = pending[handle - GENERATED];
@@ -432,6 +439,12 @@ impl StyleTree {
                     // no skipped candidates, every other rule unaffected.
                     Err(crate::css::MatchRefusal::OversizeSiblings) => {
                         tree.diagnostics.record(RefusalReason::MatchWork);
+                        // A potentially-matching rule was DROPPED for this
+                        // element: flag the page incomplete AFTER the walk
+                        // (see oversize_dropped), so diagnostics stay exact
+                        // and unrelated rules still compute, while the
+                        // all-or-nothing painter confinement stays intact.
+                        oversize_dropped = true;
                         continue;
                     }
                     // Fuel exhaustion stays a global work guard: truncate.
@@ -492,6 +505,9 @@ impl StyleTree {
                 match rule.selector.matches_originating_checked_scoped(nodes, handle) {
                     Err(crate::css::MatchRefusal::OversizeSiblings) => {
                         tree.diagnostics.record(RefusalReason::MatchWork);
+                        // Same deferred page-completeness flag as the
+                        // element pass.
+                        oversize_dropped = true;
                         continue;
                     }
                     Err(crate::css::MatchRefusal::Fuel) => {
@@ -1095,6 +1111,12 @@ impl StyleTree {
             if let Some((gen, pstyle)) = before_handle {
                 stack.push((gen, Some(index), pstyle, Rc::clone(&vars_now)));
             }
+        }
+        // Delivered-tree invariant: any oversize-sibling refusal during the
+        // walk flags the WHOLE page incomplete (truncated), so no consumer
+        // can present a page with a dropped potential match as complete.
+        if oversize_dropped {
+            tree.truncated = true;
         }
         tree.diagnostics.retained_nodes = tree.nodes.len();
         tree.diagnostics.match_attempts = match_work;

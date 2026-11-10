@@ -499,8 +499,11 @@ pub fn parse_style_tree_with_inline_sheets(
 /// pseudo-classes, pseudo-elements, namespaces and escapes are still refused
 /// as `CssSelector`; fuel exhaustion refuses as `MatchWork` and truncates the
 /// tree, while an oversize sibling list (> 4096) refuses only that rule for
-/// that element (recorded as `MatchWork`, no truncation, no other rule or
-/// element affected). The default entries are unchanged.
+/// that element: one `MatchWork` diagnostic per refused rule-element pair,
+/// every other rule and element still evaluated, and the DELIVERED tree is
+/// flagged truncated so the all-or-nothing painter refuses the page - a
+/// dropped potential match is never presented as complete. The default
+/// entries are unchanged.
 ///
 /// The same entry also accepts `font-size: <n>em` (EXPERIMENTAL, UNREVIEWED
 /// candidate): the exact parent-relative multiplier the percentage path already

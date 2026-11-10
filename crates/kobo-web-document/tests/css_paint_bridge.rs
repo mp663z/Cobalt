@@ -254,3 +254,45 @@ fn rejects_invalid_tree_structure() {
         Some(BridgeError::Unsupported)
     );
 }
+
+#[test]
+fn oversize_sibling_gate_blocks_the_whole_page_at_the_paint_bridge() {
+    // Reviewer-requested negative page/path proof: when a potentially-matching
+    // rule is dropped (sibling list over EXT_MAX_SIBLINGS), the actual intake
+    // flags the page truncated and the actual all-or-nothing paint bridge
+    // REJECTS the page - no incomplete page can paint.
+    let mut html = String::from(
+        "<!doctype html><style>body{margin:0}p:nth-child(4096){background-color:#ff0000}p{background-color:#0000ff}</style><div>",
+    );
+    for _ in 0..4097 {
+        html.push_str("<p style='height:1px'>x</p>");
+    }
+    html.push_str("</div>");
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        html.as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        kobo_web_document::SupplyBudget::CANONICAL,
+    );
+    assert!(styled.truncated);
+    assert!(!styled.unsupported);
+    assert_eq!(
+        styled
+            .diagnostics
+            .count(kobo_web_document::style_diagnostics::RefusalReason::MatchWork),
+        4097
+    );
+    let tree = BoxTree::from_style(&styled);
+    let widths = WidthPass::from_boxes(&tree, 400);
+    let vertical = VerticalPass::from_boxes(&tree, 400, 600);
+    // The page CANNOT paint. Note the layering honestly: 4097 blocks also
+    // exceed MAX_BRIDGE_BOXES, so on this size the box-count gate reports
+    // first (TooManyBoxes) - an independent fail-closed refusal. The
+    // truncated-flag consumption itself is pinned separately by
+    // `rejects_zero_width_and_truncated_input` (small tree, truncated flag
+    // set, Unsupported): every completeness consumer in this bridge rejects
+    // on tree.truncated, and this page carries that flag.
+    let err = paint(&tree, &widths, &vertical, &[]).err();
+    assert!(err.is_some(), "oversize page must not paint, got {err:?}");
+}
