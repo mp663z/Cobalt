@@ -7,6 +7,8 @@ const MAX_BYTES: usize = 64 * 1024;
 const MAX_RULES: usize = 1024;
 const MAX_SELECTORS: usize = 16;
 const MAX_STEPS: usize = 8;
+const EXT_FUEL: u32 = 4096;
+const EXT_MAX_SIBLINGS: usize = 4096;
 
 /// Explicit caller-asserted snapshot state for state pseudo-classes (ext
 /// entries only). The engine never infers this state: a caller passes it only
@@ -106,6 +108,8 @@ struct Simple {
     /// Occurrences of structural pseudo-classes (each counts toward specificity,
     /// so `:first-child:first-child` is two).
     structural_n: u8,
+    /// Extended grammar only: `:nth-child(An+B)` arguments, conjunctive.
+    nth: Vec<(i64, i64)>,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AttrSel {
@@ -409,6 +413,7 @@ fn simple(part: &str) -> Option<Simple> {
         attrs: Vec::new(),
         structural: 0,
         structural_n: 0,
+        nth: Vec::new(),
     })
 }
 
@@ -427,6 +432,104 @@ fn take_ident(s: &str, at: usize) -> (&str, usize) {
         .position(|c| !(c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_'))
         .map_or(s.len(), |n| at + n);
     (&s[at..end], end)
+}
+/// Parses the bounded `:nth-child(An+B)` argument and returns (A, B) and
+/// the position after the closing paren. Grammar (grounded against Chrome
+/// 157 `CSS.supports("selector(...)")` on each token shape): `odd`/`even`
+/// (ASCII case-insensitive), a signed integer with ATTACHED sign (`+5` ok,
+/// `- 3` refused), or `[+-]? [0-9]* n [ ws* [+-] ws* [0-9]+ ]?` with `n`
+/// ASCII case-insensitive. A doubled sign (`2n + -1`) is refused - Chrome
+/// refuses it too. Comments (`2n/**/+1`) and escaped n (`\36 e`) ARE valid
+/// CSS but stay refused here as an unsupported SUBSET (a grammar bound, not
+/// an invalid-CSS claim). Bounds: argument <= 32 chars, |A| <= 1024,
+/// |B| <= 65535. Every deviation refuses the selector.
+fn nth_child_arg(s: &str, at: usize) -> Option<((i64, i64), usize)> {
+    let b = s.as_bytes();
+    if b.get(at) != Some(&b'(') {
+        return None;
+    }
+    let close = b[at + 1..]
+        .iter()
+        .position(|&c| c == b')' || c == b'(')
+        .map(|n| at + 1 + n)?;
+    if b[close] != b')' {
+        return None;
+    }
+    let arg = &s[at + 1..close];
+    if arg.len() > 32 {
+        return None;
+    }
+    Some((an_plus_b(arg)?, close + 1))
+}
+fn an_plus_b(arg: &str) -> Option<(i64, i64)> {
+    let ws = |c: char| matches!(c, ' ' | '\t' | '\n' | '\u{c}' | '\r');
+    let t = arg.trim_matches(ws);
+    if t.is_empty() || t.contains("/*") || t.contains('*') || t.contains('\\') {
+        return None;
+    }
+    let lower = t.to_ascii_lowercase();
+    if lower == "odd" {
+        return Some((2, 1));
+    }
+    if lower == "even" {
+        return Some((2, 0));
+    }
+    let signed_int = |v: &str| -> Option<i64> {
+        // An integer with an ATTACHED optional sign (`+5`, `-3`; `- 3` no).
+        let (sign, digits) = match v.as_bytes().first() {
+            Some(b'+') => (1_i64, &v[1..]),
+            Some(b'-') => (-1_i64, &v[1..]),
+            _ => (1_i64, v),
+        };
+        if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        Some(sign * digits.parse::<i64>().ok()?)
+    };
+    let n_at = lower.find('n');
+    if n_at.is_none() {
+        let b_val = signed_int(t)?;
+        return (b_val.abs() <= 65535).then_some((0, b_val));
+    }
+    let n_at = n_at.unwrap();
+    // Exactly one `n`, and no other alphabetic characters anywhere.
+    if lower[n_at + 1..].contains('n')
+        || t.bytes().any(|c| c.is_ascii_alphabetic() && c.to_ascii_lowercase() != b'n')
+    {
+        return None;
+    }
+    let coeff_raw = &t[..n_at];
+    let coeff = coeff_raw.trim_matches(ws);
+    // The sign/digits must be ATTACHED to `n` (one `n`-dimension token):
+    // `- n + 2` and `2 n` refuse (Chrome refuses `- n + 2`; `2 n` is not a
+    // probed case - fail-closed as the same token-shape bound).
+    if !coeff.is_empty() && coeff_raw != coeff {
+        return None;
+    }
+    let a_val = match coeff {
+        "" | "+" => 1,
+        "-" => -1,
+        other => signed_int(other)?,
+    };
+    let rest = t[n_at + 1..].trim_matches(ws);
+    let b_val = if rest.is_empty() {
+        0
+    } else {
+        // One sign, optional whitespace, unsigned digits (`2n+ 1` ok,
+        // `2n + -1` and `2n++1` refused).
+        let rb = rest.as_bytes();
+        let (sign, after) = match rb.first() {
+            Some(b'+') => (1_i64, &rest[1..]),
+            Some(b'-') => (-1_i64, &rest[1..]),
+            _ => return None,
+        };
+        let digits = after.trim_matches(ws);
+        if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        sign * digits.parse::<i64>().ok()?
+    };
+    (a_val.abs() <= 1024 && b_val.abs() <= 65535).then_some((a_val, b_val))
 }
 fn skip_ws(b: &[u8], mut at: usize) -> usize {
     while at < b.len() && matches!(b[at], b' ' | b'\t' | b'\n' | b'\r' | 0x0C) {
@@ -503,6 +606,7 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
         attrs: Vec::new(),
         structural: 0,
         structural_n: 0,
+        nth: Vec::new(),
     };
     let start = at;
     if b.get(at) == Some(&b'*') {
@@ -544,6 +648,17 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
             b':' => {
                 let (token, next) = take_ident(s, at + 1);
                 let lowered = token.to_ascii_lowercase();
+                if lowered == "nth-child" {
+                    // Functional structural pseudo-class: bounded An+B only.
+                    let (an_b, after) = nth_child_arg(s, next)?;
+                    if simple.structural_n >= 8 {
+                        return None;
+                    }
+                    simple.structural_n += 1;
+                    simple.nth.push(an_b);
+                    at = after;
+                    continue;
+                }
                 match lowered.as_str() {
                     "root" if !simple.root => simple.root = true,
                     // State pseudo-classes: at most one per compound. A
@@ -597,12 +712,13 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
     (at > start).then_some((simple, at))
 }
 /// Opt-in grammar: compounds of type/`*`/`#id`/`.class`/`[attr op value]`/
-/// `:root`/`:first-child`/`:last-child`/`:only-child` and the state
-/// pseudo-class `:link`, joined by descendant, `>`, `+` and `~`, plus the
-/// state pseudo-classes `:hover`, `:active`, `:focus`, `:focus-visible` and
-/// `:focus-within`. Every other state pseudo-class (`:visited` and the
-/// rest), functional pseudo-classes, pseudo-elements, namespaces, escapes
-/// and case flags are refused. A parsed state pseudo-class is only ENROLLED
+/// `:root`/`:first-child`/`:last-child`/`:only-child`/`:nth-child(An+B)` and
+/// the state pseudo-class `:link`, joined by descendant, `>`, `+` and `~`,
+/// plus the state pseudo-classes `:hover`, `:active`, `:focus`,
+/// `:focus-visible` and `:focus-within`. Every other state pseudo-class
+/// (`:visited` and the rest), every other functional pseudo-class
+/// (`:nth-last-child`, `:nth-of-type`, `:not`, ...), the Selectors-4 `of S`
+/// form, pseudo-elements, namespaces, escapes and case flags are refused. A parsed state pseudo-class is only ENROLLED
 /// under an explicit caller `SnapshotState` guarantee covering its family
 /// (see `matched_rules`); otherwise the rule fails closed there exactly like
 /// an unparseable selector.
@@ -691,8 +807,6 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
         pseudo: Pseudo::None,
     })
 }
-const EXT_FUEL: u32 = 4096;
-const MAX_SIBLINGS: usize = 4096;
 fn is_element(nodes: &[Node], handle: Handle) -> bool {
     matches!(nodes[handle].data, Data::Element { .. })
 }
@@ -857,6 +971,15 @@ impl Selector {
         }
         *fuel -= 1;
         let (simple, relation) = &self.steps[index];
+        if !simple.nth.is_empty() {
+            if let Some(sibs) = element_siblings(nodes, node) {
+                // Oversize sibling list: refuse, never a silent mismatch
+                // (same fail-closed posture as the sibling combinators).
+                if sibs.len() > EXT_MAX_SIBLINGS {
+                    return None;
+                }
+            }
+        }
         if !simple.matches(nodes, node) {
             return Some(false);
         }
@@ -882,7 +1005,7 @@ impl Selector {
                 let Some(siblings) = element_siblings(nodes, node) else {
                     return Some(false);
                 };
-                if siblings.len() > MAX_SIBLINGS {
+                if siblings.len() > EXT_MAX_SIBLINGS {
                     return None;
                 }
                 let at = siblings.iter().position(|&n| n == node)?;
@@ -1021,7 +1144,38 @@ impl Simple {
             })
         }) && self.attrs.iter().all(|attr| attr.matches(nodes, handle))
             && (self.structural == 0 || structural_ok(nodes, handle, self.structural))
+            && self.nth.iter().all(|&an_b| nth_ok(nodes, handle, an_b))
     }
+}
+/// `:nth-child(An+B)` DOM predicate: 1-based index among ELEMENT siblings in
+/// tree order; text/comment nodes never shift the index. A detached node
+/// follows the existing `structural_ok` convention (it is its own sibling
+/// list, index 1). Match iff index = A*k + B for some integer k >= 0.
+fn nth_ok(nodes: &[Node], handle: Handle, (a, b): (i64, i64)) -> bool {
+    let index = match element_siblings(nodes, handle) {
+        Some(siblings) => {
+            let mut at = 0_i64;
+            let mut found = None;
+            for &sib in siblings {
+                if !is_element(nodes, sib) {
+                    continue;
+                }
+                at += 1;
+                if sib == handle {
+                    found = Some(at);
+                    break;
+                }
+            }
+            let Some(index) = found else { return false };
+            index
+        }
+        None => 1,
+    };
+    if a == 0 {
+        return index == b;
+    }
+    let d = index - b;
+    d % a == 0 && d / a >= 0
 }
 
 #[cfg(test)]
@@ -1356,7 +1510,7 @@ mod ext_selector_tests {
     fn unsupported_selector_forms_still_refuse() {
         for selector in [
             "p:hover", "p:focus", "p:focus-within", "p:visited", "p:link", "p::before", "p:before",
-            "p:not(.a)", "p:is(.a)", "p:nth-child(2)", "p:first-of-type", "p:empty", "p[a=b i]",
+            "p:not(.a)", "p:is(.a)", "p:first-of-type", "p:empty", "p[a=b i]",
             "p[a=b s]", "p[a|b=c]", "p[*|a]", r"p.a\:b", "svg|p", "p,", "> p", "p >", "p[a=1]",
             "p[a=b c]", "p[a=\"b\\\"c\"]", "p#a#b", ".1a", "p[a=b", "p[a",
         ] {
@@ -1505,6 +1659,99 @@ mod ext_selector_tests {
         // The legacy grammar never accepts a pseudo-element.
         assert!(super::selector("div.p::after").is_none());
         assert!(ext("a").unwrap().pseudo == super::Pseudo::None);
+    }
+    #[test]
+    fn nth_child_parser_token_pins() {
+        // Valid token shapes (grounded against the Chrome 157 CSS.supports
+        // selector() oracle, probe 2026-11-10): attached signs, ASCII
+        // case-insensitive n, odd/even, whitespace around the B sign.
+        for ok in [
+            "2n+1", "2N+1", "2n + 1", "2n+ 1", "2n +1", "+2n+1", "-2n+1", "-n+2", "n", "+n",
+            "-n", "N", "odd", "ODD", "even", "3n-1", "3n - 1", "0", "5", "+5", " 2n+1 ",
+        ] {
+            assert!(super::selector_ext(&format!("p:nth-child({ok})")).is_some(), "{ok}");
+        }
+        // Invalid CSS (Chrome refuses these too): doubled signs, separated
+        // signs, scientific/decimal forms, dangling sign.
+        for bad in [
+            "2n + -1", "2n+-1", "- n + 2", "- 3", "1e2", "2.0n", "2n+1.0", "2n++1", "2n+",
+            "of .x", "n\\",
+        ] {
+            assert!(super::selector_ext(&format!("p:nth-child({bad})")).is_none(), "{bad}");
+        }
+        // VALID CSS refused as an unsupported subset (a grammar bound, not an
+        // invalid-CSS claim): comments, escaped n, the Selectors-4 of-S form.
+        for subset in ["2n/**/+1", "\\36 e", "2 of .x"] {
+            assert!(super::selector_ext(&format!("p:nth-child({subset})")).is_none(), "{subset}");
+        }
+        // Bounds: argument <= 32 chars, |A| <= 1024, |B| <= 65535.
+        assert!(super::selector_ext("p:nth-child(1024n+65535)").is_some());
+        assert!(super::selector_ext("p:nth-child(1025n+1)").is_none());
+        assert!(super::selector_ext("p:nth-child(2n+65536)").is_none());
+        assert!(super::selector_ext("p:nth-child(111111111111111111111111111111111)").is_none());
+        // Parsed (A, B) values.
+        let vals = |a: &str| super::selector_ext(&format!("p:nth-child({a})")).unwrap().steps[0].0.nth.clone();
+        assert_eq!(vals("odd"), [(2, 1)]);
+        assert_eq!(vals("even"), [(2, 0)]);
+        assert_eq!(vals("-n+2"), [(-1, 2)]);
+        assert_eq!(vals("5"), [(0, 5)]);
+        assert_eq!(vals("3n - 1"), [(3, -1)]);
+        // Unchanged grammar bounds: other nth forms and of-type stay refused.
+        for out in ["p:nth-last-child(2)", "p:nth-of-type(2)", "p:first-of-type"] {
+            assert!(super::selector_ext(out).is_none(), "{out}");
+        }
+    }
+    #[test]
+    fn nth_child_actual_path_positions_signs_zero_negative_and_default_identity() {
+        // Element-only 1-based indexing: text and comments never count.
+        let html = "<style>p:nth-child(1){background-color:#ff0000}</style><div>text<!--c--><p>a</p><p>b</p></div><section><p>c</p></section>";
+        let tree = run(true, html);
+        assert!(!tree.unsupported);
+        assert_eq!(reds(&tree, "p"), [true, false, true]);
+        // Negative A.
+        let html = "<style>p:nth-child(-n+2){background-color:#ff0000}</style><div><p>1</p><p>2</p><p>3</p><p>4</p></div>";
+        assert_eq!(reds(&run(true, html), "p"), [true, true, false, false]);
+        // Positive A with offset.
+        let html = "<style>p:nth-child(2n+1){background-color:#ff0000}</style><div><p>1</p><p>2</p><p>3</p><p>4</p></div>";
+        assert_eq!(reds(&run(true, html), "p"), [true, false, true, false]);
+        // Zero matches nothing.
+        let html = "<style>p:nth-child(0){background-color:#ff0000}</style><div><p>1</p></div>";
+        assert_eq!(reds(&run(true, html), "p"), [false]);
+        // Plain index.
+        let html = "<style>p:nth-child(3){background-color:#ff0000}</style><div><p>1</p><p>2</p><p>3</p></div>";
+        assert_eq!(reds(&run(true, html), "p"), [false, false, true]);
+        // Default entry identity: the same selector stays fail-closed there.
+        let tree = run(false, "<style>p:nth-child(2){background-color:#ff0000}</style><p>a</p><p>b</p>");
+        assert!(tree.unsupported);
+        assert_eq!(reds(&tree, "p"), [false, false]);
+    }
+    #[test]
+    fn nth_child_oversize_sibling_list_refuses_not_mismatches() {
+        let mut html = String::from("<style>p:nth-child(4000){background-color:#ff0000}</style><div>");
+        for _ in 0..4100 {
+            html.push_str("<p>x</p>");
+        }
+        html.push_str("</div>");
+        let tree = run(true, &html);
+        assert!(tree.truncated || tree.unsupported);
+    }
+    #[test]
+    fn nth_ok_detached_element_is_index_one() {
+        use html5ever::{ns, LocalName, QualName};
+        let nodes = vec![super::Node {
+            data: super::Data::Element {
+                name: QualName::new(None, ns!(html), LocalName::from("p")),
+                attrs: Default::default(),
+                template: None,
+            },
+            parent: None,
+            children: vec![],
+        }];
+        assert!(super::nth_ok(&nodes, 0, (0, 1)));
+        assert!(!super::nth_ok(&nodes, 0, (0, 2)));
+        assert!(super::nth_ok(&nodes, 0, (2, 1)));
+        assert!(!super::nth_ok(&nodes, 0, (2, 0)));
+        assert!(!super::nth_ok(&nodes, 0, (0, 0)));
     }
 }
 
