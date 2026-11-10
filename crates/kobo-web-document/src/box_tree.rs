@@ -1128,8 +1128,10 @@ impl HeightPass {
 /// could collapse through itself stays unsupported.
 /// Per-node refusal kinds recorded by [`UsedHeightPass`] (CONTAINMENT v1,
 /// reviewer-dispositioned delta5/6, frozen acceptance matrix delta7). The
-/// whole-pass `unsupported` flag stays DERIVED and byte-identical to the
-/// pre-containment value: seed (tree-global kinds only) OR any node refusal.
+/// whole-pass `unsupported` flag remains IMPERATIVELY MAINTAINED (set at the
+/// same sites as pre-containment) and is byte-identical in value; the
+/// equivalence invariant `unsupported == seed (tree-global kinds only) ||
+/// any node refusal` is test-pinned, not a derivation the code relies on.
 /// Subtree-attributable kinds are recorded per node so a clean subtree's
 /// heights compose while a poisoned sibling stays refused; tree-global kinds
 /// (DroppedAttributes, MissingStylesheet, CssDeclaration/CssCondition,
@@ -1191,7 +1193,8 @@ pub struct UsedHeightPass {
     pub unsupported: bool,
     pub truncated: bool,
     /// Per-node refusal flags; empty bits mean the node did not refuse.
-    /// Derived invariant (test-pinned): `unsupported == (seed || any refusal)`.
+    /// Recording only: no consumer reads this field yet. Invariant
+    /// (test-pinned): `unsupported == (seed || any refusal)`.
     pub refusals: Vec<HeightRefusal>,
 }
 

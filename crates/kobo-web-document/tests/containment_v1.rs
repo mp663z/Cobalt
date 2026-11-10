@@ -47,8 +47,10 @@ impl Pass {
             .position(|t| t == tag)
             .unwrap_or_else(|| panic!("no box with tag {tag}"))
     }
-    /// Derived invariant (pinned in-code): the whole-pass bool equals
-    /// seed (tree-global kinds only) OR any per-node refusal bit.
+    /// Equivalence invariant (pinned by test): the imperatively maintained
+    /// whole-pass bool equals seed (tree-global kinds only) OR any per-node
+    /// refusal bit. The bool is not derived at read time; this test proves
+    /// the imperative maintenance never diverges from the invariant.
     fn assert_derived_bool(&self, seed: bool) {
         let any = self.h.refusals.iter().any(|r| !r.is_empty());
         assert_eq!(
