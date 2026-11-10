@@ -68,6 +68,18 @@ pub enum FocusState {
     /// never-match.
     UnfocusedInitial,
 }
+/// Enablement pseudo-classes the extended grammar can represent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Enablement {
+    /// `:enabled` / `:disabled`: pure DOM-function pseudo-classes (tag,
+    /// `disabled` attribute, bounded ancestor state per the current HTML
+    /// Standard algorithms - concept-fe-disabled, concept-fieldset-disabled
+    /// (recursive), concept-option-disabled (nearest-ancestor scan with
+    /// select/hr/datalist/option/optgroup stops), and 4.15 "nearest ancestor
+    /// select is disabled"). No input/history/focus guarantee needed.
+    Enabled,
+    Disabled,
+}
 /// State pseudo-classes the extended grammar can represent.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StatePseudo {
@@ -97,6 +109,9 @@ struct Simple {
     root: bool,
     /// Extended grammar only: at most one state pseudo-class (`:link` in v1).
     state: Option<StatePseudo>,
+    /// Extended grammar only: at most one enablement pseudo-class
+    /// (`:enabled` / `:disabled`); matching is charged and fail-closed.
+    enablement: Option<Enablement>,
     /// Extended grammar only: type selectors compare ASCII case-insensitively
     /// (Chrome matches `linearGradient` and `lineargradient` on SVG elements) and
     /// class tokens split on ASCII whitespace only.
@@ -409,6 +424,7 @@ fn simple(part: &str) -> Option<Simple> {
         classes,
         root,
         state: None,
+        enablement: None,
         ext: false,
         attrs: Vec::new(),
         structural: 0,
@@ -602,6 +618,7 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
         classes: Vec::new(),
         root: false,
         state: None,
+        enablement: None,
         ext: true,
         attrs: Vec::new(),
         structural: 0,
@@ -683,6 +700,15 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
                     }
                     "focus-within" if simple.state.is_none() => {
                         simple.state = Some(StatePseudo::FocusWithin);
+                    }
+                    // Enablement pseudo-classes: at most one per compound; a
+                    // repetition refuses as a grammar bound (not an
+                    // invalid-CSS claim), exactly like the state family.
+                    "enabled" if simple.enablement.is_none() => {
+                        simple.enablement = Some(Enablement::Enabled);
+                    }
+                    "disabled" if simple.enablement.is_none() => {
+                        simple.enablement = Some(Enablement::Disabled);
                     }
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
@@ -1060,6 +1086,26 @@ impl Selector {
                 return Ok(Some(false));
             }
         }
+        // `:enabled` / `:disabled` on this step: the spec algorithms walk
+        // ancestors (fieldset propagation + first-legend exemption, recursive
+        // fieldset disabledness, option's nearest-ancestor stop scan, the
+        // nearest-select composition). Every visited ancestor/child is
+        // charged to fuel; exhaustion refuses fail-closed, never guesses.
+        if let Some(enablement) = simple.enablement {
+            match element_disabled(nodes, node, fuel)? {
+                // Not a disable-able element: matches NEITHER pseudo.
+                None => return Ok(Some(false)),
+                Some(disabled) => {
+                    let ok = match enablement {
+                        Enablement::Enabled => !disabled,
+                        Enablement::Disabled => disabled,
+                    };
+                    if !ok {
+                        return Ok(Some(false));
+                    }
+                }
+            }
+        }
         if !simple.matches_inner(nodes, node, false) {
             return Ok(Some(false));
         }
@@ -1197,9 +1243,6 @@ pub(crate) fn has_autofocus(nodes: &[Node]) -> bool {
     })
 }
 impl Simple {
-    fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
-        self.matches_inner(nodes, handle, true)
-    }
     fn matches_inner(&self, nodes: &[Node], handle: Handle, check_nth: bool) -> bool {
         let Data::Element { name, .. } = &nodes[handle].data else {
             return false;
@@ -1253,6 +1296,17 @@ impl Simple {
             && (!check_nth || self.nth.iter().all(|&an_b| nth_ok(nodes, handle, an_b)))
     }
 }
+impl Simple {
+    fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
+        // The pure path never answers enablement (it needs charged ancestor
+        // walks; ext_match owns it): refuse to guess rather than infer from
+        // attribute absence.
+        if self.enablement.is_some() {
+            return false;
+        }
+        self.matches_inner(nodes, handle, true)
+    }
+}
 /// `:nth-child(An+B)` formula check: 1-based index among ELEMENT siblings
 /// matches iff index = A*k + B for some integer k >= 0.
 fn nth_formula(index: i64, (a, b): (i64, i64)) -> bool {
@@ -1291,6 +1345,180 @@ fn nth_index(nodes: &[Node], handle: Handle) -> Option<i64> {
         }
     }
     None
+}
+fn tag_is(nodes: &[Node], handle: Handle, names: &[&str]) -> bool {
+    match &nodes[handle].data {
+        Data::Element { name, .. } => names
+            .iter()
+            .any(|t| name.local.as_ref().eq_ignore_ascii_case(t)),
+        _ => false,
+    }
+}
+fn has_disabled_attr(nodes: &[Node], handle: Handle) -> bool {
+    match &nodes[handle].data {
+        Data::Element { attrs, .. } => attrs
+            .iter()
+            .any(|(key, _)| (&**key).eq_ignore_ascii_case("disabled")),
+        _ => false,
+    }
+}
+/// One charged step up the ancestor chain; Fuel exhaustion refuses.
+fn parent_charged(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<Option<Handle>, MatchRefusal> {
+    match nodes[handle].parent {
+        None => Ok(None),
+        Some(parent) => {
+            if *fuel == 0 {
+                return Err(MatchRefusal::Fuel);
+            }
+            *fuel -= 1;
+            Ok(Some(parent))
+        }
+    }
+}
+/// The first `legend` ELEMENT child of a fieldset, if any: one bounded scan
+/// of the fieldset's children, every visited child charged.
+fn first_legend_child(
+    nodes: &[Node],
+    fieldset: Handle,
+    fuel: &mut u32,
+) -> Result<Option<Handle>, MatchRefusal> {
+    for &child in &nodes[fieldset].children {
+        if *fuel == 0 {
+            return Err(MatchRefusal::Fuel);
+        }
+        *fuel -= 1;
+        if tag_is(nodes, child, &["legend"]) {
+            return Ok(Some(child));
+        }
+    }
+    Ok(None)
+}
+/// Shared fieldset-propagation walk (concept-fe-disabled second bullet and
+/// recursive concept-fieldset-disabled second condition): is `handle`
+/// disabled by an ANCESTOR fieldset[disabled], honoring each fieldset's
+/// first-legend-child exemption? Every ancestor and every child visited
+/// while identifying a first legend is charged. The path child is tracked so
+/// the exemption applies exactly when the path passes through that legend.
+fn disabled_by_ancestor_fieldset(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<bool, MatchRefusal> {
+    let mut at = handle;
+    while let Some(ancestor) = parent_charged(nodes, at, fuel)? {
+        if tag_is(nodes, ancestor, &["fieldset"]) && has_disabled_attr(nodes, ancestor) {
+            // First-legend exemption: if the element one step below this
+            // fieldset on the path is a legend that is the fieldset's first
+            // legend element child, this fieldset does not disable it.
+            let exempt = first_legend_child(nodes, ancestor, fuel)? == Some(at);
+            if !exempt {
+                return Ok(true);
+            }
+        }
+        at = ancestor;
+    }
+    Ok(false)
+}
+/// concept-fe-disabled for button/input/select/textarea.
+fn control_disabled(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<bool, MatchRefusal> {
+    if has_disabled_attr(nodes, handle) {
+        return Ok(true);
+    }
+    disabled_by_ancestor_fieldset(nodes, handle, fuel)
+}
+/// concept-fieldset-disabled (RECURSIVE per the current HTML Standard).
+fn fieldset_disabled(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<bool, MatchRefusal> {
+    control_disabled(nodes, handle, fuel)
+}
+/// Nearest ancestor `select`, charged per visited ancestor.
+fn nearest_ancestor_select(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<Option<Handle>, MatchRefusal> {
+    let mut at = handle;
+    while let Some(ancestor) = parent_charged(nodes, at, fuel)? {
+        if tag_is(nodes, ancestor, &["select"]) {
+            return Ok(Some(ancestor));
+        }
+        at = ancestor;
+    }
+    Ok(None)
+}
+/// Is the nearest ancestor select (if any) disabled? (4.15 composition.)
+fn nearest_select_disabled(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<bool, MatchRefusal> {
+    match nearest_ancestor_select(nodes, handle, fuel)? {
+        Some(select) => control_disabled(nodes, select, fuel),
+        None => Ok(false),
+    }
+}
+/// concept-option-disabled: own attribute, else the nearest-ancestor scan
+/// that STOPS at the first select/hr/datalist/option/optgroup ancestor
+/// (optgroup's disabled attribute decides; the other four decide false).
+fn option_disabled_algo(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<bool, MatchRefusal> {
+    if has_disabled_attr(nodes, handle) {
+        return Ok(true);
+    }
+    let mut at = handle;
+    while let Some(ancestor) = parent_charged(nodes, at, fuel)? {
+        if tag_is(nodes, ancestor, &["select", "hr", "datalist", "option"]) {
+            return Ok(false);
+        }
+        if tag_is(nodes, ancestor, &["optgroup"]) {
+            return Ok(has_disabled_attr(nodes, ancestor));
+        }
+        at = ancestor;
+    }
+    Ok(false)
+}
+/// 4.15 "actually disabled" for the disable-able set; None = the element is
+/// outside the set and matches NEITHER :enabled nor :disabled (never
+/// inferred from attribute absence). Form-associated custom elements are out
+/// of engine scope (no custom-element host) and refuse by landing here.
+fn element_disabled(
+    nodes: &[Node],
+    handle: Handle,
+    fuel: &mut u32,
+) -> Result<Option<bool>, MatchRefusal> {
+    if tag_is(nodes, handle, &["button", "input", "select", "textarea"]) {
+        return control_disabled(nodes, handle, fuel).map(Some);
+    }
+    if tag_is(nodes, handle, &["fieldset"]) {
+        return fieldset_disabled(nodes, handle, fuel).map(Some);
+    }
+    if tag_is(nodes, handle, &["optgroup"]) {
+        if has_disabled_attr(nodes, handle) {
+            return Ok(Some(true));
+        }
+        return nearest_select_disabled(nodes, handle, fuel).map(Some);
+    }
+    if tag_is(nodes, handle, &["option"]) {
+        if option_disabled_algo(nodes, handle, fuel)? {
+            return Ok(Some(true));
+        }
+        return nearest_select_disabled(nodes, handle, fuel).map(Some);
+    }
+    Ok(None)
 }
 /// Budget-charged `nth_index` for callers without the walk's O(1) position:
 /// the oversize gate refuses BEFORE any traversal, then every visited child
@@ -2000,7 +2228,109 @@ mod ext_selector_tests {
         assert!(!super::nth_ok(&nodes, 0, (2, 0)));
         assert!(!super::nth_ok(&nodes, 0, (0, 0)));
     }
+
+    // ---- bounded opt-in :enabled / :disabled (HTML 4.15, spec-verbatim
+    // algorithms; oracle: Chrome 157 engine-DOM replay, 60 cases) ----
+    #[test]
+    fn enablement_grammar_pins() {
+        use super::selector_ext;
+        // At most one enablement per compound; repetition refuses (grammar bound).
+        assert!(selector_ext("input:enabled:disabled").is_none());
+        assert!(selector_ext("input:enabled:enabled").is_none());
+        assert!(selector_ext("input:disabled:disabled").is_none());
+        // Functional form is not this family.
+        assert!(selector_ext("input:enabled(1)").is_none());
+        assert!(selector_ext("input:disabled(2n+1)").is_none());
+        // Bare forms parse (any element; non-FACE matches neither).
+        assert!(selector_ext("input:enabled").is_some());
+        assert!(selector_ext(":disabled").is_some());
+        assert!(selector_ext("div:enabled").is_some());
+    }
+    #[test]
+    fn base_entry_still_refuses_enablement() {
+        // Base grammar refuses enablement at the parser level...
+        assert!(super::selector("input:enabled").is_none());
+        assert!(super::selector("button:disabled").is_none());
+        assert!(super::selector(":enabled").is_none());
+        let html = "<style>input:enabled{background-color:#ff0000}</style><input>";
+        assert!(run(false, html).unsupported);
+        let html = "<style>button:disabled{background-color:#ff0000}</style><button disabled>x</button>";
+        assert!(run(false, html).unsupported);
+    }
+    #[test]
+    fn non_face_element_matches_neither_enablement() {
+        // div is not a FACE / disabled-capable element: BOTH pseudo-classes
+        // fail (never inferred from attribute absence). Not unsupported.
+        let html = "<style>div:enabled{background-color:#ff0000}</style><div>x</div><div disabled>y</div>";
+        let tree = run(true, html);
+        assert!(!tree.unsupported);
+        assert!(!tree.truncated);
+        assert_eq!(reds(&tree, "div"), vec![false, false]);
+        let html = "<style>div:disabled{background-color:#ff0000}</style><div>x</div><div disabled>y</div>";
+        let tree = run(true, html);
+        assert!(!tree.unsupported);
+        assert_eq!(reds(&tree, "div"), vec![false, false]);
+    }
+    #[test]
+    fn first_legend_exemption_and_recursive_fieldset_walk_pins() {
+        // <fieldset disabled><legend><input></legend><button></fieldset>:
+        // input inside the FIRST legend child is enabled; the button is disabled.
+        let html = "<style>input:disabled{background-color:#ff0000}button:disabled{background-color:#ff0000}</style><fieldset disabled><legend>l<input></legend><button>x</button></fieldset>";
+        let tree = run(true, html);
+        // Pages containing button/input independently flag CssDeclaration
+        // (pre-existing form-control refusal, reproduced with a plain
+        // `button{}` rule on this build), so the pin is matcher truth only.
+        assert!(!tree.truncated);
+        assert_eq!(reds(&tree, "input"), vec![false]);
+        assert_eq!(reds(&tree, "button"), vec![true]);
+        // Recursive concept-fieldset-disabled: inner fieldset (no own attr)
+        // under a disabled outer fieldset disables its controls.
+        let html = "<style>button:disabled{background-color:#ff0000}</style><fieldset disabled><fieldset><button>x</button></fieldset></fieldset>";
+        let tree = run(true, html);
+        assert_eq!(reds(&tree, "button"), vec![true]);
+        // fieldset:disabled itself is recursive: inner matches too.
+        let html = "<style>fieldset:disabled{background-color:#ff0000}</style><fieldset disabled><fieldset></fieldset></fieldset><fieldset></fieldset>";
+        let tree = run(true, html);
+        assert_eq!(reds(&tree, "fieldset"), vec![true, true, false]);
+    }
+    #[test]
+    fn select_option_composition_walk_pins() {
+        // Disabled select disables its option descendants.
+        let html = "<style>option:disabled{background-color:#ff0000}</style><select disabled><option>a</option></select><select><option>b</option></select>";
+        let tree = run(true, html);
+        assert!(!tree.truncated);
+        assert_eq!(reds(&tree, "option"), vec![true, false]);
+        // optgroup's own disabled attr disables its option children even
+        // under an ENABLED select (nearest-ancestor stop at optgroup).
+        let html = "<style>option:disabled{background-color:#ff0000}</style><select><optgroup disabled><option>a</option></optgroup><optgroup><option>b</option></optgroup></select>";
+        let tree = run(true, html);
+        assert_eq!(reds(&tree, "option"), vec![true, false]);
+        // select:disabled by its own attr.
+        let html = "<style>select:disabled{background-color:#ff0000}</style><select disabled></select><select></select>";
+        let tree = run(true, html);
+        assert_eq!(reds(&tree, "select"), vec![true, false]);
+    }
+    #[test]
+    fn enablement_ancestor_walk_is_charged_to_the_global_match_work_budget() {
+        use crate::style_diagnostics::RefusalReason;
+        // NEGATIVE CONTROL (budget exhaustion): 3000 nested <div><input> -
+        // each input's :enabled check walks its full ancestry (depth d costs
+        // ~d fuel), summing past the 4M match-work budget: the tree is
+        // flagged truncated with a MatchWork diagnostic, never a silent
+        // incomplete style computation.
+        let mut html =
+            String::from("<style>input:enabled{background-color:#ff0000}</style>");
+        for _ in 0..3000 {
+            html.push_str("<div><input>");
+        }
+        let tree = run(true, &html);
+        // (input pages independently flag CssDeclaration; the pin is the
+        // budget-exhaustion truncation, not page support.)
+        assert!(tree.truncated);
+        assert!(tree.diagnostics.count(RefusalReason::MatchWork) >= 1);
+    }
 }
+
 
 #[cfg(test)]
 mod attribution_harness {
@@ -2128,4 +2458,198 @@ mod attribution_harness {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod enablement_oracle_replay_tests {
+    //! ENGINE-PARSED-DOM replay of the full Chrome 157 oracle (60 element
+    //! cases; rounds 1-3, raw artifacts in
+    //! oracle-enabled-disabled-20261110/): markup is byte-verbatim from the
+    //! probe page/scripts, parsed by the engine's own html5ever Sink
+    //! (scripting disabled), matched via the REAL bounded matcher. Matcher
+    //! truth only - no paint or readiness claim.
+    use super::*;
+    use html5ever::tendril::TendrilSink;
+    fn engine_nodes(html: &str) -> Vec<Node> {
+        let sink = crate::dom::Sink::new(64 * 1024 * 1024);
+        let mut parser = html5ever::parse_document(
+            sink,
+            html5ever::ParseOpts {
+                tree_builder: html5ever::tree_builder::TreeBuilderOpts {
+                    scripting_enabled: false,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        parser.process(html.to_string().into());
+        parser.finish().into_nodes()
+    }
+    fn find_by_id(nodes: &[Node], id: &str) -> Handle {
+        let mut found = None;
+        for (h, n) in nodes.iter().enumerate() {
+            if let Data::Element { attrs, .. } = &n.data {
+                if attrs.iter().any(|(k, v)| &**k == "id" && v == id) {
+                    assert!(found.is_none(), "duplicate id {id}");
+                    found = Some(h);
+                }
+            }
+        }
+        found.unwrap_or_else(|| panic!("id {id} not in engine DOM"))
+    }
+    fn ancestry(nodes: &[Node], handle: Handle) -> String {
+        let mut chain = Vec::new();
+        let mut at = nodes[handle].parent;
+        while let Some(p) = at {
+            if let Data::Element { name, attrs, .. } = &nodes[p].data {
+                let mut t = name.local.to_string().to_uppercase();
+                if attrs.iter().any(|(k, _)| (&**k).eq_ignore_ascii_case("disabled")) {
+                    t.push_str("[disabled]");
+                }
+                chain.push(t);
+            }
+            at = nodes[p].parent;
+        }
+        chain.retain(|t| t != "HTML");
+        chain.join(">")
+    }
+    const CASES: &[(&str, bool, bool)] = &[
+        ("i1", true, false),
+        ("i2", false, true),
+        ("i3", true, false),
+        ("i4", false, true),
+        ("d1", false, false),
+        ("d2", false, false),
+        ("b1", true, false),
+        ("b2", false, true),
+        ("s1", true, false),
+        ("s2", false, true),
+        ("t1", true, false),
+        ("t2", false, true),
+        ("og1", true, false),
+        ("og2", false, true),
+        ("o1", true, false),
+        ("o2", false, true),
+        ("o3", false, true),
+        ("o4", true, false),
+        ("o5", false, true),
+        ("f1", true, false),
+        ("f2", false, true),
+        ("fi1", false, true),
+        ("fi2", true, false),
+        ("fi3", false, true),
+        ("fi4", false, true),
+        ("fi5", true, false),
+        ("a1", false, false),
+        ("u1", false, false),
+        ("u2", false, false),
+        ("x1", false, true),
+        ("x2", false, true),
+        ("x3", true, false),
+        ("x4", false, true),
+        ("x5", false, true),
+        ("x6", true, false),
+        ("x7", false, true),
+        ("x8", false, true),
+        ("x9", false, true),
+        ("x10", true, false),
+        ("x11", true, false),
+        ("x12", false, false),
+        ("x13", false, true),
+        ("x14", false, true),
+        ("x15", false, false),
+        ("g1", false, true),
+        ("g1o", false, true),
+        ("g2o", false, true),
+        ("fs", false, true),
+        ("fog", false, true),
+        ("foo", false, true),
+        ("fod", false, true),
+        ("inner", false, true),
+        ("inneri", false, true),
+        ("inner2", false, true),
+        ("inner2i", false, true),
+        ("leg1", true, false),
+        ("r10", true, false),
+        ("r11", true, false),
+        ("r12", true, false),
+        ("r13", true, false),
+    ];
+    #[test]
+    fn enablement_oracle_replay_all_cases_on_engine_parsed_dom() {
+        let nodes = engine_nodes(PAGE);
+        assert_eq!(CASES.len(), 60);
+        for &(id, en, dis) in CASES {
+            let handle = find_by_id(&nodes, id);
+            let en_sel = selector_ext(&format!("#{id}:enabled")).unwrap();
+            let dis_sel = selector_ext(&format!("#{id}:disabled")).unwrap();
+            assert_eq!(
+                en_sel.matches_checked(&nodes, handle),
+                Some(en),
+                ":enabled mismatch on #{id} (ancestry {})",
+                ancestry(&nodes, handle)
+            );
+            assert_eq!(
+                dis_sel.matches_checked(&nodes, handle),
+                Some(dis),
+                ":disabled mismatch on #{id} (ancestry {})",
+                ancestry(&nodes, handle)
+            );
+        }
+    }
+    #[test]
+    fn engine_parsed_ancestry_matches_oracle_disclosure() {
+        // Ancestry fidelity: the engine's parser produces the same structure
+        // the oracle disclosed (Chrome's parser), incl. NO select ancestor
+        // for x10/x11 and the fieldset>select>optgroup>option chain.
+        let nodes = engine_nodes(PAGE);
+        assert_eq!(ancestry(&nodes, find_by_id(&nodes, "x11")), "OPTGROUP>FIELDSET[disabled]>DIV>BODY");
+        assert_eq!(ancestry(&nodes, find_by_id(&nodes, "fog")), "SELECT>FIELDSET[disabled]>BODY");
+        assert_eq!(ancestry(&nodes, find_by_id(&nodes, "foo")), "OPTGROUP>SELECT>FIELDSET[disabled]>BODY");
+        assert_eq!(ancestry(&nodes, find_by_id(&nodes, "inneri")), "FIELDSET>FIELDSET[disabled]>BODY");
+        assert_eq!(ancestry(&nodes, find_by_id(&nodes, "leg1")), "LEGEND>FIELDSET[disabled]>BODY");
+    }
+    const PAGE: &str = r#"<!doctype html><body>
+
+<input id=i1>
+<input id=i2 disabled>
+<input id=i3 type=hidden>
+<input id=i4 type=hidden disabled>
+<div id=d1></div><div id=d2 disabled></div>
+<button id=b1></button><button id=b2 disabled></button>
+<select id=s1></select><select id=s2 disabled></select>
+<textarea id=t1></textarea><textarea id=t2 disabled></textarea>
+<select><optgroup id=og1><option id=o1>x</option></optgroup></select>
+<select><optgroup id=og2 disabled><option id=o2>x</option></optgroup></select>
+<select><option id=o3 disabled>x</option><option id=o4>x</option></select>
+<select disabled><option id=o5>x</option></select>
+<fieldset id=f1></fieldset><fieldset id=f2 disabled></fieldset>
+<fieldset disabled><input id=fi1></fieldset>
+<fieldset disabled><legend>l<input id=fi2></legend><input id=fi3></fieldset>
+<fieldset disabled><legend>l1</legend><legend>l2<input id=fi4></legend></fieldset>
+<fieldset><input id=fi5></fieldset>
+<a id=a1 href=x>a</a><foo id=u1 disabled></foo><foo id=u2></foo>
+
+<div><fieldset disabled><div><input id=x1></div></fieldset>
+<fieldset disabled><div><legend>l<input id=x2></legend></div></fieldset>
+<fieldset disabled><span></span><legend>l<input id=x3></legend></fieldset>
+<fieldset disabled><legend>l</legend><fieldset><input id=x4></fieldset></fieldset>
+<fieldset disabled><fieldset><input id=x5></fieldset></fieldset>
+<form disabled><input id=x6></form>
+<fieldset disabled><button id=x7></button><select id=x8></select><textarea id=x9></textarea></fieldset>
+<fieldset disabled><optgroup id=x10><option id=x11>o</option></optgroup></fieldset>
+<menu><li id=x12 disabled>i</li></menu>
+<input id=x13 disabled="">
+<input id=x14 disabled="disabled">
+<object id=x15 disabled></object></div>
+
+<select disabled><optgroup id=g1><option id=g1o>x</option></optgroup></select>
+<select disabled><option id=g2o>x</option></select>
+<fieldset disabled><select id=fs><optgroup id=fog><option id=foo>x</option></optgroup><option id=fod>x</option></select></fieldset>
+<fieldset disabled><fieldset id=inner><input id=inneri></fieldset></fieldset>
+<fieldset disabled><fieldset id=inner2 disabled><input id=inner2i></fieldset></fieldset>
+<fieldset disabled><legend>L<input id=leg1></legend></fieldset>
+
+<div><fieldset disabled><optgroup id=r10><option id=r11>o</option></optgroup></fieldset><fieldset disabled><div><optgroup id=r12><option id=r13>o</option></optgroup></div></fieldset></div>
+</body>"#;
 }
