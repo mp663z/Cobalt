@@ -424,10 +424,23 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                let Some(selected) = rule.selector.matches_checked(nodes, handle) else {
-                    tree.diagnostics.record(RefusalReason::MatchWork);
-                    tree.truncated = true;
-                    break;
+                let selected = match rule.selector.matches_checked_scoped(nodes, handle) {
+                    Ok(Some(selected)) => selected,
+                    // Rule-scoped refusal (sibling list over EXT_MAX_SIBLINGS):
+                    // this rule does not apply to THIS element. One precise
+                    // diagnostic per refused rule-element pair; no truncation,
+                    // no skipped candidates, every other rule unaffected.
+                    Err(crate::css::MatchRefusal::OversizeSiblings) => {
+                        tree.diagnostics.record(RefusalReason::MatchWork);
+                        continue;
+                    }
+                    // Fuel exhaustion stays a global work guard: truncate.
+                    Err(crate::css::MatchRefusal::Fuel) => {
+                        tree.diagnostics.record(RefusalReason::MatchWork);
+                        tree.truncated = true;
+                        break;
+                    }
+                    Ok(None) => false,
                 };
                 if selected {
                     if let Some(index) = rule.deferred {
@@ -476,14 +489,18 @@ impl StyleTree {
                     tree.truncated = true;
                     break;
                 }
-                match rule.selector.matches_originating_checked(nodes, handle) {
-                    None => {
+                match rule.selector.matches_originating_checked_scoped(nodes, handle) {
+                    Err(crate::css::MatchRefusal::OversizeSiblings) => {
+                        tree.diagnostics.record(RefusalReason::MatchWork);
+                        continue;
+                    }
+                    Err(crate::css::MatchRefusal::Fuel) => {
                         tree.diagnostics.record(RefusalReason::MatchWork);
                         tree.truncated = true;
                         break;
                     }
-                    Some(false) => {}
-                    Some(true) => {
+                    Ok(None) | Ok(Some(false)) => {}
+                    Ok(Some(true)) => {
                         let is_before = rule.selector.pseudo == crate::css::Pseudo::Before;
                         if is_before {
                             pseudo_hit_before = true;

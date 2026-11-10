@@ -492,10 +492,15 @@ pub fn parse_style_tree_with_inline_sheets(
 /// CANDIDATE, opt-in, unadopted: [`parse_style_tree_with_inline_sheets`] plus an
 /// extended selector grammar: attribute selectors (`[a]`, `=`, `~=`, `|=`, `^=`,
 /// `$=`, `*=`, no case flags), `*`, `:first-child`, `:last-child`, `:only-child`,
-/// and the `+` and `~` combinators, matched with a backtracking, fuel-bounded
-/// matcher. State and functional pseudo-classes, pseudo-elements, namespaces and
-/// escapes are still refused as `CssSelector`; fuel exhaustion refuses as
-/// `MatchWork`. The default entries are unchanged.
+/// and the `+` and `~` combinators, plus a bounded `:nth-child(An+B)` (argument
+/// <= 32 chars, |A| <= 1024, |B| <= 65535, attached signs only; comments,
+/// escaped `n` and the `of S` form refused as an unsupported subset), matched
+/// with a backtracking, fuel-bounded matcher. Other state and functional
+/// pseudo-classes, pseudo-elements, namespaces and escapes are still refused
+/// as `CssSelector`; fuel exhaustion refuses as `MatchWork` and truncates the
+/// tree, while an oversize sibling list (> 4096) refuses only that rule for
+/// that element (recorded as `MatchWork`, no truncation, no other rule or
+/// element affected). The default entries are unchanged.
 ///
 /// The same entry also accepts `font-size: <n>em` (EXPERIMENTAL, UNREVIEWED
 /// candidate): the exact parent-relative multiplier the percentage path already

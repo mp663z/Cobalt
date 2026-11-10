@@ -912,14 +912,33 @@ impl Selector {
         PrefilterKey::Universal
     }
 }
+/// Why a bounded match refused. `Fuel`: the step budget ran out (a global
+/// work guard - the caller treats the tree as truncated). `OversizeSiblings`:
+/// the element's sibling list exceeds `EXT_MAX_SIBLINGS` (a rule-scoped
+/// guard - only this rule refuses for this element; every other rule and
+/// element is unaffected, and the tree is NOT truncated).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MatchRefusal {
+    Fuel,
+    OversizeSiblings,
+}
 impl Selector {
-    /// `None` means the bounded matcher ran out of fuel or met an oversize
-    /// sibling list: the caller must refuse, never treat it as a mismatch.
+    /// `None` means the bounded matcher refused (out of fuel or an oversize
+    /// sibling list): the caller must refuse, never treat it as a mismatch.
+    /// Callers that must distinguish the refusal cause (rule-scoped versus
+    /// tree-truncating) use `matches_checked_scoped` instead.
     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+        self.matches_checked_scoped(nodes, handle).unwrap_or(None)
+    }
+    pub(crate) fn matches_checked_scoped(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+    ) -> Result<Option<bool>, MatchRefusal> {
         if self.pseudo != Pseudo::None {
-            return Some(false);
+            return Ok(Some(false));
         }
-        self.matches_originating_checked(nodes, handle)
+        self.matches_originating_checked_scoped(nodes, handle)
     }
     /// Any state pseudo-class anywhere in the selector (ext grammar only).
     pub(crate) fn has_state(&self) -> bool {
@@ -958,69 +977,92 @@ impl Selector {
         })
     }
     /// For a `::after` selector: does the ORIGINATING element match the steps?
-    pub(crate) fn matches_originating_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+    pub(crate) fn matches_originating_checked(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+    ) -> Option<bool> {
+        self.matches_originating_checked_scoped(nodes, handle)
+            .unwrap_or(None)
+    }
+    pub(crate) fn matches_originating_checked_scoped(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+    ) -> Result<Option<bool>, MatchRefusal> {
         if !self.ext {
-            return Some(self.matches(nodes, handle));
+            return Ok(Some(self.matches(nodes, handle)));
         }
         let mut fuel = EXT_FUEL;
         self.ext_match(nodes, handle, 0, &mut fuel)
     }
-    fn ext_match(&self, nodes: &[Node], node: Handle, index: usize, fuel: &mut u32) -> Option<bool> {
+    fn ext_match(
+        &self,
+        nodes: &[Node],
+        node: Handle,
+        index: usize,
+        fuel: &mut u32,
+    ) -> Result<Option<bool>, MatchRefusal> {
         if *fuel == 0 {
-            return None;
+            return Err(MatchRefusal::Fuel);
         }
         *fuel -= 1;
         let (simple, relation) = &self.steps[index];
         if !simple.nth.is_empty() {
             if let Some(sibs) = element_siblings(nodes, node) {
-                // Oversize sibling list: refuse, never a silent mismatch
-                // (same fail-closed posture as the sibling combinators).
+                // Oversize sibling list: this rule REFUSES for this element
+                // (rule-scoped) - never a silent mismatch, never a global
+                // truncation (same fail-closed posture as the sibling
+                // combinators).
                 if sibs.len() > EXT_MAX_SIBLINGS {
-                    return None;
+                    return Err(MatchRefusal::OversizeSiblings);
                 }
             }
         }
         if !simple.matches(nodes, node) {
-            return Some(false);
+            return Ok(Some(false));
         }
         if index + 1 == self.steps.len() {
-            return Some(true);
+            return Ok(Some(true));
         }
         match relation {
             Relation::Child => match nodes[node].parent {
                 Some(parent) => self.ext_match(nodes, parent, index + 1, fuel),
-                None => Some(false),
+                None => Ok(Some(false)),
             },
             Relation::Descendant => {
                 let mut ancestor = nodes[node].parent;
                 while let Some(candidate) = ancestor {
-                    if self.ext_match(nodes, candidate, index + 1, fuel)? {
-                        return Some(true);
+                    if self.ext_match(nodes, candidate, index + 1, fuel)? == Some(true) {
+                        return Ok(Some(true));
                     }
                     ancestor = nodes[candidate].parent;
                 }
-                Some(false)
+                Ok(Some(false))
             }
             Relation::NextSibling | Relation::LaterSibling => {
                 let Some(siblings) = element_siblings(nodes, node) else {
-                    return Some(false);
+                    return Ok(Some(false));
                 };
                 if siblings.len() > EXT_MAX_SIBLINGS {
-                    return None;
+                    return Err(MatchRefusal::OversizeSiblings);
                 }
-                let at = siblings.iter().position(|&n| n == node)?;
+                let at = siblings
+                    .iter()
+                    .position(|&n| n == node)
+                    .ok_or(MatchRefusal::Fuel)?;
                 for &earlier in siblings[..at].iter().rev() {
                     if !is_element(nodes, earlier) {
                         continue;
                     }
-                    if self.ext_match(nodes, earlier, index + 1, fuel)? {
-                        return Some(true);
+                    if self.ext_match(nodes, earlier, index + 1, fuel)? == Some(true) {
+                        return Ok(Some(true));
                     }
                     if *relation == Relation::NextSibling {
                         break;
                     }
                 }
-                Some(false)
+                Ok(Some(false))
             }
         }
     }
@@ -1526,13 +1568,24 @@ mod ext_selector_tests {
     }
     #[test]
     fn oversize_sibling_list_with_sibling_combinator_refuses_not_mismatches() {
-        let mut html = String::from("<style>i + i{background-color:#ff0000}</style><div>");
+        use crate::style_diagnostics::RefusalReason;
+        let mut html = String::from(
+            "<style>i + i{background-color:#ff0000} i{background-color:#0000ff}</style><div>",
+        );
         for _ in 0..4100 {
             html.push_str("<i></i>");
         }
-        html.push_str("</div>");
+        html.push_str("</div><div><i>x</i><i>y</i></div>");
         let tree = run(true, &html);
-        assert!(tree.truncated || tree.unsupported);
+        // Rule-scoped refusal: one precise diagnostic per oversize element,
+        // no truncation, no unsupported flag, control rule applies to all,
+        // and the small-list `i + i` still matches its second element (the
+        // gate costs no unrelated rule, inside or outside the oversize list).
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 4100);
+        let mut expected = vec![false; 4100];
+        expected.extend([false, true]);
+        assert_eq!(reds(&tree, "i"), expected);
     }
     #[test]
     fn repeated_structural_pseudo_classes_count_each_occurrence_for_specificity() {
@@ -1667,7 +1720,7 @@ mod ext_selector_tests {
         // case-insensitive n, odd/even, whitespace around the B sign.
         for ok in [
             "2n+1", "2N+1", "2n + 1", "2n+ 1", "2n +1", "+2n+1", "-2n+1", "-n+2", "n", "+n",
-            "-n", "N", "odd", "ODD", "even", "3n-1", "3n - 1", "0", "5", "+5", " 2n+1 ",
+            "-n", "N", "2n", "odd", "ODD", "even", "3n-1", "3n - 1", "0", "5", "+5", " 2n+1 ",
         ] {
             assert!(super::selector_ext(&format!("p:nth-child({ok})")).is_some(), "{ok}");
         }
@@ -1675,13 +1728,13 @@ mod ext_selector_tests {
         // signs, scientific/decimal forms, dangling sign.
         for bad in [
             "2n + -1", "2n+-1", "- n + 2", "- 3", "1e2", "2.0n", "2n+1.0", "2n++1", "2n+",
-            "of .x", "n\\",
+            "of .x", "n\\", "\\36 e",
         ] {
             assert!(super::selector_ext(&format!("p:nth-child({bad})")).is_none(), "{bad}");
         }
         // VALID CSS refused as an unsupported subset (a grammar bound, not an
         // invalid-CSS claim): comments, escaped n, the Selectors-4 of-S form.
-        for subset in ["2n/**/+1", "\\36 e", "2 of .x"] {
+        for subset in ["2n/**/+1", "\\6e ", "2 of .x"] {
             assert!(super::selector_ext(&format!("p:nth-child({subset})")).is_none(), "{subset}");
         }
         // Bounds: argument <= 32 chars, |A| <= 1024, |B| <= 65535.
@@ -1726,14 +1779,58 @@ mod ext_selector_tests {
         assert_eq!(reds(&tree, "p"), [false, false]);
     }
     #[test]
-    fn nth_child_oversize_sibling_list_refuses_not_mismatches() {
-        let mut html = String::from("<style>p:nth-child(4000){background-color:#ff0000}</style><div>");
-        for _ in 0..4100 {
-            html.push_str("<p>x</p>");
-        }
-        html.push_str("</div>");
-        let tree = run(true, &html);
-        assert!(tree.truncated || tree.unsupported);
+    fn nth_child_oversize_sibling_gate_is_precise_at_the_exact_boundary() {
+        use crate::style_diagnostics::RefusalReason;
+        const BLUE: Option<u32> = Some(0x00_00_ff);
+        // Isolated under every other budget: Limits::DEFAULT (120k nodes,
+        // 64KB sheets, 4M match-work, EXT_FUEL 4096 per match) - ONLY the
+        // EXT_MAX_SIBLINGS=4096 gate differs between the three pages.
+        let build = |n: usize| {
+            let mut html = String::from(
+                "<style>p:nth-child(4096){background-color:#ff0000} p{background-color:#0000ff}</style><div>",
+            );
+            for _ in 0..n {
+                html.push_str("<p>x</p>");
+            }
+            html.push_str("</div><div><p>lone</p></div>");
+            html
+        };
+        let backgrounds = |tree: &StyleTree| -> Vec<Option<u32>> {
+            tree.nodes
+                .iter()
+                .filter(|n| n.tag == "p")
+                .map(|n| n.style.background_color)
+                .collect()
+        };
+        // BELOW (4095 siblings): gate untripped; position 4096 absent, so the
+        // rule simply does not match - no diagnostic, control applies to all.
+        let tree = run(true, &build(4095));
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 0);
+        assert_eq!(backgrounds(&tree).len(), 4096);
+        assert!(backgrounds(&tree).iter().all(|&c| c == BLUE));
+        // AT (4096 siblings): gate untripped (strictly-greater test); the rule
+        // MATCHES exactly position 4096 (the last one); no refusal recorded.
+        let tree = run(true, &build(4096));
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 0);
+        let colors = backgrounds(&tree);
+        assert_eq!(colors.len(), 4097);
+        assert!(colors[..4095].iter().all(|&c| c == BLUE));
+        assert_eq!(colors[4095], RED);
+        assert_eq!(colors[4096], BLUE);
+        // ABOVE (4097 siblings): the nth rule REFUSES for each of the 4097
+        // oversize elements - exactly 4097 precise rule-scoped diagnostics,
+        // tree NOT truncated, NOT unsupported. No silent non-match: the
+        // refusal is recorded, not dropped. No unrelated rule loss: the
+        // control rule still applies to EVERY element including the oversize
+        // ones, and the lone outside element is untouched by the gate.
+        let tree = run(true, &build(4097));
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(tree.diagnostics.count(RefusalReason::MatchWork), 4097);
+        let colors = backgrounds(&tree);
+        assert_eq!(colors.len(), 4098);
+        assert!(colors.iter().all(|&c| c == BLUE));
     }
     #[test]
     fn nth_ok_detached_element_is_index_one() {
