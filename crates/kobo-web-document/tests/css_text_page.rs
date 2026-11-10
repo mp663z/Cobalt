@@ -1440,3 +1440,54 @@ fn e_c3_colour_plus_other_difference_still_refuses() {
         );
     }
 }
+
+#[test]
+fn text_page_refuses_an_oversize_gate_truncated_tree_with_no_other_cause() {
+    // Flag-specific negative control on the public text-page path: an
+    // oversize DOM sibling list (4097 > EXT_MAX_SIBLINGS) trips the
+    // :nth-child gate and flags the tree truncated, while every OTHER
+    // Unsupported cause in the paint gate stays provably false (unsupported,
+    // quirks, box count under MAX_COMMANDS, single-root chain of <=1-child
+    // boxes). The refusal can come ONLY from tree.truncated.
+    let build = |n: usize| {
+        let mut html = String::from(
+            "<!doctype html><style>body{margin:0}i{display:none}i:nth-child(4096){color:#ff0000}</style><div><p>",
+        );
+        for _ in 0..n {
+            html.push_str("<i></i>");
+        }
+        html.push_str("</p></div>");
+        html
+    };
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        build(4097).as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        kobo_web_document::SupplyBudget::CANONICAL,
+    );
+    assert!(styled.truncated && !styled.unsupported && !styled.quirks);
+    let boxes = BoxTree::from_style(&styled);
+    assert!(boxes.truncated && !boxes.unsupported && !boxes.quirks);
+    assert!(boxes.boxes.len() <= 4096, "box-count gate untripped");
+    assert!(boxes.boxes.iter().all(|b| b.children.len() <= 1));
+    assert_eq!(
+        paint_single_text_page(&boxes, 100, 100, &TestFace).err(),
+        Some(PageError::Unsupported)
+    );
+    // AT the boundary: gate untripped, no truncation, no refusal recorded.
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        build(4096).as_bytes(),
+        &[],
+        &Limits::DEFAULT,
+        None,
+        kobo_web_document::SupplyBudget::CANONICAL,
+    );
+    assert!(!styled.truncated);
+    assert_eq!(
+        styled
+            .diagnostics
+            .count(kobo_web_document::style_diagnostics::RefusalReason::MatchWork),
+        0
+    );
+}
