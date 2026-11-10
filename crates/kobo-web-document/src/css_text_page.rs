@@ -852,6 +852,20 @@ fn paint_direct_text_blocks_core(
                     return Err(PageError::Unsupported);
                 }
             }
+            // delta10: each glyph paints its own leaf's resolved colour. The
+            // map is built from the actual leaf boxes of this block; a leaf
+            // that cannot be resolved refuses the page (no fallback colour).
+            let leaf_colors = lines
+                .leaves
+                .iter()
+                .map(|&source| {
+                    tree.boxes
+                        .iter()
+                        .find(|b| b.source == Some(source))
+                        .map(|b| rgb(b.style.color))
+                })
+                .collect::<Option<Vec<_>>>()
+                .ok_or(PageError::Unsupported)?;
             let glyphs = paint_direct_glyphs(
                 lines,
                 i32::try_from(widths.content_x[index].ok_or(PageError::InvalidGeometry)?)
@@ -862,7 +876,7 @@ fn paint_direct_text_blocks_core(
                 size,
                 line_height,
                 baseline,
-                rgb(node.style.color),
+                |leaf| leaf_colors[leaf],
                 |character, size, bold| font.raster(character, size, bold),
             )
             .map_err(|_| PageError::Unsupported)?;

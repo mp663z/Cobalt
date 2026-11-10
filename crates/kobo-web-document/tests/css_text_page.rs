@@ -1345,3 +1345,90 @@ fn percent_float32_hole_is_refused_by_the_text_entries() {
     assert!(paint_direct_text_blocks(&text("50%"), 300, 100, &TestFace).is_ok(), "direct 50% control");
     assert!(kobo_web_document::css_text_page::paint_single_text_page(&text("50%"), 300, 100, &TestFace).is_ok(), "single 50% control");
 }
+
+// ---- delta10 (Part E frozen, reviewer watch items): per-run colour support ----
+fn glyph_colors(list: &kobo_web_document::display_list::DisplayList) -> Vec<Rgb> {
+    list.commands()
+        .iter()
+        .filter_map(|c| match c {
+            Command::GlyphRun { color, .. } => Some(*color),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn e_c1_per_run_colour_paints_each_leaf_in_its_own_resolved_colour() {
+    let boxes = tree("<p style='color:#010203'>bravo <span style='color:#00f'>blue</span></p>");
+    let list = paint_direct_text_blocks(&boxes, 800, 600, &TestFace).unwrap();
+    let colors = glyph_colors(&list);
+    // 'bravo' = 5 inked glyphs in the owner colour (the space has no ink);
+    // 'blue' = 4 glyphs in their own resolved #00f.
+    assert_eq!(colors.iter().filter(|&&c| c == Rgb(1, 2, 3)).count(), 5);
+    assert_eq!(colors.iter().filter(|&&c| c == Rgb(0, 0, 0xff)).count(), 4);
+    // Pixel check: advance 3/char, 'blue' starts at x=18; ink rows 4..6.
+    let pixels = list.rasterize(800, 600, Rgb(255, 255, 255)).unwrap();
+    let at = |x: usize, y: usize| &pixels[(y * 800 + x) * 4..(y * 800 + x) * 4 + 4];
+    assert_eq!(at(0, 4), &[1, 2, 3, 255], "owner-colour glyph ink");
+    assert_eq!(at(18, 4), &[0, 0, 0xff, 255], "span glyph ink in #00f");
+}
+
+#[test]
+fn e_c1_named_and_hex_blue_are_the_same_resolved_colour() {
+    let named = paint_direct_text_blocks(
+        &tree("<p style='color:#010203'>x <span style='color:blue'>y</span></p>"),
+        800, 600, &TestFace,
+    )
+    .unwrap();
+    let hexed = paint_direct_text_blocks(
+        &tree("<p style='color:#010203'>x <span style='color:#00f'>y</span></p>"),
+        800, 600, &TestFace,
+    )
+    .unwrap();
+    assert_eq!(glyph_colors(&named), glyph_colors(&hexed));
+    assert!(glyph_colors(&named).contains(&Rgb(0, 0, 0xff)));
+}
+
+#[test]
+fn e_c1_uncoloured_inline_inherits_owner_colour() {
+    let boxes = tree("<p style='color:#00f'>ab <span>cd</span></p>");
+    let list = paint_direct_text_blocks(&boxes, 800, 600, &TestFace).unwrap();
+    let colors = glyph_colors(&list);
+    assert!(!colors.is_empty());
+    assert!(colors.iter().all(|&c| c == Rgb(0, 0, 0xff)));
+}
+
+#[test]
+fn e_c2_mixed_bold_and_coloured_runs_paint_whole_block() {
+    let boxes = tree("<p style='color:#010203'>one <b>two</b> <span style='color:#00f'>three</span></p>");
+    let list = paint_direct_text_blocks(&boxes, 800, 600, &TestFace).unwrap();
+    let colors = glyph_colors(&list);
+    // 'one'=3, 'two'=3 (bold, owner colour), 'three'=5 at #00f; spaces uninked.
+    assert_eq!(colors.iter().filter(|&&c| c == Rgb(1, 2, 3)).count(), 6);
+    assert_eq!(colors.iter().filter(|&&c| c == Rgb(0, 0, 0xff)).count(), 5);
+}
+
+#[test]
+fn e_c3_colour_plus_other_difference_still_refuses() {
+    // Each of these combines a colour difference with one other E-C3 kind:
+    // the block must still refuse (exact-or-refuse; colour support never
+    // widens another dimension).
+    for body in [
+        "<p>one <span style='color:#123456;font-size:20px'>two</span></p>",
+        "<p>one <span style='color:#123456;font-style:italic'>two</span></p>",
+        "<p>one <span style='color:#123456;font-family:serif'>two</span></p>",
+        "<p>one <span style='color:#123456;font-weight:600'>two</span></p>",
+        "<p>one <span style='color:#123456;line-height:9px'>two</span></p>",
+        "<p>one <span style='color:#123456;margin-left:2px'>two</span></p>",
+        "<p>one <span style='color:#123456;padding:2px'>two</span></p>",
+        "<p>one <span style='color:#123456;background-color:red'>two</span></p>",
+        "<p>one <span style='color:#123456;border:2px solid transparent'>two</span></p>",
+    ] {
+        let boxes = tree(body);
+        assert_eq!(
+            paint_direct_text_blocks(&boxes, 800, 600, &TestFace).err(),
+            Some(PageError::Unsupported),
+            "{body}"
+        );
+    }
+}

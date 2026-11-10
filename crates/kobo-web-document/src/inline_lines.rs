@@ -606,8 +606,11 @@ pub fn place_direct_text(
 /// Measure a block's inline runs with an external, exact font provider.
 /// The parent must be an LTR normal-flow block whose children are all text
 /// nodes or recursively bare inline elements: one shared inline formatting
-/// context. Every run must keep the block's font size, colour, style and
+/// context. Every run must keep the block's font size, style and
 /// line-height; only weight 400/700 may vary, and the bold run is measured
+/// with the provider's bold face. Colour may vary per run (delta10): the
+/// painter resolves each glyph's own leaf colour, so runs are never painted
+/// in a substituted colour.
 /// with the provider's bold face. Inline boxes with any margin, padding,
 /// border or background, italic/oblique runs, other weights
 /// and RTL all refuse rather than paint a partial formatting context. List
@@ -718,11 +721,15 @@ fn collect_inline_runs_bounded(
             return Err(LineError::UnsupportedTree);
         }
         let st = n.style;
+        // delta10 (Part E, reviewer-frozen): per-run COLOUR is supported -
+        // each leaf paints its own resolved post-cascade colour, so a colour
+        // difference alone no longer refuses. Every other property must still
+        // match the owner exactly; any of them (with or without a colour
+        // difference) keeps refusing.
         if st.direction != Direction::Ltr
             || st.font_size != owner.style.font_size
             || st.font_family.is_some()
             || st.font_style != crate::computed_style::FontStyle::Normal
-            || st.color != owner.style.color
             || !matches!(st.font_weight, 400 | 700)
             || st.line_height != owner.style.line_height
             || st.line_height_number != owner.style.line_height_number
@@ -866,6 +873,10 @@ pub enum GlyphPaintError {
 /// baseline may lie outside a short CSS line after negative half-leading.
 /// The caller validates the natural font baseline and combines this list
 /// with backgrounds only after the *whole page* is proven paintable.
+/// `color` maps a leaf index (0..text.leaves.len()) to that leaf's own
+/// resolved colour; every glyph paints its own leaf's colour (delta10). The
+/// caller derives the map from the actual leaf styles - there is no fallback
+/// or substituted colour.
 ///
 /// # Errors
 /// Refuses missing/invalid bitmaps, coordinate overflow, invalid placement, and command or
@@ -879,7 +890,7 @@ pub fn paint_direct_glyphs(
     size: u32,
     line_height: u32,
     baseline_offset: i32,
-    color: Rgb,
+    color: impl Fn(usize) -> Rgb,
     mut raster: impl FnMut(char, u32, bool) -> Option<GlyphBitmap>,
 ) -> Result<DisplayList, GlyphPaintError> {
     if size == 0
@@ -952,7 +963,7 @@ pub fn paint_direct_glyphs(
             },
             layout,
             bitmap.coverage,
-            color,
+            color(glyph.leaf),
             Source {
                 node: Some(
                     *text
@@ -1064,7 +1075,7 @@ mod tests {
                 coverage: vec![255, 128, 64, 0],
             })
         };
-        let list = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), raster).unwrap();
+        let list = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, |_| Rgb(0, 0, 0), raster).unwrap();
         assert!(matches!(
             &list.commands()[0],
             crate::display_list::Command::GlyphRun {
@@ -1086,7 +1097,7 @@ mod tests {
         assert_eq!(at(6, 7), &[0, 0, 0, 255]);
         assert_eq!(at(7, 7), &[127, 127, 127, 255]);
         assert_eq!(at(5, 7), &[255, 255, 255, 255]);
-        let overflow = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _, _| {
+        let overflow = paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, |_| Rgb(0, 0, 0), |_, _, _| {
             Some(GlyphBitmap {
                 left: 1,
                 top: -7,
@@ -1100,7 +1111,7 @@ mod tests {
             matches!(&overflow.commands()[0], crate::display_list::Command::GlyphRun { bounds, .. } if bounds.y == 3)
         );
         assert_eq!(
-            paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, Rgb(0, 0, 0), |_, _, _| Some(
+            paint_direct_glyphs(&text, 3, 4, 20, 16, 12, 6, |_| Rgb(0, 0, 0), |_, _, _| Some(
                 GlyphBitmap {
                     left: 1,
                     top: -3,
@@ -1581,7 +1592,19 @@ mod bracket_word_tests {
             "<html><body><p>one <span style='padding:2px'>two</span></p></body></html>", // inline padding
             "<html><body><p>one <span style='margin-left:2px'>two</span></p></body></html>", // inline margin
             "<html><body><p>one <span style='background-color:red'>two</span></p></body></html>", // inline bg
-            "<html><body><p>one <span style='color:#123456'>two</span></p></body></html>", // run colour
+            // SUPERSEDED (delta10/Part E): 'run colour' alone no longer refuses;
+            // the positive colour fixtures live in containment_v1.rs (E-C1/E-C2)
+            // and the colour-paint test below. Colour COMBINED with any other
+            // difference still refuses (rows added here).
+            "<html><body><p>one <span style='color:#123456;padding:2px'>two</span></p></body></html>", // colour+padding
+            "<html><body><p>one <span style='color:#123456;margin-left:2px'>two</span></p></body></html>", // colour+margin
+            "<html><body><p>one <span style='color:#123456;font-size:20px'>two</span></p></body></html>", // colour+size
+            "<html><body><p>one <span style='color:#123456;font-style:italic'>two</span></p></body></html>", // colour+italic
+            "<html><body><p>one <span style='color:#123456;font-family:serif'>two</span></p></body></html>", // colour+family
+            "<html><body><p>one <span style='color:#123456;font-weight:600'>two</span></p></body></html>", // colour+weight
+            "<html><body><p>one <span style='color:#123456;line-height:9px'>two</span></p></body></html>", // colour+line-height
+            "<html><body><p>one <span style='color:#123456;background-color:red'>two</span></p></body></html>", // colour+bg
+            "<html><body><p>one <span style='color:#123456;border:2px solid transparent'>two</span></p></body></html>", // colour+border
             "<html><body><p style='direction:rtl'>one two</p></body></html>", // RTL block
             "<html><body><p>one <span style='font-style:oblique'>two</span></p></body></html>",
             "<html><body><p>one <span style='display:inline-block'>two</span></p></body></html>",
@@ -1649,7 +1672,7 @@ mod leaf_source_tests {
         place_runs_text(&tree, p, width, |_, _, _| Some(5), |_| Some(20)).unwrap()
     }
     fn paint(text: &DirectTextLines, width: u32) -> DisplayList {
-        paint_direct_glyphs(text, 0, 0, width, 16, 20, 15, Rgb(0, 0, 0), |_, _, _| {
+        paint_direct_glyphs(text, 0, 0, width, 16, 20, 15, |_| Rgb(0, 0, 0), |_, _, _| {
             Some(GlyphBitmap {
                 left: 0,
                 top: -1,
@@ -1774,7 +1797,7 @@ mod leaf_source_tests {
             }
             let calls = Cell::new(0);
             let result =
-                paint_direct_glyphs(&text, 0, 0, 100, 16, 20, 15, Rgb(0, 0, 0), |_, _, _| {
+                paint_direct_glyphs(&text, 0, 0, 100, 16, 20, 15, |_| Rgb(0, 0, 0), |_, _, _| {
                     calls.set(calls.get() + 1);
                     None
                 });

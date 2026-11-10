@@ -70,18 +70,35 @@ fn f1_clean_baseline_no_flags() {
     assert_eq!(p.h.heights[p.idx("article")], Some(18));
 }
 
+// SUPERSEDED v2 (delta10, Part E E-C1): per-run colour is now SUPPORTED, so
+// the F2-shaped fixture no longer refuses. Pre-colour frozen expectation
+// (delta7): bool true, article None + EMPTY_OR_UNMEASURED, section Some(18).
+// Preserved in git history at 3e6cb22; refusal counts may legitimately drop
+// where support is correctly added.
 #[test]
-fn f2_color_fail_sibling_isolated() {
+fn f2_v2_colour_supported_sibling_measures() {
     let p = run(&ext(
         "<section>alpha</section><article>bravo <span style='color:#00f'>blue</span></article>",
     ));
     p.assert_derived_bool(false);
-    assert!(p.h.unsupported, "F2: the pass bool still refuses (pre-containment equivalence)");
+    assert!(!p.h.unsupported, "F2v2: colour difference alone is supported");
+    assert!(p.h.refusals.iter().all(|r| r.is_empty()));
     let (a, b) = (p.idx("section"), p.idx("article"));
-    assert_eq!(p.h.heights[a], Some(18), "F2 R1c: clean sibling measures");
-    assert_eq!(p.h.refusals[a], HeightRefusal::NONE);
-    assert_eq!(p.h.heights[b], None, "F2: color-fail block refuses its own height");
-    assert_eq!(p.h.refusals[b], HeightRefusal::EMPTY_OR_UNMEASURED);
+    assert_eq!(p.h.heights[a], Some(18));
+    assert_eq!(p.h.heights[b], Some(18));
+}
+
+// E-C2 positive at the UsedHeightPass level (true F5 shape with the clean run
+// in bold, isolating colour from other refusal kinds).
+#[test]
+fn f5_v2_colour_supported_owner_measures() {
+    let p = run(&ext(
+        "<section>alpha</section><article><b>clean</b> <span style='color:#00f'>fail</span></article>",
+    ));
+    assert!(!p.h.unsupported);
+    assert!(p.h.refusals.iter().all(|r| r.is_empty()));
+    assert_eq!(p.h.heights[p.idx("section")], Some(18));
+    assert_eq!(p.h.heights[p.idx("article")], Some(18));
 }
 
 #[test]
@@ -119,6 +136,9 @@ fn f4_inline_block_stays_whole_pass() {
     assert_eq!(p.h.refusals[p.idx("section")], HeightRefusal::NONE);
 }
 
+// NOTE (delta10): this fixture's 'clean' run is <i> = ITALIC, itself an E-C3
+// refusal kind. Post-delta10 it pins ITALIC poison crossing to the owner
+// block, not colour. The F5-shaped COLOUR case is f5_v2_colour_supported.
 #[test]
 fn f5_inline_poison_crosses_to_owner_not_sibling() {
     let p = run(&ext(
@@ -213,21 +233,28 @@ fn v1_clean_composes_no_flags() {
     assert_eq!(p.v.content_y[p.idx("article")], Some(18));
 }
 
+// SUPERSEDED v2 (delta10, Part E E-C1): colour supported -> the whole tree
+// composes. Pre-colour frozen expectation (Part D): bool true, all y None,
+// article+ancestors NO_HEIGHT, span/texts KIND_NOT_ADMITTED. In git history.
 #[test]
-fn v2_color_fail_attribution_no_geometry() {
+fn v2_v2_colour_supported_composes() {
     let p = vrun(&ext(
         "<section>alpha</section><article>bravo <span style='color:#00f'>blue</span></article>",
     ));
-    assert!(p.v.unsupported);
-    p.assert_all_y_none();
-    // R1c: clean sibling admitted with no bit; poisoned block + ancestor chain NO_HEIGHT.
-    assert_eq!(p.v.refusals[p.idx("section")], VerticalRefusal::NONE);
-    assert_eq!(p.v.refusals[p.text_idx("alpha")], VerticalRefusal::NONE);
-    assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
-    for t in ["html", "body", "div"] {
-        assert_eq!(p.v.refusals[p.idx(t)], VerticalRefusal::NO_HEIGHT, "{t}");
-    }
-    assert_eq!(p.v.refusals[p.text_idx("blue")], VerticalRefusal::KIND_NOT_ADMITTED);
+    assert!(!p.v.unsupported);
+    assert!(p.v.refusals.iter().all(|r| r.is_empty()));
+    assert_eq!(p.v.content_y[p.idx("section")], Some(0));
+    assert_eq!(p.v.content_y[p.idx("article")], Some(18));
+}
+
+#[test]
+fn v5_v2_colour_supported_vertical_composes() {
+    let p = vrun(&ext(
+        "<section>alpha</section><article><b>clean</b> <span style='color:#00f'>fail</span></article>",
+    ));
+    assert!(!p.v.unsupported);
+    assert!(p.v.refusals.iter().all(|r| r.is_empty()));
+    assert_eq!(p.v.content_y[p.idx("article")], Some(18));
 }
 
 #[test]
@@ -253,6 +280,8 @@ fn v4_inline_block_whole_pass_attribution() {
     assert_eq!(p.v.refusals[p.idx("article")], VerticalRefusal::NO_HEIGHT);
 }
 
+// NOTE (delta10): '<i>clean</i>' is italic - this pins italic attribution,
+// not colour. The colour case is v5_v2_colour_supported_vertical_composes.
 #[test]
 fn v5_owner_poison_attribution() {
     let p = vrun(&ext(

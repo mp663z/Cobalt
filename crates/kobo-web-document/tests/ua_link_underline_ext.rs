@@ -45,9 +45,15 @@ fn text_decoration_none_turns_off_the_underline_and_ua_colour_applies() {
     assert_ne!(span_blue, span_black, "anchor: colour is visible in the raster");
     assert_eq!(paint(true, "a{text-decoration:none}", &blue_div("<a href=u>t</a>")).as_ref(), Some(&span_blue));
     assert_eq!(paint(true, "", &blue_div("<a href=u style='text-decoration:none'>t</a>")).as_ref(), Some(&span_blue));
-    // the UA colour really is blue: in a black container the link is a colour change inside the line, which the
-    // painter refuses (not an admission); a black link would have painted like span_black.
-    assert!(paint(true, "a{text-decoration:none}", "<div>x <a href=u>t</a></div>").is_none());
+    // SUPERSEDED v2 (delta10 per-run colour): the UA colour really is blue - in a black container the link now
+    // PAINTS blue next to black text (pre-delta10 the painter refused a colour change inside a line; the refusal
+    // was a missing-support limitation, noted here as "not an admission", and lives in git history at 3e6cb22).
+    // Stronger assertion than the old refusal: the mixed-colour line paints exactly like the same text with an
+    // explicitly blue span.
+    let link_in_black = paint(true, "a{text-decoration:none}", "<div>x <a href=u>t</a></div>").expect("delta10: UA-blue link paints in a black container");
+    let explicit_blue_span = paint(true, "", "<div>x <span style='color:#0000ee'>t</span></div>").expect("delta10: blue span paints in a black container");
+    assert_eq!(&link_in_black, &explicit_blue_span, "link paints its own UA blue beside black text");
+    assert_ne!(&link_in_black, &span_black, "link is visibly blue, not black");
     // author colour wins over the UA colour
     let red_div = "<div style='color:#ff0000'>x <span>t</span></div>";
     let span_red = paint(true, "", red_div).expect("red");
