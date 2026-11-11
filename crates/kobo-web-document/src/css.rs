@@ -4074,7 +4074,7 @@ mod not_bounded_tests {
     fn not_bounds_base_refusal_and_separate_inner_state_budget() {
         for bad in [":not()", ":not( )", ":not(.a,.b)", ":not(.a .b)",
             ":not(.a>.b)", ":not(:not(.a))", ":not(::before)",
-            ":not(.a::after)", ":not(:is(.a))", ":not(:has(.a .b))",
+            ":not(.a::after)", ":not(:is(.a))", ":not(:has(.a .b .c))",
             ":not(:hover:focus)", ":focus:not(:focus-visible):hover",
             ":not(.a\\:focus)", ":not([x i])"] {
             assert!(selector_ext(bad).is_none(), "{bad}");
