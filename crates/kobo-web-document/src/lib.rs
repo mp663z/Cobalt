@@ -51,7 +51,7 @@ pub mod url;
 
 use html5ever::tendril::TendrilSink;
 
-pub use css::{FocusState, HistoryState, InputState, SnapshotState};
+pub use css::{FocusState, HistoryState, InputState, SnapshotState, TargetState};
 pub use media_query::MediaContext;
 pub use style_tree::SupplyBudget;
 pub use url::{Scheme, Url, UrlError};
