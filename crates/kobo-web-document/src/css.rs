@@ -154,6 +154,10 @@ struct Simple {
     structural_n: u8,
     /// Extended grammar only: `:nth-child(An+B)` arguments, conjunctive.
     nth: Vec<(i64, i64)>,
+    /// Type-relative structural flags and bounded forward An+B formulas.
+    /// Type is the tested element's own exact namespace/canonical local name.
+    of_type: u8,
+    nth_of_type: Vec<(i64, i64)>,
     /// Bounded negation arguments: each is exactly one compound, no nesting.
     /// Each token consumes structural budget but adds only argument specificity.
     not_args: Vec<Selector>,
@@ -463,6 +467,8 @@ fn simple(part: &str) -> Option<Simple> {
         structural: 0,
         structural_n: 0,
         nth: Vec::new(),
+        of_type: 0,
+        nth_of_type: Vec::new(),
         not_args: Vec::new(),
     })
 }
@@ -662,6 +668,8 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
         structural: 0,
         structural_n: 0,
         nth: Vec::new(),
+        of_type: 0,
+        nth_of_type: Vec::new(),
         not_args: Vec::new(),
     };
     let start = at;
@@ -725,14 +733,15 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
                     // :not's specificity is replaced by its argument's.
                     continue;
                 }
-                if lowered == "nth-child" {
+                if lowered == "nth-child" || lowered == "nth-of-type" {
                     // Functional structural pseudo-class: bounded An+B only.
                     let (an_b, after) = nth_child_arg(s, next)?;
                     if simple.structural_n >= 8 {
                         return None;
                     }
                     simple.structural_n += 1;
-                    simple.nth.push(an_b);
+                    if lowered == "nth-of-type" { simple.nth_of_type.push(an_b); }
+                    else { simple.nth.push(an_b); }
                     at = after;
                     continue;
                 }
@@ -779,6 +788,9 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
+                    "first-of-type" => simple.of_type |= 1,
+                    "last-of-type" => simple.of_type |= 2,
+                    "only-of-type" => simple.of_type |= 4,
                     _ => return None,
                 }
                 if !matches!(
@@ -805,7 +817,8 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
 }
 /// Opt-in grammar: bounded compounds of type/`*`/`#id`/`.class`/
 /// `[attr op value]`, `:root`, first/last/only-child, bounded
-/// `:nth-child(An+B)`, `:enabled`/`:disabled`, `:target` and the state family
+/// `:nth-child(An+B)`, first/last/only-of-type, `:nth-of-type(An+B)`,
+/// `:enabled`/`:disabled`, `:target` and the state family
 /// `:link`/`:hover`/`:active`/`:focus`/`:focus-visible`/`:focus-within`,
 /// joined by descendant, `>`, `+` and `~`. Bounded `:not(S)` accepts exactly
 /// one compound of those features; no nested negation, lists, complex
@@ -813,7 +826,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
 /// `::after` suffixes on a non-bare, state-free originating selector are
 /// accepted; other pseudo-elements and single-colon forms are refused.
 /// Other pseudo-classes/functions (including `:visited`, `:nth-last-child`,
-/// `:nth-of-type`), the Selectors-4 `of S` form, namespaces, escapes and
+/// `:nth-last-of-type`), the Selectors-4 `of S` form, namespaces, escapes and
 /// attribute case flags remain refused. State/target dependencies anywhere,
 /// including inside negation, enroll only under an explicit caller
 /// `SnapshotState` covering every family (see `matched_rules`); without it
@@ -1213,6 +1226,20 @@ impl Selector {
             if !simple.nth.iter().all(|&an_b| nth_formula(nth_ix, an_b)) {
                 return Ok(Some(false));
             }
+        }
+        if simple.of_type != 0 || !simple.nth_of_type.is_empty() {
+            // The walk's all-element position is NOT a typed index. One
+            // borrowed, charged census supplies this compound's typed index
+            // and (only when needed) total, shared by repeated formulas.
+            let need_total = simple.of_type & (2 | 4) != 0;
+            let Some((typed_index, total)) = typed_position_charged(nodes, node, need_total, fuel)?
+                else { return Ok(None); }; // inconsistent membership, never index zero
+            if (simple.of_type & 1 != 0 && typed_index != 1)
+                || (simple.of_type & 2 != 0 && typed_index != total)
+                || (simple.of_type & 4 != 0 && total != 1)
+                || !simple.nth_of_type.iter().all(|&ab| nth_formula(typed_index, ab)) {
+                    return Ok(Some(false));
+                }
         }
         // `:enabled` / `:disabled` on this step: the spec algorithms walk
         // ancestors (fieldset propagation + first-legend exemption, recursive
@@ -1625,7 +1652,8 @@ impl Simple {
         // walks; ext_match owns it) or `:target` (it needs the caller-asserted
         // TargetState resolution): refuse to guess rather than infer from
         // attribute absence.
-        if self.enablement.is_some() || self.target || !self.not_args.is_empty() {
+        if self.enablement.is_some() || self.target || !self.not_args.is_empty()
+            || self.of_type != 0 || !self.nth_of_type.is_empty() {
             return false;
         }
         self.matches_inner(nodes, handle, true)
@@ -2039,6 +2067,38 @@ fn element_disabled(
     }
     Ok(None)
 }
+/// Typed sibling census: visits ALL raw entries up to the tested node for
+/// first/nth, or the full slice for last/only. No copied sibling list or
+/// reliance on the walk's all-element index. Exact ns/local byte comparisons
+/// ignore prefix. Detached convention is index/total1; absent membership is
+/// unknown. The raw borrowed-slice oversize guard precedes any traversal.
+fn typed_position_charged(
+    nodes: &[Node], handle: Handle, need_total: bool, fuel: &mut u32,
+) -> Result<Option<(i64, i64)>, MatchRefusal> {
+    let Some(Node { data: Data::Element { name, .. }, .. }) = nodes.get(handle)
+        else { return Ok(None); };
+    let Some(siblings) = element_siblings(nodes, handle) else {
+        return Ok(Some((1, 1)));
+    };
+    if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+    let mut count = 0_i64;
+    let mut index = None;
+    for &sibling in siblings {
+        not_charge(fuel)?; // raw child visit, including text/comment
+        let Some(Node { data: Data::Element { name: candidate, .. }, .. }) = nodes.get(sibling)
+            else { continue; };
+        if not_eq(name.ns.as_bytes(), candidate.ns.as_bytes(), false, fuel)?
+            && not_eq(name.local.as_bytes(), candidate.local.as_bytes(), false, fuel)? {
+                count += 1;
+            }
+        if sibling == handle {
+            index = Some(count);
+            if !need_total { return Ok(index.map(|ix| (ix, count))); }
+        }
+    }
+    Ok(index.map(|ix| (ix, count)))
+}
+
 /// Budget-charged `nth_index` for callers without the walk's O(1) position:
 /// the oversize gate refuses BEFORE any traversal, then every visited child
 /// (element or not) costs one fuel unit. Detached => Some(1), never charged.
@@ -2403,7 +2463,7 @@ mod ext_selector_tests {
     fn unsupported_selector_forms_still_refuse() {
         for selector in [
             "p:hover", "p:focus", "p:focus-within", "p:visited", "p:link", "p::before", "p:before",
-            "p:not(.a,.b)", "p:is(.a)", "p:first-of-type", "p:empty", "p[a=b i]",
+            "p:not(.a,.b)", "p:is(.a)", "p:nth-last-of-type(2)", "p:empty", "p[a=b i]",
             "p[a=b s]", "p[a|b=c]", "p[*|a]", r"p.a\:b", "svg|p", "p,", "> p", "p >", "p[a=1]",
             "p[a=b c]", "p[a=\"b\\\"c\"]", "p#a#b", ".1a", "p[a=b", "p[a",
         ] {
@@ -2602,8 +2662,8 @@ mod ext_selector_tests {
         assert_eq!(vals("-n+2"), [(-1, 2)]);
         assert_eq!(vals("5"), [(0, 5)]);
         assert_eq!(vals("3n - 1"), [(3, -1)]);
-        // Unchanged grammar bounds: other nth forms and of-type stay refused.
-        for out in ["p:nth-last-child(2)", "p:nth-of-type(2)", "p:first-of-type"] {
+        // Reverse functional nth remains outside the accepted subset.
+        for out in ["p:nth-last-child(2)", "p:nth-last-of-type(2)", "p:nth-child(2 of p)"] {
             assert!(super::selector_ext(out).is_none(), "{out}");
         }
     }
@@ -3732,4 +3792,97 @@ mod not_bounded_tests {
         }
         println!("NOT-PARSER total={} admitted={} refused={}",accepted+refused,accepted,refused);
     }
+}
+
+#[cfg(test)]
+mod of_type_bounded_tests {
+ use super::*;
+ fn nodes(html:&str)->Vec<Node>{
+  use html5ever::tendril::TendrilSink;
+  let sink=crate::dom::Sink::new(64*1024*1024);
+  let mut parser=html5ever::parse_document(sink,html5ever::ParseOpts {
+   tree_builder:html5ever::tree_builder::TreeBuilderOpts{scripting_enabled:false,..Default::default()},..Default::default()
+  });parser.process(html.to_string().into());parser.finish().into_nodes()
+ }
+ fn id(ns:&[Node],value:&str)->Handle{
+  ns.iter().position(|n|matches!(&n.data,Data::Element {attrs,..} if attrs.iter().any(|(k,v)|&**k=="id" && v==value))).unwrap()
+ }
+ #[test]
+ fn typed_html_and_foreign_oracle_21_rows(){
+  let ns=nodes(include_str!("../tests/fixtures/of_type_oracle.html"));
+  let expected=include_str!("../tests/fixtures/of_type_oracle_expected.tsv");
+  let sels=[":first-of-type",":last-of-type",":only-of-type",":nth-of-type(2)",":nth-of-type(odd)",":not(:first-of-type)"];
+  let mut rows=0;
+  for line in expected.lines(){let vals:Vec<_>=line.split('\t').collect();let h=id(&ns,vals[0]);
+   for (i,text) in sels.iter().enumerate(){
+    assert_eq!(selector_ext(text).unwrap().matches_checked(&ns,h),Some(vals[i+1]=="1"),"{} {}",vals[0],text);
+   }rows+=1;
+  }assert_eq!(rows,21);
+ }
+ #[test]
+ fn typed_synthetic_namespace_prefix_and_exact_case_not_html_parse_claim(){
+  let mut ns=nodes("<!doctype html><div id=parent><x id=x1></x><x id=x2></x><x id=x3></x><x id=x4></x><x id=x5></x></div>");
+  for (label,uri,local,prefix) in [("x1","urn:a","x","a"),("x2","urn:b","x","b"),("x3","urn:a","x","a"),("x4","urn:a","X","a"),("x5","urn:a","x","c")] {
+   let h=id(&ns,label);if let Data::Element{name,..}=&mut ns[h].data{*name=html5ever::QualName::new(Some(prefix.into()),uri.into(),local.into());}
+  }
+  for (label,first,last,only,nth2) in [("x1",true,false,false,false),("x2",true,true,true,false),("x3",false,false,false,true),("x4",true,true,true,false),("x5",false,true,false,false)] {
+   let h=id(&ns,label);
+   for (text,want) in [(":first-of-type",first),(":last-of-type",last),(":only-of-type",only),(":nth-of-type(2)",nth2)]{
+    assert_eq!(selector_ext(text).unwrap().matches_checked(&ns,h),Some(want),"{label} {text}");
+   }
+  }
+ }
+ #[test]
+ fn typed_specificity_bounds_base_refusal_and_anb(){
+  for text in ["p:first-of-type","p:last-of-type","p:only-of-type","p:nth-of-type(2n+1)"]{
+   assert_eq!(selector_ext(text).unwrap().specificity,(0,1,1));assert!(selector(text).is_none());
+  }
+  assert_eq!(selector_ext(":not(:first-of-type)").unwrap().specificity,(0,1,0));
+  assert_eq!(selector_ext("*:first-of-type:first-of-type").unwrap().specificity,(0,2,0));
+  assert!(selector_ext(&format!("p{}",":first-of-type".repeat(8))).is_some());
+  assert!(selector_ext(&format!("p{}",":first-of-type".repeat(9))).is_none());
+  for text in [":nth-of-type(1025n)",":nth-of-type(n+65536)",":nth-last-of-type(2)",":nth-of-type(2 of p)"]{assert!(selector_ext(text).is_none(),"{text}");}
+  let ns=nodes("<!doctype html><div><p id=a></p>text<span></span><!--c--><p id=b></p><p id=c></p></div>");
+  for (text,wants) in [(":nth-of-type(-n+2)",[true,true,false]),(":nth-of-type(0)",[false,false,false]),(":nth-of-type(even)",[false,true,false])]{
+   for (label,want) in ["a","b","c"].iter().zip(wants){assert_eq!(selector_ext(text).unwrap().matches_checked(&ns,id(&ns,label)),Some(want));}
+  }
+ }
+ #[test]
+ fn typed_scan_cost_reuse_position_and_left_unknown(){
+  let ns=nodes("<!doctype html><div><span></span>text<p id=x></p><p id=y></p></div>");let x=id(&ns,"x");
+  let sel=selector_ext(":nth-of-type(1):nth-of-type(odd)").unwrap();let mut fuel=EXT_FUEL;
+  assert_eq!(sel.matches_checked_scoped_budget(&ns,x,&mut fuel,Some((999,99)),None),Ok(Some(true)),"all-element position never reused");
+  let cost=EXT_FUEL-fuel;let mut fuel2=EXT_FUEL;
+  assert_eq!(selector_ext(":nth-of-type(1)").unwrap().matches_checked_scoped_budget(&ns,x,&mut fuel2,None,None),Ok(Some(true)));
+  assert_eq!(EXT_FUEL-fuel2,cost,"repeated formulas reuse same charged typed census");
+  // Malformed direct-node membership left of a descendant remains unknown.
+  let mut ns=nodes("<!doctype html><div id=d><p id=x></p></div>");let d=id(&ns,"d");let x=id(&ns,"x");let parent=ns[d].parent.unwrap();ns[parent].children.retain(|&h|h!=d);
+  assert_eq!(selector_ext("div:first-of-type p").unwrap().matches_checked(&ns,x),None);
+ }
+ #[test]
+ fn typed_actual_cost_non_elements_and_ns_local_bytes(){
+  let ns=nodes("<!doctype html><div><!--comment-->text<p id=x></p></div>");let x=id(&ns,"x");let parent=ns[x].parent.unwrap();
+  let mut fuel=EXT_FUEL;
+  assert_eq!(typed_position_charged(&ns,x,false,&mut fuel),Ok(Some((1,1))));
+  // Raw comment+text+element visits, plus exact HTML namespace and p bytes.
+  let Data::Element{name,..}=&ns[x].data else{panic!()};
+  assert_eq!(EXT_FUEL-fuel,ns[parent].children.len() as u32+name.ns.len() as u32+name.local.len() as u32);
+  let mut modified=ns.clone();if let Data::Element{name,..}=&mut modified[x].data{name.ns="a".repeat(5000).into();}
+  let mut fuel=EXT_FUEL;
+  assert_eq!(typed_position_charged(&modified,x,false,&mut fuel),Err(MatchRefusal::Fuel),"self namespace compare is real charged work");
+ }
+ #[test]
+ fn typed_detached_inconsistent_oversize_fuel_and_negation(){
+  let mut ns=nodes("<!doctype html><div><p id=x></p><p id=y></p></div>");let x=id(&ns,"x");let y=id(&ns,"y");
+  let sel=selector_ext(":not(:first-of-type)").unwrap();let mut fuel=1;
+  assert_eq!(sel.matches_checked_scoped_budget(&ns,x,&mut fuel,None,None),Err(MatchRefusal::Fuel));
+  let parent=ns[x].parent.unwrap();ns[parent].children.retain(|&h|h!=x);
+  assert_eq!(selector_ext(":nth-of-type(1)").unwrap().matches_checked(&ns,x),None);
+  assert_eq!(sel.matches_checked(&ns,x),None,"inconsistent census never inverted");
+  ns[x].parent=None;
+  assert_eq!(selector_ext(":only-of-type").unwrap().matches_checked(&ns,x),Some(true));
+  ns[parent].children=vec![y;EXT_MAX_SIBLINGS+1];let mut fuel=EXT_FUEL;
+  assert_eq!(selector_ext(":nth-of-type(1)").unwrap().matches_checked_scoped_budget(&ns,y,&mut fuel,None,None),Err(MatchRefusal::OversizeSiblings));
+  assert_eq!(EXT_FUEL-fuel,1,"gate before traversal, only outer step charged");
+ }
 }
