@@ -4335,7 +4335,7 @@ mod desc_has_cursor_tests {
  }
  #[test] fn malformed_cycles_duplicates_boundary_and_detached(){
  let mut n=nodes("<!doctype html><div id=a><p id=p></p><span id=s></span></div><aside id=outside></aside>");let a=id(&n,"a");let p=id(&n,"p");let out=id(&n,"outside");
- n[p].children=vec![a,out,n.len()+9]; // anchorbackedge and mismatchedoutside must not match
+ n[p].children=vec![a,p,out,n.len()+9]; // anchorbackedge, selfcycle, mismatchedoutside must not match
  let mut f=EXT_FUEL;assert_eq!(run(&n,a,":has(#outside)",&mut f),Ok(None));assert!(f<EXT_FUEL);
  n[p].children.clear();n[a].children=vec![p,p];let mut f=40;assert_eq!(run(&n,a,":has(#outside)",&mut f),Err(MatchRefusal::Fuel));assert_eq!(f,0,"duplicate firstmembership resumes same index, chargedtermination");
  n[a].children=vec![p];n[a].parent=None;let mut f=EXT_FUEL;assert_eq!(run(&n,a,":has(p)",&mut f),Ok(Some(true)));
