@@ -513,6 +513,24 @@ fn take_ident(s: &str, at: usize) -> (&str, usize) {
         .map_or(s.len(), |n| at + n);
     (&s[at..end], end)
 }
+/// EXT class-only subset: ordinary ASCII identifiers, or one embedded
+/// literal backslash-bang between a valid old prefix and nonempty continuation.
+/// Return a RAW byte offset. Other escapes remain whole-shape refusals.
+fn class_ident_ext(s: &str, at: usize) -> Option<(String, usize)> {
+    let (prefix, end) = take_ident(s, at);
+    if !ident_ok(prefix) { return None; }
+    if s.as_bytes().get(end) != Some(&b'\\') {
+        return Some((prefix.to_owned(), end));
+    }
+    if s.as_bytes().get(end + 1) != Some(&b'!') { return None; }
+    let (suffix, after) = take_ident(s, end + 2);
+    if suffix.is_empty() || s.as_bytes().get(after) == Some(&b'\\') { return None; }
+    let mut decoded = String::with_capacity(after - at - 1);
+    decoded.push_str(prefix);
+    decoded.push('!');
+    decoded.push_str(suffix);
+    Some((decoded, after))
+}
 /// Parses the bounded `:nth-child(An+B)` argument and returns (A, B) and
 /// the position after the closing paren. Grammar (grounded against Chrome
 /// 157 `CSS.supports("selector(...)")` on each token shape): `odd`/`even`
@@ -722,11 +740,9 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                 at = next;
             }
             b'.' => {
-                let (token, next) = take_ident(s, at + 1);
-                if simple.classes.len() >= 8 || !ident_ok(token) {
-                    return None;
-                }
-                simple.classes.push(token.to_owned());
+                if simple.classes.len() >= 8 { return None; }
+                let (token, next) = class_ident_ext(s, at + 1)?;
+                simple.classes.push(token);
                 at = next;
             }
             b'[' => {
@@ -894,7 +910,8 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
 /// arguments or argument pseudo-elements. Only exact trailing `::before`/
 /// `::after` suffixes on a non-bare, state-free originating selector are
 /// accepted; other pseudo-elements and single-colon forms are refused.
-/// Other pseudo-classes/functions (including `:visited`, `:nth-last-of-type`), the Selectors-4 `of S` form, namespaces, escapes and
+/// Other pseudo-classes/functions (including `:visited`, `:nth-last-of-type`), the Selectors-4 `of S` form, namespaces, general escapes (except one
+/// embedded literal backslash-bang in an EXT class identifier), and
 /// attribute case flags remain refused. State/target dependencies anywhere,
 /// including inside negation, enroll only under an explicit caller
 /// `SnapshotState` covering every family (see `matched_rules`); without it
@@ -4723,4 +4740,23 @@ mod two_descendant_has_tests {
  #[test] fn browser_truth_replay(){let n=nodes(include_str!("../tests/fixtures/two_descendant_has_oracle.html"));assert_eq!(include_str!("../tests/fixtures/two_descendant_has_expected.tsv").lines().count(),11);for l in include_str!("../tests/fixtures/two_descendant_has_expected.tsv").lines(){let p:Vec<_>=l.split('\t').collect();let a=id(&n,p[0]);for(q,v)in selectors().iter().zip(&p[1..]){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,a),Some(*v=="1"),"{} {q}",p[0]);}}}
  #[test] fn mismatched_tail_unknown_and_raw4096_exact(){let mut n=nodes("<!doctype html><div id=a>text<b id=b><i id=i></i></b></div>");let a=id(&n,"a");let b=id(&n,"b");let text=n[a].children[0];let mut q=selector_ext(":has(b i)").unwrap();q.steps[0].0.has_args[0].first.steps[0].1=Relation::Child;assert_eq!(q.matches_checked(&n,a),None);n[a].children=vec![text;EXT_MAX_SIBLINGS];let mut c=(a,0);let mut u=false;let mut f=EXT_MAX_SIBLINGS as u32;assert_eq!(Selector::pair_descendant_next(&n,a,a,&mut c,&mut u,&mut f),Ok(None));assert!(!u);assert_eq!(f,0);n[a].children=vec![b];n[b].children=vec![text;EXT_MAX_SIBLINGS];n[text].parent=Some(b);let mut c=(b,0);let mut u=false;let mut f=EXT_MAX_SIBLINGS as u32;assert_eq!(Selector::pair_descendant_next(&n,b,a,&mut c,&mut u,&mut f),Ok(None));assert!(!u);assert_eq!(f,0);}
  fn selectors()->[&'static str;11]{[":has(* *)",":has(b i)",":has(b .x)",":has(:not(.x) :where(.x))",":not(:has(b i))",":where(:has(b #leaf))",":has(b:nth-child(2) i:last-of-type)",":has(svg g)",":has(template i)",":has(b :empty)",":has(b i):has(b .x)"]}
+}
+#[cfg(test)] mod embedded_class_bang_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let sink=crate::dom::Sink::new(64*1024*1024);let mut p=html5ever::parse_document(sink,html5ever::ParseOpts::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],s:&str)->Handle{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id"&&v==s))).unwrap()}
+ fn run(n:&[Node],a:Handle,s:&str,f:&mut u32)->Result<Option<bool>,MatchRefusal>{selector_ext(s).unwrap().matches_checked_scoped_budget(n,a,f,None,None)}
+ #[test] fn exactshape_rawend_and_no_other_identifier_widening(){
+ for bad in [r".\!x",r".a\!",r".a\!x\!y",r".a\!x\:y",r".a\21x",r".a\0021x",r".a\:x",r".a\ x",r".a\\!x",r".a!x",r".1a\!x",r".-1a\!x",r".-\!x",r".a\!é",r"#a\!x",r"a\!x",r"[a\!x]",r"[a=a\!x]",r":a\!x",r".a\!x\", ".a\\\nx"]{assert!(selector_ext(bad).is_none(),"wholeunsupported:{bad}");}
+ for good in [r".a\!x",r"._a\!9",r".-a\!-",r".a\!_",r".a\!x.b",r".a\!x#b",r".a\!x[b]",r".a\!x:empty",r".a\!x>b",r".a\!x+b",r".a\!x~b",r".a\!x b",r":not(.a\!x)",r":where(.a\!x)",r":has(.a\!x)",r":has(>.a\!x)",r":has(>.a\!x>.b\!y)",r":has(+.a\!x+.b\!y)",r":has(.a\!x .b\!y)"]{assert!(selector_ext(good).is_some(),"{good}");assert!(selector(good).is_none(),"baseunchanged:{good}");}
+ assert_eq!(class_ident_ext(r"a\!x.b",0),Some(("a!x".into(),4)));assert_eq!(class_ident_ext("plain.b",0),Some(("plain".into(),5)));
+ }
+ #[test] fn rawlength_class_and_wrapper_bounds_rank(){let x=format!(".a\\!{}","b".repeat(252));assert_eq!(x.len(),256);assert!(selector_ext(&x).is_some());let x=format!(".a\\!{}","b".repeat(253));assert_eq!(x.len(),257);assert_eq!(x.replace("\\!","!").len(),256);assert!(selector_ext(&x).is_none());assert!(selector_ext(&r".a\!x".repeat(8)).is_some());assert!(selector_ext(&r".a\!x".repeat(9)).is_none());for(s,w)in[(r".a\!x",(0,1,0)),(r":not(.a\!x)",(0,1,0)),(r":where(.a\!x)",(0,0,0)),(r":has(.a\!x .b\!y)",(0,2,0)),(r":has(+.a\!x+.b\!y)",(0,2,0))]{assert_eq!(selector_ext(s).unwrap().specificity,w);}assert!(selector_ext(&format!(r".a\!x{}",":empty".repeat(9))).is_none());}
+ #[test] fn exact_charged_decoded_class_work_and_failures(){let n=nodes("<!doctype html><div id=a class='a!x'></div><div id=b class='aXx'></div>");let a=id(&n,"a");let b=id(&n,"b");let mut f=100;assert_eq!(run(&n,a,r":where(.a\!x)",&mut f),Ok(Some(true)));let used=100-f;let mut g=100;assert_eq!(run(&n,b,":where(.aXx)",&mut g),Ok(Some(true)));assert_eq!(used,100-g,"matcheddecodedlengthsamebytework");let mut f=used;assert_eq!(run(&n,a,r":where(.a\!x)",&mut f),Ok(Some(true)));assert_eq!(f,0);let mut f=used-1;assert_eq!(run(&n,a,r":where(.a\!x)",&mut f),Err(MatchRefusal::Fuel));let mut f=100;assert_eq!(run(&n,a,r":where(.a\!x):where(.a\!x)",&mut f),Ok(Some(true)));assert_eq!(100-f,used*2-1);println!("CLASSBANGexact_success={used} repeat={}",100-f);
+ for s in [r":where(.a\!x)",r":not(.a\!x)",r":where(.a\!x)"]{let mut f=0;assert_eq!(run(&n,a,s,&mut f),Err(MatchRefusal::Fuel));}
+ }
+ #[test] fn token_case_backslash_no_prefix_fallback(){let n=nodes("<!doctype html><div id=a class='a!x'></div><div id=b class='a\\!x'></div><div id=c class='A!x'></div><div id=d class='qa!xz'></div><div id=e class='a!x&#160;z'></div>");for(w,v)in[("a",true),("b",false),("c",false),("d",false),("e",false)]{assert_eq!(selector_ext(r".a\!x").unwrap().matches_checked(&n,id(&n,w)),Some(v));}assert!(selector_ext(r".a\!x\:y").is_none());}
+ #[test] fn all_wrapper_modes_state_preflight_and_indices_unchanged(){let n=nodes("<!doctype html><div id=a><b class='a!x'></b><i class='b!y' id=tail></i></div>");let a=id(&n,"a");for s in [r":has(.a\!x)",r":has(>.a\!x)",r":where(:has(.a\!x))",r":not(:has(.missing\!x))"]{assert_eq!(selector_ext(s).unwrap().matches_checked(&n,a),Some(true));}for s in [r".absent:has(.a\!x:hover)",r":where(.a\!x:focus)",r":not(.a\!x:link)"]{let s=selector_ext(s).unwrap();assert!(s.has_state());assert!(!s.state_satisfied_by(None));assert_eq!(s.matches_checked(&n,a),None);}assert_eq!(selector_ext(r":has(>.a\!x:nth-child(1))").unwrap().matches_checked(&n,a),Some(true));}
+ #[test] fn browser_truth_replay(){let n=nodes(include_str!("../tests/fixtures/embedded_class_bang_oracle.html"));let text=include_str!("../tests/fixtures/embedded_class_bang_expected.tsv");assert_eq!(text.lines().count(),9);for l in text.lines(){let p:Vec<_>=l.split('\t').collect();let a=id(&n,p[0]);for(q,v)in selectors().iter().zip(&p[1..]){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,a),Some(*v=="1"),"{} {q}",p[0]);}}}
+ fn selectors()->[&'static str;9]{[r".a\!x",r".a\!x.b",r":not(.a\!x)",r":where(.a\!x)",r":has(.a\!x)",r":has(>.a\!x)",r".a\!x + .b\!y",r":has(.a\!x .b\!y)",r":has(+.a\!x+.b\!y)"]}
 }
