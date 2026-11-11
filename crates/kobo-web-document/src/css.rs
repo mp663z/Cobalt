@@ -3055,9 +3055,10 @@ mod target_tests {
         );
         // Full scans with enough fuel answer and REPORT their consumption.
         // "zz-absent" (9 bytes) misses raw: 12 id + 12 a[name] visits, then
-        // decode (charged 4/byte = 36), then decoded differs ("zz-absent"
-        // has no %) so NO decoded rescan... it equals raw, so decode cost
-        // still applies but the rescan is skipped as observably identical.
+        // decode (charged DECODE_FUEL_PER_BYTE/byte = 6*9 = 54), then
+        // decoded equals raw ("zz-absent" has no %) so NO decoded rescan -
+        // the decode cost still applies but the rescan is skipped as
+        // observably identical.
         let mut fuel = EXT_FUEL;
         let _ = resolve_target_element(&nodes, &TargetState::Fragment("zz-absent".into()), &mut fuel);
         // Exact composition, computed from the tree: per pass, 1 fuel per
@@ -3095,7 +3096,8 @@ mod target_tests {
             "visits + conservative compared-byte pre-charge + charged decode"
         );
         // NEGATIVE CONTROL: decode refuses BEFORE any allocation when the
-        // budget cannot cover 4x the fragment bytes - an empty tree (zero
+        // budget cannot cover DECODE_FUEL_PER_BYTE times the fragment
+        // bytes - an empty tree (zero
         // scan cost) with fuel just under the decode cost.
         let empty = engine_nodes("<!doctype html><body></body>");
         let mut fuel = DECODE_FUEL_PER_BYTE * 9 - 1;
@@ -3105,7 +3107,7 @@ mod target_tests {
         );
         // NEGATIVE CONTROL: a caller fragment larger than the whole budget
         // refuses without scanning or allocating (no unbounded allocation).
-        let huge = "x".repeat(EXT_FUEL as usize); // 4x this > budget
+        let huge = "x".repeat(EXT_FUEL as usize); // 6x this > budget
         let mut fuel = EXT_FUEL;
         assert_eq!(
             resolve_target_element(&empty, &TargetState::Fragment(huge), &mut fuel),
