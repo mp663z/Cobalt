@@ -755,6 +755,9 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                     let arg_relation = if is_has && b.get(arg_start) == Some(&b'>') {
                         arg_start = skip_ws(b, arg_start + 1);
                         Relation::Child
+                    } else if is_has && b.get(arg_start) == Some(&b'+') {
+                        arg_start = skip_ws(b, arg_start + 1);
+                        Relation::NextSibling
                     } else { Relation::Descendant };
                     let (arg, end) = compound_ext_in(s, arg_start,
                         allow_not && !is_not, allow_where && !is_where, allow_has && !is_has)?;
@@ -1425,6 +1428,30 @@ impl Selector {
         }
         Ok(if unknown { None } else { Some(false) })
     }
+    /// Exactly the next element sibling, never a later candidate after a
+    /// false/unknown result. Invalid potential siblings make adjacency unknown.
+    fn matches_following_adjacent_charged(&self, nodes: &[Node], anchor: Handle,
+        fuel: &mut u32, target: Option<Option<Handle>>, state_enrolled: bool)
+        -> Result<Option<bool>, MatchRefusal> {
+        let Some(siblings) = checked_siblings(nodes, anchor) else { return Ok(None); };
+        let Some(siblings) = siblings else { return Ok(Some(false)); };
+        let Some(parent) = nodes.get(anchor).and_then(|n| n.parent) else { return Ok(None); };
+        if parent == anchor { return Ok(None); }
+        if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+        let mut found = false;
+        for &raw in siblings {
+            not_charge(fuel)?;
+            let Some(element) = checked_sibling_element(nodes, anchor, raw) else { return Ok(None); };
+            if !found {
+                if raw == anchor { found = true; }
+                continue;
+            }
+            if raw == anchor || raw == parent { return Ok(None); }
+            if !element { continue; }
+            return self.ext_match(nodes, raw, 0, fuel, None, target, state_enrolled, true);
+        }
+        Ok(if found { Some(false) } else { None })
+    }
     fn ext_match(
         &self,
         nodes: &[Node],
@@ -1546,6 +1573,7 @@ impl Selector {
             } else { match arg.first.steps[0].1 {
                 Relation::Child => arg.first.matches_direct_child_charged(nodes, node, fuel, target, state_enrolled),
                 Relation::Descendant => arg.first.matches_descendant_charged(nodes, node, fuel, target, state_enrolled),
+                Relation::NextSibling => arg.first.matches_following_adjacent_charged(nodes, node, fuel, target, state_enrolled),
                 _ => return Ok(None),
             }};
             match result? {
@@ -4348,7 +4376,7 @@ mod child_has_bounded_tests {
  }
  #[test]
  fn grammar_whole_refusal_flags_rank_and_bounds(){
-  for bad in [":has(+ p)",":has(~ p)",":has(> p > span > i)",":has(> p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(> :not(:has(> p)))",":where(:has(> :not(:where(.x))))",":not(:has(> :where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
+  for bad in [":has(+ p + i)",":has(~ p)",":has(> p > span > i)",":has(> p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(> :not(:has(> p)))",":where(:has(> :not(:where(.x))))",":not(:has(> :where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
   for good in [":has(> :where(:not(.x)))",":not(:where(:has(> .x)))",":where(:not(:has(> .x)))",":has( > p )"]{assert!(selector_ext(good).is_some(),"{good}");}
   for (s,want)in [(":has(> *)",(0,0,0)),(":has(> #x)",(1,0,0)),(":has(> p.a)",(0,1,1)),(":where(:has(> #x))",(0,0,0)),(":not(:has(> .x))",(0,1,0))]{assert_eq!(selector_ext(s).unwrap().specificity,want);assert!(selector(s).is_none());}
   assert!(selector_ext(&":has(> *)".repeat(8)).is_some());assert!(selector_ext(&":has(> *)".repeat(9)).is_none());
@@ -4394,7 +4422,7 @@ mod desc_has_bounded_tests {
  }
  #[test]
  fn grammar_whole_refusal_flags_rank_and_bounds(){
-  for bad in [":has()",":has( )",":has(p,span)",":has(p span)",":has(p + span)",":has(+ p)",":has(~ p)",":has(p > span)",":has(p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(:not(:has(p)))",":where(:has(:not(:where(.x))))",":not(:has(:where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
+  for bad in [":has()",":has( )",":has(p,span)",":has(p span)",":has(p + span)",":has(+ p + i)",":has(~ p)",":has(p > span)",":has(p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(:not(:has(p)))",":where(:has(:not(:where(.x))))",":not(:has(:where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
   for good in [":has(:where(:not(.x)))",":not(:where(:has(.x)))",":where(:not(:has(.x)))",":has( p )"]{assert!(selector_ext(good).is_some(),"{good}");}
   for (s,want)in [(":has(*)",(0,0,0)),(":has(#x)",(1,0,0)),(":has(p.a)",(0,1,1)),(":where(:has(#x))",(0,0,0)),(":not(:has(.x))",(0,1,0))]{assert_eq!(selector_ext(s).unwrap().specificity,want);assert!(selector(s).is_none());}
   assert!(matches!(selector_ext(":has(p)").unwrap().steps[0].0.has_args[0].first.steps[0].1,Relation::Descendant));assert!(matches!(selector_ext(":has(>p)").unwrap().steps[0].0.has_args[0].first.steps[0].1,Relation::Child));
@@ -4538,4 +4566,18 @@ mod checked_structural_correction_tests {
  let mut f=20;assert_eq!(selector_ext("b+p").unwrap().matches_checked_scoped_budget(&n,p,&mut f,Some((999,2)),None),Ok(None));
  n[a].children=vec![b,p];let mut f=20;assert_eq!(selector_ext("b+p").unwrap().matches_checked_scoped_budget(&n,p,&mut f,Some((1,2)),None),Ok(Some(true)));
  }
+}
+#[cfg(test)]
+mod adjacent_has_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let sink=crate::dom::Sink::new(10000);let mut p=html5ever::parse_document(sink,html5ever::ParseOpts::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],s:&str)->Handle{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id" && v==s))).unwrap()}
+ fn run(n:&[Node],a:Handle,s:&str,f:&mut u32)->Result<Option<bool>,MatchRefusal>{selector_ext(s).unwrap().matches_checked_scoped_budget(n,a,f,None,None)}
+ #[test] fn grammar_rank_flags_bounds(){for bad in [":has(+)",":has(+p+i)",":has(+p>i)",":has(+p i)",":has(+p, +i)",":has(~p)",":has(+p::before)",":has(+:where(:has(p)))",":where(:has(+:where(p)))"]{assert!(selector_ext(bad).is_none(),"{bad}");}for good in [":has( + p )",":not(:where(:has(+p)))",":has(+:not(:where(p)))"]{assert!(selector_ext(good).is_some());}for(s,w)in[(":has(+*)",(0,0,0)),(":has(+#x)",(1,0,0)),(":has(+p.a)",(0,1,1)),(":where(:has(+#x))",(0,0,0))]{assert_eq!(selector_ext(s).unwrap().specificity,w);assert!(selector(s).is_none());}assert!(selector_ext(&":has(+*)".repeat(8)).is_some());assert!(selector_ext(&":has(+*)".repeat(9)).is_none());}
+ #[test] fn first_candidate_false_blocks_later_true_unknown_and_unvisited_irrelevant(){let mut n=nodes("<!doctype html><div id=a><b id=b></b>text<!--c--><p id=p></p><i id=i class=x></i></div>");let a=id(&n,"a");let b=id(&n,"b");let p=id(&n,"p");let i=id(&n,"i");assert_eq!(selector_ext(":has(+.x)").unwrap().matches_checked(&n,b),Some(false));let bad=n.len()+1;n[a].children.push(bad);assert_eq!(selector_ext(":has(+p)").unwrap().matches_checked(&n,b),Some(true),"invalidafterdecisivecandidateignored");n[a].children=vec![b,bad,p];assert_eq!(selector_ext(":has(+p)").unwrap().matches_checked(&n,b),None);n[a].children=vec![bad,b,p];assert_eq!(selector_ext(":has(+p)").unwrap().matches_checked(&n,b),None);n[a].children=vec![b,p,i];n[p].parent=None;assert_eq!(selector_ext(":has(+.x)").unwrap().matches_checked(&n,b),None,"can'tjumpparentmismatchpotentialadjacent");}
+ #[test] fn local_selfparent_and_parent_as_next_identity_duplicate_detached(){let mut n=nodes("<!doctype html><div id=a><b id=b></b><p id=p></p></div>");let a=id(&n,"a");let b=id(&n,"b");let p=id(&n,"p");n[b].parent=Some(b);n[b].children=vec![b,p];n[p].parent=Some(b);assert_eq!(selector_ext(":has(+p)").unwrap().matches_checked(&n,b),None,"selfparentanchor");n[b].parent=Some(a);n[a].parent=Some(a);n[a].children=vec![b,a];let mut f=100;assert_eq!(run(&n,b,":has(+div)",&mut f),Ok(None));assert_eq!(100-f,3,"outer+membership+parentcandidate raw charged beforeidentity");n[a].children=vec![b,b,p];assert_eq!(selector_ext(":has(+b)").unwrap().matches_checked(&n,b),None);n[b].parent=None;assert_eq!(selector_ext(":has(+*)").unwrap().matches_checked(&n,b),Some(false));n[b].parent=Some(n.len()+3);assert_eq!(selector_ext(":has(+*)").unwrap().matches_checked(&n,b),None);n[b].parent=Some(a);n[a].children=vec![p];assert_eq!(selector_ext(":has(+*)").unwrap().matches_checked(&n,b),None);}
+ #[test] fn exact_full_scan_repeat_preguard_and_fuel_before_lookup(){let mut n=nodes("<!doctype html><div id=a>text<b id=b></b><!--c--><p id=p></p></div>");let a=id(&n,"a");let b=id(&n,"b");let p=id(&n,"p");let mut f=100;assert_eq!(run(&n,b,":has(+*)",&mut f),Ok(Some(true)));assert_eq!(100-f,6,"outer1+text/b/comment/p4+candidate1");let mut f=100;assert_eq!(run(&n,b,":has(+*):has(+*)",&mut f),Ok(Some(true)));assert_eq!(100-f,11);let mut f=5;assert_eq!(run(&n,b,":has(+*)",&mut f),Err(MatchRefusal::Fuel));assert_eq!(f,0);let mut f=100;assert_eq!(run(&n,p,":has(+*)",&mut f),Ok(Some(false)));assert_eq!(100-f,5);let bad=n.len()+1;n[a].children=vec![bad,b];let mut f=1;assert_eq!(run(&n,b,":has(+*)",&mut f),Err(MatchRefusal::Fuel));assert_eq!(f,0);let mut f=2;assert_eq!(run(&n,b,":has(+*)",&mut f),Ok(None));assert_eq!(f,0);n[a].children=vec![b;EXT_MAX_SIBLINGS+1];let mut f=100;assert_eq!(run(&n,b,":has(+*)",&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(100-f,1);}
+ #[test] fn candidate_position_none_preflight_and_error_before_later_true(){let n=nodes("<!doctype html><div><b id=b></b>text<p id=p></p><span></span></div>");let b=id(&n,"b");let mut f=EXT_FUEL;assert_eq!(selector_ext(":has(+p:nth-child(2):nth-last-child(2):first-of-type)").unwrap().matches_checked_scoped_budget(&n,b,&mut f,Some((999,999)),None),Ok(Some(true)));for s in [".absent:has(+:hover)",":not(:where(:has(+:link)))",":has(+:where(:not(:target)))"]{let x=selector_ext(s).unwrap();assert!(x.has_state());assert!(!x.state_satisfied_by(None));assert_eq!(x.matches_checked(&n,b),None);}assert_eq!(selector_ext(":has(+:target)").unwrap().matches_checked_target(&n,b,&TargetState::Fragment("p".into())),Some(true));let n=nodes(&format!("<!doctype html><div><b id=b></b><p data-x='{}'></p><p data-x=aaaaab></p></div>","a".repeat(1000)));let b=id(&n,"b");let mut f=EXT_FUEL;assert_eq!(run(&n,b,":has(+[data-x*=aaaaab])",&mut f),Err(MatchRefusal::Fuel));}
+ #[test] fn browser_truth(){let n=nodes(include_str!("../tests/fixtures/adjacent_has_oracle.html"));let sels=[":has(+*)",":has(+p)",":has(+.x)",":has(+:not(.x))",":not(:has(+p))",":where(:has(+#p))",":has(+p:nth-child(2))",":has(+:last-of-type)",":has(+svg)",":has(+template)",":has(+section):has(+.x)"];
+ let t=include_str!("../tests/fixtures/adjacent_has_expected.tsv");assert_eq!(t.lines().count(),11);for l in t.lines(){let v:Vec<_>=l.split('\t').collect();for(i,s)in sels.iter().enumerate(){assert_eq!(selector_ext(s).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {s}",v[0]);}}}
 }
