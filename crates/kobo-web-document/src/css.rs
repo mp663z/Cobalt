@@ -159,6 +159,8 @@ struct Simple {
     /// Type-relative structural flags and bounded forward An+B formulas.
     /// Type is the tested element's own exact namespace/canonical local name.
     of_type: u8,
+    /// Browser-compatible Selectors3: every nonzero text child disqualifies.
+    empty: bool,
     nth_of_type: Vec<(i64, i64)>,
     /// Bounded negation arguments: each is exactly one compound, no nesting.
     /// Each token consumes structural budget but adds only argument specificity.
@@ -473,6 +475,7 @@ fn simple(part: &str) -> Option<Simple> {
         nth: Vec::new(),
         nth_last: Vec::new(),
         of_type: 0,
+        empty: false,
         nth_of_type: Vec::new(),
         not_args: Vec::new(),
         where_args: Vec::new(),
@@ -676,6 +679,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool) -
         nth: Vec::new(),
         nth_last: Vec::new(),
         of_type: 0,
+        empty: false,
         nth_of_type: Vec::new(),
         not_args: Vec::new(),
         where_args: Vec::new(),
@@ -798,6 +802,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool) -
                     "target" if !simple.target => {
                         simple.target = true;
                     }
+                    "empty" => simple.empty = true,
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
                     "only-child" => simple.structural |= 4,
@@ -829,7 +834,8 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool) -
     (at > start).then_some((simple, at))
 }
 /// Opt-in grammar: bounded compounds of type/`*`/`#id`/`.class`/
-/// `[attr op value]`, `:root`, first/last/only-child, bounded
+/// `[attr op value]`, `:root`, browser-compatible Selectors3 `:empty`
+/// (all nonzero text affects emptiness), first/last/only-child, bounded
 /// `:nth-child(An+B)`/`:nth-last-child(An+B)`, first/last/only-of-type, `:nth-of-type(An+B)`,
 /// `:enabled`/`:disabled`, `:target` and the state family
 /// `:link`/`:hover`/`:active`/`:focus`/`:focus-visible`/`:focus-within`,
@@ -1254,6 +1260,11 @@ impl Selector {
             if !simple.nth.iter().all(|&an_b| nth_formula(nth_ix, an_b)) {
                 return Ok(Some(false));
             }
+        }
+        if simple.empty {
+            let Some(empty) = empty_children_charged(nodes, node, fuel)?
+                else { return Ok(None); };
+            if !empty { return Ok(Some(false)); }
         }
         if !simple.nth_last.is_empty() {
             // Forward walk position lacks a total, so cannot supply reverse
@@ -1698,7 +1709,7 @@ impl Simple {
         // TargetState resolution): refuse to guess rather than infer from
         // attribute absence.
         if self.enablement.is_some() || self.target || !self.not_args.is_empty()
-            || !self.where_args.is_empty() || self.of_type != 0 || !self.nth_of_type.is_empty() || !self.nth_last.is_empty() {
+            || self.empty || !self.where_args.is_empty() || self.of_type != 0 || !self.nth_of_type.is_empty() || !self.nth_last.is_empty() {
             return false;
         }
         self.matches_inner(nodes, handle, true)
@@ -2112,6 +2123,27 @@ fn element_disabled(
     }
     Ok(None)
 }
+/// Explicit browser-compatible Selectors3 policy, NOT draft4 whitespace
+/// relaxation: all nonzero text, including whitespace, affects emptiness.
+/// Inspect own children only, never template content handle. Retained string
+/// length is O(1); no text scan/allocation. Charge visit before kind/length.
+fn empty_children_charged(nodes: &[Node], handle: Handle, fuel: &mut u32)
+    -> Result<Option<bool>, MatchRefusal> {
+    let Some(Node {data: Data::Element {..}, children, ..}) = nodes.get(handle)
+        else { return Ok(None); };
+    if children.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+    for &child in children {
+        not_charge(fuel)?;
+        let Some(node) = nodes.get(child) else { return Ok(None); };
+        match &node.data {
+            Data::Element {..} => return Ok(Some(false)),
+            Data::Text(text) if !text.is_empty() => return Ok(Some(false)),
+            _ => {},
+        }
+    }
+    Ok(Some(true))
+}
+
 /// Reverse all-element sibling index. Every raw entry visited, including
 /// comments/text and full failed membership searches, costs one fuel unit.
 /// Parentless=>1, inconsistent membership=>None; no type/namespace filtering.
@@ -2526,7 +2558,7 @@ mod ext_selector_tests {
     fn unsupported_selector_forms_still_refuse() {
         for selector in [
             "p:hover", "p:focus", "p:focus-within", "p:visited", "p:link", "p::before", "p:before",
-            "p:not(.a,.b)", "p:is(.a)", "p:nth-last-of-type(2)", "p:empty", "p[a=b i]",
+            "p:not(.a,.b)", "p:is(.a)", "p:nth-last-of-type(2)", "p:empty()", "p[a=b i]",
             "p[a=b s]", "p[a|b=c]", "p[*|a]", r"p.a\:b", "svg|p", "p,", "> p", "p >", "p[a=1]",
             "p[a=b c]", "p[a=\"b\\\"c\"]", "p#a#b", ".1a", "p[a=b", "p[a",
         ] {
@@ -4046,5 +4078,43 @@ mod where_bounded_tests {
   let parent=ns[h].parent.unwrap();ns[parent].children.retain(|&x|x!=h);
   for t in [":where(:nth-last-child(1))",":not(:where(:first-of-type))",":where(:not(:nth-last-child(1)))"]{assert_eq!(selector_ext(t).unwrap().matches_checked(&ns,h),None,"{t}");}
   ns[parent].children=vec![h;EXT_MAX_SIBLINGS+1];for t in [":not(:where(:first-of-type))",":where(:not(:nth-last-child(1)))"]{let mut f=EXT_FUEL;assert_eq!(selector_ext(t).unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Err(MatchRefusal::OversizeSiblings));}
+ }
+}
+
+#[cfg(test)]
+mod empty_bounded_tests {
+ use super::*;
+ fn nodes(html:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let sink=crate::dom::Sink::new(64*1024*1024);let mut p=html5ever::parse_document(sink,html5ever::ParseOpts{tree_builder:html5ever::tree_builder::TreeBuilderOpts{scripting_enabled:false,..Default::default()},..Default::default()});p.process(html.to_string().into());p.finish().into_nodes()}
+ fn id(ns:&[Node],v:&str)->Handle{ns.iter().position(|n|matches!(&n.data,Data::Element{attrs,..} if attrs.iter().any(|(k,a)|&**k=="id" && a==v))).unwrap()}
+ #[test]
+ fn actual_html_browser17_and_template5_plus_parent_replay(){
+  for (html,expected,count) in [(include_str!("../tests/fixtures/empty_oracle.html"),include_str!("../tests/fixtures/empty_oracle_expected.tsv"),17),(include_str!("../tests/fixtures/empty_template_oracle.html"),include_str!("../tests/fixtures/empty_template_expected.tsv"),6)]{
+   let ns=nodes(html);let mut n=0;for l in expected.lines(){let v:Vec<_>=l.split('\t').collect();let h=id(&ns,v[0]);let b=v[1]=="1";assert_eq!(selector_ext(":empty").unwrap().matches_checked(&ns,h),Some(b),"{}",v[0]);assert_eq!(selector_ext(":not(:empty)").unwrap().matches_checked(&ns,h),Some(!b));assert_eq!(selector_ext(":where(:empty)").unwrap().matches_checked(&ns,h),Some(b));n+=1;}assert_eq!(n,count);
+  }
+ }
+ #[test]
+ fn specificity_grammar_repeated_census_and_exact_raw_cost(){
+  assert_eq!(selector_ext("p:empty:empty").unwrap().specificity,(0,2,1));assert_eq!(selector_ext(":where(:empty)").unwrap().specificity,(0,0,0));assert_eq!(selector_ext(":not(:empty)").unwrap().specificity,(0,1,0));assert!(selector("p:empty").is_none());assert!(selector_ext(&":empty".repeat(8)).is_some());assert!(selector_ext(&":empty".repeat(9)).is_none());assert!(selector_ext(":empty()").is_none());
+  let ns=nodes("<!doctype html><p id=x><!--c--><!--d--></p>");let h=id(&ns,"x");let mut f=EXT_FUEL;assert_eq!(selector_ext(":empty:empty").unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Ok(Some(true)));assert_eq!(EXT_FUEL-f,1+ns[h].children.len() as u32);
+ }
+ #[test]
+ fn synthetic_empty_text_other_detached_namespace_invalid_none_and_oversize(){
+  // Explicit synthetic empty Text, NOT browser row named emptytext (no nodes).
+  let mut ns=nodes("<!doctype html><p id=x></p>");let h=id(&ns,"x");ns[h].parent=None;let t=ns.len();ns.push(Node{data:Data::Text(String::new()),parent:Some(h),children:Vec::new()});let o=ns.len();ns.push(Node{data:Data::Other,parent:Some(h),children:Vec::new()});ns[h].children=vec![t,o];let mut f=EXT_FUEL;assert_eq!(empty_children_charged(&ns,h,&mut f),Ok(Some(true)));assert_eq!(EXT_FUEL-f,2);
+  ns[t].data=Data::Text(" ".into());assert_eq!(selector_ext(":empty").unwrap().matches_checked(&ns,h),Some(false));
+  ns[t].data=Data::Element{name:html5ever::QualName::new(None,"urn:foreign".into(),"x".into()),attrs:Vec::new(),template:None};assert_eq!(selector_ext(":empty").unwrap().matches_checked(&ns,h),Some(false));
+  ns[h].children=vec![ns.len()+9];for s in [":empty",":not(:empty)",":where(:empty)",":not(:where(:empty))"]{assert_eq!(selector_ext(s).unwrap().matches_checked(&ns,h),None,"{s}");}
+  let mut f=EXT_FUEL;assert_eq!(empty_children_charged(&ns,o,&mut f),Ok(None),"non-element never true");ns[h].children=vec![o;EXT_MAX_SIBLINGS+1];let mut f=EXT_FUEL;assert_eq!(empty_children_charged(&ns,h,&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(f,EXT_FUEL);
+ }
+ #[test]
+ fn raw_engine150_unique_ids_complete_chain_not_flattened(){
+  let n=150;let html=format!("<!doctype html>{}<p id=sentinel>SENTINEL</p><aside id=leaf></aside>{}",(0..n).map(|i|format!("<div id=d{}>",i)).collect::<String>(),"</div>".repeat(n));let ns=nodes(&html);let mut at=id(&ns,"sentinel");
+  for i in (0..n).rev(){at=ns[at].parent.unwrap();assert_eq!(at,id(&ns,&format!("d{}",i)));assert_eq!(selector_ext(":empty").unwrap().matches_checked(&ns,at),Some(false));}
+  assert_eq!(selector_ext(":empty").unwrap().matches_checked(&ns,id(&ns,"leaf")),Some(true));
+ }
+ #[test]
+ fn full_ignored_children_cumulative_fuel_and_left_unknown(){
+  let mut ns=nodes("<!doctype html><div id=d><p id=x></p></div>");let d=id(&ns,"d");let h=id(&ns,"x");let o=ns.len();ns.push(Node{data:Data::Other,parent:Some(h),children:Vec::new()});ns[h].children=vec![o;3];let mut f=4;assert_eq!(selector_ext(":where(:empty):not(:empty)").unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Err(MatchRefusal::Fuel));
+  ns[d].children=vec![ns.len()+1];assert_eq!(selector_ext("div:empty p").unwrap().matches_checked(&ns,h),None);
  }
 }
