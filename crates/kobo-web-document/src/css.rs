@@ -3867,7 +3867,7 @@ mod of_type_bounded_tests {
   // Raw comment+text+element visits, plus exact HTML namespace and p bytes.
   let Data::Element{name,..}=&ns[x].data else{panic!()};
   assert_eq!(EXT_FUEL-fuel,ns[parent].children.len() as u32+name.ns.len() as u32+name.local.len() as u32);
-  let mut modified=ns.clone();if let Data::Element{name,..}=&mut modified[x].data{name.ns="a".repeat(5000).into();}
+  let mut modified=nodes("<!doctype html><div><!--comment-->text<p id=x></p></div>");let x=id(&modified,"x");if let Data::Element{name,..}=&mut modified[x].data{name.ns="a".repeat(5000).into();}
   let mut fuel=EXT_FUEL;
   assert_eq!(typed_position_charged(&modified,x,false,&mut fuel),Err(MatchRefusal::Fuel),"self namespace compare is real charged work");
  }
