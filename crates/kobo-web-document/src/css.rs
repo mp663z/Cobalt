@@ -167,6 +167,8 @@ struct Simple {
     not_args: Vec<NotGroup>,
     /// Same-node bounded zero-specificity filters; argument rank discarded.
     where_args: Vec<Selector>,
+    /// Exactly five bare classes per same-node OR group, five shared slots.
+    is_args: Vec<[Selector;5]>,
     /// First compound relative mode plus at most one fixed child compound.
     has_args: Vec<HasGroup>,
 }
@@ -208,6 +210,12 @@ impl HasGroup {
         match self { Self::Pair(s) => s.iter().map(|s|s.specificity).max().unwrap(),
             Self::Single(s) => s.selectors().fold((0,0,0),|(a,b,c),s|(a+s.specificity.0,b+s.specificity.1,c+s.specificity.2)) }
     }
+}
+fn is_five<F>(mut evaluate:F)->Result<Option<bool>,MatchRefusal>
+where F:FnMut(usize)->Result<Option<bool>,MatchRefusal> {
+    let mut unknown=false;
+    for i in 0..5 { match evaluate(i)? {Some(true)=>return Ok(Some(true)), Some(false)=>{}, None=>unknown=true} }
+    Ok(if unknown {None}else{Some(false)})
 }
 fn has_pair<F>(first: Option<bool>, second: F) -> Result<Option<bool>, MatchRefusal>
 where F: FnOnce() -> Result<Option<bool>, MatchRefusal> {
@@ -537,6 +545,7 @@ fn simple(part: &str) -> Option<Simple> {
         nth_of_type: Vec::new(),
         not_args: Vec::new(),
         where_args: Vec::new(),
+        is_args: Vec::new(),
         has_args: Vec::new(),
     })
 }
@@ -752,6 +761,12 @@ fn single_class_only(s: &Simple) -> bool {
     plain.ext = true; plain.classes = s.classes.clone();
     *s == plain
 }
+fn self_class_selector(class: String) -> Option<Selector> {
+    let mut arg = simple(".x")?;
+    arg.ext = true; arg.classes = vec![class];
+    if !single_class_only(&arg) { return None; }
+    Some(Selector { steps: vec![(arg,Relation::Descendant)], specificity:(0,1,0), ext:true, pseudo:Pseudo::None })
+}
 fn typed_class_only(s: &Simple) -> bool {
     if s.tag.is_none() || s.classes.len() != 1 { return false; }
     let Some(mut plain) = simple("x.x") else { return false; };
@@ -782,6 +797,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
         nth_of_type: Vec::new(),
         not_args: Vec::new(),
         where_args: Vec::new(),
+        is_args: Vec::new(),
         has_args: Vec::new(),
     };
     let start = at;
@@ -822,6 +838,28 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
             b':' => {
                 let (token, next) = take_ident(s, at + 1);
                 let lowered = token.to_ascii_lowercase();
+                if lowered == "is" {
+                    if simple.structural_n > 3 || b.get(next) != Some(&b'(') { return None; }
+                    let mut pos = skip_ws(b,next+1);
+                    let mut args = Vec::with_capacity(5);
+                    for branch in 0..5 {
+                        if b.get(pos) != Some(&b'.') { return None; }
+                        let (class,after) = class_ident_ext(s,pos+1)?;
+                        let mut arg = self_class_selector(class)?;
+                        // This dedicated class-only path cannot recurse into wrappers.
+                        arg.specificity = arg.steps[0].0.ext_specificity();
+                        args.push(arg);
+                        pos = skip_ws(b,after);
+                        if branch < 4 {
+                            if b.get(pos) != Some(&b',') { return None; }
+                            pos = skip_ws(b,pos+1);
+                        } else if b.get(pos) != Some(&b')') { return None; }
+                    }
+                    simple.is_args.push(args.try_into().ok()?);
+                    simple.structural_n += 5;
+                    at = pos+1;
+                    continue;
+                }
                 if matches!(lowered.as_str(), "not" | "where" | "has") {
                     let is_not = lowered == "not";
                     let is_where = lowered == "where";
@@ -980,6 +1018,9 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
 /// `:nth-child(An+B)`/`:nth-last-child(An+B)`, first/last/only-of-type, `:nth-of-type(An+B)`,
 /// `:enabled`/`:disabled`, `:target` and the state family
 /// `:link`/`:hover`/`:active`/`:focus`/`:focus-visible`/`:focus-within`,
+/// Exact-five-bare-class `:is(.a,.b,.c,.d,.e)` is a strict subset, not
+/// general forgiving lists. Its arguments cannot contain wrappers. It can
+/// occur in existing singleton wrapper compounds under their current flags.
 /// joined by descendant, `>`, `+` and `~`. Bounded `:where(S)` is a nonempty
 /// single-compound zero-specificity filter, not general forgiving-list support.
 /// `:has(S)` and `:has(> S)` retain existing singleton paths; exactly two
@@ -1077,7 +1118,8 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
     })
 }
 /// Lazy EXT-only selector member routing. Balancing proposes a range only;
-/// actual full parser and actual pair provenance authorize shielding commas.
+/// Actual full parser and syntactic comma provenance authorize shielding commas.
+/// NotPair/HasPair account for one comma each; exact-five Is accounts for four.
 pub(crate) struct ExtSelectorMembers<'a> {
     input: &'a str, at: usize, done: bool,
     fallback: Option<std::str::Split<'a,char>>,
@@ -1087,11 +1129,12 @@ impl<'a> ExtSelectorMembers<'a> {
     pub(crate) fn new(input: &'a str) -> Self { Self { input, at:0, done:false, fallback:None, scanned:0, preparses:0 } }
 }
 impl Selector {
-    fn not_pair_count(&self) -> usize {
+    fn syntactic_comma_count(&self) -> usize {
         self.steps.iter().map(|(s,_)| {
-            s.not_args.iter().map(|g| usize::from(matches!(g,NotGroup::Pair(_))) + g.selectors().map(Selector::not_pair_count).sum::<usize>()).sum::<usize>()
-            + s.where_args.iter().map(Selector::not_pair_count).sum::<usize>()
-            + s.has_args.iter().map(|g|usize::from(matches!(g,HasGroup::Pair(_)))+g.selectors().map(Selector::not_pair_count).sum::<usize>()).sum::<usize>()
+            s.not_args.iter().map(|g| usize::from(matches!(g,NotGroup::Pair(_))) + g.selectors().map(Selector::syntactic_comma_count).sum::<usize>()).sum::<usize>()
+            + s.where_args.iter().map(Selector::syntactic_comma_count).sum::<usize>()
+            + s.is_args.iter().map(|g|4+g.iter().map(Selector::syntactic_comma_count).sum::<usize>()).sum::<usize>()
+            + s.has_args.iter().map(|g|usize::from(matches!(g,HasGroup::Pair(_)))+g.selectors().map(Selector::syntactic_comma_count).sum::<usize>()).sum::<usize>()
         }).sum()
     }
 }
@@ -1131,8 +1174,8 @@ impl<'a> Iterator for ExtSelectorMembers<'a> {
             if commas>0 && !malformed && paren==0 && bracket==0 && quote.is_none() && !escape && raw.len()<=256 {
                 self.preparses+=1;
                 if let Some(sel)=selector_ext(raw) {
-                    let pairs=sel.not_pair_count();
-                    if pairs>0 && pairs==raw.bytes().filter(|c|*c==b',').count() { return Some(raw); }
+                    let commas=sel.syntactic_comma_count();
+                    if commas>0 && commas==raw.bytes().filter(|c|*c==b',').count() { return Some(raw); }
                 }
             }
             self.fallback=Some(raw.split(','));
@@ -1369,10 +1412,10 @@ impl Selector {
         self.steps
             .iter()
             .any(|(simple, _)| simple.state.is_some() || simple.target
-                || simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasGroup::selectors)).any(Selector::has_state))
+                || simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.is_args.iter().flatten()).chain(simple.has_args.iter().flat_map(HasGroup::selectors)).any(Selector::has_state))
     }
     fn has_context_wrapper(&self) -> bool {
-        self.steps.iter().any(|(s,_)| !s.where_args.is_empty() || !s.has_args.is_empty()
+        self.steps.iter().any(|(s,_)| !s.where_args.is_empty() || !s.has_args.is_empty() || !s.is_args.is_empty()
             || s.not_args.iter().flat_map(NotGroup::selectors).any(Selector::has_context_wrapper))
     }
     // Raw checked helpers have no SnapshotState. A resolved target is their
@@ -1381,7 +1424,7 @@ impl Selector {
     // actual same SnapshotState before matching.
     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
         self.steps.iter().all(|(s,_)| s.state.is_none() && (!s.target || target.is_some())
-            && s.not_args.iter().flat_map(NotGroup::selectors).chain(&s.where_args).chain(s.has_args.iter().flat_map(HasGroup::selectors)).all(|a|a.raw_dependencies_satisfied(target)))
+            && s.not_args.iter().flat_map(NotGroup::selectors).chain(&s.where_args).chain(s.is_args.iter().flatten()).chain(s.has_args.iter().flat_map(HasGroup::selectors)).all(|a|a.raw_dependencies_satisfied(target)))
     }
     /// Every state pseudo-class in the selector is covered by the caller's
     /// explicit guarantee. History and input are scoped independently: a
@@ -1389,7 +1432,7 @@ impl Selector {
     /// input-only guarantee does not enroll `:link`.
     pub(crate) fn state_satisfied_by(&self, snapshot: Option<&SnapshotState>) -> bool {
         self.steps.iter().all(|(simple, _)| {
-            if !simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasGroup::selectors)).all(|arg| arg.state_satisfied_by(snapshot)) {
+            if !simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.is_args.iter().flatten()).chain(simple.has_args.iter().flat_map(HasGroup::selectors)).all(|arg| arg.state_satisfied_by(snapshot)) {
                 return false;
             }
             if simple.target
@@ -1854,6 +1897,11 @@ impl Selector {
                 None => return Ok(None),
             }
         }
+        for group in &simple.is_args {
+            let result = is_five(|i| group[i].ext_match(nodes,node,0,fuel,
+                position.filter(|_|index==0),target,state_enrolled,true))?;
+            match result { Some(true)=>{}, Some(false)=>return Ok(Some(false)), None=>return Ok(None) }
+        }
         for group in &simple.not_args {
             let mut evaluate = |arg: &Selector| {
                 if !state_enrolled && arg.steps.iter().any(|(p, _)| p.state.is_some()) { return Ok(None); }
@@ -2138,10 +2186,10 @@ impl Simple {
             u16::from(self.id.is_some()),
             (self.classes.len() + self.attrs.len()) as u16
                 + u16::from(self.root) + u16::from(self.state.is_some())
-                + u16::from(self.structural_n) - self.not_args.iter().map(NotGroup::slots).sum::<usize>() as u16 - self.where_args.len() as u16 - self.has_args.iter().map(HasGroup::slots).sum::<usize>() as u16,
+                + u16::from(self.structural_n) - self.not_args.iter().map(NotGroup::slots).sum::<usize>() as u16 - self.where_args.len() as u16 - self.has_args.iter().map(HasGroup::slots).sum::<usize>() as u16 - (5*self.is_args.len()) as u16,
             u16::from(self.tag.is_some()),
         );
-        self.not_args.iter().map(NotGroup::specificity).chain(self.has_args.iter().map(HasGroup::specificity)).fold(own, |(a,b,c), rank| {
+        self.not_args.iter().map(NotGroup::specificity).chain(self.has_args.iter().map(HasGroup::specificity)).chain(self.is_args.iter().map(|g|g.iter().map(|s|s.specificity).max().unwrap())).fold(own, |(a,b,c), rank| {
             (a + rank.0, b + rank.1, c + rank.2)
         })
     }
@@ -2207,7 +2255,7 @@ impl Simple {
         // TargetState resolution): refuse to guess rather than infer from
         // attribute absence.
         if self.enablement.is_some() || self.target || !self.not_args.is_empty()
-            || self.empty || !self.has_args.is_empty() || !self.where_args.is_empty() || self.of_type != 0 || !self.nth_of_type.is_empty() || !self.nth_last.is_empty() {
+            || !self.is_args.is_empty() || self.empty || !self.has_args.is_empty() || !self.where_args.is_empty() || self.of_type != 0 || !self.nth_of_type.is_empty() || !self.nth_last.is_empty() {
             return false;
         }
         self.matches_inner(nodes, handle, true, true)
@@ -4976,7 +5024,7 @@ mod not_class_pair_tests {
   assert!(selector_ext(&":has(.a,.b)".repeat(4)).is_some());assert!(selector_ext(&":has(.a,.b)".repeat(5)).is_none());for(n,w)in[(6,true),(7,false)]{assert_eq!(selector_ext(&format!(":has(.a,.b){}",":first-child".repeat(n))).is_some(),w);}
   for q in [":has(.a,.b):not(.c,.d)",":has(.x :not(.a,.b))",":has(> .x > :not(.a,.b))",":has(+ .x + :not(.a,.b))",":not(:where(:has(.a,.b)))"]{assert_eq!(ExtSelectorMembers::new(q).collect::<Vec<_>>(),[q]);}
   let q=format!(":has(.{},.b)","a".repeat(246));assert_eq!(q.len(),256);assert!(selector_ext(&q).is_some());assert!(selector_ext(&(q+" ")).is_none());
-  let q=":has(.a,.b):not(.c,.d)";assert_eq!(selector_ext(q).unwrap().not_pair_count(),2);
+  let q=":has(.a,.b):not(.c,.d)";assert_eq!(selector_ext(q).unwrap().syntactic_comma_count(),2);
  }
  #[test] fn synthetic_or_and_real_topology_unknown(){
   for(a,b,w)in[(Some(false),Some(false),Some(false)),(None,Some(true),Some(true)),(None,Some(false),None),(Some(false),None,None)]{assert_eq!(has_pair(a,||Ok(b)),Ok(w));}assert_eq!(has_pair(Some(true),||panic!("skiperror")),Ok(Some(true)));assert_eq!(has_pair(None,||Err(MatchRefusal::Fuel)),Err(MatchRefusal::Fuel));
@@ -5008,7 +5056,7 @@ mod not_class_pair_tests {
  for(q,r)in[(":has(article.a,div.b)",(0,1,1)),(":has(article.a,div.b):not(.x,.y)",(0,2,1)),(":has(article.a div.b)",(0,2,2)),(":has(article.a,div.b):has(article.a div.b)",(0,3,3)),(":where(:has(article.a,div.b))",(0,0,0))]{assert_eq!(selector_ext(q).unwrap().specificity,r,"{q}");}
  assert!(selector_ext(&":has(a.a,b.b)".repeat(4)).is_some());assert!(selector_ext(&":has(a.a,b.b)".repeat(5)).is_none());for(n,w)in[(6,true),(7,false)]{assert_eq!(selector_ext(&format!(":has(a.a,b.b){}",":first-child".repeat(n))).is_some(),w);}
  let q=format!(":has(a.{},b.b)","a".repeat(244));assert_eq!(q.len(),256);assert!(selector_ext(&q).is_some());assert!(selector_ext(&(q+" ")).is_none());
- for q in [":has(a.a,b.b):not(.x,.y)",":not(:where(:has(a.a,b.b)))",":has(.x :not(.a,.b)):has(a.a,b.b)",":has(>.x>:not(.a,.b)):has(a.a,b.b)",":has(+.x+:not(.a,.b)):has(a.a,b.b)"]{assert_eq!(selector_ext(q).unwrap().not_pair_count(),if q==":not(:where(:has(a.a,b.b)))"{1}else{2});assert_eq!(ExtSelectorMembers::new(q).collect::<Vec<_>>(),[q]);}
+ for q in [":has(a.a,b.b):not(.x,.y)",":not(:where(:has(a.a,b.b)))",":has(.x :not(.a,.b)):has(a.a,b.b)",":has(>.x>:not(.a,.b)):has(a.a,b.b)",":has(+.x+:not(.a,.b)):has(a.a,b.b)"]{assert_eq!(selector_ext(q).unwrap().syntactic_comma_count(),if q==":not(:where(:has(a.a,b.b)))"{1}else{2});assert_eq!(ExtSelectorMembers::new(q).collect::<Vec<_>>(),[q]);}
  }
  #[test] fn typed_charged_predicate_order_unknown_rescans_and_errors(){
  let mut n=nodes("<!doctype html><div id=s><article id=b class=a></article></div>");let s=id(&n,"s");let b=id(&n,"b");
@@ -5021,4 +5069,46 @@ mod not_class_pair_tests {
  assert_eq!(selector_ext(":has(div.absent,p.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut EXT_FUEL,None,None),Ok(Some(false)),"type mismatch skips expensive class compare");
  }
  #[test] fn browser_original11_truths(){let n=nodes(include_str!("../tests/fixtures/has_typed_pair_oracle.html"));let qs:Vec<_>=include_str!("../tests/fixtures/has_typed_pair_original11.txt").lines().collect();let mut count=0;for row in include_str!("../tests/fixtures/has_typed_pair_expected.tsv").lines(){let v:Vec<_>=row.split('\t').collect();for(i,q)in qs.iter().enumerate(){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {q}",v[0]);count+=1;}}assert_eq!(count,1573);}
+}
+#[cfg(test)] mod is_five_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],v:&str)->usize{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,x)|&**k=="id"&&x==v))).unwrap()}
+ const Q:&str=":is(.a,.b,.c,.d,.e)";
+ #[test] fn scope_budget_rank_wrappers_and_comma_provenance(){
+ for q in [Q,":IS( .a , .b , .c , .d , .e )",r":is(.a\!x,.\:focus,.c,.d,.e)",":not(:is(.a,.b,.c,.d,.e))",":where(:is(.a,.b,.c,.d,.e))",":has(>:is(.a,.b,.c,.d,.e))",":has(>.x>:is(.a,.b,.c,.d,.e))",":has(+.x+:is(.a,.b,.c,.d,.e))",":has(.x :is(.a,.b,.c,.d,.e))"]{assert!(selector_ext(q).is_some(),"{q}");assert!(selector(q).is_none());assert_eq!(selector_ext(q).unwrap().syntactic_comma_count(),4);assert_eq!(ExtSelectorMembers::new(q).collect::<Vec<_>>(),[q]);}
+ for q in [":is()",":is(.a,.b,.c,.d)",":is(.a,.b,.c,.d,.e,.f)",":is(.a,,.c,.d,.e)",":is(*.a,.b,.c,.d,.e)",":is(p.a,.b,.c,.d,.e)",":is(.a.b,.b,.c,.d,.e)",":is(.a[x],.b,.c,.d,.e)",":is(.a:hover,.b,.c,.d,.e)",":is(.a .x,.b,.c,.d,.e)",":is(:is(.a,.b,.c,.d,.e),.b,.c,.d,.e)",":is(:not(.a),.b,.c,.d,.e)",":not(:is(.a,.b,.c,.d,.e),.x)",":has(:is(.a,.b,.c,.d,.e),.x)"]{assert!(selector_ext(q).is_none(),"{q}");}
+ for(q,w)in[(Q,(0,1,0)),(":not(:is(.a,.b,.c,.d,.e))",(0,1,0)),(":where(:is(.a,.b,.c,.d,.e))",(0,0,0)),(":has(.x :is(.a,.b,.c,.d,.e))",(0,2,0)),(":is(.a,.b,.c,.d,.e):not(.x,.y)",(0,2,0))]{assert_eq!(selector_ext(q).unwrap().specificity,w);}
+ for(n,w)in[(3,true),(4,false)]{assert_eq!(selector_ext(&format!("{Q}{}",":first-child".repeat(n))).is_some(),w);}assert!(selector_ext(&Q.repeat(2)).is_none());assert!(selector_ext(&format!("{Q}:not(.x,.y):has(.u,.v)")).is_none());let q=format!("{Q} :not(.x,.y) :has(.u,.v)");assert_eq!(selector_ext(&q).unwrap().syntactic_comma_count(),6);assert_eq!(ExtSelectorMembers::new(&q).collect::<Vec<_>>(),[q.as_str()]);
+ let q=format!(":is(.{},.b,.c,.d,.e)","a".repeat(238));assert_eq!(q.len(),256);assert!(selector_ext(&q).is_some());assert!(selector_ext(&(q+" ")).is_none());
+ }
+ #[test] fn same_node_or_synthetic_unknown_and_actual_charged_work(){
+ for(vals,w)in[([Some(false);5],Some(false)),([None,Some(false),Some(true),None,None],Some(true)),([None,Some(false),Some(false),Some(false),Some(false)],None)]{assert_eq!(is_five(|i|Ok(vals[i])),Ok(w));}assert_eq!(is_five(|i|if i==0{Ok(Some(true))}else{panic!("skip")}),Ok(Some(true)));assert_eq!(is_five(|_|Err(MatchRefusal::Fuel)),Err(MatchRefusal::Fuel));
+ let mut n=nodes("<!doctype html><p id=s class=a>x</p>");let h=id(&n,"s");let cost=|q:&str|{let mut f=EXT_FUEL;let r=selector_ext(q).unwrap().matches_checked_scoped_budget(&n,h,&mut f,None,None);(r,EXT_FUEL-f)};
+ let one=cost(":not(.z)");let all=cost(":is(.z,.z,.z,.z,.z)");assert_eq!(all.0,Ok(Some(false)));assert_eq!(all.1,1+5*(one.1-1));let truecost=cost(Q);for(f,w)in[(truecost.1,true),(truecost.1-1,false)]{let mut f=f;assert_eq!(selector_ext(Q).unwrap().matches_checked_scoped_budget(&n,h,&mut f,None,None).is_ok(),w);}
+ assert!(!selector_ext(Q).unwrap().matches(&n,h),"legacybool doesnotignore is");
+ if let Data::Element{attrs,..}=&mut n[h].data{attrs.iter_mut().find(|(k,_)|&**k=="class").unwrap().1=format!("a {}","x ".repeat(3000));}assert_eq!(selector_ext(Q).unwrap().matches_checked_scoped_budget(&n,h,&mut EXT_FUEL,None,None),Ok(Some(true)));assert_eq!(selector_ext(":is(.absent,.a,.c,.d,.e)").unwrap().matches_checked_scoped_budget(&n,h,&mut EXT_FUEL,None,None),Err(MatchRefusal::Fuel));
+ for q in [".absent:focus:is(.a,.b,.c,.d,.e)",".absent:target:is(.a,.b,.c,.d,.e)",".absent:not(:is(.a,.b,.c,.d,.e)):focus"]{let x=selector_ext(q).unwrap();assert_eq!(x.matches_checked(&n,h),None);assert!(!x.matches(&n,h));}
+ // Old family order: has then where then is then not. False earlierhas skips costlyis.
+ assert_eq!(selector_ext(":has(.no):is(.absent,.b,.c,.d,.e)").unwrap().matches_checked_scoped_budget(&n,h,&mut EXT_FUEL,None,None),Ok(Some(false)));
+ }
+ #[test] fn explicit_splitter_fallbacks_and_original_browser_truths(){
+ for q in [":is(.a,.b,.c,.d)",":is(.a,.b,.c,.d,.e,.f)",":is(.a,.b,.c,.d,.e)[x=\"a,b\"]",":is(.a,.b,.c,.d,.e),",",:is(.a,.b,.c,.d,.e)"]{let got:Vec<_>=ExtSelectorMembers::new(q).collect();let old:Vec<_>=q.split(',').map(str::trim).filter(|x|!x.is_empty()).collect();if !q.ends_with(',')&&!q.starts_with(','){assert_eq!(got,old,"{q}");}}
+ let n=nodes(include_str!("../tests/fixtures/is_five_oracle.html"));let qs:Vec<_>=include_str!("../tests/fixtures/is_five_queries.txt").lines().collect();let mut total=0;for l in include_str!("../tests/fixtures/is_five_expected.tsv").lines(){let v:Vec<_>=l.split('\t').collect();for(i,q)in qs.iter().enumerate(){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {q}",v[0]);total+=1;}}assert_eq!(total,96);
+ }
+}
+#[cfg(test)] mod is_five_additional_tests {
+ use super::*;
+ #[test] fn lazy17_and_explicit_provenance_differential(){
+ let q=":is(.a,.b,.c,.d,.e)";let list=vec![q;18].join(",");let mut it=ExtSelectorMembers::new(&list);for _ in 0..17{assert_eq!(it.next(),Some(q));}assert!(it.at<list.len(),"lazy17 hasnotconsumed18");
+ for x in [q,":IS( .a , .b , .c , .d , .e )",":is(.a,.b,.c,.d,.e),p",",:is(.a,.b,.c,.d,.e)",":is(.a,.b,.c,.d,.e),",":is(.a,.b,.c,.d,.e) :not(.x,.y) :has(.u,.v)"]{let v:Vec<_>=ExtSelectorMembers::new(x).collect();assert!(v.iter().any(|s|selector_ext(s).is_some_and(|q|q.syntactic_comma_count()>=4)),"{x}");}
+ for x in ["[x=':is(.a,.b,.c,.d,.e)']",":is(.a,.b,.c,.d)",":is(.a,.b,.c,.d,.e,.f)",":is(.a,.b,.c,.d,.e)[x='a,b']"]{assert_eq!(ExtSelectorMembers::new(x).collect::<Vec<_>>(),x.split(',').map(str::trim).filter(|s|!s.is_empty()).collect::<Vec<_>>());}
+ }
+ #[test] fn every_newbranch_dependency_walk_and_oldfamily_order(){
+ use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process("<!doctype html><p id=x class=a>x</p>".to_string().into());let mut n=p.finish().into_nodes();let h=n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id"&&v=="x"))).unwrap();
+ for i in 0..5{let mut q=selector_ext(":is(.a,.b,.c,.d,.e)").unwrap();q.steps[0].0.is_args[0][i].steps[0].0.target=true;assert!(q.has_state());assert!(!q.raw_dependencies_satisfied(None));assert!(q.raw_dependencies_satisfied(Some(None)));assert!(!q.state_satisfied_by(None));assert_eq!(q.matches_checked(&n,h),None);q.steps[0].0.is_args[0][i].steps[0].0.target=false;q.steps[0].0.is_args[0][i].steps[0].0.state=Some(StatePseudo::Focus);assert!(q.has_state());assert!(!q.state_satisfied_by(None));assert!(!q.raw_dependencies_satisfied(None));}
+ if let Data::Element{attrs,..}=&mut n[h].data{attrs.iter_mut().find(|(k,_)|&**k=="class").unwrap().1=format!("a {}","x ".repeat(3000));}
+ for q in [":where(div):is(.absent,.b,.c,.d,.e)",":has(.no):is(.absent,.b,.c,.d,.e)"]{assert_eq!(selector_ext(q).unwrap().matches_checked_scoped_budget(&n,h,&mut EXT_FUEL,None,None),Ok(Some(false)));}
+ assert_eq!(selector_ext(":is(.absent,.b,.c,.d,.e):not(.a)").unwrap().matches_checked_scoped_budget(&n,h,&mut EXT_FUEL,None,None),Err(MatchRefusal::Fuel),"newis beforeoldnot, oldrelativeorderretained");
+ }
 }

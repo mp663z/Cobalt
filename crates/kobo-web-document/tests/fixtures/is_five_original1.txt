@@ -1,0 +1,1 @@
+.im-c-panel__body :is(.govuk-hint, .govuk-caption-xl, .govuk-caption-l, .govuk-caption-m, .govuk-caption-s)

@@ -1,0 +1,8 @@
+<!doctype html><style>
+.z:is(.a,.b,.c,.d,.e){color:red}.z.q{color:blue}
+#strong:is(.a,.b,.c,.d,.e){color:red}.z.q{color:blue}
+.w:is(.a,.b,.c,.d,.e){color:red}.w.a{color:blue}
+.v:where(:is(.a,.b,.c,.d,.e)){color:red}.v{color:blue}
+.m:is(.a,.b,.c,.d,.e):not(.x,.y){color:red}.m.a:not(.x){color:blue}
+.h:has(>:is(.a,.b,.c,.d,.e)){color:red}.h:has(>.a){color:blue}
+</style><p id=z class="z q a">z</p><p id=strong class="z q b">strong</p><p id=w class="w a">w</p><p id=v class="v a">v</p><p id=m class="m a">m</p><div id=h class=h>h<p class=a>child</p></div>
