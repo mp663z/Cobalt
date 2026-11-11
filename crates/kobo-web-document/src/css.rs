@@ -1025,6 +1025,10 @@ impl Selector {
     /// matches with it. No assertion is represented by NOT calling this: the
     /// plain checked entries carry no resolution and `:target` answers
     /// UNRESOLVED (None), never a guess.
+    /// NOTE: this entry re-resolves the target on EVERY call (two charged
+    /// budgets per call). Current consumers are the tests and the
+    /// once-per-tree sheet walk only; a future per-selector consumer would
+    /// multiply resolution work and must be budget-reviewed first.
     pub(crate) fn matches_checked_target(
         &self,
         nodes: &[Node],
@@ -1510,6 +1514,56 @@ fn disabled_by_ancestor_fieldset(
 /// URL percent-decoding for a fragment string: each `%XX` (two hex digits)
 /// becomes that byte; a `%` not followed by two hex digits passes through
 /// literally (URL Standard percent-decode).
+/// UTF-8 decode WITHOUT BOM with lossy replacement, built in two passes:
+/// pass 1 computes the EXACT output length (O(L), no allocation), pass 2
+/// builds into String::with_capacity(exact_len) - a single exact-capacity
+/// allocation. Replacement semantics are byte-identical to
+/// String::from_utf8_lossy (same std Utf8Error walk: valid prefix kept,
+/// one U+FFFD per error, advance by error_len / rest-on-incomplete), which
+/// is the 7.4.6.4 "UTF-8 decode without BOM" behavior. This is what makes
+/// the decode charge honest BY CONSTRUCTION: capacity is exact, with zero
+/// reliance on Vec growth, reallocation transients, or allocator behavior.
+/// (with_capacity promises AT LEAST the requested capacity; allocator
+/// rounding is possible, so no exact heap-peak claim is made anywhere.)
+fn utf8_lossy_exact(bytes: &[u8]) -> String {
+    let mut len = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match std::str::from_utf8(&bytes[i..]) {
+            Ok(rest) => {
+                len += rest.len();
+                break;
+            }
+            Err(e) => {
+                let valid = e.valid_up_to();
+                len += valid + 3; // valid prefix + one U+FFFD
+                let bad = e.error_len().unwrap_or(bytes.len() - i - valid);
+                i += valid + bad;
+            }
+        }
+    }
+    let mut out = String::with_capacity(len);
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match std::str::from_utf8(&bytes[i..]) {
+            Ok(rest) => {
+                out.push_str(rest);
+                break;
+            }
+            Err(e) => {
+                let valid = e.valid_up_to();
+                out.push_str(
+                    std::str::from_utf8(&bytes[i..i + valid]).expect("valid prefix per Utf8Error"),
+                );
+                out.push('\u{FFFD}');
+                let bad = e.error_len().unwrap_or(bytes.len() - i - valid);
+                i += valid + bad;
+            }
+        }
+    }
+    debug_assert_eq!(out.len(), len, "exact-capacity construction");
+    out
+}
 fn percent_decode(input: &str) -> Vec<u8> {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -1539,16 +1593,32 @@ fn percent_decode(input: &str) -> Vec<u8> {
 /// tree order whose ID equals `fragment`; failing that, the first `a`
 /// element in tree order whose `name` attribute equals it. Every visited
 /// element charges one fuel; exhaustion refuses (never a partial answer).
-/// One charged preorder traversal over the engine-parsed tree, calling
-/// `probe` on each element until it returns true. First hit in tree order
-/// wins; every visited element (hit or not) costs one unit of fuel. The
-/// explicit stack is proportional to tree breadth/depth, which is bounded
-/// by the engine's own input limits - NO allocation here grows with the
+/// Charge `cost` against the budget (u64 math; shortfall zeroes and
+/// refuses - fail-closed, never a silent truncation).
+fn charge(fuel: &mut u32, cost: u64) -> Result<(), MatchRefusal> {
+    if cost > *fuel as u64 {
+        *fuel = 0;
+        return Err(MatchRefusal::Fuel);
+    }
+    *fuel -= cost as u32;
+    Ok(())
+}
+/// One charged preorder traversal over the engine-parsed tree. Every
+/// visited element costs 1 fuel; when the element carries `attr`, its
+/// BYTE LENGTH is charged before the equality probe - a conservative
+/// pre-charge for the compare work, since str equality compares at most
+/// min(fragment.len(), attr.len()) <= attr.len() bytes. This makes the
+/// raw and decoded scans' comparison cost explicitly budgeted instead of
+/// relying on the engine's finite input as an implicit proof. The
+/// explicit stack is proportional to tree breadth/depth (bounded by the
+/// engine's byte-limited intake); NO allocation grows with the
 /// caller-supplied fragment.
-fn for_each_element_preorder(
+fn find_first_by_attr(
     nodes: &[Node],
+    fragment: &str,
     fuel: &mut u32,
-    probe: &mut dyn FnMut(&[Node], Handle) -> bool,
+    attr_name: &str,
+    only_a: bool,
 ) -> Result<Option<Handle>, MatchRefusal> {
     let mut stack = vec![crate::dom::DOCUMENT];
     while let Some(h) = stack.pop() {
@@ -1556,12 +1626,16 @@ fn for_each_element_preorder(
         if !is_element(nodes, h) {
             continue;
         }
-        if *fuel == 0 {
-            return Err(MatchRefusal::Fuel);
+        if only_a && !tag_is(nodes, h, &["a"]) {
+            charge(fuel, 1)?;
+            continue;
         }
-        *fuel -= 1;
-        if probe(nodes, h) {
-            return Ok(Some(h));
+        charge(fuel, 1)?;
+        if let Some(value) = attribute(nodes, h, attr_name) {
+            charge(fuel, value.len() as u64)?;
+            if value == fragment {
+                return Ok(Some(h));
+            }
         }
     }
     Ok(None)
@@ -1573,32 +1647,28 @@ fn find_potential_indicated(
 ) -> Result<Option<Handle>, MatchRefusal> {
     // Spec order: ALL id matches before ANY a[name] match, first in tree
     // order within each pass (two charged early-return traversals).
-    if let Some(hit) =
-        for_each_element_preorder(nodes, fuel, &mut |n, h| attribute(n, h, "id") == Some(fragment))?
-    {
+    if let Some(hit) = find_first_by_attr(nodes, fragment, fuel, "id", false)? {
         return Ok(Some(hit));
     }
-    for_each_element_preorder(nodes, fuel, &mut |n, h| {
-        tag_is(n, h, &["a"]) && attribute(n, h, "name") == Some(fragment)
-    })
+    find_first_by_attr(nodes, fragment, fuel, "name", true)
 }
-/// Fuel charged per fragment byte before ANY percent-decode allocation.
-/// The decoded output is at most 3x the input (UTF-8 lossy replacement
-/// expansion), so 4 per input byte bounds every allocation in the decode
-/// path by the caller's own budget with margin. The caller-supplied
-/// fragment String has no engine-input limit; this charge is what makes
-/// its decoding bounded and fail-closed: exhaustion refuses (Err(Fuel) =>
-/// truncated walk => no paint), never a silent truncation, and no
-/// default/caps value changes (EXT_FUEL itself is untouched).
-const DECODE_FUEL_PER_BYTE: u32 = 4;
+/// Fuel charged per fragment byte before ANY percent-decode work.
+/// Logical-work accounting per input byte: percent-decode scan+write ~2,
+/// exact-length validation pass 1, build pass <= 3 (lossy expansion) -
+/// 6 covers the total with the per-element visit/compare charges handled
+/// separately in find_first_by_attr. Capacity BY CONSTRUCTION: the
+/// percent-decode Vec is with_capacity(L) exactly and the decoded String
+/// is with_capacity(exact computed length <= 3L) exactly; with_capacity
+/// promises AT LEAST the request and allocator rounding is possible, so
+/// this bounds logical work and requested capacity - NO exact heap-peak
+/// claim is made. The caller-supplied fragment String has no engine-input
+/// limit; this charge is what makes its decoding bounded and fail-closed:
+/// exhaustion refuses (Err(Fuel) => truncated walk => no paint), never a
+/// silent truncation, and no default/caps value changes (EXT_FUEL itself
+/// is untouched).
+const DECODE_FUEL_PER_BYTE: u32 = 6;
 fn charge_decode(fragment: &str, fuel: &mut u32) -> Result<(), MatchRefusal> {
-    let cost = (fragment.len() as u64) * (DECODE_FUEL_PER_BYTE as u64);
-    if cost > *fuel as u64 {
-        *fuel = 0;
-        return Err(MatchRefusal::Fuel);
-    }
-    *fuel -= cost as u32;
-    Ok(())
+    charge(fuel, (fragment.len() as u64) * (DECODE_FUEL_PER_BYTE as u64))
 }
 /// Resolve the Document's target element under a caller-asserted TargetState
 /// per the VERBATIM HTML 7.4.6.4 algorithm on THIS engine-parsed DOM
@@ -1625,7 +1695,7 @@ pub(crate) fn resolve_target_element(
         return Ok(Some(hit));
     }
     charge_decode(fragment, fuel)?;
-    let decoded = String::from_utf8_lossy(&percent_decode(fragment)).into_owned();
+    let decoded = utf8_lossy_exact(&percent_decode(fragment));
     if decoded != *fragment {
         if let Some(hit) = find_potential_indicated(nodes, &decoded, fuel)? {
             return Ok(Some(hit));
@@ -2990,20 +3060,45 @@ mod target_tests {
         // still applies but the rescan is skipped as observably identical.
         let mut fuel = EXT_FUEL;
         let _ = resolve_target_element(&nodes, &TargetState::Fragment("zz-absent".into()), &mut fuel);
+        // Exact composition, computed from the tree: per pass, 1 fuel per
+        // element visit + attr byte-length per compare (id pass compares
+        // every element's id; name pass compares only a elements' name);
+        // plus 4 fuel per fragment byte for the decode. "zz-absent" has
+        // no % so the decoded rescan is skipped (observably identical).
         let nelem = nodes
             .iter()
             .filter(|n| matches!(n.data, Data::Element { .. }))
-            .count() as u32;
+            .count() as u64;
+        let id_bytes: u64 = nodes
+            .iter()
+            .filter_map(|n| match &n.data {
+                Data::Element { attrs, .. } => attrs
+                    .iter()
+                    .find(|(k, _)| &**k == "id")
+                    .map(|(_, v)| v.len() as u64),
+                _ => None,
+            })
+            .sum();
+        let name_bytes: u64 = nodes
+            .iter()
+            .filter_map(|n| match &n.data {
+                Data::Element { name: tag, attrs, .. } if &*tag.local == "a" => attrs
+                    .iter()
+                    .find(|(k, _)| &**k == "name")
+                    .map(|(_, v)| v.len() as u64),
+                _ => None,
+            })
+            .sum();
         assert_eq!(
-            EXT_FUEL - fuel,
-            2 * nelem + 4 * 9,
-            "two charged scans (id + a[name]) + charged decode (4/byte)"
+            (EXT_FUEL - fuel) as u64,
+            2 * nelem + id_bytes + name_bytes + (DECODE_FUEL_PER_BYTE as u64) * 9,
+            "visits + conservative compared-byte pre-charge + charged decode"
         );
         // NEGATIVE CONTROL: decode refuses BEFORE any allocation when the
         // budget cannot cover 4x the fragment bytes - an empty tree (zero
         // scan cost) with fuel just under the decode cost.
         let empty = engine_nodes("<!doctype html><body></body>");
-        let mut fuel = 4 * 9 - 1;
+        let mut fuel = DECODE_FUEL_PER_BYTE * 9 - 1;
         assert_eq!(
             resolve_target_element(&empty, &TargetState::Fragment("zz-absent".into()), &mut fuel),
             Err(MatchRefusal::Fuel)
@@ -3015,6 +3110,72 @@ mod target_tests {
         assert_eq!(
             resolve_target_element(&empty, &TargetState::Fragment(huge), &mut fuel),
             Err(MatchRefusal::Fuel)
+        );
+        // COMPARE-CHARGE CONTROLS: long matching prefix (compare cost is
+        // real, attr-len pre-charge applies), raw hit, and decoded retry.
+        let pre = engine_nodes(
+            "<!doctype html><body><div id=prefixmatch-aaaaaaaa></div><a name=prefixmatch-aaaaaaaa></a></body>",
+        );
+        // (1) long common prefix, differs at last byte: miss; charged
+        // visit + FULL id byte length before the comparison happened.
+        // fuel sized to exhaust exactly AT the long-prefix compare:
+        // visits for html/head/body/div (4) + full id byte length (20) - 1.
+        let mut fuel = 4 + 20 - 1;
+        assert_eq!(
+            resolve_target_element(
+                &pre,
+                &TargetState::Fragment("prefixmatch-aaaaaaab".into()),
+                &mut fuel
+            ),
+            Err(MatchRefusal::Fuel)
+        );
+        // (2) same fragment, enough fuel: miss (Ok(None)), NOT a hit.
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(
+                &pre,
+                &TargetState::Fragment("prefixmatch-aaaaaaab".into()),
+                &mut fuel
+            ),
+            Ok(None)
+        );
+        // (3) raw hit under compare charging: exact fragment resolves.
+        let want = find_by_id(&pre, "prefixmatch-aaaaaaaa")[0];
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(
+                &pre,
+                &TargetState::Fragment("prefixmatch-aaaaaaaa".into()),
+                &mut fuel
+            ),
+            Ok(Some(want))
+        );
+        // SEMANTICS PIN: the two-pass exact-capacity decode is
+        // byte-identical to from_utf8_lossy on valid, invalid and
+        // truncated sequences (incl. consecutive errors).
+        for raw in [
+            &b"caf\xc3\xa9"[..],
+            &b"a\xffb"[..],
+            &b"a\xff\xfeb"[..],
+            &b"ok\xc3"[..],
+            &b"\xe2\x82"[..],
+            &b"\xef\xbb\xbfbom-kept"[..],
+        ] {
+            assert_eq!(
+                utf8_lossy_exact(raw),
+                String::from_utf8_lossy(raw).into_owned()
+            );
+        }
+        // (4) decoded retry under compare charging: %70refixmatch-aaaaaaaa
+        // decodes to the id and resolves via the retry pass.
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(
+                &pre,
+                &TargetState::Fragment("%70refixmatch-aaaaaaaa".into()),
+                &mut fuel
+            ),
+            Ok(Some(want))
         );
     }
     #[test]
