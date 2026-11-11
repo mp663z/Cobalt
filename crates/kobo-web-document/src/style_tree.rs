@@ -488,7 +488,7 @@ impl StyleTree {
                 let mut fuel = css::EXT_FUEL;
                 let outcome =
                     rule.selector
-                        .matches_checked_scoped_budget(nodes, handle, &mut fuel, position, resolved_target);
+                        .matches_checked_scoped_budget_with_snapshot(nodes, handle, &mut fuel, position, resolved_target, snapshot);
                 // Charge what the match actually consumed (selector steps and
                 // every visited sibling in a scan) to the global work budget;
                 // one unit was already charged for the test itself.
@@ -570,8 +570,8 @@ impl StyleTree {
                     break;
                 }
                 let mut fuel = css::EXT_FUEL;
-                let outcome = rule.selector.matches_originating_checked_scoped_budget(
-                    nodes, handle, &mut fuel, position, resolved_target,
+                let outcome = rule.selector.matches_originating_checked_scoped_budget_with_snapshot(
+                    nodes, handle, &mut fuel, position, resolved_target, snapshot,
                 );
                 match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
                 if match_work > MAX_MATCH_WORK {
