@@ -147,8 +147,10 @@ struct Simple {
     attrs: Vec<AttrSel>,
     /// Bit 1 `:first-child`, bit 2 `:last-child`, bit 4 `:only-child`.
     structural: u8,
-    /// Occurrences of structural pseudo-classes (each counts toward specificity,
-    /// so `:first-child:first-child` is two).
+    /// Shared occurrence budget for structural/enablement/target pseudos and
+    /// bounded :not tokens. Repeated :first-child counts twice. :not tokens
+    /// consume budget but their specificity is replaced by the argument's
+    /// (ext_specificity subtracts their own count before adding arguments).
     structural_n: u8,
     /// Extended grammar only: `:nth-child(An+B)` arguments, conjunctive.
     nth: Vec<(i64, i64)>,
