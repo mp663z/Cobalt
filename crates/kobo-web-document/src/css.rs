@@ -1539,38 +1539,66 @@ fn percent_decode(input: &str) -> Vec<u8> {
 /// tree order whose ID equals `fragment`; failing that, the first `a`
 /// element in tree order whose `name` attribute equals it. Every visited
 /// element charges one fuel; exhaustion refuses (never a partial answer).
+/// One charged preorder traversal over the engine-parsed tree, calling
+/// `probe` on each element until it returns true. First hit in tree order
+/// wins; every visited element (hit or not) costs one unit of fuel. The
+/// explicit stack is proportional to tree breadth/depth, which is bounded
+/// by the engine's own input limits - NO allocation here grows with the
+/// caller-supplied fragment.
+fn for_each_element_preorder(
+    nodes: &[Node],
+    fuel: &mut u32,
+    probe: &mut dyn FnMut(&[Node], Handle) -> bool,
+) -> Result<Option<Handle>, MatchRefusal> {
+    let mut stack = vec![crate::dom::DOCUMENT];
+    while let Some(h) = stack.pop() {
+        stack.extend(nodes[h].children.iter().rev());
+        if !is_element(nodes, h) {
+            continue;
+        }
+        if *fuel == 0 {
+            return Err(MatchRefusal::Fuel);
+        }
+        *fuel -= 1;
+        if probe(nodes, h) {
+            return Ok(Some(h));
+        }
+    }
+    Ok(None)
+}
 fn find_potential_indicated(
     nodes: &[Node],
     fragment: &str,
     fuel: &mut u32,
 ) -> Result<Option<Handle>, MatchRefusal> {
-    let mut stack = vec![crate::dom::DOCUMENT];
-    let mut order = Vec::new();
-    while let Some(h) = stack.pop() {
-        stack.extend(nodes[h].children.iter().rev());
-        if is_element(nodes, h) {
-            order.push(h);
-        }
+    // Spec order: ALL id matches before ANY a[name] match, first in tree
+    // order within each pass (two charged early-return traversals).
+    if let Some(hit) =
+        for_each_element_preorder(nodes, fuel, &mut |n, h| attribute(n, h, "id") == Some(fragment))?
+    {
+        return Ok(Some(hit));
     }
-    for &h in &order {
-        if *fuel == 0 {
-            return Err(MatchRefusal::Fuel);
-        }
-        *fuel -= 1;
-        if attribute(nodes, h, "id") == Some(fragment) {
-            return Ok(Some(h));
-        }
+    for_each_element_preorder(nodes, fuel, &mut |n, h| {
+        tag_is(n, h, &["a"]) && attribute(n, h, "name") == Some(fragment)
+    })
+}
+/// Fuel charged per fragment byte before ANY percent-decode allocation.
+/// The decoded output is at most 3x the input (UTF-8 lossy replacement
+/// expansion), so 4 per input byte bounds every allocation in the decode
+/// path by the caller's own budget with margin. The caller-supplied
+/// fragment String has no engine-input limit; this charge is what makes
+/// its decoding bounded and fail-closed: exhaustion refuses (Err(Fuel) =>
+/// truncated walk => no paint), never a silent truncation, and no
+/// default/caps value changes (EXT_FUEL itself is untouched).
+const DECODE_FUEL_PER_BYTE: u32 = 4;
+fn charge_decode(fragment: &str, fuel: &mut u32) -> Result<(), MatchRefusal> {
+    let cost = (fragment.len() as u64) * (DECODE_FUEL_PER_BYTE as u64);
+    if cost > *fuel as u64 {
+        *fuel = 0;
+        return Err(MatchRefusal::Fuel);
     }
-    for &h in &order {
-        if *fuel == 0 {
-            return Err(MatchRefusal::Fuel);
-        }
-        *fuel -= 1;
-        if tag_is(nodes, h, &["a"]) && attribute(nodes, h, "name") == Some(fragment) {
-            return Ok(Some(h));
-        }
-    }
-    Ok(None)
+    *fuel -= cost as u32;
+    Ok(())
 }
 /// Resolve the Document's target element under a caller-asserted TargetState
 /// per the VERBATIM HTML 7.4.6.4 algorithm on THIS engine-parsed DOM
@@ -1596,6 +1624,7 @@ pub(crate) fn resolve_target_element(
     if let Some(hit) = find_potential_indicated(nodes, fragment, fuel)? {
         return Ok(Some(hit));
     }
+    charge_decode(fragment, fuel)?;
     let decoded = String::from_utf8_lossy(&percent_decode(fragment)).into_owned();
     if decoded != *fragment {
         if let Some(hit) = find_potential_indicated(nodes, &decoded, fuel)? {
@@ -2921,6 +2950,30 @@ mod target_tests {
         );
     }
     #[test]
+    fn target_decode_retry_hits_top_id_and_top_fallback_uses_decoded() {
+        // EXPLICIT reviewer pin: fragment "%74op" on a DOM whose ONLY
+        // candidate is id=top - raw scan misses, the decode-retry (7.4.6.4:
+        // percent-decode + UTF-8-without-BOM, then find again) HITS id=top.
+        let nodes = engine_nodes("<!doctype html><body><div id=top></div></body>");
+        let top = find_by_id(&nodes, "top")[0];
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(&nodes, &TargetState::Fragment("%74op".into()), &mut fuel),
+            Ok(Some(top)),
+            "decode-retry must hit id=top"
+        );
+        // Complement: same fragment on a DOM with NO id=top and NO id=%74op:
+        // raw miss, decode to "top", retry miss, then the ASCII-ci "top"
+        // fallback (checked on the DECODED string) => NULL.
+        let bare = engine_nodes("<!doctype html><body><div id=other></div></body>");
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(&bare, &TargetState::Fragment("%74op".into()), &mut fuel),
+            Ok(None),
+            "decoded 'top' fallback yields NULL target"
+        );
+    }
+    #[test]
     fn target_resolution_is_charged_and_refuses_on_exhaustion() {
         // NEGATIVE CONTROL: resolution scans charge one fuel per visited
         // element per scan; a starved budget refuses (never a partial scan).
@@ -2931,9 +2984,38 @@ mod target_tests {
             Err(MatchRefusal::Fuel)
         );
         // Full scans with enough fuel answer and REPORT their consumption.
+        // "zz-absent" (9 bytes) misses raw: 12 id + 12 a[name] visits, then
+        // decode (charged 4/byte = 36), then decoded differs ("zz-absent"
+        // has no %) so NO decoded rescan... it equals raw, so decode cost
+        // still applies but the rescan is skipped as observably identical.
         let mut fuel = EXT_FUEL;
         let _ = resolve_target_element(&nodes, &TargetState::Fragment("zz-absent".into()), &mut fuel);
-        assert!(EXT_FUEL - fuel >= 2 * 12, "two full scans charged");
+        let nelem = nodes
+            .iter()
+            .filter(|n| matches!(n.data, Data::Element { .. }))
+            .count() as u32;
+        assert_eq!(
+            EXT_FUEL - fuel,
+            2 * nelem + 4 * 9,
+            "two charged scans (id + a[name]) + charged decode (4/byte)"
+        );
+        // NEGATIVE CONTROL: decode refuses BEFORE any allocation when the
+        // budget cannot cover 4x the fragment bytes - an empty tree (zero
+        // scan cost) with fuel just under the decode cost.
+        let empty = engine_nodes("<!doctype html><body></body>");
+        let mut fuel = 4 * 9 - 1;
+        assert_eq!(
+            resolve_target_element(&empty, &TargetState::Fragment("zz-absent".into()), &mut fuel),
+            Err(MatchRefusal::Fuel)
+        );
+        // NEGATIVE CONTROL: a caller fragment larger than the whole budget
+        // refuses without scanning or allocating (no unbounded allocation).
+        let huge = "x".repeat(EXT_FUEL as usize); // 4x this > budget
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(&empty, &TargetState::Fragment(huge), &mut fuel),
+            Err(MatchRefusal::Fuel)
+        );
     }
     #[test]
     fn target_selector_match_and_no_assertion_unresolved() {
