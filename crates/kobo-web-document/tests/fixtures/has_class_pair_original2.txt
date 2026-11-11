@@ -1,0 +1,2 @@
+.client-js .mw-collapsible:not(.mw-made-collapsible):has(.mw-collapsible-toggle, .mw-collapsible-toggle-placeholder) th::before
+.client-js .mw-collapsible:not(.mw-made-collapsible):has(.mw-collapsible-toggle, .mw-collapsible-toggle-placeholder)::before

@@ -1,0 +1,9 @@
+<!doctype html><meta charset=utf-8><title>Has pair COLOR and actual pseudo</title><style>
+div[data-k=e]:has(.a,.b){color:red}div[data-k=e].z{color:blue}
+div[data-k=w]:where(:has(.a,.b)){color:red}div[data-k=w].z{color:blue}
+#strong:has(.a,.b){color:red}div[data-k=s].z{color:blue}
+div[data-k=m]:has(.a,.b):not(.x,.y){color:red}div[data-k=m].z.q{color:blue}
+.client-js .mw-collapsible:not(.mw-made-collapsible):has(.mw-collapsible-toggle, .mw-collapsible-toggle-placeholder) th::before{color:red}
+.client-js .mw-collapsible:not(.mw-made-collapsible):has(.mw-collapsible-toggle, .mw-collapsible-toggle-placeholder)::before{color:blue}
+th::before,table::before{content:"";font-size:16px}
+</style><div id=equal data-k=e class=z>pair equal BLUE<b class=a>child</b></div><div id=where data-k=w class=z>where BLUE<b class=b>child</b></div><div id=strong data-k=s class=z>ID RED<b class=a>child</b></div><div id=mixed data-k=m class="z q">mixed rank BLUE<b class=b>child</b></div><div class=client-js><table id=table class=mw-collapsible><tbody><tr><th id=th>head</th><td><b class=mw-collapsible-toggle>toggle</b></td></tr></tbody></table></div>
