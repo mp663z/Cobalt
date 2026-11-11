@@ -1,0 +1,10 @@
+<!doctype html><style>
+*{color:black}
+.c1 :where(#t1){color:red}.c1 .x{color:blue}
+.c2 :where(p){color:red}.c2 *{color:blue}
+.c3 p:where(.x){color:red}.c3 p{color:blue}
+.c4 :where(:not(.no)){color:red}.c4 *{color:blue}
+.c5 :not(:where(.no)){color:red}.c5 *{color:blue}
+.c6 .x:where(#t6){color:red}.c6 .x{color:blue}
+.c7 :where(.x):where(#t7){color:red}.c7 *{color:blue}
+</style><div class=c1><p id=t1 class=x>A</p></div><div class=c2><p id=t2>B</p></div><div class=c3><p id=t3 class=x>C</p></div><div class=c4><p id=t4>D</p></div><div class=c5><p id=t5>E</p></div><div class=c6><p id=t6 class=x>F</p></div><div class=c7><p id=t7 class=x>G</p></div>
