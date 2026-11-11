@@ -1,0 +1,7 @@
+<!doctype html><meta charset=utf-8><title>Two class not rank COLOR</title><style>
+div[data-k=e]:not(.a,.b){color:red}div[data-k=e].z{color:blue}
+div[data-k=r].r:not(.a,.b){color:red}div[data-k=r].r.z{color:blue}
+div[data-k=t]:not(.a,.b):not(.c){color:red}div[data-k=t].x.z{color:blue}
+div[data-k=w]:where(:not(.a,.b)){color:red}div[data-k=w].w{color:blue}
+#strong:not(.a,.b){color:red}div[data-k=s].z{color:blue}
+</style><div id=equal data-k=e class=z>equal pair vs later one class: BLUE</div><div id=repeat data-k=r class="r z">mixed rank equal: BLUE</div><div id=twogroups data-k=t class="x z">two groups equal: BLUE</div><div id=where data-k=w class=w>where zero: BLUE</div><div id=strong data-k=s class=z>ID control: RED</div><div id=first data-k=e class="a z">first excludes: BLUE</div><div id=second data-k=e class="b z">second excludes: BLUE</div><div id=both data-k=e class="a b z">both excludes: BLUE</div>

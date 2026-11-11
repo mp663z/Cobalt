@@ -162,13 +162,35 @@ struct Simple {
     /// Browser-compatible Selectors3: every nonzero text child disqualifies.
     empty: bool,
     nth_of_type: Vec<(i64, i64)>,
-    /// Bounded negation arguments: each is exactly one compound, no nesting.
-    /// Each token consumes structural budget but adds only argument specificity.
-    not_args: Vec<Selector>,
+    /// Bounded negation groups: singleton compound or exact two individual classes.
+    /// Each branch consumes a budget slot; each group adds only its MAX rank.
+    not_args: Vec<NotGroup>,
     /// Same-node bounded zero-specificity filters; argument rank discarded.
     where_args: Vec<Selector>,
     /// First compound relative mode plus at most one fixed child compound.
     has_args: Vec<HasArgument>,
+}
+/// One original singleton or an exact two-class list. Grouping preserves MAX rank.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum NotGroup { Single(Selector), Pair([Selector;2]) }
+impl NotGroup {
+    fn selectors(&self) -> impl Iterator<Item=&Selector> {
+        let slice: &[Selector] = match self { Self::Single(s) => std::slice::from_ref(s), Self::Pair(s) => s };
+        slice.iter()
+    }
+    fn slots(&self) -> usize { self.selectors().count() }
+    fn specificity(&self) -> (u16,u16,u16) { self.selectors().map(|s|s.specificity).max().unwrap() }
+}
+// Negated OR: known true dominates unknown; encountered errors propagate.
+// Lazy second branch is needed to preserve true-first work/error short-circuit.
+fn not_pair<F>(first: Option<bool>, second: F) -> Result<Option<bool>, MatchRefusal>
+where F: FnOnce() -> Result<Option<bool>, MatchRefusal> {
+    if first == Some(true) { return Ok(Some(false)); }
+    match second()? {
+        Some(true) => Ok(Some(false)),
+        Some(false) => Ok(first.map(|v| !v)),
+        None => Ok(None),
+    }
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct HasArgument {
@@ -701,6 +723,13 @@ fn attr_selector(s: &str, mut at: usize) -> Option<(AttrSel, usize)> {
     }
     Some((AttrSel { name: name.to_owned(), op, value: text.to_owned() }, at + 1))
 }
+fn single_class_only(s: &Simple) -> bool {
+    if s.classes.len() != 1 { return false; }
+    // Reuse base single-class skeleton, then compare every field.
+    let Some(mut plain) = simple(".x") else { return false; };
+    plain.ext = true; plain.classes = s.classes.clone();
+    *s == plain
+}
 fn compound_ext(s: &str, at: usize) -> Option<(Simple, usize)> {
     compound_ext_in(s, at, true, true, true)
 }
@@ -805,13 +834,23 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                             else if descendant_tail { HasTail::Descendant(parsed_tail) }
                             else { HasTail::NextSibling(parsed_tail) })
                     } else { None };
+                    let second = if is_not && b.get(end) == Some(&b',') {
+                        if simple.structural_n > 6 || !single_class_only(&arg) || b.get(arg_start) != Some(&b'.') { return None; }
+                        let next_start = skip_ws(b, end + 1);
+                        if b.get(next_start) != Some(&b'.') { return None; }
+                        let (other, after) = compound_ext_in(s, next_start, false, false, false)?;
+                        if !single_class_only(&other) { return None; }
+                        end = skip_ws(b, after);
+                        let specificity = other.ext_specificity();
+                        Some(Selector { steps: vec![(other, Relation::Descendant)], specificity, ext: true, pseudo: Pseudo::None })
+                    } else { None };
                     if b.get(end) != Some(&b')') { return None; }
                     let specificity = arg.ext_specificity();
                     let parsed = Selector {
                         steps: vec![(arg, arg_relation)],
                         specificity, ext: true, pseudo: Pseudo::None,
                     };
-                    if is_not { simple.not_args.push(parsed); }
+                    if is_not { simple.not_args.push(if let Some(other) = second { simple.structural_n += 1; NotGroup::Pair([parsed,other]) } else { NotGroup::Single(parsed) }); }
                     else if is_where { simple.where_args.push(parsed); }
                     else { simple.has_args.push(HasArgument { first: parsed, tail }); }
                     simple.structural_n += 1;
@@ -915,7 +954,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
 /// `:has(S)` and `:has(> S)` accept one compound, not general has.
 /// Not/where/has may cross once each but none nests itself on any path.
 /// Bounded `:not(S)` accepts exactly
-/// one compound of those features; no nested negation, lists, complex
+/// one compound of those features, or exactly two individual classes; no nested negation, general lists, complex
 /// arguments or argument pseudo-elements. Only exact trailing `::before`/
 /// `::after` suffixes on a non-bare, state-free originating selector are
 /// accepted; other pseudo-elements and single-colon forms are refused.
@@ -1003,6 +1042,69 @@ pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
         ext: true,
         pseudo: Pseudo::None,
     })
+}
+/// Lazy EXT-only selector member routing. Balancing proposes a range only;
+/// actual full parser and actual pair provenance authorize shielding commas.
+pub(crate) struct ExtSelectorMembers<'a> {
+    input: &'a str, at: usize, done: bool,
+    fallback: Option<std::str::Split<'a,char>>,
+    scanned: usize, preparses: usize,
+}
+impl<'a> ExtSelectorMembers<'a> {
+    pub(crate) fn new(input: &'a str) -> Self { Self { input, at:0, done:false, fallback:None, scanned:0, preparses:0 } }
+}
+impl Selector {
+    fn not_pair_count(&self) -> usize {
+        self.steps.iter().map(|(s,_)| {
+            s.not_args.iter().map(|g| usize::from(matches!(g,NotGroup::Pair(_))) + g.selectors().map(Selector::not_pair_count).sum::<usize>()).sum::<usize>()
+            + s.where_args.iter().map(Selector::not_pair_count).sum::<usize>()
+            + s.has_args.iter().flat_map(HasArgument::selectors).map(Selector::not_pair_count).sum::<usize>()
+        }).sum()
+    }
+}
+impl<'a> Iterator for ExtSelectorMembers<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(split) = &mut self.fallback {
+                if let Some(item) = split.next() { return Some(item); }
+                self.fallback = None;
+            }
+            if self.done { return None; }
+            let start = self.at; let b = self.input.as_bytes();
+            let (mut paren, mut bracket, mut quote, mut escape, mut malformed, mut commas) = (0usize,0usize,None,false,false,0usize);
+            let mut i = start;
+            while i < b.len() {
+                let c = b[i]; self.scanned += 1;
+                if escape { escape = false; i += 1; continue; }
+                if c == b'\\' { escape = true; i += 1; continue; }
+                if let Some(q) = quote { if c == q { quote=None; } i += 1; continue; }
+                if c == b'"' || c == b'\'' { quote=Some(c); i += 1; continue; }
+                match c {
+                    b'[' => bracket += 1,
+                    b']' => { if bracket==0 {malformed=true;} else {bracket-=1;} },
+                    b'(' if bracket==0 => paren += 1,
+                    b')' if bracket==0 => { if paren==0 {malformed=true;} else {paren-=1;} },
+                    b',' if paren==0 && bracket==0 => break,
+                    _ => {},
+                }
+                if c==b',' { commas+=1; }
+                i+=1;
+            }
+            self.done = i==b.len(); self.at = if self.done {i} else {i+1};
+            let raw = &self.input[start..i];
+            // Count ALL raw commas, including quoted/escaped bytes. Each actual
+            // class-only Pair consumes exactly one distinct comma, never these.
+            if commas>0 && !malformed && paren==0 && bracket==0 && quote.is_none() && !escape && raw.len()<=256 {
+                self.preparses+=1;
+                if let Some(sel)=selector_ext(raw) {
+                    let pairs=sel.not_pair_count();
+                    if pairs>0 && pairs==raw.bytes().filter(|c|*c==b',').count() { return Some(raw); }
+                }
+            }
+            self.fallback=Some(raw.split(','));
+        }
+    }
 }
 fn is_element(nodes: &[Node], handle: Handle) -> bool {
     matches!(nodes[handle].data, Data::Element { .. })
@@ -1234,11 +1336,11 @@ impl Selector {
         self.steps
             .iter()
             .any(|(simple, _)| simple.state.is_some() || simple.target
-                || simple.not_args.iter().chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).any(Selector::has_state))
+                || simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).any(Selector::has_state))
     }
     fn has_context_wrapper(&self) -> bool {
         self.steps.iter().any(|(s,_)| !s.where_args.is_empty() || !s.has_args.is_empty()
-            || s.not_args.iter().any(Selector::has_context_wrapper))
+            || s.not_args.iter().flat_map(NotGroup::selectors).any(Selector::has_context_wrapper))
     }
     // Raw checked helpers have no SnapshotState. A resolved target is their
     // only explicit context; never let an ordinary false predicate bypass
@@ -1246,7 +1348,7 @@ impl Selector {
     // actual same SnapshotState before matching.
     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
         self.steps.iter().all(|(s,_)| s.state.is_none() && (!s.target || target.is_some())
-            && s.not_args.iter().chain(&s.where_args).chain(s.has_args.iter().flat_map(HasArgument::selectors)).all(|a|a.raw_dependencies_satisfied(target)))
+            && s.not_args.iter().flat_map(NotGroup::selectors).chain(&s.where_args).chain(s.has_args.iter().flat_map(HasArgument::selectors)).all(|a|a.raw_dependencies_satisfied(target)))
     }
     /// Every state pseudo-class in the selector is covered by the caller's
     /// explicit guarantee. History and input are scoped independently: a
@@ -1254,7 +1356,7 @@ impl Selector {
     /// input-only guarantee does not enroll `:link`.
     pub(crate) fn state_satisfied_by(&self, snapshot: Option<&SnapshotState>) -> bool {
         self.steps.iter().all(|(simple, _)| {
-            if !simple.not_args.iter().chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).all(|arg| arg.state_satisfied_by(snapshot)) {
+            if !simple.not_args.iter().flat_map(NotGroup::selectors).chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).all(|arg| arg.state_satisfied_by(snapshot)) {
                 return false;
             }
             if simple.target
@@ -1717,19 +1819,16 @@ impl Selector {
                 None => return Ok(None),
             }
         }
-        for arg in &simple.not_args {
-            // Missing assertions remain unknown, never inverted. The public
-            // walk verifies them against the SAME snapshot as enrollment.
-            // A target-only argument can use its explicit resolved context.
-            if !state_enrolled && arg.steps.iter().any(|(p, _)| p.state.is_some()) {
-                return Ok(None);
-            }
-            match arg.ext_match(nodes, node, 0, fuel,
-                position.filter(|_| index == 0), target, state_enrolled, true)? {
-                Some(true) => return Ok(Some(false)),
-                Some(false) => {},
-                None => return Ok(None),
-            }
+        for group in &simple.not_args {
+            let mut evaluate = |arg: &Selector| {
+                if !state_enrolled && arg.steps.iter().any(|(p, _)| p.state.is_some()) { return Ok(None); }
+                arg.ext_match(nodes, node, 0, fuel, position.filter(|_| index == 0), target, state_enrolled, true)
+            };
+            let result = match group {
+                NotGroup::Single(arg) => evaluate(arg)?.map(|v| !v),
+                NotGroup::Pair([a,b]) => { let first = evaluate(a)?; not_pair(first, || evaluate(b))? },
+            };
+            match result { Some(true) => {}, Some(false) => return Ok(Some(false)), None => return Ok(None) }
         }
         if index + 1 == self.steps.len() {
             return Ok(Some(true));
@@ -2004,11 +2103,11 @@ impl Simple {
             u16::from(self.id.is_some()),
             (self.classes.len() + self.attrs.len()) as u16
                 + u16::from(self.root) + u16::from(self.state.is_some())
-                + u16::from(self.structural_n) - self.not_args.len() as u16 - self.where_args.len() as u16 - self.has_args.len() as u16,
+                + u16::from(self.structural_n) - self.not_args.iter().map(NotGroup::slots).sum::<usize>() as u16 - self.where_args.len() as u16 - self.has_args.len() as u16,
             u16::from(self.tag.is_some()),
         );
-        self.not_args.iter().chain(self.has_args.iter().flat_map(HasArgument::selectors)).fold(own, |(a,b,c), arg| {
-            (a + arg.specificity.0, b + arg.specificity.1, c + arg.specificity.2)
+        self.not_args.iter().map(NotGroup::specificity).chain(self.has_args.iter().flat_map(HasArgument::selectors).map(|s|s.specificity)).fold(own, |(a,b,c), rank| {
+            (a + rank.0, b + rank.1, c + rank.2)
         })
     }
 }
@@ -4183,12 +4282,12 @@ mod not_bounded_tests {
         // Split scans aa +space (3), first token comparison (2). Total12.
         let arg=selector_ext(":not(.aa)").unwrap();
         let mut fuel=100;
-        assert!(arg.steps[0].0.not_args[0].steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
+        assert!(arg.steps[0].0.not_args[0].selectors().next().unwrap().steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
         assert_eq!(100-fuel,12);
         let huge="z".repeat(2000);
         let ns=nodes(&format!("<!doctype html><p id=x title='{huge}' class=aa></p>"));let h=id(&ns,"x");
         let mut fuel=100;
-        assert!(arg.steps[0].0.not_args[0].steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
+        assert!(arg.steps[0].0.not_args[0].selectors().next().unwrap().steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
         // title's VALUE was never inspected; its lookup iteration and first
         // mismatching name byte are charged (same name length as class).
         assert_eq!(100-fuel,13);
@@ -4779,4 +4878,53 @@ mod two_descendant_has_tests {
  #[test] fn rawcaps_classbounds_rank_and_charged_matchedlength(){let x=format!(".\\:{}","a".repeat(253));assert_eq!(x.len(),256);assert!(selector_ext(&x).is_some());let x=format!(".\\:{}","a".repeat(254));assert_eq!(x.len(),257);assert_eq!(x.replace("\\:",":").len(),256);assert!(selector_ext(&x).is_none());assert!(selector_ext(&r".\:x".repeat(8)).is_some());assert!(selector_ext(&r".\:x".repeat(9)).is_none());for(q,w)in[(r".\:focus",(0,1,0)),(r":where(.\:focus)",(0,0,0)),(r":not(.\:focus)",(0,1,0)),(r":has(.\:focus .a\!x)",(0,2,0))]{assert_eq!(selector_ext(q).unwrap().specificity,w);}let n=nodes("<!doctype html><div id=a class=':focus'></div><div id=b class='Xfocus'></div>");let a=id(&n,"a");let b=id(&n,"b");let mut f=100;assert_eq!(run(&n,a,r":where(.\:focus)",&mut f),Ok(Some(true)));let used=100-f;let mut g=100;assert_eq!(run(&n,b,":where(.Xfocus)",&mut g),Ok(Some(true)));assert_eq!(used,100-g);let mut f=used-1;assert_eq!(run(&n,a,r":where(.\:focus)",&mut f),Err(MatchRefusal::Fuel));let mut f=100;assert_eq!(run(&n,a,r":where(.\:focus):where(.\:focus)",&mut f),Ok(Some(true)));assert_eq!(100-f,used*2-1);assert_eq!(used,21);assert_eq!(100-f,41);println!("LEADINGCOLONcost={used} repeat={}",100-f);}
  #[test] fn browser_truth_replay(){let n=nodes(include_str!("../tests/fixtures/leading_class_colon_oracle.html"));let text=include_str!("../tests/fixtures/leading_class_colon_expected.tsv");assert_eq!(text.lines().count(),9);for l in text.lines(){let p:Vec<_>=l.split('\t').collect();let a=id(&n,p[0]);for(q,v)in selectors().iter().zip(&p[1..]){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,a),Some(*v=="1"),"{} {q}",p[0]);}}}
  fn selectors()->[&'static str;9]{[r".\:focus",r".\:focus.b",r":not(.\:focus)",r":where(.\:focus)",r":has(.\:focus)",r":has(>.\:focus)",r".\:focus + .a\!x",r":has(.\:focus .a\!x)",r":has(+.\:focus+.a\!x)"]}
+}
+
+#[cfg(test)]
+mod not_class_pair_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],v:&str)->usize{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,x)|&**k=="id"&&x==v))).unwrap()}
+ #[test] fn syntax_rank_slots_and_raw_bounds(){
+  for q in [":not(.a,.b)",":not( .a , .b )",r":not(.a\!x,.\:focus)",":where(:not(.a,.b))",":has(:not(.a,.b))"] {assert!(selector_ext(q).is_some(),"{q}");assert!(selector(q).is_none());}
+  for q in [":not(.a,)",":not(,.b)",":not(.a,.b,.c)",":not(.a,#b)",":not(#a,.b)",":not(.a,b)",":not(.a,[b])",":not(.a,:hover)",":not(.a,.b.c)",":not(.a.b,.c)",":not(.a,.b:first-child)",":not(.a,.b .c)",":not(.a,.b>.c)",":not(.a,:not(.b))",":not(.a,:where(.b))",":not(.a,.b::before)",":not(:not(.a,.b))",r":not(.a,.b\:c)"]{assert!(selector_ext(q).is_none(),"{q}");}
+  for(q,r)in[(":not(.a,.b)",(0,1,0)),(":not(.a,.b):not(.c,.d)",(0,2,0)),(":not(.a,.b):not(#x)",(1,1,0)),(":not(.a,.b):first-child:where(#x):has(p)",(0,2,1)),(":where(:not(.a,.b))",(0,0,0)),(":has(:not(.a,.b))",(0,1,0))]{assert_eq!(selector_ext(q).unwrap().specificity,r,"{q}");}
+  assert!(selector_ext(&":not(.a,.b)".repeat(4)).is_some());assert!(selector_ext(&":not(.a,.b)".repeat(5)).is_none());
+  assert!(selector_ext(&format!(":not(.a,.b){}",":first-child".repeat(6))).is_some());assert!(selector_ext(&format!(":not(.a,.b){}",":first-child".repeat(7))).is_none());
+  let q=format!(":not(.{},.b)","a".repeat(246));assert_eq!(q.len(),256);assert!(selector_ext(&q).is_some());assert!(selector_ext(&q.replace(",.b)","a,.b)")).is_none());
+ }
+ #[test] fn negated_or_synthetic_unknown_and_lazy_error(){
+  for(a,b,w)in[(Some(false),Some(false),Some(true)),(Some(false),Some(true),Some(false)),(None,Some(true),Some(false)),(None,Some(false),None),(None,None,None),(Some(false),None,None)]{assert_eq!(not_pair(a,||Ok(b)),Ok(w));}
+  assert_eq!(not_pair(Some(true),||panic!("must skip B")),Ok(Some(false)));
+  assert_eq!(not_pair(Some(false),||Err(MatchRefusal::Fuel)),Err(MatchRefusal::Fuel));assert_eq!(not_pair(None,||Err(MatchRefusal::Fuel)),Err(MatchRefusal::Fuel));
+ }
+ #[test] fn actual_charged_truth_cost_and_shortcircuit(){
+  let ns=nodes("<!doctype html><div id=a class='a'></div><div id=b class='b'></div><div id=both class='a b'></div><div id=none class='c'></div>");
+  for(v,w)in[("a",false),("b",false),("both",false),("none",true)]{let h=id(&ns,v);let pair=selector_ext(":not(.a,.b)").unwrap();assert_eq!(pair.matches_checked(&ns,h),Some(w));}
+  let h=id(&ns,"a");let cost=|q:&str|{let mut f=EXT_FUEL;let r=selector_ext(q).unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None);(r,EXT_FUEL-f)};
+  assert_eq!(cost(":not(.a,.b)"),cost(":not(.a)"),"truefirst skips B entirely");
+  let mut f=EXT_FUEL;assert_eq!(selector_ext(":not(.a,.b)").unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Ok(Some(false)));let exact=EXT_FUEL-f;let mut f=exact;assert_eq!(selector_ext(":not(.a,.b)").unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Ok(Some(false)),"zero remaining B is skipped");
+  let h=id(&ns,"none");let one=|q:&str|{let mut f=EXT_FUEL;assert_eq!(selector_ext(q).unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Ok(Some(true)));EXT_FUEL-f};assert_eq!(one(":not(.a,.b)"),one(":not(.a):not(.b)"));assert_eq!(one(":not(.a,.b):not(.a,.b)"),1+2*(one(":not(.a,.b)")-1));let mut f=one(":not(.a,.b)")-1;assert_eq!(selector_ext(":not(.a,.b)").unwrap().matches_checked_scoped_budget(&ns,h,&mut f,None,None),Err(MatchRefusal::Fuel));
+ }
+}
+#[cfg(test)] mod not_class_pair_oracle_tests {
+ use super::*;
+ #[test] fn actual_browser147_truths(){use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process(include_str!("../tests/fixtures/not_class_pair_oracle.html").to_string().into());let ns=p.finish().into_nodes();let sels=[r":not(.a,.b)",r":not(.a\!x,.\:focus)",":where(:not(.a,.b))",":not(.a,.b):not(.c)",":has(> :not(.a,.b))",r#"#onetrust-pc-sdk ul li p[aria-level="3"]:not(.ot-host-name, .ot-host-desc)"#,r#"#onetrust-pc-sdk ul li p[aria-level="4"]:not(.ot-host-name, .ot-host-desc)"#];let mut rows=0;for l in include_str!("../tests/fixtures/not_class_pair_expected.tsv").lines(){let v:Vec<_>=l.split('\t').collect();let h=ns.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,x)|&**k=="id"&&x==v[0]))).unwrap();for(i,q)in sels.iter().enumerate(){assert_eq!(selector_ext(q).unwrap().matches_checked(&ns,h),Some(v[i+1]=="1"),"{} {}",v[0],q);}rows+=1;}assert_eq!(rows,21);}
+}
+#[cfg(test)] mod not_class_pair_splitter_tests {
+ use super::*;
+ fn same(s:&str){assert_eq!(ExtSelectorMembers::new(s).collect::<Vec<_>>(),s.split(',').collect::<Vec<_>>(),"{s:?}");}
+ #[test] fn legacy_slice_identity_arbitrary_ascii(){
+  for s in ["",",",",,"," a,b,",r#"[x="v,:not(.a,.b)"]"#,r#"[x="a,b"]:not(.a,.b)"#,":not(.a,.b,.c)",":not(:not(.a,.b))",":where(.a,.b)","([)],a,b",r"\:not(.a,.b)","a((((,b",r#"[x="a\",:not(.a,.b)"]"#]{same(s);}
+  let mut seed=9u64;for _ in 0..5000{let mut s=String::new();for _ in 0..(seed as usize%120){seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);s.push((32+(seed>>33)%95)as u8 as char);}same(&s);}
+ }
+ #[test] fn actual_group_provenance_and_wrapped_counts(){
+  for s in [":not(.a,.b)",":WHERE(:not(.a,.b))",":has(> :not(.a,.b))",":not(.a,.b):has(> :not(.c,.d))",":has(.x :not(.a,.b))",":has(+ .x + :not(.a,.b))",":has(> .x > :not(.a,.b))"]{let v=ExtSelectorMembers::new(s).collect::<Vec<_>>();assert_eq!(v,vec![s],"{s}");}
+  let s=":not(.a,.b), .x,, :not(.c,.d),";assert_eq!(ExtSelectorMembers::new(s).collect::<Vec<_>>(),[":not(.a,.b)"," .x",""," :not(.c,.d)",""]);
+  same(":not(:where(:has(.x:not(.a,.b))))");same(&format!("{}:not(.a,.b)","a".repeat(256)));same(r#":not(.a,.b)[x="c,d"]"#);
+ }
+ #[test] fn instrument_disjoint_scan_and_early17(){
+  let s=(0..1000).map(|_|":not(.a,.b)").collect::<Vec<_>>().join(",");let mut it=ExtSelectorMembers::new(&s);assert_eq!(it.by_ref().take(17).count(),17);assert_eq!(it.preparses,17);assert_eq!(it.scanned,17*12);assert!(it.scanned<s.len());
+  let s=format!("[{}",",x".repeat(10000));let mut it=ExtSelectorMembers::new(&s);let a=it.next();assert_eq!(a,Some("["));assert_eq!(it.scanned,s.len());assert_eq!(it.preparses,0);assert_eq!(it.by_ref().count(),10000);assert_eq!(it.scanned,s.len());
+ }
 }

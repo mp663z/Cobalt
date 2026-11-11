@@ -1643,7 +1643,9 @@ fn matched_rules(
                 style_syntax::MediaFit::Screen => {}
                 style_syntax::MediaFit::Skip | style_syntax::MediaFit::Unknown => continue,
             }
-            let mut selectors = rule.prelude.split(',');
+            let mut selectors: Box<dyn Iterator<Item=&str> + '_> = if ext_selectors {
+                Box::new(css::ExtSelectorMembers::new(rule.prelude))
+            } else { Box::new(rule.prelude.split(',')) };
             let (properties, unknown) = block_entries(
                 rule.declarations,
                 &mut deferred_table,
