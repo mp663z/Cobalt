@@ -167,8 +167,18 @@ struct Simple {
     not_args: Vec<Selector>,
     /// Same-node bounded zero-specificity filters; argument rank discarded.
     where_args: Vec<Selector>,
-    /// One compound with explicit Child or implicit Descendant relative mode.
-    has_args: Vec<Selector>,
+    /// First compound relative mode plus at most one fixed child compound.
+    has_args: Vec<HasArgument>,
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HasArgument {
+    first: Selector,
+    child: Option<Selector>,
+}
+impl HasArgument {
+    fn selectors(&self) -> impl Iterator<Item=&Selector> {
+        std::iter::once(&self.first).chain(self.child.iter())
+    }
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AttrSel {
@@ -748,7 +758,15 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                     } else { Relation::Descendant };
                     let (arg, end) = compound_ext_in(s, arg_start,
                         allow_not && !is_not, allow_where && !is_where, allow_has && !is_has)?;
-                    let end = skip_ws(b, end);
+                    let mut end = skip_ws(b, end);
+                    let child = if is_has && matches!(arg_relation, Relation::Child) && b.get(end) == Some(&b'>') {
+                        let (tail, after) = compound_ext_in(s, skip_ws(b, end + 1),
+                            allow_not, allow_where, false)?;
+                        end = skip_ws(b, after);
+                        let specificity = tail.ext_specificity();
+                        Some(Selector { steps: vec![(tail, Relation::Child)], specificity,
+                            ext: true, pseudo: Pseudo::None })
+                    } else { None };
                     if b.get(end) != Some(&b')') { return None; }
                     let specificity = arg.ext_specificity();
                     let parsed = Selector {
@@ -757,7 +775,7 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                     };
                     if is_not { simple.not_args.push(parsed); }
                     else if is_where { simple.where_args.push(parsed); }
-                    else { simple.has_args.push(parsed); }
+                    else { simple.has_args.push(HasArgument { first: parsed, child }); }
                     simple.structural_n += 1;
                     at = end + 1;
                     // Do NOT take the class-level fall-through increment:
@@ -1124,7 +1142,7 @@ impl Selector {
         self.steps
             .iter()
             .any(|(simple, _)| simple.state.is_some() || simple.target
-                || simple.not_args.iter().chain(&simple.where_args).chain(&simple.has_args).any(Selector::has_state))
+                || simple.not_args.iter().chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).any(Selector::has_state))
     }
     fn has_context_wrapper(&self) -> bool {
         self.steps.iter().any(|(s,_)| !s.where_args.is_empty() || !s.has_args.is_empty()
@@ -1136,7 +1154,7 @@ impl Selector {
     // actual same SnapshotState before matching.
     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
         self.steps.iter().all(|(s,_)| s.state.is_none() && (!s.target || target.is_some())
-            && s.not_args.iter().chain(&s.where_args).chain(&s.has_args).all(|a|a.raw_dependencies_satisfied(target)))
+            && s.not_args.iter().chain(&s.where_args).chain(s.has_args.iter().flat_map(HasArgument::selectors)).all(|a|a.raw_dependencies_satisfied(target)))
     }
     /// Every state pseudo-class in the selector is covered by the caller's
     /// explicit guarantee. History and input are scoped independently: a
@@ -1144,7 +1162,7 @@ impl Selector {
     /// input-only guarantee does not enroll `:link`.
     pub(crate) fn state_satisfied_by(&self, snapshot: Option<&SnapshotState>) -> bool {
         self.steps.iter().all(|(simple, _)| {
-            if !simple.not_args.iter().chain(&simple.where_args).chain(&simple.has_args).all(|arg| arg.state_satisfied_by(snapshot)) {
+            if !simple.not_args.iter().chain(&simple.where_args).chain(simple.has_args.iter().flat_map(HasArgument::selectors)).all(|arg| arg.state_satisfied_by(snapshot)) {
                 return false;
             }
             if simple.target
@@ -1319,6 +1337,42 @@ impl Selector {
         }
         Ok(None)
     }
+    /// Exactly anchor > first > tail. No generic complex matcher may
+    /// ascend past the anchor. S unknown conservatively skips the T branch.
+    fn matches_two_child_charged(&self, tail: &Selector, nodes: &[Node], anchor: Handle,
+        fuel: &mut u32, target: Option<Option<Handle>>, state_enrolled: bool)
+        -> Result<Option<bool>, MatchRefusal> {
+        let Some(Node { data: Data::Element {..}, children, .. }) = nodes.get(anchor)
+            else { return Ok(None); };
+        if children.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+        let mut unknown = false;
+        for &middle in children {
+            not_charge(fuel)?;
+            let Some(first) = nodes.get(middle) else { unknown = true; continue; };
+            if middle == anchor || first.parent != Some(anchor) { unknown = true; continue; }
+            if !matches!(first.data, Data::Element {..}) { continue; }
+            match self.ext_match(nodes, middle, 0, fuel, None, target, state_enrolled, true)? {
+                Some(true) => {},
+                Some(false) => continue,
+                None => { unknown = true; continue; },
+            }
+            if first.children.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+            for &leaf in &first.children {
+                not_charge(fuel)?;
+                let Some(last) = nodes.get(leaf) else { unknown = true; continue; };
+                if leaf == anchor || leaf == middle || last.parent != Some(middle) {
+                    unknown = true; continue;
+                }
+                if !matches!(last.data, Data::Element {..}) { continue; }
+                match tail.ext_match(nodes, leaf, 0, fuel, None, target, state_enrolled, true)? {
+                    Some(true) => return Ok(Some(true)),
+                    Some(false) => {},
+                    None => unknown = true,
+                }
+            }
+        }
+        Ok(if unknown { None } else { Some(false) })
+    }
     fn ext_match(
         &self,
         nodes: &[Node],
@@ -1427,11 +1481,13 @@ impl Selector {
             return Ok(Some(false));
         }
         for arg in &simple.has_args {
-            let result = match arg.steps[0].1 {
-                Relation::Child => arg.matches_direct_child_charged(nodes, node, fuel, target, state_enrolled),
-                Relation::Descendant => arg.matches_descendant_charged(nodes, node, fuel, target, state_enrolled),
+            let result = if let Some(tail) = &arg.child {
+                arg.first.matches_two_child_charged(tail, nodes, node, fuel, target, state_enrolled)
+            } else { match arg.first.steps[0].1 {
+                Relation::Child => arg.first.matches_direct_child_charged(nodes, node, fuel, target, state_enrolled),
+                Relation::Descendant => arg.first.matches_descendant_charged(nodes, node, fuel, target, state_enrolled),
                 _ => return Ok(None),
-            };
+            }};
             match result? {
                 Some(true) => {},
                 Some(false) => return Ok(Some(false)),
@@ -1753,7 +1809,7 @@ impl Simple {
                 + u16::from(self.structural_n) - self.not_args.len() as u16 - self.where_args.len() as u16 - self.has_args.len() as u16,
             u16::from(self.tag.is_some()),
         );
-        self.not_args.iter().chain(&self.has_args).fold(own, |(a,b,c), arg| {
+        self.not_args.iter().chain(self.has_args.iter().flat_map(HasArgument::selectors)).fold(own, |(a,b,c), arg| {
             (a + arg.specificity.0, b + arg.specificity.1, c + arg.specificity.2)
         })
     }
@@ -4242,7 +4298,7 @@ mod child_has_bounded_tests {
  }
  #[test]
  fn grammar_whole_refusal_flags_rank_and_bounds(){
-  for bad in [":has(+ p)",":has(~ p)",":has(> p > span)",":has(> p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(> :not(:has(> p)))",":where(:has(> :not(:where(.x))))",":not(:has(> :where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
+  for bad in [":has(+ p)",":has(~ p)",":has(> p > span > i)",":has(> p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(> :not(:has(> p)))",":where(:has(> :not(:where(.x))))",":not(:has(> :where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
   for good in [":has(> :where(:not(.x)))",":not(:where(:has(> .x)))",":where(:not(:has(> .x)))",":has( > p )"]{assert!(selector_ext(good).is_some(),"{good}");}
   for (s,want)in [(":has(> *)",(0,0,0)),(":has(> #x)",(1,0,0)),(":has(> p.a)",(0,1,1)),(":where(:has(> #x))",(0,0,0)),(":not(:has(> .x))",(0,1,0))]{assert_eq!(selector_ext(s).unwrap().specificity,want);assert!(selector(s).is_none());}
   assert!(selector_ext(&":has(> *)".repeat(8)).is_some());assert!(selector_ext(&":has(> *)".repeat(9)).is_none());
@@ -4291,7 +4347,7 @@ mod desc_has_bounded_tests {
   for bad in [":has()",":has( )",":has(p,span)",":has(p span)",":has(p + span)",":has(+ p)",":has(~ p)",":has(p > span)",":has(p, > span)",":has(>)",":has(>>p)",":has(>p +)",":has(>p junk)",":has(>p::before)",":has(:not(:has(p)))",":where(:has(:not(:where(.x))))",":not(:has(:where(:not(.x))))"]{assert!(selector_ext(bad).is_none(),"scope refusal not invalid CSS:{bad}");}
   for good in [":has(:where(:not(.x)))",":not(:where(:has(.x)))",":where(:not(:has(.x)))",":has( p )"]{assert!(selector_ext(good).is_some(),"{good}");}
   for (s,want)in [(":has(*)",(0,0,0)),(":has(#x)",(1,0,0)),(":has(p.a)",(0,1,1)),(":where(:has(#x))",(0,0,0)),(":not(:has(.x))",(0,1,0))]{assert_eq!(selector_ext(s).unwrap().specificity,want);assert!(selector(s).is_none());}
-  assert!(matches!(selector_ext(":has(p)").unwrap().steps[0].0.has_args[0].steps[0].1,Relation::Descendant));assert!(matches!(selector_ext(":has(>p)").unwrap().steps[0].0.has_args[0].steps[0].1,Relation::Child));
+  assert!(matches!(selector_ext(":has(p)").unwrap().steps[0].0.has_args[0].first.steps[0].1,Relation::Descendant));assert!(matches!(selector_ext(":has(>p)").unwrap().steps[0].0.has_args[0].first.steps[0].1,Relation::Child));
   assert!(selector_ext(&":has(*)".repeat(8)).is_some());assert!(selector_ext(&":has(*)".repeat(9)).is_none());
  }
  #[test]
@@ -4363,4 +4419,45 @@ mod desc_has_ascent_refusal_tests {
   n[c].parent=None;let mut f=10000;assert_eq!(Selector::descendant_resume(&n,c,&mut f),Ok(None));assert_eq!(10000-f,1);
   n[c].parent=Some(n.len()+1);let mut f=10000;assert_eq!(Selector::descendant_resume(&n,c,&mut f),Ok(None));assert_eq!(10000-f,1);
  }
+}
+
+#[cfg(test)]
+mod two_child_has_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let sink=crate::dom::Sink::new(64*1024*1024);let mut p=html5ever::parse_document(sink,html5ever::ParseOpts::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],s:&str)->Handle{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id" && v==s))).unwrap()}
+ fn run(n:&[Node],a:Handle,s:&str,f:&mut u32)->Result<Option<bool>,MatchRefusal>{selector_ext(s).unwrap().matches_checked_scoped_budget(n,a,f,None,None)}
+ #[test] fn grammar_inherited_flags_both_ranks_and_fixed_bounds(){
+ for bad in [":has(>p>i>b)",":has(p>i)",":has(>p i)",":has(>p + i)",":has(>p>i,>b)",":has(>p>)",":has(>p>>i)",":has(>p>i::before)",":has(>:not(:has(p))>i)",":has(>p>:where(:has(i)))",":not(:has(>p>:not(i)))",":where(:has(>:where(p)>i))"]{assert!(selector_ext(bad).is_none(),"whole scoped refusal:{bad}");}
+ for good in [":has( > p > i )",":has(>:where(p)>:where(i))",":has(>:not(p)>:not(i))",":not(:has(>:where(p)>:where(i)))",":where(:has(>:not(p)>:not(i)))"]{assert!(selector_ext(good).is_some(),"{good}");}
+ for (x,w) in [(":has(>* >*)",(0,0,0)),(":has(>#x>p.a)",(1,1,1)),(":where(:has(>#x>p.a))",(0,0,0)),(":not(:has(>p.a>#x))",(1,1,1))]{assert_eq!(selector_ext(x).unwrap().specificity,w);assert!(selector(x).is_none());}
+ assert!(selector_ext(&":has(>*>*)".repeat(8)).is_some());assert!(selector_ext(&":has(>*>*)".repeat(9)).is_none());assert!(selector_ext(&format!(":has(>{}>*)",":empty".repeat(9))).is_none());assert!(selector_ext(&format!(":has(> * >{})",":empty".repeat(9))).is_none());
+ }
+ #[test] fn real_unknown_middle_leaf_then_true_false_mismatch_and_cycles(){
+ let mut n=nodes("<!doctype html><div id=a><section id=m><p id=p class=x></p><b id=b></b></section><section id=m2><p class=x></p></section></div><aside id=outside></aside>");let a=id(&n,"a");let m=id(&n,"m");let m2=id(&n,"m2");let p=id(&n,"p");let b=id(&n,"b");let out=id(&n,"outside");let bad=n.len()+1;
+ n[a].children=vec![bad,m];assert_eq!(selector_ext(":has(>section>.x)").unwrap().matches_checked(&n,a),Some(true));assert_eq!(selector_ext(":has(>section>.no)").unwrap().matches_checked(&n,a),None);
+ n[a].children=vec![m];n[m].children=vec![bad,p];assert_eq!(selector_ext(":has(>section>.x)").unwrap().matches_checked(&n,a),Some(true));n[m].children=vec![bad,b];assert_eq!(selector_ext(":has(>section>.x)").unwrap().matches_checked(&n,a),None);
+ n[m].children=vec![p];n[p].parent=None;assert_eq!(selector_ext(":has(>section>.no)").unwrap().matches_checked(&n,a),None,"leaf mismatchbeforefalse");n[m].parent=None;assert_eq!(selector_ext(":has(>.absent>*)").unwrap().matches_checked(&n,a),None,"middle mismatchbeforefalse");n[m].parent=Some(a);n[p].parent=Some(m);
+ n[a].parent=Some(m);n[m].children=vec![a,m,out];assert_eq!(selector_ext(":has(>section>#a)").unwrap().matches_checked(&n,a),None,"originalanchor excluded even parentconsistent");assert_eq!(selector_ext(":has(>section>#outside)").unwrap().matches_checked(&n,a),None);
+ n[a].children=vec![m,m2];assert_eq!(selector_ext(":has(>section>.x)").unwrap().matches_checked(&n,a),Some(true),"later validtrue wins corruptedbranchunknown");
+ }
+ #[test] fn exact_two_loops_cost_duplicate_repeat_and_gates(){
+ let mut n=nodes("<!doctype html><div id=a><section id=m>text<!--c--><p></p></section></div>");let a=id(&n,"a");let m=id(&n,"m");let mut f=100;assert_eq!(run(&n,a,":has(>*>.no)",&mut f),Ok(Some(false)));assert_eq!(100-f,7,"outer1+rawmiddle1+Smatch1+3rawleaf+Tmatch1; noattrs noclasslookup");let text=n[m].children[0];n[m].children=vec![text;EXT_MAX_SIBLINGS+1];let mut f=100;assert_eq!(run(&n,a,":has(>*>*)",&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(100-f,3);
+ n[a].children=vec![m;EXT_MAX_SIBLINGS+1];let mut f=100;assert_eq!(run(&n,a,":has(>*>*)",&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(100-f,1);
+ n[a].children=vec![m,m];n[m].children=vec![text,text];let mut f=100;assert_eq!(run(&n,a,":has(>*>*)",&mut f),Ok(Some(false)));assert_eq!(100-f,9,"outer1+2*(middlevisit1+Smatch1+2textvisits)");
+ let n=nodes("<!doctype html><div id=a><section><p></p></section></div>");let a=id(&n,"a");let mut f=100;assert_eq!(run(&n,a,":has(>*>*)",&mut f),Ok(Some(true)));let cost=100-f;assert_eq!(cost,5);let mut f=100;assert_eq!(run(&n,a,":has(>*>*):has(>*>*)",&mut f),Ok(Some(true)));assert_eq!(100-f,1+2*(cost-1));let mut f=4;assert_eq!(run(&n,a,":has(>*>*)",&mut f),Err(MatchRefusal::Fuel));assert_eq!(f,0);
+ }
+ #[test] fn s_unknown_skips_t_and_errors_before_later_true(){
+ let mut n=nodes("<!doctype html><div id=a><section id=m><p></p></section></div>");let a=id(&n,"a");let m=id(&n,"m");let invalid=n.len()+1;n[m].children=vec![invalid];let mut f=4;assert_eq!(run(&n,a,":has(>:empty>*)",&mut f),Ok(None),"Sunknown skips T even with zero fuel remaining, not exactfalse");assert_eq!(f,0);
+
+ let n=nodes(&format!("<!doctype html><div id=a><section data-x='{}'><p></p></section><section data-x=aaaaab><p></p></section></div>","a".repeat(1000)));let a=id(&n,"a");let mut f=EXT_FUEL;assert_eq!(run(&n,a,":has(>[data-x*=aaaaab]>*)",&mut f),Err(MatchRefusal::Fuel));
+ let n=nodes(&format!("<!doctype html><div id=a><section><p data-x='{}'></p><p data-x=aaaaab></p></section></div>","a".repeat(1000)));let a=id(&n,"a");let mut f=EXT_FUEL;assert_eq!(run(&n,a,":has(>*>[data-x*=aaaaab])",&mut f),Err(MatchRefusal::Fuel));
+ }
+ #[test] fn both_position_none_and_both_dependencies_preflight(){
+ let n=nodes("<!doctype html><div id=a><b></b><section><b></b><p id=p></p></section></div>");let a=id(&n,"a");let mut f=EXT_FUEL;assert_eq!(selector_ext(":has(>section:nth-child(2):last-of-type>p:nth-child(2):nth-last-child(1):last-of-type)").unwrap().matches_checked_scoped_budget(&n,a,&mut f,Some((999,999)),None),Ok(Some(true)));
+ for s in [".absent:has(>.absent>:hover)",":has(>.absent>:where(:not(:link)))",":not(:has(>.absent>:where(:focus)))",":where(:has(>:not(.absent)>:target))"]{let x=selector_ext(s).unwrap();assert!(x.has_state());assert!(!x.state_satisfied_by(None));assert_eq!(x.matches_checked(&n,a),None,"bothdeps/rawpreflight:{s}");}
+ assert_eq!(selector_ext(":has(>section>:target)").unwrap().matches_checked_target(&n,a,&TargetState::Fragment("p".into())),Some(true));
+ }
+ #[test] fn browser_two_child_truth(){let n=nodes(include_str!("../tests/fixtures/two_child_has_oracle.html"));let sels=[":has(>section>p)",":has(>*>*)",":has(>section>.x)",":has(>:not(.no)>:where(.x))",":not(:has(>section>p))",":where(:has(>section>#p))",":has(>section:nth-child(2)>p:last-child)",":has(>svg>g)",":has(>template>p)",":has(>section>:empty)",":has(>section>p):has(>section>.x)"];
+ let t=include_str!("../tests/fixtures/two_child_has_expected.tsv");assert_eq!(t.lines().count(),15);for l in t.lines(){let v:Vec<_>=l.split('\t').collect();for(i,s)in sels.iter().enumerate(){assert_eq!(selector_ext(s).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {s}",v[0]);}}}
 }
