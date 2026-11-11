@@ -752,6 +752,12 @@ fn single_class_only(s: &Simple) -> bool {
     plain.ext = true; plain.classes = s.classes.clone();
     *s == plain
 }
+fn typed_class_only(s: &Simple) -> bool {
+    if s.tag.is_none() || s.classes.len() != 1 { return false; }
+    let Some(mut plain) = simple("x.x") else { return false; };
+    plain.ext = true; plain.tag = s.tag.clone(); plain.classes = s.classes.clone();
+    *s == plain
+}
 fn compound_ext(s: &str, at: usize) -> Option<(Simple, usize)> {
     compound_ext_in(s, at, true, true, true)
 }
@@ -857,12 +863,14 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
                             else { HasTail::NextSibling(parsed_tail) })
                     } else { None };
                     let second = if (is_not || is_has) && b.get(end) == Some(&b',') {
-                        if simple.structural_n > 6 || !single_class_only(&arg) || b.get(arg_start) != Some(&b'.')
+                        let bare = single_class_only(&arg) && b.get(arg_start) == Some(&b'.');
+                        let typed = is_has && typed_class_only(&arg) && b.get(arg_start).is_some_and(|c|c.is_ascii_alphabetic());
+                        if simple.structural_n > 6 || !(bare || typed)
                             || (is_has && (!matches!(arg_relation,Relation::Descendant) || tail.is_some())) { return None; }
                         let next_start = skip_ws(b, end + 1);
-                        if b.get(next_start) != Some(&b'.') { return None; }
+                        if (bare && b.get(next_start) != Some(&b'.')) || (typed && !b.get(next_start).is_some_and(|c|c.is_ascii_alphabetic())) { return None; }
                         let (other, after) = compound_ext_in(s, next_start, false, false, false)?;
-                        if !single_class_only(&other) { return None; }
+                        if (bare && !single_class_only(&other)) || (typed && !typed_class_only(&other)) { return None; }
                         end = skip_ws(b, after);
                         let specificity = other.ext_specificity();
                         Some(Selector { steps: vec![(other, Relation::Descendant)], specificity, ext: true, pseudo: Pseudo::None })
@@ -975,7 +983,8 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool, allow_where: bool, a
 /// joined by descendant, `>`, `+` and `~`. Bounded `:where(S)` is a nonempty
 /// single-compound zero-specificity filter, not general forgiving-list support.
 /// `:has(S)` and `:has(> S)` retain existing singleton paths; exactly two
-/// individual implicit-descendant classes are also supported, not general has lists.
+/// individual implicit-descendant classes or two type-plus-one-class compounds
+/// are also supported, not mixed pairs or general has lists.
 /// Not/where/has may cross once each but none nests itself on any path.
 /// Bounded `:not(S)` accepts exactly
 /// one compound of those features, or exactly two individual classes; no nested negation, general lists, complex
@@ -4988,4 +4997,28 @@ mod not_class_pair_tests {
  #[test] fn actual_firsttrue_skips_second_fuel_error_and_full_rescans_charged(){use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process("<!doctype html><div id=s><b id=b class=a></b></div>".to_string().into());let mut n=p.finish().into_nodes();let s=n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id"&&v=="s"))).unwrap();let b=n[s].children[0];if let Data::Element{attrs,..}=&mut n[b].data{attrs.iter_mut().find(|(k,_)|&**k=="class").unwrap().1=format!("a {}","x ".repeat(3000));}let mut f=EXT_FUEL;assert_eq!(selector_ext(":has(.a,.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut f,None,None),Ok(Some(true)));let mut f=EXT_FUEL;assert_eq!(selector_ext(":has(.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut f,None,None),Err(MatchRefusal::Fuel));
   if let Data::Element{attrs,..}=&mut n[b].data{attrs.iter_mut().find(|(k,_)|&**k=="class").unwrap().1="b".into();}let cost=|q:&str|{let mut f=EXT_FUEL;let r=selector_ext(q).unwrap().matches_checked_scoped_budget(&n,s,&mut f,None,None);(r,EXT_FUEL-f)};let a=cost(":has(.absent)");let b=cost(":has(.b)");let pair=cost(":has(.absent,.b)");assert_eq!(pair.0,Ok(Some(true)));assert_eq!(pair.1,a.1+b.1-1,"Brescanchargedagainsharedouterone");
  }
+}
+#[cfg(test)] mod has_typed_pair_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let mut p=html5ever::parse_document(crate::dom::Sink::new(64*1024*1024),Default::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],v:&str)->usize{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,x)|&**k=="id"&&x==v))).unwrap()}
+ #[test] fn strict_scope_rank_slots_provenance_and_legacy_isolation(){
+ for q in [":has(article.a,div.b)",":has( ARTICLE.a , DIV.b )",r":has(article.a\!x,div.\:focus)",":not(:has(article.a,div.b))",":where(:has(article.a,div.b))"]{assert!(selector_ext(q).is_some(),"{q}");assert!(selector(q).is_none());}
+ for q in [":not(article.a,div.b)",":not(.a,div.b)",":not(article.a,.b)",":has(article.a,.b)",":has(.a,div.b)",":has(article,div.b)",":has(article.a,div)",":has(*.a,div.b)",":has(article.a,*.b)",":has(article.a.b,div.b)",":has(article.a,div.b.c)",":has(article.a,div.b:hover)",":has(article.a[x],div.b)",":has(>article.a,div.b)",":has(+article.a,div.b)",":has(article.a,>div.b)",":has(article.a div.b,p.c)",":has(article.a,div.b p.c)",":has(article.a,div.b,p.c)",":has(article.a,)",":has(,div.b)",":has(article.a:has(.x),div.b)"]{assert!(selector_ext(q).is_none(),"{q}");}
+ for(q,r)in[(":has(article.a,div.b)",(0,1,1)),(":has(article.a,div.b):not(.x,.y)",(0,2,1)),(":has(article.a div.b)",(0,2,2)),(":has(article.a,div.b):has(article.a div.b)",(0,3,3)),(":where(:has(article.a,div.b))",(0,0,0))]{assert_eq!(selector_ext(q).unwrap().specificity,r,"{q}");}
+ assert!(selector_ext(&":has(a.a,b.b)".repeat(4)).is_some());assert!(selector_ext(&":has(a.a,b.b)".repeat(5)).is_none());for(n,w)in[(6,true),(7,false)]{assert_eq!(selector_ext(&format!(":has(a.a,b.b){}",":first-child".repeat(n))).is_some(),w);}
+ let q=format!(":has(a.{},b.b)","a".repeat(244));assert_eq!(q.len(),256);assert!(selector_ext(&q).is_some());assert!(selector_ext(&(q+" ")).is_none());
+ for q in [":has(a.a,b.b):not(.x,.y)",":not(:where(:has(a.a,b.b)))",":has(.x :not(.a,.b)):has(a.a,b.b)",":has(>.x>:not(.a,.b)):has(a.a,b.b)",":has(+.x+:not(.a,.b)):has(a.a,b.b)"]{assert_eq!(selector_ext(q).unwrap().not_pair_count(),if q==":not(:where(:has(a.a,b.b)))"{1}else{2});assert_eq!(ExtSelectorMembers::new(q).collect::<Vec<_>>(),[q]);}
+ }
+ #[test] fn typed_charged_predicate_order_unknown_rescans_and_errors(){
+ let mut n=nodes("<!doctype html><div id=s><article id=b class=a></article></div>");let s=id(&n,"s");let b=id(&n,"b");
+ let cost=|q:&str|{let mut f=EXT_FUEL;let r=selector_ext(q).unwrap().matches_checked_scoped_budget(&n,s,&mut f,None,None);(r,EXT_FUEL-f)};
+ let a=cost(":has(article.absent)");let bcost=cost(":has(article.a)");let pair=cost(":has(article.absent,article.a)");assert_eq!(pair.0,Ok(Some(true)));assert_eq!(pair.1,a.1+bcost.1-1);assert_eq!(cost(":has(article.a,div.b)"),bcost);assert_eq!(cost(":has(article.a,div.b):has(article.a,div.b)").1,1+2*(bcost.1-1));
+ for(f,w)in[(pair.1,true),(pair.1-1,false)]{let r=selector_ext(":has(article.absent,article.a)").unwrap().matches_checked_scoped_budget(&n,s,&mut f.clone(),None,None);assert_eq!(r.is_ok(),w);}
+ n[s].children=vec![n.len()+3,b];assert_eq!(selector_ext(":has(article.absent,article.a)").unwrap().matches_checked(&n,s),Some(true));assert_eq!(selector_ext(":has(article.absent,div.no)").unwrap().matches_checked(&n,s),None);assert_eq!(selector_ext(":has(article.absent):has(article.a)").unwrap().matches_checked(&n,s),None);
+ n[s].children=vec![b];if let Data::Element{attrs,..}=&mut n[b].data{attrs.iter_mut().find(|(k,_)|&**k=="class").unwrap().1=format!("a {}","x ".repeat(3000));}
+ assert_eq!(selector_ext(":has(article.a,article.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut EXT_FUEL,None,None),Ok(Some(true)));assert_eq!(selector_ext(":has(article.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut EXT_FUEL,None,None),Err(MatchRefusal::Fuel));assert_eq!(selector_ext(":has(article.absent,article.a)").unwrap().matches_checked_scoped_budget(&n,s,&mut EXT_FUEL,None,None),Err(MatchRefusal::Fuel));
+ assert_eq!(selector_ext(":has(div.absent,p.absent)").unwrap().matches_checked_scoped_budget(&n,s,&mut EXT_FUEL,None,None),Ok(Some(false)),"type mismatch skips expensive class compare");
+ }
+ #[test] fn browser_original11_truths(){let n=nodes(include_str!("../tests/fixtures/has_typed_pair_oracle.html"));let qs:Vec<_>=include_str!("../tests/fixtures/has_typed_pair_original11.txt").lines().collect();let mut count=0;for row in include_str!("../tests/fixtures/has_typed_pair_expected.tsv").lines(){let v:Vec<_>=row.split('\t').collect();for(i,q)in qs.iter().enumerate(){assert_eq!(selector_ext(q).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {q}",v[0]);count+=1;}}assert_eq!(count,1573);}
 }

@@ -1,0 +1,11 @@
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large)
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .story-wrap
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .head-image
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .thumb-image
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .head-image.wide
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .thumb-image.wide
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .head-image.square
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .thumb-image.square
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .post-type-simple.has-image .credit
+.tmplHomePage .bucketwrap.featured:not(.spicerack):has(article.volume-full, div.x-large) .video.large
