@@ -1146,7 +1146,7 @@ impl Selector {
         if !self.ext {
             return Ok(Some(self.matches(nodes, handle)));
         }
-        self.ext_match(nodes, handle, 0, fuel, position, target, false)
+        self.ext_match(nodes, handle, 0, fuel, position, target, false, false)
     }
     /// Production walk entries use the same snapshot as enrollment and the
     /// once-per-walk resolved target. Arguments never resolve target again.
@@ -1166,7 +1166,7 @@ impl Selector {
     ) -> Result<Option<bool>, MatchRefusal> {
         if !self.ext { return Ok(Some(self.matches(nodes, handle))); }
         if !self.state_satisfied_by(snapshot) { return Ok(None); }
-        self.ext_match(nodes, handle, 0, fuel, position, target, true)
+        self.ext_match(nodes, handle, 0, fuel, position, target, true, false)
     }
     fn ext_match(
         &self,
@@ -1177,6 +1177,7 @@ impl Selector {
         position: Option<(u32, u32)>,
         target: Option<Option<Handle>>,
         state_enrolled: bool,
+        charged_argument: bool,
     ) -> Result<Option<bool>, MatchRefusal> {
         if *fuel == 0 {
             return Err(MatchRefusal::Fuel);
@@ -1240,7 +1241,10 @@ impl Selector {
                 }
             }
         }
-        if !simple.matches_inner(nodes, node, false) {
+        let matches = if charged_argument {
+            simple.matches_not_charged(nodes, node, fuel)?
+        } else { simple.matches_inner(nodes, node, false) };
+        if !matches {
             return Ok(Some(false));
         }
         for arg in &simple.not_args {
@@ -1250,9 +1254,8 @@ impl Selector {
             if !state_enrolled && arg.steps.iter().any(|(p, _)| p.state.is_some()) {
                 return Ok(None);
             }
-            charge_not_argument(nodes, node, &arg.steps[0].0, fuel)?;
             match arg.ext_match(nodes, node, 0, fuel,
-                position.filter(|_| index == 0), target, state_enrolled)? {
+                position.filter(|_| index == 0), target, state_enrolled, true)? {
                 Some(true) => return Ok(Some(false)),
                 Some(false) => {},
                 None => return Ok(None),
@@ -1263,18 +1266,21 @@ impl Selector {
         }
         match relation {
             Relation::Child => match nodes[node].parent {
-                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel, None, target, state_enrolled),
+                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel, None, target, state_enrolled, charged_argument),
                 None => Ok(Some(false)),
             },
             Relation::Descendant => {
                 let mut ancestor = nodes[node].parent;
+                let mut unknown = false;
                 while let Some(candidate) = ancestor {
-                    if self.ext_match(nodes, candidate, index + 1, fuel, None, target, state_enrolled)? == Some(true) {
-                        return Ok(Some(true));
+                    match self.ext_match(nodes, candidate, index + 1, fuel, None, target, state_enrolled, charged_argument)? {
+                        Some(true) => return Ok(Some(true)),
+                        None => unknown = true,
+                        Some(false) => {},
                     }
                     ancestor = nodes[candidate].parent;
                 }
-                Ok(Some(false))
+                Ok(if unknown { None } else { Some(false) })
             }
             Relation::NextSibling | Relation::LaterSibling => {
                 let Some(siblings) = element_siblings(nodes, node) else {
@@ -1303,6 +1309,7 @@ impl Selector {
                         found.ok_or(MatchRefusal::Fuel)?
                     }
                 };
+                let mut unknown = false;
                 for &earlier in siblings[..at].iter().rev() {
                     if *fuel == 0 {
                         return Err(MatchRefusal::Fuel);
@@ -1311,14 +1318,16 @@ impl Selector {
                     if !is_element(nodes, earlier) {
                         continue;
                     }
-                    if self.ext_match(nodes, earlier, index + 1, fuel, None, target, state_enrolled)? == Some(true) {
-                        return Ok(Some(true));
+                    match self.ext_match(nodes, earlier, index + 1, fuel, None, target, state_enrolled, charged_argument)? {
+                        Some(true) => return Ok(Some(true)),
+                        None => unknown = true,
+                        Some(false) => {},
                     }
                     if *relation == Relation::NextSibling {
                         break;
                     }
                 }
-                Ok(Some(false))
+                Ok(if unknown { None } else { Some(false) })
             }
         }
     }
@@ -1391,36 +1400,150 @@ pub(crate) fn has_autofocus(nodes: &[Node]) -> bool {
         _ => false,
     })
 }
-/// Pre-charge negation argument work not already charged by ext_match.
-/// All attribute-name/value bytes are charged conservatively for every
-/// potential id/class/attribute lookup before any comparison/allocation.
-/// Structural scans are charged before matches_inner traverses siblings.
-fn charge_not_argument(nodes: &[Node], node: Handle, arg: &Simple, fuel: &mut u32)
-    -> Result<(), MatchRefusal> {
-    fn charge(fuel: &mut u32, n: usize) -> Result<(), MatchRefusal> {
-        let Ok(n) = u32::try_from(n) else { *fuel = 0; return Err(MatchRefusal::Fuel); };
-        if *fuel < n { *fuel = 0; return Err(MatchRefusal::Fuel); }
-        *fuel -= n;
-        Ok(())
-    }
-    let Some(Node { data: Data::Element { name, attrs, .. }, .. }) = nodes.get(node)
-        else { return Ok(()); };
-    let lookups = 2 + arg.classes.len() + arg.attrs.len();
-    charge(fuel, name.local.len())?;
-    for (k, v) in attrs {
-        charge(fuel, 1)?; // iteration itself, before length inspection
-        charge(fuel, (k.len() + v.len()).saturating_mul(lookups).saturating_mul(8))?;
-    }
-    for attr in &arg.attrs {
-        charge(fuel, attr.name.len() + attr.value.len())?;
-    }
-    if arg.structural != 0 {
-        if let Some(siblings) = element_siblings(nodes, node) {
-            if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
-            charge(fuel, siblings.len().saturating_mul(2))?;
+/// Negation arguments deliberately charge actual byte/iteration work, unlike
+/// the legacy bounded compares in matches_inner. No blanket multipliers and
+/// no allocation: borrowed byte comparisons and token ranges only. Each
+/// loop charges BEFORE the operation; predicate failure short-circuits.
+fn not_charge(fuel: &mut u32) -> Result<(), MatchRefusal> {
+    if *fuel == 0 { return Err(MatchRefusal::Fuel); }
+    *fuel -= 1;
+    Ok(())
+}
+fn not_eq(a: &[u8], b: &[u8], fold: bool, fuel: &mut u32) -> Result<bool, MatchRefusal> {
+    // Length inspection is O(1); unequal lengths require no byte comparison.
+    if a.len() != b.len() { return Ok(false); }
+    for (&x, &y) in a.iter().zip(b) {
+        not_charge(fuel)?;
+        if if fold { !x.eq_ignore_ascii_case(&y) } else { x != y } {
+            return Ok(false);
         }
     }
-    Ok(())
+    Ok(true)
+}
+fn not_attr<'a>(attrs: &'a [(html5ever::LocalName, String)], name: &str,
+    fold: bool, fuel: &mut u32) -> Result<Option<&'a str>, MatchRefusal> {
+    for (key, value) in attrs {
+        not_charge(fuel)?; // actual lookup iteration
+        if not_eq(key.as_bytes(), name.as_bytes(), fold, fuel)? {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
+}
+fn not_words(actual: &[u8], want: &[u8], fold: bool, fuel: &mut u32)
+    -> Result<bool, MatchRefusal> {
+    let mut start = 0;
+    for at in 0..actual.len() {
+        not_charge(fuel)?; // byte inspected by ASCII-whitespace split
+        if matches!(actual[at], b' ' | b'\t' | b'\n' | b'\r' | 0x0c) {
+            if at > start && not_eq(&actual[start..at], want, fold, fuel)? { return Ok(true); }
+            start = at + 1;
+        }
+    }
+    Ok(start < actual.len() && not_eq(&actual[start..], want, fold, fuel)?)
+}
+impl AttrSel {
+    fn matches_not_charged(&self, nodes: &[Node], handle: Handle, fuel: &mut u32)
+        -> Result<bool, MatchRefusal> {
+        let Data::Element { name, attrs, .. } = &nodes[handle].data else { return Ok(false); };
+        let Some(actual) = not_attr(attrs, &self.name, true, fuel)? else { return Ok(false); };
+        if self.op == AttrOp::Exists { return Ok(true); }
+        // Existing attribute-value folding policy, without a lowercase copy.
+        let mut fold = false;
+        if name.ns == html5ever::ns!(html) {
+            for candidate in CI_VALUE_ATTRS {
+                not_charge(fuel)?;
+                if not_eq(self.name.as_bytes(), candidate.as_bytes(), true, fuel)? {
+                    fold = true; break;
+                }
+            }
+        }
+        let a = actual.as_bytes(); let b = self.value.as_bytes();
+        match self.op {
+            AttrOp::Exists => Ok(true),
+            AttrOp::Equals => not_eq(a,b,fold,fuel),
+            AttrOp::Word => {
+                if b.is_empty() { return Ok(false); }
+                for &byte in b {
+                    not_charge(fuel)?;
+                    if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0c) { return Ok(false); }
+                }
+                not_words(a,b,fold,fuel)
+            }
+            AttrOp::Dash => {
+                if not_eq(a,b,fold,fuel)? { return Ok(true); }
+                if a.len() <= b.len() { return Ok(false); }
+                if !not_eq(&a[..b.len()],b,fold,fuel)? { return Ok(false); }
+                not_charge(fuel)?;
+                Ok(a[b.len()] == b'-')
+            }
+            AttrOp::Prefix => Ok(!b.is_empty() && a.len() >= b.len()
+                && not_eq(&a[..b.len()],b,fold,fuel)?),
+            AttrOp::Suffix => Ok(!b.is_empty() && a.len() >= b.len()
+                && not_eq(&a[a.len()-b.len()..],b,fold,fuel)?),
+            AttrOp::Substring => {
+                if b.is_empty() || a.len() < b.len() { return Ok(false); }
+                for window in a.windows(b.len()) {
+                    not_charge(fuel)?; // candidate substring position
+                    if not_eq(window,b,fold,fuel)? { return Ok(true); }
+                }
+                Ok(false)
+            }
+        }
+    }
+}
+impl Simple {
+    fn matches_not_charged(&self, nodes: &[Node], handle: Handle, fuel: &mut u32)
+        -> Result<bool, MatchRefusal> {
+        let Data::Element { name, attrs, .. } = &nodes[handle].data else { return Ok(false); };
+        match self.state {
+            None => {},
+            Some(StatePseudo::Link) => {
+                if name.ns != html5ever::ns!(html)
+                    || !matches!(&*name.local, "a" | "area")
+                    || not_attr(attrs,"href",true,fuel)?.is_none() { return Ok(false); }
+            }
+            Some(_) => return Ok(false), // snapshot enrolled; quiescent/unfocused
+        }
+        if self.root && !nodes[handle].parent
+            .is_some_and(|p| matches!(nodes[p].data, Data::Document)) { return Ok(false); }
+        if let Some(tag) = &self.tag {
+            if !not_eq(name.local.as_bytes(),tag.as_bytes(),true,fuel)? { return Ok(false); }
+        }
+        if let Some(want) = &self.id {
+            let Some(actual) = not_attr(attrs,"id",false,fuel)? else { return Ok(false); };
+            if !not_eq(actual.as_bytes(),want.as_bytes(),false,fuel)? { return Ok(false); }
+        }
+        for class in &self.classes {
+            let Some(actual) = not_attr(attrs,"class",false,fuel)? else { return Ok(false); };
+            if !not_words(actual.as_bytes(),class.as_bytes(),false,fuel)? { return Ok(false); }
+        }
+        for attr in &self.attrs {
+            if !attr.matches_not_charged(nodes,handle,fuel)? { return Ok(false); }
+        }
+        if self.structural != 0 {
+            if let Some(siblings) = element_siblings(nodes,handle) {
+                if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+                // Same two directional scans as structural_ok, charged per
+                // visited sibling, stopping at the first element each way.
+                let mut first = None; let mut last = None;
+                for &h in siblings {
+                    not_charge(fuel)?;
+                    if is_element(nodes,h) { first=Some(h);break; }
+                }
+                for &h in siblings.iter().rev() {
+                    not_charge(fuel)?;
+                    if is_element(nodes,h) { last=Some(h);break; }
+                }
+                if (self.structural & 1 != 0 && first != Some(handle))
+                    || (self.structural & 2 != 0 && last != Some(handle))
+                    || (self.structural & 4 != 0 && (first != Some(handle) || last != Some(handle))) {
+                        return Ok(false);
+                    }
+            }
+        }
+        Ok(true)
+    }
 }
 impl Simple {
     fn ext_specificity(&self) -> (u16, u16, u16) {
@@ -3484,14 +3607,14 @@ mod not_bounded_tests {
     fn not_submatch_fuel_attr_and_structural_exhaustion_never_inverted() {
         let ns=nodes(&format!("<!doctype html><div><p id=x data-x='{}'></p><p></p></div>","a".repeat(1000)));
         let h=id(&ns,"x");
-        let attr=selector_ext(":not([data-x=z])").unwrap();
+        let attr=selector_ext(":not([data-x*=aaaaab])").unwrap();
         let mut fuel=EXT_FUEL;
         assert_eq!(attr.matches_checked_scoped_budget(&ns,h,&mut fuel,None,None),Err(MatchRefusal::Fuel));
         assert_eq!(fuel,0);
         let ns=nodes("<!doctype html><div><p></p><p></p><p></p></div>");
         let h=ns.iter().position(|n|matches!(&n.data,Data::Element {name,..} if &*name.local=="p")).unwrap();
         let structural=selector_ext(":not(:last-child)").unwrap();
-        let mut fuel=4; // enough for outer step/tag; not the sibling precharge
+        let mut fuel=3; // outer+inner steps and first sibling; reverse scan exhausts
         assert_eq!(structural.matches_checked_scoped_budget(&ns,h,&mut fuel,None,None),Err(MatchRefusal::Fuel));
         assert_eq!(structural.matches_checked(&ns,h),Some(true));
     }
@@ -3520,6 +3643,75 @@ mod not_bounded_tests {
         let snap=SnapshotState {history:Some(HistoryState::FreshNoHistory),input:None,focus:None,target:None};
         let mut fuel=EXT_FUEL;
         assert_eq!(link.matches_checked_scoped_budget_with_snapshot(&ns,x,&mut fuel,None,None,Some(&snap)),Ok(Some(false)));
+    }
+    #[test]
+    fn not_charging_exact_work_short_circuits_and_ignores_unread_values() {
+        let ns=nodes("<!doctype html><p id=x class='aa bb'></p>");let h=id(&ns,"x");
+        // Lookup: id iteration1 (length mismatch); class iteration1 +5 bytes.
+        // Split scans aa +space (3), first token comparison (2). Total12.
+        let arg=selector_ext(":not(.aa)").unwrap();
+        let mut fuel=100;
+        assert!(arg.steps[0].0.not_args[0].steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
+        assert_eq!(100-fuel,12);
+        let huge="z".repeat(2000);
+        let ns=nodes(&format!("<!doctype html><p id=x title='{huge}' class=aa></p>"));let h=id(&ns,"x");
+        let mut fuel=100;
+        assert!(arg.steps[0].0.not_args[0].steps[0].0.matches_not_charged(&ns,h,&mut fuel).unwrap());
+        // title's VALUE was never inspected; its lookup iteration and first
+        // mismatching name byte are charged (same name length as class).
+        assert_eq!(100-fuel,13);
+        // First false conjunct stops: the later expensive substring does not run.
+        let ns=nodes(&format!("<!doctype html><p id=x title='{huge}'></p>"));let h=id(&ns,"x");
+        let sel=selector_ext(":not(.absent[title*=zzzzzy])").unwrap();
+        let mut fuel=40;
+        assert_eq!(sel.matches_checked_scoped_budget(&ns,h,&mut fuel,None,None),Ok(Some(true)));
+        assert!(fuel>0);
+    }
+    #[test]
+    fn not_charged_attribute_predicates_match_legacy_truth_without_allocations() {
+        let ns=nodes("<!doctype html><p id=x data-x='one two-en' type='TeXT' class='aa&#11;bb'></p>");
+        let h=id(&ns,"x");
+        for text in ["[data-x]","[missing]","[data-x='one two-en']","[data-x=z]",
+            "[data-x~=one]","[data-x~=two-en]","[data-x|=one]","[data-x^=one]",
+            "[data-x$=en]","[data-x*=two]","[data-x*='']","[type=text]",
+            "[type^=TE]","[type$=XT]","[type*=EX]","[data-x~=aa]", "[DATA-X]"] {
+            let sel=selector_ext(text).unwrap();let attr=&sel.steps[0].0.attrs[0];
+            let mut fuel=EXT_FUEL;
+            assert_eq!(attr.matches_not_charged(&ns,h,&mut fuel),Ok(attr.matches(&ns,h)),"{text}");
+        }
+        // CSS ASCII whitespace excludes vertical tab. No widening to Rust's
+        // is_ascii_whitespace set in the new byte-split implementation.
+        assert_eq!(selector_ext(":not(.aa)").unwrap().matches_checked(&ns,h),Some(true));
+    }
+    #[test]
+    fn not_unknown_left_search_steps_propagate_and_resolved_matches_succeed() {
+        let ns=nodes("<!doctype html><div><p id=x></p></div><div></div><p id=y></p>");
+        for (text,want_id) in [("div:not(:hover) p","x"),("div:not(:hover) ~ p","y"),
+            ("div:not(:hover) + p","y"),("div:not(:hover) > p","x")] {
+            assert_eq!(selector_ext(text).unwrap().matches_checked(&ns,id(&ns,want_id)),None,"{text}");
+        }
+        // Explicit target context yields proven true candidates.
+        let ns=nodes("<!doctype html><div><a href=x><p id=x></p></a></div><div></div><a href=x></a><p id=y></p>");
+        // Ordinary false candidate path remains a proven false.
+        assert_eq!(selector_ext("aside:not(:hover) p").unwrap().matches_checked(&ns,id(&ns,"x")),Some(false));
+        // Explicit resolved target shared by every scanned candidate.
+        let sel=selector_ext(":not(:target) p").unwrap();
+        let mut fuel=EXT_FUEL;
+        assert_eq!(sel.matches_checked_scoped_budget(&ns,id(&ns,"x"),&mut fuel,None,Some(None)),Ok(Some(true)));
+        let mut fuel=1;
+        assert_eq!(sel.matches_checked_scoped_budget(&ns,id(&ns,"x"),&mut fuel,None,Some(None)),Err(MatchRefusal::Fuel));
+        assert_eq!(selector_ext("aside:not(:hover) ~ p").unwrap().matches_checked(&ns,id(&ns,"y")),Some(false));
+        // Unknown paths still share one finite fuel counter across candidates.
+        let sel=selector_ext("div:not(:hover) ~ p").unwrap();
+        let mut fuel=2;
+        assert_eq!(sel.matches_checked_scoped_budget(&ns,id(&ns,"y"),&mut fuel,None,None),Err(MatchRefusal::Fuel));
+        assert_eq!(fuel,0);
+        // An earlier-unknown/later-true fixture is not representable by the
+        // admitted state model: missing assertions are uniform per selector,
+        // and every successful path would have to evaluate the same unknown
+        // predicate. The any-true priority is source-verified, not exercised
+        // by the separate resolved-target fixture above.
+
     }
     #[test]
     #[ignore = "measurement: NOT_LINES path supplies original 542-line inventory"]

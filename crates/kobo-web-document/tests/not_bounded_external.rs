@@ -53,11 +53,11 @@ fn separate_inner_focus_bound_and_autofocus_guard() {
     assert!(t.unsupported,"existing autofocus guard covers inner focus");
 }
 #[test]
-fn negated_attribute_exhaustion_truncates_and_base_refuses() {
+fn negated_substring_real_work_exhaustion_truncates_and_base_refuses() {
     let body=format!("<p data-x='{}'>x</p>","a".repeat(1000));
-    let css="p:not([data-x=z]){background-color:red}";
+    let css="p:not([data-x*=aaaaab]){background-color:red}";
     let t=run(css,&body,&snapshot());
-    assert!(t.truncated,"submatch precharge exhaustion propagates to tree gate");
+    assert!(t.truncated,"submatch actual repeated-compare exhaustion propagates to tree gate");
     assert!(t.diagnostics.count(RefusalReason::MatchWork)>0);
     let html=format!("<!doctype html><style>{css}</style><p>x</p>");
     let t=kobo_web_document::parse_style_tree(html.as_bytes(),&[],&Limits::DEFAULT);
