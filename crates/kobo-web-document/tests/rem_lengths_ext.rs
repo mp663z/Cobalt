@@ -226,6 +226,7 @@ fn state_entry_admits_rem_minmax_like_ext() {
         history: Some(HistoryState::FreshNoHistory),
         input: Some(InputState::QuiescentCapture),
         focus: None,
+        target: None,
     };
     let t = parse_style_tree_with_state(
         html.as_bytes(),

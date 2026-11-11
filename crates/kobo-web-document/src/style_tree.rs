@@ -286,6 +286,32 @@ impl StyleTree {
             Rc::new(Map::new()),
         )];
         let mut match_work = 0_usize;
+        // `:target` resolution: exactly once per tree, ONLY under a caller-
+        // asserted TargetState (enrollment already refused `:target` rules
+        // otherwise). Charged to the global match-work budget (one unit per
+        // visited element per scan). Resolution failure flags the page
+        // truncated BEFORE the walk: an unresolved target can never yield an
+        // admitted paint, and no :target step is ever guessed.
+        let resolved_target: Option<Option<crate::dom::Handle>> = match snapshot
+            .and_then(|state| state.target.as_ref())
+        {
+            None => None,
+            Some(target_state) => {
+                let mut fuel = crate::css::EXT_FUEL;
+                let resolved = crate::css::resolve_target_element(nodes, target_state, &mut fuel);
+                match_work = match_work.saturating_add(crate::css::EXT_FUEL as usize - fuel as usize);
+                match resolved {
+                    Ok(handle) if match_work <= MAX_MATCH_WORK => Some(handle),
+                    _ => {
+                        tree.diagnostics.record(RefusalReason::MatchWork);
+                        tree.truncated = true;
+                        // Unresolved: every `:target` step answers UNRESOLVED,
+                        // and the truncation above already refuses the page.
+                        None
+                    }
+                }
+            }
+        };
         // Ext entry only: rightmost-key prefilter over the active rule list
         // (conditions already resolved at collection). One bucket per rule,
         // values in ascending collection order. The default entry never builds
@@ -462,7 +488,7 @@ impl StyleTree {
                 let mut fuel = css::EXT_FUEL;
                 let outcome =
                     rule.selector
-                        .matches_checked_scoped_budget(nodes, handle, &mut fuel, position);
+                        .matches_checked_scoped_budget(nodes, handle, &mut fuel, position, resolved_target);
                 // Charge what the match actually consumed (selector steps and
                 // every visited sibling in a scan) to the global work budget;
                 // one unit was already charged for the test itself.
@@ -545,7 +571,7 @@ impl StyleTree {
                 }
                 let mut fuel = css::EXT_FUEL;
                 let outcome = rule.selector.matches_originating_checked_scoped_budget(
-                    nodes, handle, &mut fuel, position,
+                    nodes, handle, &mut fuel, position, resolved_target,
                 );
                 match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
                 if match_work > MAX_MATCH_WORK {
@@ -1436,7 +1462,7 @@ fn matched_rules(
         Some(state) if state.focus.is_some() && crate::css::has_autofocus(nodes) => {
             gated_snapshot = crate::css::SnapshotState {
                 focus: None,
-                ..*state
+                ..state.clone()
             };
             Some(&gated_snapshot)
         }
@@ -5255,26 +5281,31 @@ mod link_state_tests {
         history: Some(HistoryState::FreshNoHistory),
         input: None,
         focus: None,
+        target: None,
     };
     const QUIESCENT: SnapshotState = SnapshotState {
         history: None,
         input: Some(crate::InputState::QuiescentCapture),
         focus: None,
+        target: None,
     };
     const BOTH: SnapshotState = SnapshotState {
         history: Some(HistoryState::FreshNoHistory),
         input: Some(crate::InputState::QuiescentCapture),
         focus: None,
+        target: None,
     };
     const UNFOCUSED: SnapshotState = SnapshotState {
         history: None,
         input: None,
         focus: Some(crate::FocusState::UnfocusedInitial),
+        target: None,
     };
     const ALL: SnapshotState = SnapshotState {
         history: Some(HistoryState::FreshNoHistory),
         input: Some(crate::InputState::QuiescentCapture),
         focus: Some(crate::FocusState::UnfocusedInitial),
+        target: None,
     };
 
     fn state(html: &str) -> StyleTree {

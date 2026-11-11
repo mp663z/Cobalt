@@ -16,13 +16,39 @@ const EXT_MAX_SIBLINGS: usize = 4096;
 /// History and input guarantees are INDEPENDENTLY scoped: a link-only
 /// guarantee never enrolls `:hover`/`:active`, and an input-only guarantee
 /// never enrolls `:link`.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SnapshotState {
     pub history: Option<HistoryState>,
     pub input: Option<InputState>,
     /// Focus guarantee, scoped independently of history and input: a
     /// link-only or quiescent-only guarantee never enrolls the focus family.
     pub focus: Option<FocusState>,
+    /// Target guarantee, scoped independently of history, input and focus:
+    /// no other guarantee enrolls `:target`, and `:target` never enrolls or
+    /// implies any of them.
+    pub target: Option<TargetState>,
+}
+/// Target guarantees a caller can explicitly assert (HTML 7.4.6.4 state
+/// contract). Without an explicit guarantee `:target` fails closed at rule
+/// enrollment exactly like an unparseable selector. `:target` never writes
+/// or infers focus state, and focus state never writes or infers the target
+/// element; the focus/autofocus guards are exactly unchanged by this lane.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TargetState {
+    /// The caller guarantees, as a written contract: the final capture URL
+    /// has NO fragment identifier; the DOM is the fresh static capture loaded
+    /// under static conditions (no arbitrary URL, mid-parse, JS-modified or
+    /// history-restored capture can assert this). CSS: "If the document's URL
+    /// has no fragment identifier, then the document has no target elements."
+    FragmentFreeCapture,
+    /// The caller guarantees, as a written contract: the String is the FINAL
+    /// post-navigation URL fragment identifier (raw, NOT percent-decoded);
+    /// fragment selection per HTML 7.4.6.4 COMPLETED against THIS exact
+    /// fully-parsed static DOM; and no subsequent DOM/history/fragment
+    /// changes occurred. The engine resolves the target element once on this
+    /// engine-parsed DOM per the verbatim algorithm; it does NOT implement
+    /// scroll/focus side effects.
+    Fragment(String),
 }
 /// History guarantees a caller can explicitly assert. v1: only a fresh profile
 /// with no prior navigation. Without an explicit guarantee, `:link` fails
@@ -112,6 +138,7 @@ struct Simple {
     /// Extended grammar only: at most one enablement pseudo-class
     /// (`:enabled` / `:disabled`); matching is charged and fail-closed.
     enablement: Option<Enablement>,
+    target: bool,
     /// Extended grammar only: type selectors compare ASCII case-insensitively
     /// (Chrome matches `linearGradient` and `lineargradient` on SVG elements) and
     /// class tokens split on ASCII whitespace only.
@@ -425,6 +452,7 @@ fn simple(part: &str) -> Option<Simple> {
         root,
         state: None,
         enablement: None,
+            target: false,
         ext: false,
         attrs: Vec::new(),
         structural: 0,
@@ -619,6 +647,7 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
         root: false,
         state: None,
         enablement: None,
+            target: false,
         ext: true,
         attrs: Vec::new(),
         structural: 0,
@@ -709,6 +738,12 @@ fn compound_ext(s: &str, mut at: usize) -> Option<(Simple, usize)> {
                     }
                     "disabled" if simple.enablement.is_none() => {
                         simple.enablement = Some(Enablement::Disabled);
+                    }
+                    // `:target`: bare form only, at most one per compound
+                    // (repetition falls to `_` and refuses). Caller-state
+                    // dependent: resolved under TargetState at match time.
+                    "target" if !simple.target => {
+                        simple.target = true;
                     }
                     "first-child" => simple.structural |= 1,
                     "last-child" => simple.structural |= 2,
@@ -963,7 +998,7 @@ impl Selector {
         handle: Handle,
     ) -> Result<Option<bool>, MatchRefusal> {
         let mut fuel = EXT_FUEL;
-        self.matches_checked_scoped_budget(nodes, handle, &mut fuel, None)
+        self.matches_checked_scoped_budget(nodes, handle, &mut fuel, None, None)
     }
     /// Budgeted form: the caller supplies the per-match fuel (EXT_FUEL) and
     /// reads back what the match actually consumed (steps + every visited
@@ -978,22 +1013,54 @@ impl Selector {
         handle: Handle,
         fuel: &mut u32,
         position: Option<(u32, u32)>,
+        target: Option<Option<Handle>>,
     ) -> Result<Option<bool>, MatchRefusal> {
         if self.pseudo != Pseudo::None {
             return Ok(Some(false));
         }
-        self.matches_originating_checked_scoped_budget(nodes, handle, fuel, position)
+        self.matches_originating_checked_scoped_budget(nodes, handle, fuel, position, target)
+    }
+    /// `:target`-aware checked match: resolves the target element under the
+    /// caller-asserted TargetState (charged, verbatim 7.4.6.4 algorithm) and
+    /// matches with it. No assertion is represented by NOT calling this: the
+    /// plain checked entries carry no resolution and `:target` answers
+    /// UNRESOLVED (None), never a guess.
+    pub(crate) fn matches_checked_target(
+        &self,
+        nodes: &[Node],
+        handle: Handle,
+        target_state: &TargetState,
+    ) -> Option<bool> {
+        let mut fuel = EXT_FUEL;
+        let resolved = resolve_target_element(nodes, target_state, &mut fuel).ok()?;
+        let mut fuel = EXT_FUEL;
+        self.matches_checked_scoped_budget(nodes, handle, &mut fuel, None, Some(resolved))
+            .unwrap_or(None)
     }
     /// Any state pseudo-class anywhere in the selector (ext grammar only).
     pub(crate) fn has_state(&self) -> bool {
-        self.steps.iter().any(|(simple, _)| simple.state.is_some())
+        self.steps
+            .iter()
+            .any(|(simple, _)| simple.state.is_some() || simple.target)
     }
     /// Every state pseudo-class in the selector is covered by the caller's
     /// explicit guarantee. History and input are scoped independently: a
     /// link-only guarantee does not enroll `:hover`/`:active`, and an
     /// input-only guarantee does not enroll `:link`.
     pub(crate) fn state_satisfied_by(&self, snapshot: Option<&SnapshotState>) -> bool {
-        self.steps.iter().all(|(simple, _)| match simple.state {
+        self.steps.iter().all(|(simple, _)| {
+            if simple.target
+                && !matches!(
+                    snapshot,
+                    Some(SnapshotState {
+                        target: Some(_),
+                        ..
+                    })
+                )
+            {
+                return false;
+            }
+            match simple.state {
             None => true,
             Some(StatePseudo::Link) => matches!(
                 snapshot,
@@ -1018,6 +1085,7 @@ impl Selector {
                     })
                 )
             }
+            }
         })
     }
     /// For a `::after` selector: does the ORIGINATING element match the steps?
@@ -1035,7 +1103,7 @@ impl Selector {
         handle: Handle,
     ) -> Result<Option<bool>, MatchRefusal> {
         let mut fuel = EXT_FUEL;
-        self.matches_originating_checked_scoped_budget(nodes, handle, &mut fuel, None)
+        self.matches_originating_checked_scoped_budget(nodes, handle, &mut fuel, None, None)
     }
     pub(crate) fn matches_originating_checked_scoped_budget(
         &self,
@@ -1043,11 +1111,12 @@ impl Selector {
         handle: Handle,
         fuel: &mut u32,
         position: Option<(u32, u32)>,
+        target: Option<Option<Handle>>,
     ) -> Result<Option<bool>, MatchRefusal> {
         if !self.ext {
             return Ok(Some(self.matches(nodes, handle)));
         }
-        self.ext_match(nodes, handle, 0, fuel, position)
+        self.ext_match(nodes, handle, 0, fuel, position, target)
     }
     fn ext_match(
         &self,
@@ -1056,6 +1125,7 @@ impl Selector {
         index: usize,
         fuel: &mut u32,
         position: Option<(u32, u32)>,
+        target: Option<Option<Handle>>,
     ) -> Result<Option<bool>, MatchRefusal> {
         if *fuel == 0 {
             return Err(MatchRefusal::Fuel);
@@ -1106,6 +1176,19 @@ impl Selector {
                 }
             }
         }
+        // `:target` on this step: resolved caller-asserted target element.
+        // None = no TargetState assertion: refuse to answer (UNRESOLVED),
+        // never guessed. Some(resolved): exact element identity, O(1).
+        if simple.target {
+            match target {
+                None => return Ok(None),
+                Some(resolved) => {
+                    if resolved != Some(node) {
+                        return Ok(Some(false));
+                    }
+                }
+            }
+        }
         if !simple.matches_inner(nodes, node, false) {
             return Ok(Some(false));
         }
@@ -1114,13 +1197,13 @@ impl Selector {
         }
         match relation {
             Relation::Child => match nodes[node].parent {
-                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel, None),
+                Some(parent) => self.ext_match(nodes, parent, index + 1, fuel, None, target),
                 None => Ok(Some(false)),
             },
             Relation::Descendant => {
                 let mut ancestor = nodes[node].parent;
                 while let Some(candidate) = ancestor {
-                    if self.ext_match(nodes, candidate, index + 1, fuel, None)? == Some(true) {
+                    if self.ext_match(nodes, candidate, index + 1, fuel, None, target)? == Some(true) {
                         return Ok(Some(true));
                     }
                     ancestor = nodes[candidate].parent;
@@ -1162,7 +1245,7 @@ impl Selector {
                     if !is_element(nodes, earlier) {
                         continue;
                     }
-                    if self.ext_match(nodes, earlier, index + 1, fuel, None)? == Some(true) {
+                    if self.ext_match(nodes, earlier, index + 1, fuel, None, target)? == Some(true) {
                         return Ok(Some(true));
                     }
                     if *relation == Relation::NextSibling {
@@ -1299,9 +1382,10 @@ impl Simple {
 impl Simple {
     fn matches(&self, nodes: &[Node], handle: Handle) -> bool {
         // The pure path never answers enablement (it needs charged ancestor
-        // walks; ext_match owns it): refuse to guess rather than infer from
+        // walks; ext_match owns it) or `:target` (it needs the caller-asserted
+        // TargetState resolution): refuse to guess rather than infer from
         // attribute absence.
-        if self.enablement.is_some() {
+        if self.enablement.is_some() || self.target {
             return false;
         }
         self.matches_inner(nodes, handle, true)
@@ -1422,6 +1506,106 @@ fn disabled_by_ancestor_fieldset(
         at = ancestor;
     }
     Ok(false)
+}
+/// URL percent-decoding for a fragment string: each `%XX` (two hex digits)
+/// becomes that byte; a `%` not followed by two hex digits passes through
+/// literally (URL Standard percent-decode).
+fn percent_decode(input: &str) -> Vec<u8> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    let hex = |b: u8| -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    };
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push(hi * 16 + lo);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+/// HTML 7.4.6.4 "find a potential indicated element": the first element in
+/// tree order whose ID equals `fragment`; failing that, the first `a`
+/// element in tree order whose `name` attribute equals it. Every visited
+/// element charges one fuel; exhaustion refuses (never a partial answer).
+fn find_potential_indicated(
+    nodes: &[Node],
+    fragment: &str,
+    fuel: &mut u32,
+) -> Result<Option<Handle>, MatchRefusal> {
+    let mut stack = vec![crate::dom::DOCUMENT];
+    let mut order = Vec::new();
+    while let Some(h) = stack.pop() {
+        stack.extend(nodes[h].children.iter().rev());
+        if is_element(nodes, h) {
+            order.push(h);
+        }
+    }
+    for &h in &order {
+        if *fuel == 0 {
+            return Err(MatchRefusal::Fuel);
+        }
+        *fuel -= 1;
+        if attribute(nodes, h, "id") == Some(fragment) {
+            return Ok(Some(h));
+        }
+    }
+    for &h in &order {
+        if *fuel == 0 {
+            return Err(MatchRefusal::Fuel);
+        }
+        *fuel -= 1;
+        if tag_is(nodes, h, &["a"]) && attribute(nodes, h, "name") == Some(fragment) {
+            return Ok(Some(h));
+        }
+    }
+    Ok(None)
+}
+/// Resolve the Document's target element under a caller-asserted TargetState
+/// per the VERBATIM HTML 7.4.6.4 algorithm on THIS engine-parsed DOM
+/// (select the indicated part + find a potential indicated element):
+/// raw-string ID lookup first (literal `%74op` / `top` IDs WIN), then
+/// percent-decode + UTF-8-without-BOM retry, then the ASCII-case-insensitive
+/// "top" fallback; empty fragment and "top" resolve to top-of-document,
+/// whose target element is NULL. Matcher use only: no scroll/focus effects.
+pub(crate) fn resolve_target_element(
+    nodes: &[Node],
+    state: &TargetState,
+    fuel: &mut u32,
+) -> Result<Option<Handle>, MatchRefusal> {
+    let TargetState::Fragment(fragment) = state else {
+        // FragmentFreeCapture: "If the document's URL has no fragment
+        // identifier, then the document has no target elements." (Selectors 4)
+        return Ok(None);
+    };
+    if fragment.is_empty() {
+        // Empty fragment => top of the document => target element null.
+        return Ok(None);
+    }
+    if let Some(hit) = find_potential_indicated(nodes, fragment, fuel)? {
+        return Ok(Some(hit));
+    }
+    let decoded = String::from_utf8_lossy(&percent_decode(fragment)).into_owned();
+    if decoded != *fragment {
+        if let Some(hit) = find_potential_indicated(nodes, &decoded, fuel)? {
+            return Ok(Some(hit));
+        }
+    }
+    if decoded.eq_ignore_ascii_case("top") {
+        return Ok(None);
+    }
+    Ok(None)
 }
 /// concept-fe-disabled for button/input/select/textarea.
 fn control_disabled(
@@ -2652,4 +2836,221 @@ mod enablement_oracle_replay_tests {
 
 <div><fieldset disabled><optgroup id=r10><option id=r11>o</option></optgroup></fieldset><fieldset disabled><div><optgroup id=r12><option id=r13>o</option></optgroup></div></fieldset></div>
 </body>"#;
+}
+
+#[cfg(test)]
+mod target_tests {
+    //! `:target` bounded opt-in: grammar pins, charged-resolution pins and the
+    //! verbatim 7.4.6.4 truth table on the ENGINE-PARSED DOM. Matcher truth
+    //! only - no paint/readiness/scroll/focus claim.
+    use super::*;
+    fn engine_nodes(html: &str) -> Vec<Node> {
+        use html5ever::tendril::TendrilSink;
+        let sink = crate::dom::Sink::new(64 * 1024 * 1024);
+        let mut parser = html5ever::parse_document(
+            sink,
+            html5ever::ParseOpts {
+                tree_builder: html5ever::tree_builder::TreeBuilderOpts {
+                    scripting_enabled: false,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        parser.process(html.to_string().into());
+        parser.finish().into_nodes()
+    }
+    fn find_by_id(nodes: &[Node], id: &str) -> Vec<Handle> {
+        let mut out = Vec::new();
+        for (h, n) in nodes.iter().enumerate() {
+            if let Data::Element { attrs, .. } = &n.data {
+                if attrs.iter().any(|(k, v)| &**k == "id" && v == id) {
+                    out.push(h);
+                }
+            }
+        }
+        out
+    }
+    fn find_a_name(nodes: &[Node], name: &str) -> Vec<Handle> {
+        let mut out = Vec::new();
+        for (h, n) in nodes.iter().enumerate() {
+            if let Data::Element { name: tag, attrs, .. } = &n.data {
+                if &*tag.local == "a" && attrs.iter().any(|(k, v)| &**k == "name" && v == name) {
+                    out.push(h);
+                }
+            }
+        }
+        out
+    }
+    const FIXTURE: &str = r#"<!doctype html><body>
+<div id=a></div><p id=b></p>
+<span id=dup>first</span><span id=dup>second</span>
+<div id="café"></div><div id="sec%20x"></div><div id="%74op"></div><div id=top></div>
+<a name=legacy></a><a name=dupname>first</a><a name=dupname>second</a>
+</body>"#;
+    #[test]
+    fn target_resolution_truth_table_engine_parsed_dom() {
+        let nodes = engine_nodes(FIXTURE);
+        let cases: &[(&str, Option<Handle>)] = &[
+            ("a", Some(find_by_id(&nodes, "a")[0])),
+            ("missing", None),
+            ("dup", Some(find_by_id(&nodes, "dup")[0])), // duplicate IDs: FIRST in tree order
+            ("legacy", Some(find_a_name(&nodes, "legacy")[0])),
+            ("caf\u{e9}", Some(find_by_id(&nodes, "caf\u{e9}")[0])),
+            ("caf%C3%A9", Some(find_by_id(&nodes, "caf\u{e9}")[0])), // decode retry
+            ("sec%2520x", Some(find_by_id(&nodes, "sec%20x")[0])), // decode once -> literal % id
+            ("sec%20x", Some(find_by_id(&nodes, "sec%20x")[0])), // raw literal-% id wins
+            ("sec%20y", None),                        // decodes to "sec y": no such id
+            ("", None),                               // empty fragment => top => NULL
+            ("top", Some(find_by_id(&nodes, "top")[0])), // raw ID wins BEFORE top fallback
+            ("TOP", None),                            // no id TOP; decoded TOP ~ top => NULL
+            ("%74op", Some(find_by_id(&nodes, "%74op")[0])), // literal %74op ID wins raw
+            ("dupname", Some(find_a_name(&nodes, "dupname")[0])), // first a[name]
+        ];
+        for &(fragment, expected) in cases {
+            let mut fuel = EXT_FUEL;
+            let got = resolve_target_element(&nodes, &TargetState::Fragment(fragment.to_string()), &mut fuel)
+                .unwrap_or_else(|e| panic!("resolution refused on {fragment:?}: {e:?}"));
+            assert_eq!(got, expected, "fragment {fragment:?}");
+        }
+        // FragmentFreeCapture: never a target.
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            resolve_target_element(&nodes, &TargetState::FragmentFreeCapture, &mut fuel),
+            Ok(None)
+        );
+    }
+    #[test]
+    fn target_resolution_is_charged_and_refuses_on_exhaustion() {
+        // NEGATIVE CONTROL: resolution scans charge one fuel per visited
+        // element per scan; a starved budget refuses (never a partial scan).
+        let nodes = engine_nodes(FIXTURE);
+        let mut fuel = 1;
+        assert_eq!(
+            resolve_target_element(&nodes, &TargetState::Fragment("zz-absent".into()), &mut fuel),
+            Err(MatchRefusal::Fuel)
+        );
+        // Full scans with enough fuel answer and REPORT their consumption.
+        let mut fuel = EXT_FUEL;
+        let _ = resolve_target_element(&nodes, &TargetState::Fragment("zz-absent".into()), &mut fuel);
+        assert!(EXT_FUEL - fuel >= 2 * 12, "two full scans charged");
+    }
+    #[test]
+    fn target_selector_match_and_no_assertion_unresolved() {
+        let nodes = engine_nodes(FIXTURE);
+        let a = find_by_id(&nodes, "a")[0];
+        let b = find_by_id(&nodes, "b")[0];
+        let sel = selector_ext("#a:target").unwrap();
+        assert_eq!(
+            sel.matches_checked_target(&nodes, a, &TargetState::Fragment("a".into())),
+            Some(true)
+        );
+        assert_eq!(
+            sel.matches_checked_target(&nodes, a, &TargetState::Fragment("b".into())),
+            Some(false)
+        );
+        assert_eq!(
+            sel.matches_checked_target(&nodes, a, &TargetState::FragmentFreeCapture),
+            Some(false)
+        );
+        // No assertion at all: UNRESOLVED, never a guess.
+        let mut fuel = EXT_FUEL;
+        assert_eq!(
+            sel.matches_checked_scoped_budget(&nodes, a, &mut fuel, None, None),
+            Ok(None)
+        );
+        assert_eq!(
+            sel.matches_checked_target(&nodes, b, &TargetState::Fragment("a".into())),
+            Some(false)
+        );
+    }
+    #[test]
+    fn target_grammar_pins() {
+        assert!(selector_ext("p:target").is_some());
+        assert!(selector_ext(":target").is_some());
+        assert!(selector_ext(".citation:target").is_some());
+        assert!(selector_ext(":target .mw-cite-up-arrow").is_some());
+        assert!(selector_ext("p:target:target").is_none()); // repetition refuses
+        assert!(selector_ext("p:target(1)").is_none()); // functional form refuses
+        assert!(selector_ext("p:target:enabled").is_some()); // combines with enablement
+    }
+    #[test]
+    fn base_entry_still_refuses_target() {
+        assert!(super::selector("p:target").is_none());
+        assert!(super::selector(":target").is_none());
+    }
+}
+
+#[cfg(test)]
+mod target_walk_tests {
+    //! Sheet-level enrollment + walk pins through the real state entry.
+    use super::*;
+    const RED: Option<u32> = Some(0xff_00_00);
+    fn tree_with(html: &str, snap: &crate::SnapshotState) -> crate::style_tree::StyleTree {
+        crate::parse_style_tree_with_state(
+            html.as_bytes(),
+            &[],
+            &crate::Limits::DEFAULT,
+            None,
+            crate::SupplyBudget::CANONICAL,
+            snap,
+        )
+    }
+    fn reds(tree: &crate::style_tree::StyleTree, tag: &str) -> Vec<bool> {
+        tree.nodes
+            .iter()
+            .filter(|n| n.tag == tag)
+            .map(|n| n.style.background_color == RED)
+            .collect()
+    }
+    const PAGE: &str = "<style>#a:target{background-color:#ff0000}#b:target{background-color:#ff0000}</style><div id=a></div><div id=b></div>";
+    #[test]
+    fn fragment_assertion_enrolls_and_matches_resolved_target_only() {
+        let snap = crate::SnapshotState {
+            target: Some(TargetState::Fragment("a".into())),
+            ..Default::default()
+        };
+        let tree = tree_with(PAGE, &snap);
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(reds(&tree, "div"), vec![true, false]);
+    }
+    #[test]
+    fn fragment_free_assertion_enrolls_and_matches_nothing() {
+        let snap = crate::SnapshotState {
+            target: Some(TargetState::FragmentFreeCapture),
+            ..Default::default()
+        };
+        let tree = tree_with(PAGE, &snap);
+        assert!(!tree.unsupported && !tree.truncated);
+        assert_eq!(reds(&tree, "div"), vec![false, false]);
+    }
+    #[test]
+    fn no_assertion_fails_closed_at_enrollment() {
+        // Snapshot present but NO target guarantee: :target refuses exactly
+        // like an unparseable selector (page incomplete).
+        let tree = tree_with(PAGE, &crate::SnapshotState::default());
+        assert!(tree.unsupported);
+        // No snapshot entry at all also refuses.
+        let plain = crate::parse_style_tree_with_inline_sheets_and_selectors(
+            PAGE.as_bytes(),
+            &[],
+            &crate::Limits::DEFAULT,
+            None,
+            crate::SupplyBudget::CANONICAL,
+        );
+        assert!(plain.unsupported);
+    }
+    #[test]
+    fn focus_guards_unchanged_by_target_assertion() {
+        // :focus stays fail-closed under a target-only assertion (no cross
+        // inference): a page with BOTH rules is incomplete because the focus
+        // rule refuses, while the :target rule alone would have enrolled.
+        let html = "<style>#a:target{background-color:#ff0000}#a:focus{border-color:#ff0000}</style><div id=a></div>";
+        let snap = crate::SnapshotState {
+            target: Some(TargetState::Fragment("a".into())),
+            ..Default::default()
+        };
+        let tree = tree_with(html, &snap);
+        assert!(tree.unsupported);
+    }
 }
