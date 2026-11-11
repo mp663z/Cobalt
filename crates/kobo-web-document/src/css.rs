@@ -3028,7 +3028,8 @@ mod ext_selector_tests {
     fn unsupported_selector_forms_still_refuse() {
         for selector in [
             "p:hover", "p:focus", "p:focus-within", "p:visited", "p:link", "p::before", "p:before",
-            "p:not(.a,.b,.c)", // exact pair newly admitted; general list still refused "p:is(.a)", "p:nth-last-of-type(2)", "p:empty()", "p[a=b i]",
+            // Exact pair newly admitted; general list still refused.
+            "p:not(.a,.b,.c)", "p:is(.a)", "p:nth-last-of-type(2)", "p:empty()", "p[a=b i]",
             "p[a=b s]", "p[a|b=c]", "p[*|a]", r"p.a\:b", "svg|p", "p,", "> p", "p >", "p[a=1]",
             "p[a=b c]", "p[a=\"b\\\"c\"]", "p#a#b", ".1a", "p[a=b", "p[a",
         ] {
