@@ -1019,6 +1019,58 @@ fn element_siblings(nodes: &[Node], handle: Handle) -> Option<&[Handle]> {
     let parent = nodes[handle].parent?;
     Some(&nodes[parent].children)
 }
+/// Checked EXT resolution: Some(None) is detached, None is invalid.
+/// Legacy bool helpers deliberately retain their original malformed limitation.
+fn checked_siblings(nodes: &[Node], handle: Handle) -> Option<Option<&[Handle]>> {
+    let node = nodes.get(handle)?;
+    if !matches!(node.data, Data::Element {..}) { return None; }
+    let Some(parent) = node.parent else { return Some(None); };
+    let parent = nodes.get(parent)?;
+    if !matches!(parent.data, Data::Element {..} | Data::Document) { return None; }
+    Some(Some(&parent.children))
+}
+/// Call only after charging a raw visit. Invalid handle or inconsistent
+/// parent is unknown; valid text/comment remains a proven non-element.
+fn checked_sibling_element(nodes: &[Node], owner: Handle, raw: Handle) -> Option<bool> {
+    let sibling = nodes.get(raw)?;
+    if sibling.parent != nodes.get(owner)?.parent { return None; }
+    Some(matches!(sibling.data, Data::Element {..}))
+}
+fn structural_checked(nodes: &[Node], handle: Handle, bits: u8, fuel: &mut u32)
+    -> Result<Option<bool>, MatchRefusal> {
+    let Some(siblings) = checked_siblings(nodes, handle) else { return Ok(None); };
+    let Some(siblings) = siblings else { return Ok(Some(true)); };
+    if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
+    let mut first = None; let mut last = None;
+    // Preserve the two existing directional scans and their exact valid costs.
+    for &h in siblings {
+        not_charge(fuel)?;
+        match checked_sibling_element(nodes, handle, h) {
+            None => return Ok(None), Some(true) => { first = Some(h); break; }, Some(false) => {},
+        }
+    }
+    for &h in siblings.iter().rev() {
+        not_charge(fuel)?;
+        match checked_sibling_element(nodes, handle, h) {
+            None => return Ok(None), Some(true) => { last = Some(h); break; }, Some(false) => {},
+        }
+    }
+    if first != Some(handle) && last != Some(handle) {
+        // If neither end is the tested element, prove its membership before
+        // answering false. This extra scan occurs only for malformed or
+        // interior nodes; every visited entry is charged.
+        let mut found = false;
+        for &h in siblings {
+            not_charge(fuel)?;
+            if checked_sibling_element(nodes, handle, h).is_none() { return Ok(None); }
+            if h == handle { found = true; break; }
+        }
+        if !found { return Ok(None); }
+    }
+    Ok(Some((bits & 1 == 0 || first == Some(handle))
+        && (bits & 2 == 0 || last == Some(handle))
+        && (bits & 4 == 0 || (first == Some(handle) && last == Some(handle)))))
+}
 fn structural_ok(nodes: &[Node], handle: Handle, bits: u8) -> bool {
     let Some(siblings) = element_siblings(nodes, handle) else {
         // A detached node has no siblings: it is its own first and last element.
@@ -1388,6 +1440,8 @@ impl Selector {
             return Err(MatchRefusal::Fuel);
         }
         *fuel -= 1;
+        let Some(current) = nodes.get(node) else { return Ok(None); };
+        if !matches!(current.data, Data::Element {..}) { return Ok(Some(false)); }
         let (simple, relation) = &self.steps[index];
         // `:nth-child` on this step: the walk supplies the element's index
         // O(1) for the rightmost step (one fuel unit per test, zero
@@ -1397,7 +1451,8 @@ impl Selector {
         if !simple.nth.is_empty() {
             let nth_ix = match position.filter(|_| index == 0) {
                 Some((_, element_index)) => {
-                    if let Some(sibs) = element_siblings(nodes, node) {
+                    let Some(sibs) = checked_siblings(nodes, node) else { return Ok(None); };
+                    if let Some(sibs) = sibs {
                         if sibs.len() > EXT_MAX_SIBLINGS {
                             return Err(MatchRefusal::OversizeSiblings);
                         }
@@ -1407,7 +1462,7 @@ impl Selector {
                 None => nth_index_charged(nodes, node, fuel)?,
             };
             let Some(nth_ix) = nth_ix else {
-                return Ok(Some(false));
+                return Ok(None);
             };
             if !simple.nth.iter().all(|&an_b| nth_formula(nth_ix, an_b)) {
                 return Ok(Some(false));
@@ -1476,9 +1531,14 @@ impl Selector {
         }
         let matches = if charged_argument {
             simple.matches_not_charged(nodes, node, fuel)?
-        } else { simple.matches_inner(nodes, node, false) };
+        } else { simple.matches_inner(nodes, node, false, false) };
         if !matches {
             return Ok(Some(false));
+        }
+        if simple.structural != 0 {
+            match structural_checked(nodes, node, simple.structural, fuel)? {
+                Some(true) => {}, Some(false) => return Ok(Some(false)), None => return Ok(None),
+            }
         }
         for arg in &simple.has_args {
             let result = if let Some(tail) = &arg.child {
@@ -1538,9 +1598,8 @@ impl Selector {
                 Ok(if unknown { None } else { Some(false) })
             }
             Relation::NextSibling | Relation::LaterSibling => {
-                let Some(siblings) = element_siblings(nodes, node) else {
-                    return Ok(Some(false));
-                };
+                let Some(siblings) = checked_siblings(nodes, node) else { return Ok(None); };
+                let Some(siblings) = siblings else { return Ok(Some(false)); };
                 if siblings.len() > EXT_MAX_SIBLINGS {
                     return Err(MatchRefusal::OversizeSiblings);
                 }
@@ -1548,7 +1607,11 @@ impl Selector {
                 // O(1); any deeper step scans, with every visited sibling
                 // charged to fuel.
                 let at = match position.filter(|_| index == 0) {
-                    Some((raw_index, _)) => raw_index as usize,
+                    Some((raw_index, _)) => {
+                        let at = raw_index as usize;
+                        if siblings.get(at) != Some(&node) { return Ok(None); }
+                        at
+                    },
                     None => {
                         let mut found = None;
                         for (at, &n) in siblings.iter().enumerate() {
@@ -1556,12 +1619,14 @@ impl Selector {
                                 return Err(MatchRefusal::Fuel);
                             }
                             *fuel -= 1;
+                            if checked_sibling_element(nodes, node, n).is_none() { return Ok(None); }
                             if n == node {
                                 found = Some(at);
                                 break;
                             }
                         }
-                        found.ok_or(MatchRefusal::Fuel)?
+                        let Some(found) = found else { return Ok(None); };
+                        found
                     }
                 };
                 let mut unknown = false;
@@ -1570,9 +1635,8 @@ impl Selector {
                         return Err(MatchRefusal::Fuel);
                     }
                     *fuel -= 1;
-                    if !is_element(nodes, earlier) {
-                        continue;
-                    }
+                    let Some(element) = checked_sibling_element(nodes, node, earlier) else { return Ok(None); };
+                    if !element { continue; }
                     match self.ext_match(nodes, earlier, index + 1, fuel, None, target, state_enrolled, charged_argument)? {
                         Some(true) => return Ok(Some(true)),
                         None => unknown = true,
@@ -1776,27 +1840,6 @@ impl Simple {
         for attr in &self.attrs {
             if !attr.matches_not_charged(nodes,handle,fuel)? { return Ok(false); }
         }
-        if self.structural != 0 {
-            if let Some(siblings) = element_siblings(nodes,handle) {
-                if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
-                // Same two directional scans as structural_ok, charged per
-                // visited sibling, stopping at the first element each way.
-                let mut first = None; let mut last = None;
-                for &h in siblings {
-                    not_charge(fuel)?;
-                    if is_element(nodes,h) { first=Some(h);break; }
-                }
-                for &h in siblings.iter().rev() {
-                    not_charge(fuel)?;
-                    if is_element(nodes,h) { last=Some(h);break; }
-                }
-                if (self.structural & 1 != 0 && first != Some(handle))
-                    || (self.structural & 2 != 0 && last != Some(handle))
-                    || (self.structural & 4 != 0 && (first != Some(handle) || last != Some(handle))) {
-                        return Ok(false);
-                    }
-            }
-        }
         Ok(true)
     }
 }
@@ -1815,7 +1858,7 @@ impl Simple {
     }
 }
 impl Simple {
-    fn matches_inner(&self, nodes: &[Node], handle: Handle, check_nth: bool) -> bool {
+    fn matches_inner(&self, nodes: &[Node], handle: Handle, check_nth: bool, check_structural: bool) -> bool {
         let Data::Element { name, .. } = &nodes[handle].data else {
             return false;
         };
@@ -1864,7 +1907,7 @@ impl Simple {
                 }
             })
         }) && self.attrs.iter().all(|attr| attr.matches(nodes, handle))
-            && (self.structural == 0 || structural_ok(nodes, handle, self.structural))
+            && (!check_structural || self.structural == 0 || structural_ok(nodes, handle, self.structural))
             && (!check_nth || self.nth.iter().all(|&an_b| nth_ok(nodes, handle, an_b)))
     }
 }
@@ -1878,7 +1921,7 @@ impl Simple {
             || self.empty || !self.has_args.is_empty() || !self.where_args.is_empty() || self.of_type != 0 || !self.nth_of_type.is_empty() || !self.nth_last.is_empty() {
             return false;
         }
-        self.matches_inner(nodes, handle, true)
+        self.matches_inner(nodes, handle, true, true)
     }
 }
 /// `:nth-child(An+B)` formula check: 1-based index among ELEMENT siblings
@@ -2316,12 +2359,14 @@ fn empty_children_charged(nodes: &[Node], handle: Handle, fuel: &mut u32)
 /// Raw borrowed-slice gate precedes traversal. No forward-position shortcut.
 fn nth_last_index_charged(nodes: &[Node], handle: Handle, fuel: &mut u32)
     -> Result<Option<i64>, MatchRefusal> {
-    let Some(siblings) = element_siblings(nodes, handle) else { return Ok(Some(1)); };
+    let Some(siblings) = checked_siblings(nodes, handle) else { return Ok(None); };
+    let Some(siblings) = siblings else { return Ok(Some(1)); };
     if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
     let mut reverse_index = 0_i64;
     for &sibling in siblings.iter().rev() {
         not_charge(fuel)?;
-        if !is_element(nodes, sibling) { continue; }
+        let Some(element) = checked_sibling_element(nodes, handle, sibling) else { return Ok(None); };
+        if !element { continue; }
         reverse_index += 1;
         if sibling == handle { return Ok(Some(reverse_index)); }
     }
@@ -2338,7 +2383,8 @@ fn typed_position_charged(
 ) -> Result<Option<(i64, i64)>, MatchRefusal> {
     let Some(Node { data: Data::Element { name, .. }, .. }) = nodes.get(handle)
         else { return Ok(None); };
-    let Some(siblings) = element_siblings(nodes, handle) else {
+    let Some(siblings) = checked_siblings(nodes, handle) else { return Ok(None); };
+    let Some(siblings) = siblings else {
         return Ok(Some((1, 1)));
     };
     if siblings.len() > EXT_MAX_SIBLINGS { return Err(MatchRefusal::OversizeSiblings); }
@@ -2346,8 +2392,10 @@ fn typed_position_charged(
     let mut index = None;
     for &sibling in siblings {
         not_charge(fuel)?; // raw child visit, including text/comment
+        let Some(element) = checked_sibling_element(nodes, handle, sibling) else { return Ok(None); };
+        if !element { continue; }
         let Some(Node { data: Data::Element { name: candidate, .. }, .. }) = nodes.get(sibling)
-            else { continue; };
+            else { return Ok(None); };
         if not_eq(name.ns.as_bytes(), candidate.ns.as_bytes(), false, fuel)?
             && not_eq(name.local.as_bytes(), candidate.local.as_bytes(), false, fuel)? {
                 count += 1;
@@ -2368,7 +2416,8 @@ fn nth_index_charged(
     handle: Handle,
     fuel: &mut u32,
 ) -> Result<Option<i64>, MatchRefusal> {
-    let Some(siblings) = element_siblings(nodes, handle) else {
+    let Some(siblings) = checked_siblings(nodes, handle) else { return Ok(None); };
+    let Some(siblings) = siblings else {
         return Ok(Some(1));
     };
     if siblings.len() > EXT_MAX_SIBLINGS {
@@ -2380,7 +2429,8 @@ fn nth_index_charged(
             return Err(MatchRefusal::Fuel);
         }
         *fuel -= 1;
-        if !is_element(nodes, sib) {
+        let Some(element) = checked_sibling_element(nodes, handle, sib) else { return Ok(None); };
+        if !element {
             continue;
         }
         at += 1;
@@ -4460,4 +4510,32 @@ mod two_child_has_tests {
  }
  #[test] fn browser_two_child_truth(){let n=nodes(include_str!("../tests/fixtures/two_child_has_oracle.html"));let sels=[":has(>section>p)",":has(>*>*)",":has(>section>.x)",":has(>:not(.no)>:where(.x))",":not(:has(>section>p))",":where(:has(>section>#p))",":has(>section:nth-child(2)>p:last-child)",":has(>svg>g)",":has(>template>p)",":has(>section>:empty)",":has(>section>p):has(>section>.x)"];
  let t=include_str!("../tests/fixtures/two_child_has_expected.tsv");assert_eq!(t.lines().count(),15);for l in t.lines(){let v:Vec<_>=l.split('\t').collect();for(i,s)in sels.iter().enumerate(){assert_eq!(selector_ext(s).unwrap().matches_checked(&n,id(&n,v[0])),Some(v[i+1]=="1"),"{} {s}",v[0]);}}}
+}
+#[cfg(test)]
+mod checked_structural_correction_tests {
+ use super::*;
+ fn nodes(h:&str)->Vec<Node>{use html5ever::tendril::TendrilSink;let sink=crate::dom::Sink::new(10000);let mut p=html5ever::parse_document(sink,html5ever::ParseOpts::default());p.process(h.to_string().into());p.finish().into_nodes()}
+ fn id(n:&[Node],s:&str)->Handle{n.iter().position(|n|matches!(&n.data,Data::Element{attrs,..}if attrs.iter().any(|(k,v)|&**k=="id" && v==s))).unwrap()}
+ #[test] fn original_panic_now_unknown_S_skips_tail_nested_oversize(){let mut n=nodes("<!doctype html><div id=a><section id=m><p></p></section></div>");let a=id(&n,"a");let m=id(&n,"m");let invalid=n.len()+1;n[a].children.insert(0,invalid);n[m].children=vec![n.len()+2;EXT_MAX_SIBLINGS+1];let mut f=100;assert_eq!(selector_ext(":has(>:nth-child(1)>*)").unwrap().matches_checked_scoped_budget(&n,a,&mut f,None,None),Ok(None));assert!(f<100);}
+ #[test] fn both_directions_typed_structural_unknown_through_not_where_and_has(){
+ let mut n=nodes("<!doctype html><div id=a>text<!--c--><p id=p></p></div>");let a=id(&n,"a");let p=id(&n,"p");let bad=n.len()+1;
+ for rev in [false,true]{n[a].children=if rev{vec![p,bad]}else{vec![bad,p]};for q in if rev{vec![":nth-last-child(1)",":last-child",":only-child",":last-of-type",":only-of-type"]}else{vec![":nth-child(1)",":first-child",":only-child",":first-of-type",":nth-of-type(1)"]}{for sel in [q.to_string(),format!(":not({q})"),format!(":where({q})")]{assert_eq!(selector_ext(&sel).unwrap().matches_checked(&n,p),None,"{sel}");}assert_eq!(selector_ext(&format!(":has(>{q})")).unwrap().matches_checked(&n,a),None);assert_eq!(selector_ext(&format!(":has({q})")).unwrap().matches_checked(&n,a),None);}}
+ }
+ #[test] fn invalid_before_after_unknown_tail_both_compound_and_later_valid_true(){
+ let mut n=nodes("<!doctype html><div id=a><section id=m><p id=p></p></section><section id=m2><p></p></section></div>");let a=id(&n,"a");let m=id(&n,"m");let m2=id(&n,"m2");let p=id(&n,"p");let bad=n.len()+1;n[m].children=vec![bad,p];assert_eq!(selector_ext(":has(>section>:nth-child(1))").unwrap().matches_checked(&n,a),Some(true),"valid secondbranch wins firstunknown");n[a].children=vec![m];assert_eq!(selector_ext(":has(>section>:nth-child(1))").unwrap().matches_checked(&n,a),None);n[a].children=vec![bad,m];assert_eq!(selector_ext(":has(>:nth-child(1)>*)").unwrap().matches_checked(&n,a),None);n[a].children=vec![m2];n[m2].parent=None;assert_eq!(selector_ext(":has(>*>*)").unwrap().matches_checked(&n,a),None);
+ }
+ #[test] fn detached_invalid_parent_missing_member_text_other_fuel_and_gates(){
+ let mut n=nodes("<!doctype html><div id=a>text<!--c--><p id=p></p><b id=b></b></div>");let a=id(&n,"a");let p=id(&n,"p");let b=id(&n,"b");let text=n[a].children[0];let comment=n[a].children[1];
+ let mut f=100;assert_eq!(nth_index_charged(&n,p,&mut f),Ok(Some(1)));assert_eq!(100-f,3);let mut f=100;assert_eq!(nth_last_index_charged(&n,p,&mut f),Ok(Some(2)));assert_eq!(100-f,2);
+ n[p].parent=None;for q in [":nth-child(1)",":nth-last-child(1)",":first-child",":last-child",":only-child",":first-of-type",":last-of-type",":only-of-type"]{assert_eq!(selector_ext(q).unwrap().matches_checked(&n,p),Some(true),"detached:{q}");}
+ n[p].parent=Some(n.len()+9);for q in [":nth-child(1)",":nth-last-child(1)",":first-child",":first-of-type","p+p","p~p"]{assert_eq!(selector_ext(q).unwrap().matches_checked(&n,p),None,"invalidparent:{q}");}
+ n[p].parent=Some(a);n[a].children=vec![text,comment,b];for q in [":nth-child(1)",":nth-last-child(1)",":first-child",":first-of-type","b+p"]{assert_eq!(selector_ext(q).unwrap().matches_checked(&n,p),None,"absentmembership:{q}");}
+ let invalid=n.len()+1;n[a].children=vec![invalid,p];let mut f=0;assert_eq!(nth_index_charged(&n,p,&mut f),Err(MatchRefusal::Fuel));let mut f=1;assert_eq!(nth_index_charged(&n,p,&mut f),Ok(None));assert_eq!(f,0,"chargebeforeinvalidlookup");
+ n[a].children=vec![invalid;EXT_MAX_SIBLINGS+1];let mut f=5;assert_eq!(nth_index_charged(&n,p,&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(f,5);let mut f=5;assert_eq!(typed_position_charged(&n,p,true,&mut f),Err(MatchRefusal::OversizeSiblings));assert_eq!(f,5);
+ }
+ #[test] fn sibling_combinator_visited_invalid_and_position_membership(){
+ let mut n=nodes("<!doctype html><div id=a><b id=b></b><p id=p></p></div>");let a=id(&n,"a");let b=id(&n,"b");let p=id(&n,"p");let bad=n.len()+1;n[a].children=vec![b,bad,p];for sel in ["b+p","b~p",":not(b)+p"]{assert_eq!(selector_ext(sel).unwrap().matches_checked(&n,p),None,"visitedinvalid:{sel}");}
+ let mut f=20;assert_eq!(selector_ext("b+p").unwrap().matches_checked_scoped_budget(&n,p,&mut f,Some((999,2)),None),Ok(None));
+ n[a].children=vec![b,p];let mut f=20;assert_eq!(selector_ext("b+p").unwrap().matches_checked_scoped_budget(&n,p,&mut f,Some((1,2)),None),Ok(Some(true)));
+ }
 }
