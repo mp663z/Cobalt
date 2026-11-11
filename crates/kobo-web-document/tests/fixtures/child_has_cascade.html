@@ -1,0 +1,11 @@
+<!doctype html><style>
+*{color:black}
+.c1:has(> *){color:red}.c1{color:blue}
+.c2:has(> #x2){color:red}.c2.x{color:blue}
+.c3:has(> p){color:red}.c3{color:blue}
+.c4:has(> .x){color:red}.c4.x{color:blue}
+.c5:where(:has(> #x5)){color:red}.c5{color:blue}
+.c6:not(:has(> #absent)){color:red}.c6.x{color:blue}
+.c7:has(> :where(#x7)){color:red}.c7{color:blue}
+.c8:has(> .x):has(> .x){color:red}.c8.x.x{color:blue}
+</style><div id=c1 class=c1><p></p></div><div id=c2 class='c2 x'><p id=x2></p></div><div id=c3 class=c3><p></p></div><div id=c4 class='c4 x'><p class=x></p></div><div id=c5 class=c5><p id=x5></p></div><div id=c6 class='c6 x'><p></p></div><div id=c7 class=c7><p id=x7></p></div><div id=c8 class='c8 x'><p class=x></p></div>
