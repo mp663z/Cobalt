@@ -803,17 +803,21 @@ fn compound_ext_in(s: &str, mut at: usize, allow_not: bool) -> Option<(Simple, u
     }
     (at > start).then_some((simple, at))
 }
-/// Opt-in grammar: compounds of type/`*`/`#id`/`.class`/`[attr op value]`/
-/// `:root`/`:first-child`/`:last-child`/`:only-child`/`:nth-child(An+B)` and
-/// the state pseudo-class `:link`, joined by descendant, `>`, `+` and `~`,
-/// plus the state pseudo-classes `:hover`, `:active`, `:focus`,
-/// `:focus-visible` and `:focus-within`. Every other state pseudo-class
-/// (`:visited` and the rest), every other functional pseudo-class
-/// (`:nth-last-child`, `:nth-of-type`, `:not`, ...), the Selectors-4 `of S`
-/// form, pseudo-elements, namespaces, escapes and case flags are refused. A parsed state pseudo-class is only ENROLLED
-/// under an explicit caller `SnapshotState` guarantee covering its family
-/// (see `matched_rules`); otherwise the rule fails closed there exactly like
-/// an unparseable selector.
+/// Opt-in grammar: bounded compounds of type/`*`/`#id`/`.class`/
+/// `[attr op value]`, `:root`, first/last/only-child, bounded
+/// `:nth-child(An+B)`, `:enabled`/`:disabled`, `:target` and the state family
+/// `:link`/`:hover`/`:active`/`:focus`/`:focus-visible`/`:focus-within`,
+/// joined by descendant, `>`, `+` and `~`. Bounded `:not(S)` accepts exactly
+/// one compound of those features; no nested negation, lists, complex
+/// arguments or argument pseudo-elements. Only exact trailing `::before`/
+/// `::after` suffixes on a non-bare, state-free originating selector are
+/// accepted; other pseudo-elements and single-colon forms are refused.
+/// Other pseudo-classes/functions (including `:visited`, `:nth-last-child`,
+/// `:nth-of-type`), the Selectors-4 `of S` form, namespaces, escapes and
+/// attribute case flags remain refused. State/target dependencies anywhere,
+/// including inside negation, enroll only under an explicit caller
+/// `SnapshotState` covering every family (see `matched_rules`); without it
+/// the rule fails closed exactly like an unparseable selector.
 pub(crate) fn selector_ext(input: &str) -> Option<Selector> {
     if input.is_empty() || input.len() > 256 {
         return None;
