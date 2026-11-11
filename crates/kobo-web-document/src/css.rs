@@ -3028,7 +3028,7 @@ mod ext_selector_tests {
     fn unsupported_selector_forms_still_refuse() {
         for selector in [
             "p:hover", "p:focus", "p:focus-within", "p:visited", "p:link", "p::before", "p:before",
-            "p:not(.a,.b)", "p:is(.a)", "p:nth-last-of-type(2)", "p:empty()", "p[a=b i]",
+            "p:not(.a,.b,.c)", // exact pair newly admitted; general list still refused "p:is(.a)", "p:nth-last-of-type(2)", "p:empty()", "p[a=b i]",
             "p[a=b s]", "p[a|b=c]", "p[*|a]", r"p.a\:b", "svg|p", "p,", "> p", "p >", "p[a=1]",
             "p[a=b c]", "p[a=\"b\\\"c\"]", "p#a#b", ".1a", "p[a=b", "p[a",
         ] {
@@ -4198,7 +4198,8 @@ mod not_bounded_tests {
     }
     #[test]
     fn not_bounds_base_refusal_and_separate_inner_state_budget() {
-        for bad in [":not()", ":not( )", ":not(.a,.b)", ":not(.a .b)",
+        // Exact two-class list is now covered positively; three remains bounded refusal.
+        for bad in [":not()", ":not( )", ":not(.a,.b,.c)", ":not(.a .b)",
             ":not(.a>.b)", ":not(:not(.a))", ":not(::before)",
             ":not(.a::after)", ":not(:is(.a))", ":not(:has(.a .b .c))",
             ":not(:hover:focus)", ":focus:not(:focus-visible):hover",
