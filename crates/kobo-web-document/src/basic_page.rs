@@ -418,6 +418,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             self.stats.output_truncated = true;
             return 0;
         }
+        // Commands emitted for this subtree start here; the box's own
+        // background is INSERTED at this position once its height is known,
+        // so it paints behind all descendants (correct stacking order).
+        let bg_insert_at = list.len();
         let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
         match node_kind {
@@ -521,14 +525,30 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 content_height = i64::from(h);
             }
         }
-        // Background: padding box. Fill AFTER content in v1 only when the box
-        // is a text block (its background would hide the text); block
-        // containers get their fill before children in the caller below.
-        if pure_inline {
+        // Background: padding box, inserted behind everything this subtree
+        // emitted. The root's background is the canvas fill (already first).
+        if Some(index) != self.tree.roots.first().copied() {
             if let Some(color) = style.used_background_color() {
-                // re-emit behind text is not possible post hoc; skip with count
-                self.stats.skip("inline-block-bg-order");
-                let _ = color;
+                let bw = pad_left + i64::from(width) + pad_right;
+                let bh = pad_top + content_height + pad_bot;
+                if bw > 0 && bh > 0 {
+                    if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
+                        i32::try_from(content_x),
+                        i32::try_from(top),
+                        u32::try_from(bw),
+                        u32::try_from(bh),
+                    ) {
+                        list.insert(
+                            bg_insert_at,
+                            Command::Fill {
+                                rect: Rect { x, y, width: w, height: h },
+                                color: rgb(color),
+                                source: Source { node: self.tree.boxes[index].source, action: None },
+                            },
+                        );
+                        self.stats.fills += 1;
+                    }
+                }
             }
         }
         self.stats.blocks_painted += 1;
@@ -602,33 +622,5 @@ pub fn paint_basic_page(
     for top_index in start {
         cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list);
     }
-    // Container backgrounds: second preorder pass would double-emit; v1 fills
-    // container backgrounds BEFORE content in a first pass instead. To keep
-    // one walk simple, v1 paints container backgrounds after content with a
-    // documented order approximation only when they carry a background.
-    // (Counted; fixed in the hardening track with a two-phase paint.)
-    let mut order_pass = |list: &mut Vec<Command>, stats: &mut PartialStats| {
-        let mut stack = vec![root];
-        let mut visited = 0usize;
-        while let Some(index) = stack.pop() {
-            visited += 1;
-            if visited > MAX_VISITS {
-                stats.output_truncated = true;
-                break;
-            }
-            let node = &tree.boxes[index];
-            if matches!(node.kind, BoxKind::Block | BoxKind::AnonymousBlock | BoxKind::ListItem)
-                && node.style.used_background_color().is_some()
-                && index != root
-                && Some(index) != body
-            {
-                stats.approx("container-bg-after-content");
-            }
-            for &c in node.children.iter().rev() {
-                stack.push(c);
-            }
-        }
-    };
-    order_pass(&mut list, &mut painter.stats);
     Ok((list, painter.stats, cursor))
 }
