@@ -17,15 +17,17 @@
 //! - line breaking is the existing narrow ASCII placer; blocks it refuses
 //!   are skipped whole.
 //!
-//! Bounds: node visits, emitted commands and glyph bytes reuse the display
-//! list budgets; on exhaustion painting stops and `output_truncated` is set.
+//! Bounds: node visits are capped (MAX_VISITS); emitted commands are NOT
+//! display-list budgeted - the caller replays the command vec into bounded
+//! display lists (e.g. per strip) for rasterization. `output_truncated` is
+//! set only when the visit cap stops the walk.
 
 use std::collections::BTreeMap;
 
 use crate::box_tree::{BoxKind, BoxTree, WidthPass};
 use crate::computed_style::{Length, Margin};
 use crate::css_text_page::FontProvider;
-use crate::display_list::{DisplayList, Rect, Rgb, Source};
+use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::{place_runs_normal, Lines};
 
 const MAX_VISITS: usize = 200_000;
@@ -257,7 +259,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         content_x: i64,
         top: i64,
         width: u32,
-        list: &mut DisplayList,
+        list: &mut Vec<Command>,
     ) -> Result<i64, &'static str> {
         let node = &self.tree.boxes[index];
         let mut size = node.style.font_size;
@@ -322,7 +324,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let flush = |from: usize,
                      to: usize,
                      glyphs: &[crate::inline_lines::PositionedGlyph],
-                     list: &mut DisplayList,
+                     list: &mut Vec<Command>,
                      stats: &mut PartialStats,
                      font: &F|
          -> Result<(), ()> {
@@ -369,8 +371,13 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 width: run_w,
                 height: line_height,
             };
-            list.glyph_run(rect, rect, mask, color, Source { node: self_node(glyphs, from), action: None })
-                .map_err(|_| ())?;
+            list.push(Command::GlyphRun {
+                bounds: rect,
+                layout: rect,
+                coverage: mask,
+                color,
+                source: Source { node: self_node(glyphs, from), action: None },
+            });
             stats.glyph_runs += 1;
             Ok(())
         };
@@ -401,10 +408,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         content_x: i64,
         top: i64,
         width: u32,
-        list: &mut DisplayList,
+        list: &mut Vec<Command>,
     ) -> i64 {
         self.visits += 1;
-        if self.visits > MAX_VISITS || self.stats.output_truncated {
+        if self.visits > MAX_VISITS {
             self.stats.output_truncated = true;
             return 0;
         }
@@ -517,7 +524,7 @@ pub fn paint_basic_page(
     viewport_width: u32,
     viewport_height: u32,
     font: &impl FontProvider,
-) -> Result<(DisplayList, PartialStats, i64), &'static str> {
+) -> Result<(Vec<Command>, PartialStats, i64), &'static str> {
     if viewport_width == 0 || viewport_height == 0 {
         return Err("viewport");
     }
@@ -532,7 +539,7 @@ pub fn paint_basic_page(
         stats: PartialStats::default(),
         visits: 0,
     };
-    let mut list = DisplayList::default();
+    let mut list: Vec<Command> = Vec::new();
     let root = tree.roots[0];
     // Canvas background from root (or body) as in the exact painter.
     let body = tree.boxes[root].children.first().copied();
@@ -541,18 +548,12 @@ pub fn paint_basic_page(
         .used_background_color()
         .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()));
     if let Some(color) = canvas {
-        if list
-            .fill(
-                Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
-                rgb(color),
-                Source { node: tree.boxes[root].source, action: None },
-            )
-            .is_err()
-        {
-            painter.stats.output_truncated = true;
-        } else {
-            painter.stats.fills += 1;
-        }
+        list.push(Command::Fill {
+            rect: Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
+            color: rgb(color),
+            source: Source { node: tree.boxes[root].source, action: None },
+        });
+        painter.stats.fills += 1;
     }
     // Walk top-level blocks: root's descendants in order, block by block.
     let mut cursor = 0i64;
@@ -569,7 +570,7 @@ pub fn paint_basic_page(
     // one walk simple, v1 paints container backgrounds after content with a
     // documented order approximation only when they carry a background.
     // (Counted; fixed in the hardening track with a two-phase paint.)
-    let mut order_pass = |list: &mut DisplayList, stats: &mut PartialStats| {
+    let mut order_pass = |list: &mut Vec<Command>, stats: &mut PartialStats| {
         let mut stack = vec![root];
         let mut visited = 0usize;
         while let Some(index) = stack.pop() {
