@@ -256,7 +256,9 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// Collect (text, bold) runs for a pure-inline block, tolerating the
     /// tree-level flags the exact collector refuses on. Second return is
     /// true when any leaf colour differs from the block's (v1 flattens them).
-    fn collect_runs(&mut self, parent: usize) -> Result<(Vec<(String, bool)>, bool), &'static str> {
+    /// Runs carry (text, bold, color). Color is the leaf's own computed
+    /// color; the caller maps glyphs back to runs to paint link colors.
+    fn collect_runs(&mut self, parent: usize) -> Result<(Vec<(String, bool, u32)>, bool), &'static str> {
         let owner = &self.tree.boxes[parent];
         if owner.kind != BoxKind::Block && owner.kind != BoxKind::AnonymousBlock && owner.kind != BoxKind::ListItem {
             return Err("not-block");
@@ -273,7 +275,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         let block_color = owner.style.color;
         let mut mixed_color = false;
-        let mut runs: Vec<(String, bool)> = Vec::new();
+        let mut runs: Vec<(String, bool, u32)> = Vec::new();
         let mut stack: Vec<usize> = owner.children.iter().rev().copied().collect();
         let mut visited = 0usize;
         while let Some(index) = stack.pop() {
@@ -288,7 +290,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             match node.kind {
                 BoxKind::Text => {
                     let text = node.text.clone().ok_or("no-text")?;
-                    runs.push((text, node.style.font_weight == 700));
+                    runs.push((text, node.style.font_weight == 700, node.style.color));
                 }
                 BoxKind::Inline => {
                     for &c in node.children.iter().rev() {
@@ -326,7 +328,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         let mut folded_any = false;
         let mut folded_runs: Vec<String> = Vec::with_capacity(runs.len());
-        for (text, _) in &runs {
+        for (text, _, _) in &runs {
             let f = fold_ascii(text).ok_or("non-ascii-text")?;
             if f != *text {
                 folded_any = true;
@@ -339,7 +341,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let run_refs: Vec<(&str, bool)> = folded_runs
             .iter()
             .zip(runs.iter())
-            .map(|(t, (_, b))| (t.as_str(), *b))
+            .map(|(t, (_, b, _))| (t.as_str(), *b))
             .collect();
         let lines: Lines = match place_runs_normal(&run_refs, width, |ch, bold| {
             self.font.advance(ch, size, bold)
@@ -347,6 +349,39 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             Ok(l) => l,
             Err(_) => greedy_wrap(&run_refs, width, |ch, bold| self.font.advance(ch, size, bold), &mut self.stats)
                 .ok_or("place-and-greedy-refused")?,
+        };
+        // Map each glyph back to its run's color by walking the folded char
+        // stream in glyph order; whitespace dropped at line breaks is
+        // skipped over. Only engaged when a block mixes colors (links).
+        let glyph_colors: Vec<u32> = if mixed_color {
+            self.stats.approx("link-color-by-char-map");
+            let mut stream: Vec<(char, u32)> = Vec::new();
+            for ((f, (_, _, c))) in folded_runs.iter().zip(runs.iter()) {
+                for ch in f.chars() {
+                    stream.push((ch, *c));
+                }
+            }
+            let mut pos = 0usize;
+            let mut colors = Vec::with_capacity(lines.glyphs.len());
+            for g in &lines.glyphs {
+                let mut skipped = 0;
+                while pos < stream.len()
+                    && stream[pos].0 != g.character
+                    && stream[pos].0.is_whitespace()
+                    && skipped < 8
+                {
+                    pos += 1;
+                    skipped += 1;
+                }
+                let color = stream.get(pos).map(|&(_, c)| c).unwrap_or(self.tree.boxes[index].style.color);
+                colors.push(color);
+                if pos < stream.len() {
+                    pos += 1;
+                }
+            }
+            colors
+        } else {
+            Vec::new()
         };
         let natural = self
             .font
@@ -377,6 +412,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let flush = |from: usize,
                      to: usize,
                      glyphs: &[crate::inline_lines::PositionedGlyph],
+                     run_color: Rgb,
                      list: &mut Vec<Command>,
                      stats: &mut PartialStats,
                      font: &F|
@@ -417,7 +453,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     }
                 }
             }
-            let color = block_rgb;
+            let color = run_color;
             let rect = Rect {
                 x: i32::try_from(x0).map_err(|_| ())?,
                 y: i32::try_from(line_top).map_err(|_| ())?,
@@ -434,13 +470,21 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             stats.glyph_runs += 1;
             Ok(())
         };
+        let color_of = |i: usize| -> Rgb {
+            if glyph_colors.is_empty() {
+                block_rgb
+            } else {
+                rgb(glyph_colors[i])
+            }
+        };
         for i in 1..=glyphs.len() {
             let boundary = i == glyphs.len()
                 || glyphs[i].line != glyphs[i - 1].line
-                || glyphs[i].bold != glyphs[i - 1].bold;
+                || glyphs[i].bold != glyphs[i - 1].bold
+                || (!glyph_colors.is_empty() && glyph_colors[i] != glyph_colors[i - 1]);
             if boundary {
                 let from = run_start.take().unwrap_or(0);
-                if flush(from, i, glyphs, list, &mut self.stats, self.font).is_err() {
+                if flush(from, i, glyphs, color_of(from), list, &mut self.stats, self.font).is_err() {
                     self.stats.output_truncated = true;
                     return Ok(i64::from(lines.count) * i64::from(line_height));
                 }
