@@ -589,6 +589,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             }
         } else {
             let mut cursor = content_top;
+            let mut prev_mb = 0i64;
             let child_width = (i64::from(width) - pad_left - pad_right).max(0) as u32;
             for &child in &self.tree.boxes[index].children {
                 let ckind = self.tree.boxes[child].kind;
@@ -612,13 +613,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 if self.widths.widths.get(child).copied().flatten().is_none() {
                     self.stats.approx("width-fallback-parent");
                 }
-                cursor += mt;
+                // Adjacent vertical margins collapse to the larger one.
+                if prev_mb != 0 && mt != 0 {
+                    self.stats.approx("margin-collapse-adjacent");
+                }
+                cursor += if prev_mb == 0 { mt } else { prev_mb.max(mt) };
                 let child_x = content_x + pad_left + ml;
                 let h = self.layout_block(child, child_x, cursor, cw, list);
-                // Background for this child, behind nothing (emitted after
-                // descendants in v1: paint order approximation, counted once).
-                cursor += h + mb;
+                cursor += h;
+                prev_mb = mb;
             }
+            cursor += prev_mb;
             content_height = cursor - content_top;
         }
         // Definite px height wins for the background rect when larger.
