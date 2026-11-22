@@ -41,6 +41,9 @@ pub struct PartialStats {
     pub glyph_runs: usize,
     pub fills: usize,
     pub output_truncated: bool,
+    /// The intake style/box tree was itself truncated (sheet supply, match
+    /// work, retained nodes): the render is partial by construction.
+    pub intake_truncated: bool,
 }
 
 impl PartialStats {
@@ -572,6 +575,7 @@ pub fn paint_basic_page(
         stats: PartialStats::default(),
         visits: 0,
     };
+    painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
     let root = tree.roots[0];
     // Canvas background from root (or body) as in the exact painter.

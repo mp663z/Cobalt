@@ -52,8 +52,8 @@ fn main() {
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
     let bytes = std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap();
-    let budget = SupplyBudget { max_linked_sheets: 24, max_sheet_bytes: 512 * 1024, max_aggregate_bytes: 3 * 1024 * 1024 };
-    let limits = Limits { max_input_bytes: 4 * 1024 * 1024, ..Limits::DEFAULT };
+    let budget = SupplyBudget { max_linked_sheets: 48, max_sheet_bytes: 2 * 1024 * 1024, max_aggregate_bytes: 16 * 1024 * 1024 };
+    let limits = Limits { max_input_bytes: 8 * 1024 * 1024, ..Limits::DEFAULT };
     let media = MediaContext::new(WIDTH).unwrap();
     let st = parse_style_tree_with_inline_sheets_and_selectors(&bytes, &[], &limits, Some(media), budget);
     let bt = BoxTree::from_style(&st);
@@ -94,7 +94,7 @@ fn main() {
         top += i64::from(sh);
     }
     std::fs::write(format!("/tmp/basic-{page}.rgba"), &rgba).unwrap();
-    println!("{page}: {WIDTH}x{height} complete={} output_truncated={} strip_overflows={} blocks={} text_blocks={} glyph_runs={} fills={}", stats.complete(), stats.output_truncated, strip_overflows, stats.blocks_painted, stats.text_blocks_painted, stats.glyph_runs, stats.fills);
+    println!("{page}: {WIDTH}x{height} complete={} output_truncated={} intake_truncated={} strip_overflows={} blocks={} text_blocks={} glyph_runs={} fills={}", stats.complete(), stats.output_truncated, stats.intake_truncated, strip_overflows, stats.blocks_painted, stats.text_blocks_painted, stats.glyph_runs, stats.fills);
     println!("  skips: {:?}", stats.skips);
     println!("  approximations: {:?}", stats.approximations);
     println!("  bytes={}", rgba.len());
