@@ -56,6 +56,101 @@ impl PartialStats {
     }
 }
 
+/// Basic-mode greedy wrapper used when the narrow placer refuses a block:
+/// words wrap greedily at `max_width`; a word wider than the line is hard-
+/// broken (counted). ASCII-only input (callers fold first). Every fallback
+/// block is counted as `greedy-wrap-fallback`.
+fn greedy_wrap(
+    runs: &[(&str, bool)],
+    max_width: u32,
+    mut advance: impl FnMut(char, bool) -> Option<u32>,
+    stats: &mut PartialStats,
+) -> Option<Lines> {
+    if max_width == 0 {
+        return None;
+    }
+    let mut glyphs = Vec::new();
+    let mut x = 0u32;
+    let mut line = 0u32;
+    let space_w = advance(' ', false).filter(|&n| n > 0)?;
+    let mut at_word_start = true;
+    for (text, bold) in runs {
+        for word in text.split_inclusive(|c: char| c == ' ') {
+            let trimmed = word.trim_end_matches(' ');
+            let trailing_space = word.len() != trimmed.len();
+            if !trimmed.is_empty() {
+                if !at_word_start {
+                    if x + space_w > max_width { line += 1; x = 0; } else { x += space_w; }
+                }
+                let word_w: u32 = trimmed.chars().filter_map(|c| advance(c, *bold)).sum();
+                if word_w > max_width {
+                    stats.approx("word-hard-broken");
+                }
+                for ch in trimmed.chars() {
+                    let w = advance(ch, *bold).filter(|&n| n > 0)?;
+                    if x + w > max_width {
+                        line += 1;
+                        x = 0;
+                        if w > max_width {
+                            stats.approx("glyph-wider-than-line");
+                        }
+                    }
+                    glyphs.push(crate::inline_lines::PositionedGlyph { character: ch, x, line, advance: w, bold: *bold, leaf: 0 });
+                    x += w;
+                }
+                at_word_start = false;
+            }
+            if trailing_space {
+                if x + space_w > max_width { line += 1; x = 0; } else { x += space_w; }
+            }
+        }
+    }
+    if glyphs.is_empty() {
+        return None;
+    }
+    stats.approx("greedy-wrap-fallback");
+    Some(Lines { glyphs, count: line + 1 })
+}
+
+/// Fold common Unicode punctuation to ASCII for the narrow placer. Every
+/// substitution is counted as `unicode-folded-ascii` by the caller; text
+/// with any other non-ASCII character still skips the block.
+fn fold_ascii(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len());
+    let mut folded = false;
+    for ch in text.chars() {
+        let mapped = match ch {
+            '\u{2018}' | '\u{2019}' | '\u{2032}' | '\u{00b4}' => '\'',
+            '\u{201c}' | '\u{201d}' | '\u{2033}' => '"',
+            '\u{2013}' | '\u{2014}' | '\u{2212}' | '\u{2010}' | '\u{2011}' => '-',
+            '\u{2026}' => '.',
+            '\u{00a0}' | '\u{2002}' | '\u{2003}' | '\u{2009}' | '\u{202f}' => ' ',
+            '\u{00b7}' | '\u{2022}' | '\u{25cf}' => '*',
+            '\u{2192}' => '>',
+            '\u{2190}' => '<',
+            '\u{00e9}' => 'e',
+            '\u{00e8}' => 'e',
+            '\u{00fc}' => 'u',
+            '\u{00f6}' => 'o',
+            '\u{00e4}' => 'a',
+            '\u{00e1}' => 'a',
+            '\u{00ed}' => 'i',
+            '\u{00f3}' => 'o',
+            '\u{00fa}' => 'u',
+            '\u{00f1}' => 'n',
+            '\u{00e7}' => 'c',
+            c if c.is_ascii() && !c.is_control() => c,
+            '\t' | '\n' | '\r' => ' ',
+            _ => return None,
+        };
+        if mapped != ch {
+            folded = true;
+        }
+        out.push(mapped);
+    }
+    Some(if folded { out } else { text.to_string() })
+}
+
 fn rgb(color: u32) -> Rgb {
     Rgb(
         ((color >> 16) & 255) as u8,
@@ -174,12 +269,30 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         if mixed_color {
             self.stats.approx("inline-color-flattened");
         }
-        let run_refs: Vec<(&str, bool)> =
-            runs.iter().map(|(t, b)| (t.as_str(), *b)).collect();
-        let lines: Lines = place_runs_normal(&run_refs, width, |ch, bold| {
+        let mut folded_any = false;
+        let mut folded_runs: Vec<String> = Vec::with_capacity(runs.len());
+        for (text, _) in &runs {
+            let f = fold_ascii(text).ok_or("non-ascii-text")?;
+            if f != *text {
+                folded_any = true;
+            }
+            folded_runs.push(f);
+        }
+        if folded_any {
+            self.stats.approx("unicode-folded-ascii");
+        }
+        let run_refs: Vec<(&str, bool)> = folded_runs
+            .iter()
+            .zip(runs.iter())
+            .map(|(t, (_, b))| (t.as_str(), *b))
+            .collect();
+        let lines: Lines = match place_runs_normal(&run_refs, width, |ch, bold| {
             self.font.advance(ch, size, bold)
-        })
-        .map_err(|_| "place-refused")?;
+        }) {
+            Ok(l) => l,
+            Err(_) => greedy_wrap(&run_refs, width, |ch, bold| self.font.advance(ch, size, bold), &mut self.stats)
+                .ok_or("place-and-greedy-refused")?,
+        };
         let natural = self
             .font
             .normal_line_metrics(size, false)
