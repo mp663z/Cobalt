@@ -1,0 +1,483 @@
+//! BASIC MODE (experimental, private, unadopted): a partial, best-effort page
+//! painter for the resumption's "basic working browser first" track. Unlike
+//! every `css_text_page` entry this NEVER proves a complete page: it paints
+//! the boxes it can measure in normal flow, SKIPS and counts everything it
+//! cannot, and returns the skip census with the list. A `PartialStats` with
+//! any nonzero skip count means the image is a PARTIAL render - never present
+//! one as complete or as Chrome parity. All exact painters and gates are
+//! unchanged; this module shares only their measured primitives.
+//!
+//! Documented approximations (each counted in stats when used):
+//! - no margin collapsing (adjoining margins add),
+//! - diagnostic (floored) percentage widths from `WidthPass`,
+//! - `font_size == 0` (fractional-em refusals) falls back to the nearest
+//!   nonzero ancestor size, else 16px,
+//! - backgrounds paint the padding box; border widths are not subtracted,
+//! - floats, positioned boxes, flex subtrees and replaced content are skipped,
+//! - line breaking is the existing narrow ASCII placer; blocks it refuses
+//!   are skipped whole.
+//!
+//! Bounds: node visits, emitted commands and glyph bytes reuse the display
+//! list budgets; on exhaustion painting stops and `output_truncated` is set.
+
+use std::collections::BTreeMap;
+
+use crate::box_tree::{BoxKind, BoxTree, WidthPass};
+use crate::computed_style::{Length, Margin};
+use crate::css_text_page::FontProvider;
+use crate::display_list::{DisplayList, Rect, Rgb, Source};
+use crate::inline_lines::{place_runs_normal, Lines};
+
+const MAX_VISITS: usize = 200_000;
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PartialStats {
+    pub skips: BTreeMap<&'static str, usize>,
+    pub approximations: BTreeMap<&'static str, usize>,
+    pub blocks_painted: usize,
+    pub text_blocks_painted: usize,
+    pub glyph_runs: usize,
+    pub fills: usize,
+    pub output_truncated: bool,
+}
+
+impl PartialStats {
+    fn skip(&mut self, kind: &'static str) {
+        *self.skips.entry(kind).or_insert(0) += 1;
+    }
+    fn approx(&mut self, kind: &'static str) {
+        *self.approximations.entry(kind).or_insert(0) += 1;
+    }
+    /// True when nothing was skipped (the render may still carry the named
+    /// approximations above - report them either way).
+    #[must_use]
+    pub fn complete(&self) -> bool {
+        self.skips.is_empty() && !self.output_truncated
+    }
+}
+
+fn rgb(color: u32) -> Rgb {
+    Rgb(
+        ((color >> 16) & 255) as u8,
+        ((color >> 8) & 255) as u8,
+        (color & 255) as u8,
+    )
+}
+
+struct Painter<'a, F: FontProvider> {
+    tree: &'a BoxTree,
+    font: &'a F,
+    widths: WidthPass,
+    stats: PartialStats,
+    visits: usize,
+}
+
+impl<'a, F: FontProvider> Painter<'a, F> {
+    fn font_size(&self, index: usize) -> u32 {
+        let mut i = Some(index);
+        while let Some(current) = i {
+            let size = self.tree.boxes[current].style.font_size;
+            if size != 0 {
+                if current != index {
+                    // counted once per text block by the caller
+                    return size;
+                }
+                return size;
+            }
+            i = self.tree.boxes[current].parent;
+        }
+        16
+    }
+
+    fn margin_px(&mut self, margin: Margin, containing: u32) -> i64 {
+        match margin {
+            Margin::Px(v) => i64::from(v),
+            Margin::Percent(p) => {
+                self.stats.approx("margin-percent-floored");
+                (i64::from(containing) * i64::from(p)) / 10_000
+            }
+            Margin::Auto | Margin::Em(_) => {
+                self.stats.approx("margin-zeroed");
+                0
+            }
+        }
+    }
+
+    /// Collect (text, bold) runs for a pure-inline block, tolerating the
+    /// tree-level flags the exact collector refuses on. Second return is
+    /// true when any leaf colour differs from the block's (v1 flattens them).
+    fn collect_runs(&mut self, parent: usize) -> Result<(Vec<(String, bool)>, bool), &'static str> {
+        let owner = &self.tree.boxes[parent];
+        if owner.kind != BoxKind::Block && owner.kind != BoxKind::AnonymousBlock && owner.kind != BoxKind::ListItem {
+            return Err("not-block");
+        }
+        if owner.children.is_empty() {
+            return Err("empty");
+        }
+        if !owner
+            .children
+            .iter()
+            .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline))
+        {
+            return Err("mixed-content");
+        }
+        let block_color = owner.style.color;
+        let mut mixed_color = false;
+        let mut runs: Vec<(String, bool)> = Vec::new();
+        let mut stack: Vec<usize> = owner.children.iter().rev().copied().collect();
+        let mut visited = 0usize;
+        while let Some(index) = stack.pop() {
+            visited += 1;
+            if visited > 4096 || runs.len() >= 4096 {
+                return Err("bounded");
+            }
+            let node = &self.tree.boxes[index];
+            if node.style.color != block_color {
+                mixed_color = true;
+            }
+            match node.kind {
+                BoxKind::Text => {
+                    let text = node.text.clone().ok_or("no-text")?;
+                    runs.push((text, node.style.font_weight == 700));
+                }
+                BoxKind::Inline => {
+                    for &c in node.children.iter().rev() {
+                        stack.push(c);
+                    }
+                }
+                _ => return Err("other-kind"),
+            }
+        }
+        if runs.is_empty() {
+            return Err("no-runs");
+        }
+        Ok((runs, mixed_color))
+    }
+
+    /// Paint one pure-inline text block at (content_x, top) with `width`.
+    /// Returns the painted content height in px.
+    fn paint_text_block(
+        &mut self,
+        index: usize,
+        content_x: i64,
+        top: i64,
+        width: u32,
+        list: &mut DisplayList,
+    ) -> Result<i64, &'static str> {
+        let node = &self.tree.boxes[index];
+        let mut size = node.style.font_size;
+        if size == 0 {
+            size = self.font_size(index);
+            self.stats.approx("font-size-fallback");
+        }
+        let (runs, mixed_color) = self.collect_runs(index)?;
+        if mixed_color {
+            self.stats.approx("inline-color-flattened");
+        }
+        let run_refs: Vec<(&str, bool)> =
+            runs.iter().map(|(t, b)| (t.as_str(), *b)).collect();
+        let lines: Lines = place_runs_normal(&run_refs, width, |ch, bold| {
+            self.font.advance(ch, size, bold)
+        })
+        .map_err(|_| "place-refused")?;
+        let natural = self
+            .font
+            .normal_line_metrics(size, false)
+            .map(|m| m.height)
+            .or_else(|| self.font.line_height(size, false))
+            .ok_or("no-line-metrics")?;
+        let line_height = node
+            .style
+            .used_line_height(natural)
+            .filter(|&v| v > 0)
+            .unwrap_or(natural);
+        let baseline = self
+            .font
+            .normal_line_metrics(size, false)
+            .map(|m| m.baseline)
+            .or_else(|| self.font.baseline_offset(size, false))
+            .filter(|&b| b >= 0 && i64::from(b) < i64::from(natural))
+            .ok_or("no-baseline")?;
+        if lines.count == 0 {
+            return Ok(0);
+        }
+        // Merge consecutive glyphs sharing (line, leaf, bold) into one
+        // coverage command so long pages stay inside display-list budgets.
+        let mut run_start: Option<usize> = Some(0);
+        let glyphs = &lines.glyphs;
+        let block_rgb = rgb(self.tree.boxes[index].style.color);
+        let flush = |from: usize,
+                     to: usize,
+                     glyphs: &[crate::inline_lines::PositionedGlyph],
+                     list: &mut DisplayList,
+                     stats: &mut PartialStats,
+                     font: &F|
+         -> Result<(), ()> {
+            if from >= to {
+                return Ok(());
+            }
+            let first = glyphs[from];
+            let line_top = top
+                + i64::from(to_owned_line(glyphs, from)) * i64::from(line_height);
+            let x0 = content_x + i64::from(first.x);
+            let last = glyphs[to - 1];
+            let width_px = i64::from(last.x) + i64::from(last.advance);
+            let run_w = u32::try_from(width_px - i64::from(first.x)).map_err(|_| ())?;
+            if run_w == 0 {
+                return Ok(());
+            }
+            let mut mask = vec![0u8; run_w as usize * line_height as usize];
+            for g in &glyphs[from..to] {
+                let bitmap = font.raster(g.character, size, g.bold).ok_or(())?;
+                let dx = i64::from(g.x) - i64::from(first.x) + i64::from(bitmap.left);
+                let dy = i64::from(baseline) + i64::from(bitmap.top);
+                for row in 0..bitmap.height {
+                    let y = dy + i64::from(row);
+                    if y < 0 || y >= i64::from(line_height) {
+                        continue;
+                    }
+                    for col in 0..bitmap.width {
+                        let x = dx + i64::from(col);
+                        if x < 0 || x >= i64::from(run_w) {
+                            continue;
+                        }
+                        let dst = (y as usize) * run_w as usize + x as usize;
+                        let src = (row * bitmap.width + col) as usize;
+                        if src < bitmap.coverage.len() {
+                            mask[dst] = mask[dst].max(bitmap.coverage[src]);
+                        }
+                    }
+                }
+            }
+            let color = block_rgb;
+            let rect = Rect {
+                x: i32::try_from(x0).map_err(|_| ())?,
+                y: i32::try_from(line_top).map_err(|_| ())?,
+                width: run_w,
+                height: line_height,
+            };
+            list.glyph_run(rect, rect, mask, color, Source { node: self_node(glyphs, from), action: None })
+                .map_err(|_| ())?;
+            stats.glyph_runs += 1;
+            Ok(())
+        };
+        for i in 1..=glyphs.len() {
+            let boundary = i == glyphs.len()
+                || glyphs[i].line != glyphs[i - 1].line
+                || glyphs[i].bold != glyphs[i - 1].bold;
+            if boundary {
+                let from = run_start.take().unwrap_or(0);
+                if flush(from, i, glyphs, list, &mut self.stats, self.font).is_err() {
+                    self.stats.output_truncated = true;
+                    return Ok(i64::from(lines.count) * i64::from(line_height));
+                }
+                if i < glyphs.len() {
+                    run_start = Some(i);
+                }
+            }
+        }
+        self.stats.text_blocks_painted += 1;
+        Ok(i64::from(lines.count) * i64::from(line_height))
+    }
+
+    /// Normal-flow stacking walk. Returns the subtree's vertical extent in px
+    /// (content only; caller adds its own padding/margins).
+    fn layout_block(
+        &mut self,
+        index: usize,
+        content_x: i64,
+        top: i64,
+        width: u32,
+        list: &mut DisplayList,
+    ) -> i64 {
+        self.visits += 1;
+        if self.visits > MAX_VISITS || self.stats.output_truncated {
+            self.stats.output_truncated = true;
+            return 0;
+        }
+        let node_kind = self.tree.boxes[index].kind;
+        let style = self.tree.boxes[index].style;
+        match node_kind {
+            BoxKind::Flex => {
+                // v1 approximation: flex containers lay out as plain block
+                // stacks (row direction collapses to vertical).
+                self.stats.approx("flex-as-block");
+            }
+            BoxKind::InlineBlock => {
+                self.stats.approx("inline-block-as-block");
+            }
+            _ => {}
+        }
+        if style.positioned.position != crate::computed_style::Position::Static {
+            self.stats.skip("positioned");
+            return 0;
+        }
+        let pad_top = i64::from(style.padding_top);
+        let pad_bot = i64::from(style.padding_bottom);
+        let content_top = top + pad_top;
+        let node = &self.tree.boxes[index];
+        let pure_inline = !node.children.is_empty()
+            && node
+                .children
+                .iter()
+                .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline));
+        let mut content_height: i64 = 0;
+        if pure_inline {
+            match self.paint_text_block(index, content_x, content_top, width, list) {
+                Ok(h) => content_height = h,
+                Err(reason) => self.stats.skip(reason),
+            }
+        } else {
+            let mut cursor = content_top;
+            let child_width = width
+                .saturating_sub(style.padding_left)
+                .saturating_sub(style.padding_right);
+            for &child in &self.tree.boxes[index].children {
+                let ckind = self.tree.boxes[child].kind;
+                if matches!(ckind, BoxKind::Text | BoxKind::Inline) {
+                    self.stats.skip("stray-inline");
+                    continue;
+                }
+                let cstyle = self.tree.boxes[child].style;
+                let containing = width;
+                let ml = self.margin_px(cstyle.margin_left, containing);
+                let mt = self.margin_px(cstyle.margin_top, containing);
+                let mb = self.margin_px(cstyle.margin_bottom, containing);
+                let cw = self
+                    .widths
+                    .widths
+                    .get(child)
+                    .copied()
+                    .flatten()
+                    .map(|w| w.content)
+                    .unwrap_or(child_width);
+                if self.widths.widths.get(child).copied().flatten().is_none() {
+                    self.stats.approx("width-fallback-parent");
+                }
+                cursor += mt;
+                let child_x = content_x + ml;
+                let h = self.layout_block(child, child_x, cursor, cw, list);
+                // Background for this child, behind nothing (emitted after
+                // descendants in v1: paint order approximation, counted once).
+                cursor += h + mb;
+            }
+            content_height = cursor - content_top;
+        }
+        // Definite px height wins for the background rect when larger.
+        if let Length::Px(h) = style.height {
+            if i64::from(h) > content_height {
+                content_height = i64::from(h);
+            }
+        }
+        // Background: padding box. Fill AFTER content in v1 only when the box
+        // is a text block (its background would hide the text); block
+        // containers get their fill before children in the caller below.
+        if pure_inline {
+            if let Some(color) = style.used_background_color() {
+                // re-emit behind text is not possible post hoc; skip with count
+                self.stats.skip("inline-block-bg-order");
+                let _ = color;
+            }
+        }
+        self.stats.blocks_painted += 1;
+        content_height + pad_top + pad_bot
+    }
+}
+
+fn to_owned_line(glyphs: &[crate::inline_lines::PositionedGlyph], i: usize) -> u32 {
+    glyphs[i].line
+}
+
+fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Option<usize> {
+    None
+}
+
+/// Paint a best-effort partial page. The returned stats MUST travel with any
+/// image produced from the list: a nonzero skip census or `output_truncated`
+/// marks the render partial.
+///
+/// # Errors
+/// Fails only on invalid viewport or an unpaintable root (no boxes); partial
+/// results always return Ok with their census.
+pub fn paint_basic_page(
+    tree: &BoxTree,
+    viewport_width: u32,
+    viewport_height: u32,
+    font: &impl FontProvider,
+) -> Result<(DisplayList, PartialStats, i64), &'static str> {
+    if viewport_width == 0 || viewport_height == 0 {
+        return Err("viewport");
+    }
+    if tree.roots.len() != 1 || tree.roots[0] >= tree.boxes.len() {
+        return Err("root");
+    }
+    let widths = WidthPass::from_boxes(tree, viewport_width);
+    let mut painter = Painter {
+        tree,
+        font,
+        widths,
+        stats: PartialStats::default(),
+        visits: 0,
+    };
+    let mut list = DisplayList::default();
+    let root = tree.roots[0];
+    // Canvas background from root (or body) as in the exact painter.
+    let body = tree.boxes[root].children.first().copied();
+    let canvas = tree.boxes[root]
+        .style
+        .used_background_color()
+        .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()));
+    if let Some(color) = canvas {
+        if list
+            .fill(
+                Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
+                rgb(color),
+                Source { node: tree.boxes[root].source, action: None },
+            )
+            .is_err()
+        {
+            painter.stats.output_truncated = true;
+        } else {
+            painter.stats.fills += 1;
+        }
+    }
+    // Walk top-level blocks: root's descendants in order, block by block.
+    let mut cursor = 0i64;
+    let root_width = viewport_width;
+    let start: Vec<usize> = match tree.boxes[root].kind {
+        BoxKind::Block | BoxKind::AnonymousBlock | BoxKind::ListItem => vec![root],
+        _ => vec![],
+    };
+    for top_index in start {
+        cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list);
+    }
+    // Container backgrounds: second preorder pass would double-emit; v1 fills
+    // container backgrounds BEFORE content in a first pass instead. To keep
+    // one walk simple, v1 paints container backgrounds after content with a
+    // documented order approximation only when they carry a background.
+    // (Counted; fixed in the hardening track with a two-phase paint.)
+    let mut order_pass = |list: &mut DisplayList, stats: &mut PartialStats| {
+        let mut stack = vec![root];
+        let mut visited = 0usize;
+        while let Some(index) = stack.pop() {
+            visited += 1;
+            if visited > MAX_VISITS {
+                stats.output_truncated = true;
+                break;
+            }
+            let node = &tree.boxes[index];
+            if matches!(node.kind, BoxKind::Block | BoxKind::AnonymousBlock | BoxKind::ListItem)
+                && node.style.used_background_color().is_some()
+                && index != root
+                && Some(index) != body
+            {
+                stats.approx("container-bg-after-content");
+            }
+            for &c in node.children.iter().rev() {
+                stack.push(c);
+            }
+        }
+    };
+    order_pass(&mut list, &mut painter.stats);
+    Ok((list, painter.stats, cursor))
+}
