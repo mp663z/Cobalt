@@ -322,7 +322,15 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             size = self.font_size(index);
             self.stats.approx("font-size-fallback");
         }
-        let (runs, mixed_color) = self.collect_runs(index)?;
+        let (mut runs, mixed_color) = self.collect_runs(index)?;
+        // Unordered-list marker approximation: a literal bullet glyph
+        // prefixed to the item's first run (list-style-type is not read).
+        if self.tree.boxes[index].kind == BoxKind::ListItem {
+            if let Some(first) = runs.first_mut() {
+                first.0.insert_str(0, "* ");
+                self.stats.approx("list-marker-bullet");
+            }
+        }
         if mixed_color {
             self.stats.approx("inline-color-flattened");
         }
