@@ -428,12 +428,43 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             }
             _ => {}
         }
-        if style.positioned.position != crate::computed_style::Position::Static {
-            self.stats.skip("positioned");
-            return 0;
+        let (mut content_x, mut top) = (content_x, top);
+        match style.positioned.position {
+            crate::computed_style::Position::Static => {}
+            crate::computed_style::Position::Relative | crate::computed_style::Position::Sticky => {
+                // Relative (and sticky at scroll offset 0) occupies its static
+                // flow space and paints shifted by the resolved offsets.
+                let t = self.margin_px(style.positioned.offsets[0], width);
+                let r = self.margin_px(style.positioned.offsets[1], width);
+                let b = self.margin_px(style.positioned.offsets[2], width);
+                let l = self.margin_px(style.positioned.offsets[3], width);
+                let dx = l - r;
+                let dy = t - b;
+                if dx != 0 || dy != 0 {
+                    self.stats.approx("relative-offset-applied");
+                } else {
+                    self.stats.approx("relative-as-static");
+                }
+                content_x += dx;
+                top += dy;
+            }
+            crate::computed_style::Position::Absolute | crate::computed_style::Position::Fixed => {
+                self.stats.skip("positioned");
+                return 0;
+            }
         }
-        let pad_top = i64::from(style.padding_top);
-        let pad_bot = i64::from(style.padding_bottom);
+        let pad = |v: u32, stats: &mut PartialStats| -> i64 {
+            if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                stats.approx("padding-unrepresentable-zeroed");
+                0
+            } else {
+                i64::from(v)
+            }
+        };
+        let pad_top = pad(style.padding_top, &mut self.stats);
+        let pad_bot = pad(style.padding_bottom, &mut self.stats);
+        let pad_left = pad(style.padding_left, &mut self.stats);
+        let pad_right = pad(style.padding_right, &mut self.stats);
         let content_top = top + pad_top;
         let node = &self.tree.boxes[index];
         let pure_inline = !node.children.is_empty()
@@ -443,15 +474,13 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline));
         let mut content_height: i64 = 0;
         if pure_inline {
-            match self.paint_text_block(index, content_x, content_top, width, list) {
+            match self.paint_text_block(index, content_x + pad_left, content_top, (i64::from(width) - pad_left - pad_right).max(0) as u32, list) {
                 Ok(h) => content_height = h,
                 Err(reason) => self.stats.skip(reason),
             }
         } else {
             let mut cursor = content_top;
-            let child_width = width
-                .saturating_sub(style.padding_left)
-                .saturating_sub(style.padding_right);
+            let child_width = (i64::from(width) - pad_left - pad_right).max(0) as u32;
             for &child in &self.tree.boxes[index].children {
                 let ckind = self.tree.boxes[child].kind;
                 if matches!(ckind, BoxKind::Text | BoxKind::Inline) {
@@ -475,7 +504,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     self.stats.approx("width-fallback-parent");
                 }
                 cursor += mt;
-                let child_x = content_x + ml;
+                let child_x = content_x + pad_left + ml;
                 let h = self.layout_block(child, child_x, cursor, cw, list);
                 // Background for this child, behind nothing (emitted after
                 // descendants in v1: paint order approximation, counted once).
@@ -500,7 +529,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             }
         }
         self.stats.blocks_painted += 1;
-        content_height + pad_top + pad_bot
+        let total = content_height + pad_top + pad_bot;
+        if total > 100_000 {
+            eprintln!("HUGE block index={index} kind={node_kind:?} total={total} content={content_height} pad_t={pad_top} pad_b={pad_bot} height_style={:?}", style.height);
+        }
+        total
     }
 }
 

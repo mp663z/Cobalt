@@ -60,7 +60,10 @@ fn main() {
     let face = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf").unwrap()).unwrap();
     // Pass 1: measure content height (canvas fill covers 1px; discarded).
     let (_, _, h1) = paint_basic_page(&bt, WIDTH, 1, &face).unwrap();
-    let height = u32::try_from(h1.max(1)).unwrap_or(u32::MAX);
+    if h1 > 100_000 {
+        println!("{page}: WARNING raw content height {h1} clamped to 100000");
+    }
+    let height = u32::try_from(h1.clamp(1, 100_000)).unwrap();
     // Pass 2: paint with the canvas covering the full content height.
     let (cmds, stats, _) = paint_basic_page(&bt, WIDTH, height, &face).unwrap();
     let mut rgba = vec![255u8; WIDTH as usize * height as usize * 4];
