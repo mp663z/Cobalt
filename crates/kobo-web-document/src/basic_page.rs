@@ -675,6 +675,51 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
     None
 }
 
+/// BASIC-mode intake normalization: rewrite table-structure tags
+/// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
+/// `colgroup`, `col`) to `div` so their content flows as blocks. The engine
+/// has no table display; without this the content vanishes. Cells stack
+/// vertically (no column geometry) - an approximation that MUST be
+/// disclosed with any render made from normalized input.
+pub fn normalize_table_tags_basic(input: &[u8]) -> Vec<u8> {
+    const NAMES: [&[u8]; 10] = [
+        b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
+    ];
+    let mut out = Vec::with_capacity(input.len());
+    let mut i = 0usize;
+    while i < input.len() {
+        if input[i] == b'<' {
+            let mut j = i + 1;
+            if j < input.len() && input[j] == b'/' {
+                j += 1;
+            }
+            let start = j;
+            while j < input.len() && input[j].is_ascii_alphabetic() {
+                j += 1;
+            }
+            let name = &input[start..j];
+            let bounded = j >= input.len()
+                || matches!(input[j], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
+            let mut replaced = false;
+            if bounded && !name.is_empty() {
+                let lower: Vec<u8> = name.iter().map(|b| b.to_ascii_lowercase()).collect();
+                if NAMES.contains(&lower.as_slice()) {
+                    out.extend_from_slice(&input[i..start]);
+                    out.extend_from_slice(b"div");
+                    replaced = true;
+                }
+            }
+            if replaced {
+                i = j;
+                continue;
+            }
+        }
+        out.push(input[i]);
+        i += 1;
+    }
+    out
+}
+
 /// Paint a best-effort partial page. The returned stats MUST travel with any
 /// image produced from the list: a nonzero skip census or `output_truncated`
 /// marks the render partial.
