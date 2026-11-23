@@ -20,6 +20,11 @@ pub enum BoxKind {
     Flex,
     Text,
     AnonymousBlock,
+    /// Replaced `img` content. Carries [`crate::style_tree::ImageFacts`];
+    /// geometry and paint land with the Phase 1 image slice. No current
+    /// intake path produces it (the basic normalizer still rewrites
+    /// `<img>`), so it is inert; the layout passes refuse it if reached.
+    Image,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,6 +41,8 @@ pub struct CssBox {
     pub style: Computed,
     /// Original DOM text. White-space processing belongs to line layout.
     pub text: Option<String>,
+    /// Replaced-content facts when `kind == BoxKind::Image`.
+    pub image: Option<crate::style_tree::ImageFacts>,
     /// EXPERIMENTAL: a generated `::before`/`::after` box (extended-CSS entry).
     /// Paintable only as the cleared child of the confined float kernel by the
     /// explicit kernel painter.
@@ -1100,6 +1107,12 @@ impl HeightPass {
                     })
                 }
                 BoxKind::AnonymousBlock => None,
+                BoxKind::Image => {
+                    // Inert until the Phase 1 image slice wires geometry;
+                    // refuse rather than guess if a tree ever carries one.
+                    result.unsupported = true;
+                    None
+                }
                 BoxKind::InlineBlock | BoxKind::Inline | BoxKind::Text => {
                     if node.kind == BoxKind::InlineBlock {
                         result.unsupported = true;
@@ -2182,6 +2195,11 @@ impl WidthPass {
                     result.unsupported = true;
                     (None, None)
                 }
+                BoxKind::Image => {
+                    // Inert until the Phase 1 image slice wires geometry.
+                    result.unsupported = true;
+                    (None, None)
+                }
                 BoxKind::Inline | BoxKind::Text => (containing, None),
             };
             for &child in node.children.iter().rev() {
@@ -2665,6 +2683,13 @@ impl BoxTree {
             let node = &styled.nodes[source];
             let kind = if node.text.is_some() {
                 Some(BoxKind::Text)
+            } else if node.image.is_some() {
+                // Replaced `img` keeps its display in `style`; the box kind
+                // records WHAT it is. `display:none` still removes it.
+                match node.style.display {
+                    Display::None => None,
+                    _ => Some(BoxKind::Image),
+                }
             } else {
                 match node.style.display {
                     Display::None => None,
@@ -2773,6 +2798,7 @@ impl BoxTree {
                 children: Vec::new(),
                 style,
                 text: node.text.clone(),
+                image: node.image.clone(),
                 // Same generated-box paint confinement for both pseudo families:
                 // kernel-cleared only, by the explicit kernel painter.
                 generated: node.tag == "::after" || node.tag == "::before",
@@ -3063,6 +3089,7 @@ impl BoxTree {
             children: std::mem::take(run),
             style,
             text: None,
+            image: None,
             generated: false,
         });
         self.boxes[parent].children.push(index);
@@ -3089,6 +3116,30 @@ mod tests {
 
     fn boxes(html: &str) -> BoxTree {
         BoxTree::from_style(&styled(html))
+    }
+
+    #[test]
+    fn img_becomes_an_image_box_with_its_facts() {
+        let tree = boxes(
+            "<div><img src=\"data:image/png;base64,AAAA\" alt=\"A\" width=10 height=20></div>",
+        );
+        let image_boxes: Vec<_> = tree
+            .boxes
+            .iter()
+            .filter(|b| b.kind == BoxKind::Image)
+            .collect();
+        assert_eq!(image_boxes.len(), 1);
+        let facts = image_boxes[0].image.as_ref().expect("image facts");
+        assert_eq!(
+            facts.src_data_uri.as_deref(),
+            Some("data:image/png;base64,AAAA")
+        );
+        assert_eq!(facts.alt.as_deref(), Some("A"));
+        assert_eq!(facts.attr_width, Some(10));
+        assert_eq!(facts.attr_height, Some(20));
+        // display:none still removes the box entirely.
+        let hidden = boxes("<div><img style=\"display:none\" alt=\"A\"></div>");
+        assert!(!hidden.boxes.iter().any(|b| b.kind == BoxKind::Image));
     }
 
     #[test]
