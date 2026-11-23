@@ -24,3 +24,7 @@ are the build inputs. Do not regenerate from an arbitrary newer font version.
 
 CJK is intentionally not bundled: the broad Japanese subset costs 13.38 MB.
 Callers may install an external face through PageFontSession::add_fallback.
+
+For the bundled Hindi and Russian fixtures, no external face is needed.
+The Japanese fixture intentionally exercises the optional fallback path.
+A zero skipped-block count alone is not proof of glyph coverage or shaping.
