@@ -359,6 +359,7 @@ pub enum Value {
     Visibility(bool),
     /// CANDIDATE (ext entry only): `white-space: nowrap` (true) or `normal` (false).
     WhiteSpaceNowrap(bool),
+    WhiteSpacePre,
     TextDecoration(TextDecoration),
     BackgroundColor(Option<u32>),
     BorderColor(BorderColor),
@@ -570,6 +571,8 @@ pub struct Computed {
     pub list_style_none: bool,
     /// CANDIDATE (ext entry only): computed `white-space: nowrap`; inherited. Admitted only for texts without a break opportunity.
     pub white_space_nowrap: bool,
+    /// Page-view preserved whitespace; exact paint consumers remain unsupported.
+    pub white_space_pre: bool,
     /// Not inherited; a decorating box paints its own and descendant text (restricted paths only).
     pub text_decoration: TextDecoration,
     /// Computed CSS font-size in integer pixels. Relative sizes need an explicit parent.
@@ -636,6 +639,7 @@ impl Computed {
         text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
+        white_space_pre: false,
         text_decoration: TextDecoration::None,
         font_size: 16,
         font_family: None,
@@ -739,6 +743,7 @@ impl Computed {
             text_align: parent.unwrap_or(initial).text_align,
             list_style_none: parent.unwrap_or(initial).list_style_none,
             white_space_nowrap: parent.unwrap_or(initial).white_space_nowrap,
+            white_space_pre: parent.unwrap_or(initial).white_space_pre,
             text_decoration: TextDecoration::None,
             font_size: parent.unwrap_or(initial).font_size,
             font_family: parent.unwrap_or(initial).font_family,
@@ -858,7 +863,7 @@ impl Computed {
                 Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
                 Property::ListStyleType => Value::ListStyleNone(parent.unwrap_or(initial).list_style_none),
                 Property::Visibility => Value::Visibility(parent.unwrap_or(initial).positioned.hidden),
-                Property::WhiteSpace => Value::WhiteSpaceNowrap(parent.unwrap_or(initial).white_space_nowrap),
+                Property::WhiteSpace => if parent.unwrap_or(initial).white_space_pre { Value::WhiteSpacePre } else { Value::WhiteSpaceNowrap(parent.unwrap_or(initial).white_space_nowrap) },
                 Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
                 Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family, parent.unwrap_or(initial).font_family_list),
                 Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
@@ -955,8 +960,13 @@ impl Computed {
                 Value::ListStyleNone(none) if property == Property::ListStyleType => {
                     computed.list_style_none = none;
                 }
+                Value::WhiteSpacePre if property == Property::WhiteSpace => {
+                    computed.white_space_pre = true;
+                    computed.white_space_nowrap = false;
+                }
                 Value::WhiteSpaceNowrap(nowrap) if property == Property::WhiteSpace => {
                     computed.white_space_nowrap = nowrap;
+                    computed.white_space_pre = false;
                 }
                 Value::TextDecoration(d) if property == Property::TextDecoration => {
                     computed.text_decoration = d;
@@ -1169,7 +1179,7 @@ fn resolve(
         Property::TextAlign => Value::TextAlign(initial.text_align),
         Property::ListStyleType => Value::ListStyleNone(initial.list_style_none),
         Property::Visibility => Value::Visibility(initial.positioned.hidden),
-        Property::WhiteSpace => Value::WhiteSpaceNowrap(initial.white_space_nowrap),
+        Property::WhiteSpace => if initial.white_space_pre { Value::WhiteSpacePre } else { Value::WhiteSpaceNowrap(initial.white_space_nowrap) },
         Property::TextDecoration => Value::TextDecoration(initial.text_decoration),
         Property::FontFamily => Value::FontFamily(initial.font_family, initial.font_family_list),
         Property::FontSize => Value::FontSize(initial.font_size),
@@ -1221,7 +1231,7 @@ fn resolve(
         Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
         Property::ListStyleType => Value::ListStyleNone(parent.unwrap_or(initial).list_style_none),
         Property::Visibility => Value::Visibility(parent.unwrap_or(initial).positioned.hidden),
-        Property::WhiteSpace => Value::WhiteSpaceNowrap(parent.unwrap_or(initial).white_space_nowrap),
+        Property::WhiteSpace => if parent.unwrap_or(initial).white_space_pre { Value::WhiteSpacePre } else { Value::WhiteSpaceNowrap(parent.unwrap_or(initial).white_space_nowrap) },
         Property::TextDecoration => Value::TextDecoration(parent.unwrap_or(initial).text_decoration),
         Property::FontFamily => Value::FontFamily(parent.unwrap_or(initial).font_family, parent.unwrap_or(initial).font_family_list),
         Property::FontSize => Value::FontSize(parent.unwrap_or(initial).font_size),
@@ -1367,6 +1377,7 @@ mod tests {
             text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
+        white_space_pre: false,
         text_decoration: TextDecoration::None,
             font_weight: 400,
             font_style: FontStyle::Normal,
@@ -1416,6 +1427,7 @@ mod tests {
                 text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
+        white_space_pre: false,
         text_decoration: TextDecoration::None,
                 font_weight: 400,
                 font_style: FontStyle::Normal,
@@ -1572,6 +1584,7 @@ mod tests {
             text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
+        white_space_pre: false,
         text_decoration: TextDecoration::None,
             font_weight: 400,
             font_style: FontStyle::Normal,
@@ -1630,6 +1643,7 @@ mod tests {
                     text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
+        white_space_pre: false,
         text_decoration: TextDecoration::None,
                     font_weight: 400,
                     font_style: FontStyle::Normal,

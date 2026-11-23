@@ -28,7 +28,7 @@ use crate::box_tree::{BoxKind, BoxTree, WidthPass};
 use crate::computed_style::{Length, Margin};
 use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
-use crate::inline_lines::{place_runs_normal, Lines};
+
 
 const MAX_VISITS: usize = 200_000;
 
@@ -61,155 +61,6 @@ impl PartialStats {
     }
 }
 
-/// Basic-mode greedy wrapper used when the narrow placer refuses a block:
-/// words wrap greedily at `max_width`; a word wider than the line is hard-
-/// broken (counted). ASCII-only input (callers fold first). Every fallback
-/// block is counted as `greedy-wrap-fallback`.
-fn greedy_wrap(
-    runs: &[(&str, bool)],
-    max_width: u32,
-    mut advance: impl FnMut(char, bool) -> Option<u32>,
-    stats: &mut PartialStats,
-) -> Option<Lines> {
-    if max_width == 0 {
-        return None;
-    }
-    let mut glyphs = Vec::new();
-    let mut x = 0u32;
-    let mut line = 0u32;
-    let space_w = advance(' ', false).filter(|&n| n > 0)?;
-    // One collapsed space per word boundary (CSS white-space collapsing):
-    // a pending flag set by trailing whitespace, consumed by the next word.
-    // The old code emitted the space on BOTH sides of the boundary.
-    let mut need_space = false;
-    let mut any_word = false;
-    for (text, bold) in runs {
-        for word in text.split_inclusive(|c: char| c == ' ') {
-            let trimmed = word.trim_end_matches(' ');
-            let trailing_space = word.len() != trimmed.len();
-            if !trimmed.is_empty() {
-                if need_space && any_word {
-                    if x + space_w > max_width { line += 1; x = 0; } else { x += space_w; }
-                }
-                let word_w: u32 = trimmed.chars().filter_map(|c| advance(c, *bold)).sum();
-                if word_w > max_width {
-                    stats.approx("word-hard-broken");
-                }
-                for ch in trimmed.chars() {
-                    let w = advance(ch, *bold).filter(|&n| n > 0)?;
-                    if x + w > max_width {
-                        line += 1;
-                        x = 0;
-                        if w > max_width {
-                            stats.approx("glyph-wider-than-line");
-                        }
-                    }
-                    glyphs.push(crate::inline_lines::PositionedGlyph { character: ch, x, line, advance: w, bold: *bold, leaf: 0 });
-                    x += w;
-                }
-                any_word = true;
-                need_space = false;
-            }
-            if trailing_space {
-                need_space = true;
-            }
-        }
-    }
-    if glyphs.is_empty() {
-        return None;
-    }
-    stats.approx("greedy-wrap-fallback");
-    Some(Lines { glyphs, count: line + 1 })
-}
-
-/// Fold common Unicode punctuation to ASCII for the narrow placer. Every
-/// substitution is counted as `unicode-folded-ascii` by the caller; text
-/// with any other non-ASCII character still skips the block.
-fn fold_char(ch: char) -> Option<&'static str> {
-    Some(match ch {
-        '\u{2018}' | '\u{2019}' | '\u{2032}' | '\u{00b4}' => "'",
-        '\u{201c}' | '\u{201d}' | '\u{2033}' => "\"",
-        '\u{2013}' | '\u{2014}' | '\u{2212}' | '\u{2010}' | '\u{2011}' => "-",
-        '\u{2026}' => "...",
-        '\u{00a0}' | '\u{2002}' | '\u{2003}' | '\u{2009}' | '\u{202f}' | '\t' | '\n' | '\r' => " ",
-        '\u{00b7}' | '\u{2022}' | '\u{25cf}' => "*",
-        '\u{2192}' => ">",
-        '\u{2190}' => "<",
-        // Latin-1 Supplement and Extended-A letters fold to their ASCII base
-        // (a transliteration approximation, counted per block by the caller).
-        '\u{00c0}'..='\u{00c5}' | '\u{0100}' | '\u{0102}' | '\u{0104}' => "A",
-        '\u{00e0}'..='\u{00e5}' | '\u{0101}' | '\u{0103}' | '\u{0105}' => "a",
-        '\u{00c6}' => "AE",
-        '\u{00e6}' => "ae",
-        '\u{00c7}' | '\u{0106}' | '\u{0108}' | '\u{010a}' | '\u{010c}' => "C",
-        '\u{00e7}' | '\u{0107}' | '\u{0109}' | '\u{010b}' | '\u{010d}' => "c",
-        '\u{00d0}' | '\u{010e}' | '\u{0110}' => "D",
-        '\u{00f0}' | '\u{010f}' | '\u{0111}' => "d",
-        '\u{00c8}'..='\u{00cb}' | '\u{0112}' | '\u{0114}' | '\u{0116}' | '\u{0118}' | '\u{011a}' => "E",
-        '\u{00e8}'..='\u{00eb}' | '\u{0113}' | '\u{0115}' | '\u{0117}' | '\u{0119}' | '\u{011b}' => "e",
-        '\u{011c}' | '\u{011e}' | '\u{0120}' | '\u{0122}' => "G",
-        '\u{011d}' | '\u{011f}' | '\u{0121}' | '\u{0123}' => "g",
-        '\u{0124}' | '\u{0126}' => "H",
-        '\u{0125}' | '\u{0127}' => "h",
-        '\u{00cc}'..='\u{00cf}' | '\u{0128}' | '\u{012a}' | '\u{012c}' | '\u{012e}' | '\u{0130}' => "I",
-        '\u{00ec}'..='\u{00ef}' | '\u{0129}' | '\u{012b}' | '\u{012d}' | '\u{012f}' | '\u{0131}' => "i",
-        '\u{0132}' => "IJ",
-        '\u{0133}' => "ij",
-        '\u{0134}' => "J",
-        '\u{0135}' => "j",
-        '\u{0136}' => "K",
-        '\u{0137}' => "k",
-        '\u{0139}' | '\u{013b}' | '\u{013d}' | '\u{013f}' | '\u{0141}' => "L",
-        '\u{013a}' | '\u{013c}' | '\u{013e}' | '\u{0140}' | '\u{0142}' => "l",
-        '\u{00d1}' | '\u{0143}' | '\u{0145}' | '\u{0147}' => "N",
-        '\u{00f1}' | '\u{0144}' | '\u{0146}' | '\u{0148}' | '\u{014b}' => "n",
-        '\u{014a}' => "N",
-        '\u{00d2}'..='\u{00d6}' | '\u{00d8}' | '\u{014c}' | '\u{014e}' | '\u{0150}' => "O",
-        '\u{00f2}'..='\u{00f6}' | '\u{00f8}' | '\u{014d}' | '\u{014f}' | '\u{0151}' => "o",
-        '\u{0152}' => "OE",
-        '\u{0153}' => "oe",
-        '\u{0154}' | '\u{0156}' | '\u{0158}' => "R",
-        '\u{0155}' | '\u{0157}' | '\u{0159}' => "r",
-        '\u{015a}' | '\u{015c}' | '\u{015e}' | '\u{0160}' => "S",
-        '\u{015b}' | '\u{015d}' | '\u{015f}' | '\u{0161}' | '\u{017f}' => "s",
-        '\u{00de}' => "TH",
-        '\u{00fe}' => "th",
-        '\u{0162}' | '\u{0164}' | '\u{0166}' => "T",
-        '\u{0163}' | '\u{0165}' | '\u{0167}' => "t",
-        '\u{00d9}'..='\u{00dc}' | '\u{0168}' | '\u{016a}' | '\u{016c}' | '\u{016e}' | '\u{0170}' | '\u{0172}' => "U",
-        '\u{00f9}'..='\u{00fc}' | '\u{0169}' | '\u{016b}' | '\u{016d}' | '\u{016f}' | '\u{0171}' | '\u{0173}' => "u",
-        '\u{0174}' => "W",
-        '\u{0175}' => "w",
-        '\u{00dd}' | '\u{0176}' | '\u{0178}' => "Y",
-        '\u{00fd}' | '\u{00ff}' | '\u{0177}' => "y",
-        '\u{0179}' | '\u{017b}' | '\u{017d}' => "Z",
-        '\u{017a}' | '\u{017c}' | '\u{017e}' => "z",
-        '\u{00df}' => "ss",
-        c if c.is_ascii() && !c.is_control() => return None,
-        _ => return Some(""),
-    })
-}
-
-fn fold_ascii(text: &str) -> Option<String> {
-    let mut out = String::with_capacity(text.len());
-    let mut folded = false;
-    for ch in text.chars() {
-        if ch.is_ascii() && !ch.is_control() {
-            out.push(ch);
-            continue;
-        }
-        match fold_char(ch) {
-            Some("") => return None,
-            Some(s) => {
-                folded = true;
-                out.push_str(s);
-            }
-            None => out.push(ch),
-        }
-    }
-    let _ = folded;
-    Some(out)
-}
 
 fn rgb(color: u32) -> Rgb {
     Rgb(
@@ -364,12 +215,12 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// `block_color` is the fallback color of the owning block.
     /// Runs as (text, bold, color, font_size). A text box's own size,
     /// falling back to its ancestors; 0 is impossible after the fallback.
-    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<(String, bool, u32, u32)>, bool), &'static str> {
+    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<crate::basic_text_paint::Run>, bool), &'static str> {
         if children.is_empty() {
             return Err("empty");
         }
         let mut mixed_color = false;
-        let mut runs: Vec<(String, bool, u32, u32)> = Vec::new();
+        let mut runs: Vec<crate::basic_text_paint::Run> = Vec::new();
         let mut stack: Vec<usize> = children.iter().rev().copied().collect();
         let mut visited = 0usize;
         while let Some(index) = stack.pop() {
@@ -385,7 +236,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 BoxKind::Text => {
                     let text = node.text.clone().ok_or("no-text")?;
                     let run_size = self.font_size(index);
-                    runs.push((text, node.style.font_weight == 700, node.style.color, run_size));
+                    let mut underline = node.style.text_decoration == crate::computed_style::TextDecoration::Underline;
+                    let mut parent = node.parent;
+                    while let Some(p) = parent {
+                        underline |= self.tree.boxes[p].style.text_decoration == crate::computed_style::TextDecoration::Underline;
+                        parent = self.tree.boxes[p].parent;
+                    }
+                    runs.push((text, node.style.font_weight >= 600, node.style.color, run_size,
+                        node.style.font_style != crate::computed_style::FontStyle::Normal, underline));
                 }
                 BoxKind::Inline => {
                     for &c in node.children.iter().rev() {
@@ -421,20 +279,13 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize) in &runs {
+        for (text, bold, _, rsize, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char
             // instead of failing the whole measurement.
-            match fold_ascii(text) {
-                Some(folded) => {
-                    for ch in folded.chars() {
-                        total += i64::from(face.advance(ch, sz, *bold).unwrap_or(sz / 2));
-                    }
-                }
-                None => {
-                    total += i64::from(text.chars().count() as u32) * i64::from((sz / 2).max(1));
-                }
+            for ch in text.chars() {
+                total += i64::from(face.advance(ch, sz, *bold).unwrap_or((sz / 2).max(1)));
             }
         }
         if total == 0 {
@@ -470,13 +321,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             let Some(text) = text else { return 0 };
             let size = if size == 0 { 16 } else { size };
             let face = self.face_for(index);
-            return match fold_ascii(&text) {
-                Some(folded) => folded
-                    .chars()
-                    .map(|ch| i64::from(face.advance(ch, size, false).unwrap_or(size / 2)))
-                    .sum(),
-                None => i64::from(text.chars().count() as u32) * i64::from((size / 2).max(1)),
-            };
+            return text.chars().map(|ch| i64::from(face.advance(ch, size, false).unwrap_or((size / 2).max(1)))).sum();
         }
         let mut total = 0i64;
         for c in children {
@@ -520,208 +365,25 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     ) -> Result<i64, &'static str> {
         let face = self.face_for(index);
         let node = &self.tree.boxes[index];
-        let mut size = node.style.font_size;
-        if size == 0 {
-            size = self.font_size(index);
-            self.stats.approx("font-size-fallback");
-        }
-        let (mut runs, mixed_color) = self.collect_runs_of(children, self.tree.boxes[index].style.color)?;
-        // Per-run font sizes: when every run resolves to one size that
-        // differs from the block's, the block is a same-size inline group
-        // (e.g. a 7pt subtext span inside a 10pt cell) — paint at the run
-        // size. Mixed sizes stay at the block size (baseline sharing is
-        // not modelled); both are counted.
-        {
-            let mut sizes = runs.iter().map(|r| r.3);
-            if let Some(first_size) = sizes.next() {
-                if sizes.all(|s| s == first_size) && first_size != size {
-                    size = first_size;
-                    self.stats.approx("run-size-uniform-override");
-                } else if runs.iter().any(|r| r.3 != size) {
-                    self.stats.approx("mixed-font-size-flattened");
-                }
-            }
-        }
-        // Unordered-list marker approximation: a literal bullet glyph
-        // prefixed to the item's first run (list-style-type is not read).
-        if self.tree.boxes[index].kind == BoxKind::ListItem {
-            if let Some(first) = runs.first_mut() {
-                first.0.insert_str(0, "* ");
-                self.stats.approx("list-marker-bullet");
-            }
-        }
-        if mixed_color {
-            self.stats.approx("inline-color-flattened");
-        }
-        let mut folded_any = false;
-        let mut folded_runs: Vec<String> = Vec::with_capacity(runs.len());
-        for (text, _, _, _) in &runs {
-            let f = fold_ascii(text).ok_or("non-ascii-text")?;
-            if f != *text {
-                folded_any = true;
-            }
-            folded_runs.push(f);
-        }
-        if folded_any {
-            self.stats.approx("unicode-folded-ascii");
-        }
-        let run_refs: Vec<(&str, bool)> = folded_runs
-            .iter()
-            .zip(runs.iter())
-            .map(|(t, (_, b, _, _))| (t.as_str(), *b))
-            .collect();
-        let lines: Lines = match place_runs_normal(&run_refs, width, |ch, bold| {
-            face.advance(ch, size, bold)
-        }) {
-            Ok(l) => l,
-            Err(_) => greedy_wrap(&run_refs, width, |ch, bold| face.advance(ch, size, bold), &mut self.stats)
-                .ok_or("place-and-greedy-refused")?,
+        let size = self.font_size(index).clamp(1, 256);
+        let style = crate::basic_text_paint::Style {
+            size,
+            line_height: node.style.used_line_height(size + 4).unwrap_or(size + 4),
+            align: node.style.text_align,
+            direction: node.style.direction,
+            pre: node.style.white_space_pre,
+            background: node.style.used_background_color().unwrap_or(0xffffff),
         };
-        // Map each glyph back to its run's color by walking the folded char
-        // stream in glyph order; whitespace dropped at line breaks is
-        // skipped over. Only engaged when a block mixes colors (links).
-        let glyph_colors: Vec<u32> = if mixed_color {
-            self.stats.approx("link-color-by-char-map");
-            let mut stream: Vec<(char, u32)> = Vec::new();
-            for ((f, (_, _, c, _))) in folded_runs.iter().zip(runs.iter()) {
-                for ch in f.chars() {
-                    stream.push((ch, *c));
-                }
-            }
-            let mut pos = 0usize;
-            let mut colors = Vec::with_capacity(lines.glyphs.len());
-            for g in &lines.glyphs {
-                let mut skipped = 0;
-                while pos < stream.len()
-                    && stream[pos].0 != g.character
-                    && stream[pos].0.is_whitespace()
-                    && skipped < 8
-                {
-                    pos += 1;
-                    skipped += 1;
-                }
-                let color = stream.get(pos).map(|&(_, c)| c).unwrap_or(self.tree.boxes[index].style.color);
-                colors.push(color);
-                if pos < stream.len() {
-                    pos += 1;
-                }
-            }
-            colors
-        } else {
-            Vec::new()
-        };
-        let natural = self
-            .font
-            .normal_line_metrics(size, false)
-            .map(|m| m.height)
-            .or_else(|| face.line_height(size, false))
-            .ok_or("no-line-metrics")?;
-        let line_height = node
-            .style
-            .used_line_height(natural)
-            .filter(|&v| v > 0)
-            .unwrap_or(natural);
-        let baseline = self
-            .font
-            .normal_line_metrics(size, false)
-            .map(|m| m.baseline)
-            .or_else(|| face.baseline_offset(size, false))
-            .filter(|&b| b >= 0 && i64::from(b) < i64::from(natural))
-            .ok_or("no-baseline")?;
-        if lines.count == 0 {
-            return Ok(0);
+        let (mut runs, _) = self.collect_runs_of(children, node.style.color)?;
+        if self.tree.boxes[index].kind == BoxKind::ListItem && !self.tree.boxes[index].style.list_style_none {
+            if let Some(first) = runs.first_mut() { first.0.insert_str(0, self.tree.page_list_markers.get(&index).map_or("• ", String::as_str)); }
         }
-        // Merge consecutive glyphs sharing (line, leaf, bold) into one
-        // coverage command so long pages stay inside display-list budgets.
-        let mut run_start: Option<usize> = Some(0);
-        let glyphs = &lines.glyphs;
-        let block_rgb = rgb(self.tree.boxes[index].style.color);
-        let flush = |from: usize,
-                     to: usize,
-                     glyphs: &[crate::inline_lines::PositionedGlyph],
-                     run_color: Rgb,
-                     list: &mut Vec<Command>,
-                     stats: &mut PartialStats,
-                     font: &F|
-         -> Result<(), ()> {
-            if from >= to {
-                return Ok(());
-            }
-            let first = glyphs[from];
-            let line_top = top
-                + i64::from(to_owned_line(glyphs, from)) * i64::from(line_height);
-            let x0 = content_x + i64::from(first.x);
-            let last = glyphs[to - 1];
-            let width_px = i64::from(last.x) + i64::from(last.advance);
-            let run_w = u32::try_from(width_px - i64::from(first.x)).map_err(|_| ())?;
-            if run_w == 0 {
-                return Ok(());
-            }
-            let mut mask = vec![0u8; run_w as usize * line_height as usize];
-            for g in &glyphs[from..to] {
-                let bitmap = font.raster(g.character, size, g.bold).ok_or(())?;
-                let dx = i64::from(g.x) - i64::from(first.x) + i64::from(bitmap.left);
-                let dy = i64::from(baseline) + i64::from(bitmap.top);
-                for row in 0..bitmap.height {
-                    let y = dy + i64::from(row);
-                    if y < 0 || y >= i64::from(line_height) {
-                        continue;
-                    }
-                    for col in 0..bitmap.width {
-                        let x = dx + i64::from(col);
-                        if x < 0 || x >= i64::from(run_w) {
-                            continue;
-                        }
-                        let dst = (y as usize) * run_w as usize + x as usize;
-                        let src = (row * bitmap.width + col) as usize;
-                        if src < bitmap.coverage.len() {
-                            mask[dst] = mask[dst].max(bitmap.coverage[src]);
-                        }
-                    }
-                }
-            }
-            let color = run_color;
-            let rect = Rect {
-                x: i32::try_from(x0).map_err(|_| ())?,
-                y: i32::try_from(line_top).map_err(|_| ())?,
-                width: run_w,
-                height: line_height,
-            };
-            list.push(Command::GlyphRun {
-                bounds: rect,
-                layout: rect,
-                coverage: mask,
-                color,
-                source: Source { node: self_node(glyphs, from), action: None },
-            });
-            stats.glyph_runs += 1;
-            Ok(())
-        };
-        let color_of = |i: usize| -> Rgb {
-            if glyph_colors.is_empty() {
-                block_rgb
-            } else {
-                rgb(glyph_colors[i])
-            }
-        };
-        for i in 1..=glyphs.len() {
-            let boundary = i == glyphs.len()
-                || glyphs[i].line != glyphs[i - 1].line
-                || glyphs[i].bold != glyphs[i - 1].bold
-                || (!glyph_colors.is_empty() && glyph_colors[i] != glyph_colors[i - 1]);
-            if boundary {
-                let from = run_start.take().unwrap_or(0);
-                if flush(from, i, glyphs, color_of(from), list, &mut self.stats, face).is_err() {
-                    self.stats.output_truncated = true;
-                    return Ok(i64::from(lines.count) * i64::from(line_height));
-                }
-                if i < glyphs.len() {
-                    run_start = Some(i);
-                }
-            }
-        }
-        self.stats.text_blocks_painted += 1;
-        Ok(i64::from(lines.count) * i64::from(line_height))
+        let (commands, height, missing) = crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
+        if missing > 0 { *self.stats.approximations.entry("missing-glyph-placeholder").or_insert(0) += missing; }
+        self.stats.glyph_runs += commands.len();
+        self.stats.text_blocks_painted += usize::from(!commands.is_empty());
+        list.extend(commands);
+        Ok(height)
     }
 
     /// Normal-flow stacking walk. Returns the subtree's vertical extent in px
@@ -1241,13 +903,6 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     }
 }
 
-fn to_owned_line(glyphs: &[crate::inline_lines::PositionedGlyph], i: usize) -> u32 {
-    glyphs[i].line
-}
-
-fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Option<usize> {
-    None
-}
 
 /// BASIC-mode intake normalization: rewrite table-structure tags
 /// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,

@@ -63,6 +63,8 @@ pub struct BoxTree {
     pub quirks: bool,
     /// CANDIDATE-local API growth (disclosed): copied from `StyleTree::ext`; stretch and centring of absolute leaves require it.
     pub ext: bool,
+    /// Page-view list markers keyed by box index; exact painters ignore these.
+    pub page_list_markers: std::collections::BTreeMap<usize, String>,
 }
 
 /// CSS 2.2 §10.3.3, restricted to zero margin/padding/border, LTR,
@@ -2750,6 +2752,17 @@ impl BoxTree {
             style.padding_right = style.padding_right.saturating_add(right);
             style.padding_bottom = style.padding_bottom.saturating_add(bottom);
             style.padding_left = style.padding_left.saturating_add(left);
+            // Preserve semantic pre formatting and ordered-list numbering for Page view.
+            if node.tag == "pre" { style.white_space_pre = true; }
+            if style.white_space_pre { tree.unsupported = true; }
+            if kind == BoxKind::ListItem {
+                let marker = node.parent.and_then(|p| {
+                    if styled.nodes[p].tag != "ol" { return None; }
+                    let number = styled.nodes[..source].iter().filter(|s| s.parent == Some(p) && s.tag == "li").count() + 1;
+                    Some(format!("{number}. "))
+                }).unwrap_or_else(|| "• ".to_owned());
+                tree.page_list_markers.insert(index, marker);
+            }
             tree.boxes.push(CssBox {
                 inline_phrase: node.inline_phrase,
                 inline_attributes: node.inline_attributes,

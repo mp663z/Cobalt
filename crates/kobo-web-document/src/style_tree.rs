@@ -1051,6 +1051,7 @@ impl StyleTree {
             }
             let rem_refused = normalize_rem(&mut declarations, root_font_px);
             let style = Computed::cascade(Some(inherited), &declarations);
+            if style.white_space_pre { tree.unsupported = true; }
             if parent.is_none() {
                 root_font_px = style.font_size;
             }
@@ -2585,6 +2586,7 @@ pub(crate) fn properties_with(
             // break opportunity; BoxTree::from_style refuses the rest.
             "white-space" if em_font => parse_keyword(value)
                 .or(match value {
+                    "pre" => Some(Value::WhiteSpacePre),
                     "nowrap" => Some(Value::WhiteSpaceNowrap(true)),
                     "normal" => Some(Value::WhiteSpaceNowrap(false)),
                     _ => None,

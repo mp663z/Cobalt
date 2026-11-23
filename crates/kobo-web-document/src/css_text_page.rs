@@ -62,6 +62,14 @@ pub trait FontProvider {
     fn face_catalog(&self) -> Option<&dyn crate::font_family::FaceCoverage> {
         None
     }
+    /// Page-view style hook. Exact paint paths continue to use `advance`.
+    fn page_advance(&self, character: char, size: u32, bold: bool, _italic: bool) -> Option<u32> {
+        self.advance(character, size, bold)
+    }
+    /// Page-view style hook. Providers without italic cuts keep regular shape.
+    fn page_raster(&self, character: char, size: u32, bold: bool, _italic: bool) -> Option<GlyphBitmap> {
+        self.raster(character, size, bold)
+    }
     fn advance(&self, character: char, size: u32, bold: bool) -> Option<u32>;
     fn line_height(&self, size: u32, bold: bool) -> Option<u32>;
     fn baseline_offset(&self, size: u32, bold: bool) -> Option<i32>;
