@@ -283,6 +283,73 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
     }
 
+    /// Margin resolution that knows the owning element: em margins
+    /// resolve against its computed font size, but only on an exact
+    /// integer pixel product (the `Margin::Em` contract); anything else
+    /// stays zeroed and counted. Auto margins are the caller's problem
+    /// (they need the used width), so they stay zeroed here.
+    fn margin_px_el(&mut self, el: usize, margin: Margin, containing: u32) -> i64 {
+        if let Margin::Em(hundredths) = margin {
+            let fs = i64::from(self.font_size(el));
+            let product = i64::from(hundredths) * fs;
+            if product % 100 == 0 {
+                return product / 100;
+            }
+        }
+        self.margin_px(margin, containing)
+    }
+
+    /// Horizontal geometry of a normal-flow block child per the engine's
+    /// restricted CSS 2.2 §10.3.3 resolver, with the one extension the
+    /// resolver refuses: a `max-width` cap, applied by re-running with
+    /// the cap as the used width so auto margins split the leftover
+    /// (`.mw7.center` and friends). Returns (margin_left, layout_width,
+    /// margin_right) where layout_width is the border-box width the
+    /// painter expects (content + padding + border).
+    fn block_child_hgeom(&mut self, child: usize, containing: u32) -> (i64, u32, i64) {
+        let cstyle = self.tree.boxes[child].style;
+        let border = cstyle.decor.used_border();
+        let pad_or_zero = |v: u32| -> u32 {
+            if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                0
+            } else {
+                v
+            }
+        };
+        let left_edge = pad_or_zero(cstyle.padding_left).saturating_add(border[3]);
+        let right_edge = pad_or_zero(cstyle.padding_right).saturating_add(border[1]);
+        let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+            match m {
+                Margin::Auto => None,
+                other => Some(s.margin_px_el(child, other, containing)),
+            }
+        };
+        let ml = margin(self, cstyle.margin_left);
+        let mr = margin(self, cstyle.margin_right);
+        let (geom, capped) = capped_block_width(
+            cstyle.width,
+            cstyle.max_width,
+            containing,
+            left_edge,
+            right_edge,
+            ml,
+            mr,
+        );
+        if capped {
+            self.stats.approx("max-width-capped");
+        }
+        if matches!(cstyle.margin_left, Margin::Auto) || matches!(cstyle.margin_right, Margin::Auto) {
+            if geom.margin_left != 0 || geom.margin_right != 0 {
+                self.stats.approx("margin-auto-resolved");
+            }
+        }
+        (
+            geom.margin_left,
+            geom.content + left_edge + right_edge,
+            geom.margin_right,
+        )
+    }
+
     /// Collect (text, bold) runs for a pure-inline block, tolerating the
     /// tree-level flags the exact collector refuses on. Second return is
     /// true when any leaf colour differs from the block's (v1 flattens them).
@@ -1011,20 +1078,40 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 flush_anon!(cursor);
                 let cstyle = self.tree.boxes[child].style;
                 let containing = width;
-                let ml = self.margin_px(cstyle.margin_left, containing);
                 let mt = self.margin_px(cstyle.margin_top, containing);
                 let mb = self.margin_px(cstyle.margin_bottom, containing);
-                let cw = self
+                let (ml, cw, _mr) = match self
                     .widths
                     .widths
                     .get(child)
                     .copied()
                     .flatten()
-                    .map(|w| w.content)
-                    .unwrap_or(child_width);
-                if self.widths.widths.get(child).copied().flatten().is_none() {
-                    self.stats.approx("width-fallback-parent");
-                }
+                {
+                    Some(w) => {
+                        // Engine width pass already resolved geometry;
+                        // honor its margins (auto splits included). Its
+                        // content width is content-box; the painter wants
+                        // the border box.
+                        let b = cstyle.decor.used_border();
+                        let edge_or_zero = |v: u32| -> u32 {
+                            if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                                0
+                            } else {
+                                v
+                            }
+                        };
+                        (
+                            w.margin_left,
+                            w.content
+                                + edge_or_zero(cstyle.padding_left)
+                                + edge_or_zero(cstyle.padding_right)
+                                + b[3]
+                                + b[1],
+                            w.margin_right,
+                        )
+                    }
+                    None => self.block_child_hgeom(child, child_width),
+                };
                 // Adjacent vertical margins collapse to the larger one.
                 if prev_mb != 0 && mt != 0 {
                     self.stats.approx("margin-collapse-adjacent");
@@ -2699,6 +2786,125 @@ pub fn paint_basic_page(
         cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list, (0, 0));
     }
     Ok((list, painter.stats, cursor))
+}
+
+/// Restricted CSS 2.2 §10.3.3 via the engine resolver, plus the one
+/// extension it refuses: a `max-width` cap, applied by re-running with
+/// the cap as the used width so auto margins split the leftover
+/// (`.mw7.center` and friends). Returns the geometry and whether the
+/// cap fired. LTR only, matching the resolver's own restriction.
+fn capped_block_width(
+    width: crate::computed_style::Length,
+    max_width: crate::computed_style::Length,
+    containing: u32,
+    left_edge: u32,
+    right_edge: u32,
+    margin_left: Option<i64>,
+    margin_right: Option<i64>,
+) -> (crate::box_tree::UsedBlockWidth, bool) {
+    let geom = crate::box_tree::used_block_width_edges(
+        width,
+        containing,
+        left_edge,
+        right_edge,
+        margin_left,
+        margin_right,
+        false,
+    );
+    if let crate::computed_style::Length::Px(cap) = max_width {
+        if geom.content > cap {
+            return (
+                crate::box_tree::used_block_width_edges(
+                    crate::computed_style::Length::Px(cap),
+                    containing,
+                    left_edge,
+                    right_edge,
+                    margin_left,
+                    margin_right,
+                    false,
+                ),
+                true,
+            );
+        }
+    }
+    (geom, false)
+}
+
+#[cfg(test)]
+mod hgeom_tests {
+    use super::capped_block_width;
+    use crate::computed_style::Length;
+
+    #[test]
+    fn auto_margins_split_free_space() {
+        // 700px block in an 800px container, both margins auto.
+        let (geom, capped) = capped_block_width(
+            Length::Px(700),
+            Length::Auto,
+            800,
+            0,
+            0,
+            None,
+            None,
+        );
+        assert!(!capped);
+        assert_eq!(geom.content, 700);
+        assert_eq!(geom.margin_left, 50);
+        assert_eq!(geom.margin_right, 50);
+    }
+
+    #[test]
+    fn max_width_cap_recenters() {
+        // width:auto fills 800, capped to 768: the re-run splits the
+        // 32px leftover across the two auto margins.
+        let (geom, capped) = capped_block_width(
+            Length::Auto,
+            Length::Px(768),
+            800,
+            0,
+            0,
+            None,
+            None,
+        );
+        assert!(capped);
+        assert_eq!(geom.content, 768);
+        assert_eq!(geom.margin_left, 16);
+        assert_eq!(geom.margin_right, 16);
+    }
+
+    #[test]
+    fn cap_below_content_does_not_fire_and_one_sided_auto_absorbs() {
+        let (geom, capped) = capped_block_width(
+            Length::Px(500),
+            Length::Px(768),
+            800,
+            0,
+            0,
+            Some(10),
+            None,
+        );
+        assert!(!capped);
+        assert_eq!(geom.margin_left, 10);
+        assert_eq!(geom.margin_right, 290);
+    }
+
+    #[test]
+    fn over_wide_content_overruns_the_right_margin() {
+        // CSS 2.2 §10.3.3 over-constrained LTR: the right margin absorbs
+        // the overflow (goes negative); content keeps its used width.
+        let (geom, _) = capped_block_width(
+            Length::Px(900),
+            Length::Auto,
+            800,
+            0,
+            0,
+            None,
+            None,
+        );
+        assert_eq!(geom.content, 900);
+        assert_eq!(geom.margin_left, 0);
+        assert_eq!(geom.margin_right, -100);
+    }
 }
 
 #[cfg(test)]
