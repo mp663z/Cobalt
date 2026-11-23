@@ -233,3 +233,21 @@ stripped ARM EABI5. All host endpoints were rebuilt together; fresh BW Page
 link/pagination/Reader and Colour inline-editing/keyboard/menu/reload journeys
 passed, with actual screenshots inspected. These are simulator and linked-size
 checks, not physical-reader RSS, latency or panel-quality measurements.
+
+### Counted cell minimum sizing, November 23, 2026
+
+Measured source: `0102796be52d2fa12eef066392e4671d38aebd1e`.
+The same pinned locked ARM release build includes the counted pixel cell
+min-width/min-height extension with content-box and border-box edges.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,171,476 | +3,922,096 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,087,012 | |
+
+This is 448 browser bytes above the last checkpoint, with 1,320,784 bytes
+remaining under the +5 MiB allowance. All outputs inspected as stripped,
+static ARM EABI5. A fresh combined SDK/UI/layout/profile/simulator suite also
+passed 652 tests with 4 ignored across 10 test-result groups. This does not
+qualify hardware RSS, latency or panel behavior.
