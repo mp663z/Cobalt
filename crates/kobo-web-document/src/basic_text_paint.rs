@@ -49,6 +49,23 @@ fn placeholder(size: u32) -> GlyphBitmap {
     }
 }
 
+/// Byte offset of the next occurrence of `ch` at or after `*offset`,
+/// advancing the cursor past it. The placer may re-request a character
+/// (e.g. measuring both sides of a line-break decision), so a forward-only
+/// scan can miss an occurrence that lies BEHIND the cursor; fall back to
+/// scanning the prefix so the cursor always lands on a real occurrence. A
+/// byte offset inside a multi-byte character would panic the next slice.
+fn next_occurrence(text: &str, offset: &mut usize, ch: char) -> usize {
+    let byte = text[*offset..]
+        .char_indices()
+        .find(|(_, c)| *c == ch)
+        .map(|(i, _)| *offset + i)
+        .or_else(|| text[..*offset].char_indices().find(|(_, c)| *c == ch).map(|(i, _)| i))
+        .unwrap_or(*offset);
+    *offset = byte.saturating_add(ch.len_utf8()).min(text.len());
+    byte
+}
+
 #[allow(clippy::too_many_lines)] // Measurement, baseline and mask placement share the same run data.
 pub(crate) fn paint(
     runs: &[Run],
@@ -66,12 +83,7 @@ pub(crate) fn paint(
     let mut measure_offsets = vec![0_usize; runs.len()];
     let glyph_width = |ch: char, leaf: usize| {
         let size = size_of(leaf);
-        let offset = &mut measure_offsets[leaf];
-        let next = runs[leaf].0[*offset..]
-            .char_indices()
-            .find(|(_, c)| *c == ch);
-        let byte = next.map_or(*offset, |(i, _)| *offset + i);
-        *offset = byte.saturating_add(ch.len_utf8()).min(runs[leaf].0.len());
+        let byte = next_occurrence(&runs[leaf].0, &mut measure_offsets[leaf], ch);
         if let Some(clusters) = &shaped[leaf] {
             if let Some(cluster) = clusters
                 .get(clusters.partition_point(|c| c.end <= byte))
@@ -154,14 +166,7 @@ pub(crate) fn paint(
         let bitmaps: Vec<_> = glyphs
             .iter()
             .map(|g| {
-                let offset = &mut paint_offsets[g.leaf];
-                let next = runs[g.leaf].0[*offset..]
-                    .char_indices()
-                    .find(|(_, c)| *c == g.character);
-                let byte = next.map_or(*offset, |(i, _)| *offset + i);
-                *offset = byte
-                    .saturating_add(g.character.len_utf8())
-                    .min(runs[g.leaf].0.len());
+                let byte = next_occurrence(&runs[g.leaf].0, &mut paint_offsets[g.leaf], g.character);
                 if let Some(clusters) = &shaped[g.leaf] {
                     if let Some(cluster) = clusters
                         .get(clusters.partition_point(|c| c.end <= byte))
