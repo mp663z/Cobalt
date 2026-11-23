@@ -24,6 +24,7 @@ mod basic_bidi;
 pub mod box_tree;
 pub mod computed_style;
 mod convert;
+mod source_text;
 mod css;
 pub mod css_background;
 mod css_border;

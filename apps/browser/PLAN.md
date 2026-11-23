@@ -386,3 +386,21 @@ does not paint native text in colour. The next increment must carry provenance
 through semantic whitespace collapse/trim and code/link conversion before any
 RGB span is sent to the native renderer. The helper is deliberately private;
 no new protocol or public model fields have been introduced.
+
+
+### Normalized text source-range foundation
+
+A crate-private paragraph buffer now records normalized UTF-8 byte ranges and
+same-DOM source handles through adjacent text append and edge trim. Adjacent
+ranges merge only for the same source. A collapsed boundary space keeps the
+first emitting source. Synthetic text has no source. Byte/span limits reject
+an append atomically. The existing converter uses the exact same extracted
+whitespace normalizer, with existing semantic output preserved by the full
+engine/browser suites. Unicode, NBSP, repeated words, whitespace-only input,
+span caps and 64 small input partitions are checked; a trim-rebasing mutation
+fails the tests.
+
+This buffer is not yet installed in Gather/Inline: nested inline, code and
+link conversion still need end-to-end provenance. No native RGB span or wire
+support has been claimed. Integration must carry ranges with transformations,
+not reconstruct them by looking for matching strings after conversion.

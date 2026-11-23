@@ -8,6 +8,7 @@
 use html5ever::{local_name, ns};
 
 use crate::css::Styles;
+use crate::source_text::collapse_keep_edges;
 use crate::dom::{Data, Handle, Node, DOCUMENT};
 use crate::{
     Block, Field, Form, ImageRef, Inline, Limits, Link, Method, OptionValue, Table, Url, UrlError,
@@ -1183,26 +1184,6 @@ fn push_text(inlines: &mut Vec<Inline>, text: &str) {
     } else {
         inlines.push(Inline::Text(collapsed));
     }
-}
-
-fn collapse_keep_edges(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut space = false;
-    for c in text.chars() {
-        if c.is_whitespace() && c != '\u{a0}' {
-            space = true;
-        } else {
-            if space {
-                out.push(' ');
-                space = false;
-            }
-            out.push(c);
-        }
-    }
-    if space {
-        out.push(' ');
-    }
-    out
 }
 
 /// Collapsed and trimmed.

@@ -466,3 +466,15 @@ Locked stripped static ARM EABI5 remains 5,192,500 bytes, unchanged from the
 preceding production checkpoint. No added crates, unsafe, allocator or wire
 changes. No new visual support claim, so prior actual RGB frames remain the
 latest visual evidence.
+
+
+### Normalized source-range foundation, November 24, 2026
+
+Shared whitespace normalizer extracted unchanged from semantic conversion.
+Optional private source buffer preserves UTF-8 ranges through append/trim with
+atomic byte/span caps; not yet installed in semantic Gather/Inline or native
+RGB rendering. Five tests include 64 input partitions and a trim-rebase
+mutation that fails. Engine: 1,406 passed, 0 failed, 18 ignored, 147 groups.
+Browser: 210 passed, 0 failed, 2 ignored. Clippy completed with existing warnings.
+Locked stripped static ARM remains 5,192,500 bytes. No new visual behavior,
+protocol, crates, unsafe code or allocator changes.
