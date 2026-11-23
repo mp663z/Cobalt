@@ -1,4 +1,4 @@
-width=800 height=31013 height_clamped=false blocks=469 text_blocks=168 glyph_runs=2452 fills=169 output_truncated=false intake_truncated=false
-skips={"non-ascii-text": 19}
-approximations={"border-side": 100, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "font-size-fallback": 15, "greedy-wrap-fallback": 18, "inline-color-flattened": 108, "link-color-by-char-map": 91, "list-marker-bullet": 50, "margin-collapse-adjacent": 2, "unicode-folded-ascii": 238, "word-hard-broken": 24}
+width=800 height=29817 height_clamped=false blocks=469 text_blocks=187 glyph_runs=2310 fills=169 output_truncated=false intake_truncated=false
+skips={}
+approximations={"border-side": 100, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "margin-collapse-adjacent": 2}
 images=0

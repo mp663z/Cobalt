@@ -1,4 +1,4 @@
-width=800 height=2857 height_clamped=false blocks=82 text_blocks=48 glyph_runs=96 fills=0 output_truncated=false intake_truncated=false
+width=800 height=3370 height_clamped=false blocks=82 text_blocks=48 glyph_runs=209 fills=0 output_truncated=false intake_truncated=false
 skips={}
-approximations={"inline-color-flattened": 10, "link-color-by-char-map": 10, "margin-collapse-adjacent": 18, "margin-zeroed": 48, "mixed-font-size-flattened": 18, "relative-as-static": 12, "unicode-folded-ascii": 39}
+approximations={"margin-collapse-adjacent": 18, "margin-zeroed": 48, "relative-as-static": 12}
 images=0
