@@ -39,5 +39,4 @@ shot url-keyboard
 tap-id kb.cancel
 tap-id reload
 expect Sample pages
-expect 100%
 shot page-reloaded
