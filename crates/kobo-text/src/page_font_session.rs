@@ -53,6 +53,8 @@ impl PageFontSession {
         let mut session = Self::from_bytes(crate::TEXT_FONT, crate::DISPLAY_FONT)?;
         session.add_fallback(include_bytes!("../fonts/NotoSans-Cyrillic.ttf"))?;
         session.add_fallback(include_bytes!("../fonts/NotoSansDevanagari.ttf"))?;
+        session.add_fallback(include_bytes!("../fonts/KoboPage-arabic.ttf"))?;
+        session.add_fallback(include_bytes!("../fonts/KoboPage-hebrew.ttf"))?;
         session.add_styled_fallback(
             include_bytes!("../fonts/KoboPage-cyrillic-bold.ttf"),
             true,
@@ -257,7 +259,7 @@ impl PageFontSession {
 
     /// Shape text in whitespace-delimited font spans, keeping input cluster boundaries.
     /// Indic substitutions and positioning use the selected face's OpenType tables.
-    /// RTL spans currently return `None` rather than reverse logical text incorrectly.
+    /// Clusters return in logical source order; the painter reorders each line.
     #[must_use]
     #[allow(clippy::too_many_lines)] // One bounded cluster raster transaction.
     pub fn shape(&self, text: &str, px: u32, bold: bool, italic: bool) -> Option<Vec<PageCluster>> {
@@ -304,12 +306,13 @@ impl PageFontSession {
             let mut buffer = rustybuzz::UnicodeBuffer::new();
             buffer.push_str(word);
             buffer.guess_segment_properties();
-            if buffer.direction() == rustybuzz::Direction::RightToLeft {
-                return None;
-            }
             let shaped = rustybuzz::shape(&face, &[], buffer);
-            let infos = shaped.glyph_infos();
-            let positions = shaped.glyph_positions();
+            // The shaper returns RTL clusters in visual order. Store clusters
+            // in logical source order; paragraph layout reorders each line later.
+            let mut order: Vec<usize> = (0..shaped.glyph_infos().len()).collect();
+            order.sort_by_key(|&i| shaped.glyph_infos()[i].cluster);
+            let infos: Vec<_> = order.iter().map(|&i| shaped.glyph_infos()[i]).collect();
+            let positions: Vec<_> = order.iter().map(|&i| shaped.glyph_positions()[i]).collect();
             let mut index = 0;
             while index < infos.len() {
                 let start = usize::try_from(infos[index].cluster).ok()?;
@@ -537,6 +540,21 @@ mod tests {
             .unwrap();
         assert!(indic.0 >= latin.0);
         assert_ne!(indic, latin, "used Devanagari may enlarge only its line");
+    }
+
+    #[test]
+    fn arabic_and_hebrew_shape_to_logical_clusters_with_full_coverage() {
+        let session = PageFontSession::bundled().unwrap();
+        for text in ["مرحبا بالعالم", "שלום עולם"] {
+            let shaped = session.shape(text, 28, false, false).unwrap();
+            assert_eq!(shaped.first().unwrap().start, 0);
+            assert_eq!(shaped.last().unwrap().end, text.len());
+            for pair in shaped.windows(2) {
+                assert_eq!(pair[0].end, pair[1].start);
+            }
+            assert!(text.chars().all(|ch| session.has_glyph(ch, false, false)));
+            assert!(shaped.iter().all(|c| !c.glyph.missing));
+        }
     }
 
     #[test]

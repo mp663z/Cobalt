@@ -173,8 +173,9 @@ pub(crate) fn paint(
                 .unwrap_or((size / 2).max(3)),
         )
     };
-    let lines = crate::basic_text::place(&refs, width, style.pre, glyph_width)
+    let mut lines = crate::basic_text::place(&refs, width, style.pre, glyph_width)
         .map_err(|_| "text-layout-bounded")?;
+    crate::basic_bidi::reorder(&mut lines, &refs, style.direction);
     if lines.glyphs.is_empty() {
         return Ok((Vec::new(), 0, 0));
     }
@@ -336,14 +337,17 @@ pub(crate) fn paint(
             });
         }
         if runs[first.leaf].5 {
+            let underline_left = glyphs.iter().map(|g| g.x).min().unwrap_or(first.x);
             let extent = glyphs
-                .last()
-                .map_or(first.x, |g| g.x.saturating_add(g.advance))
-                .saturating_sub(first.x);
+                .iter()
+                .map(|g| g.x.saturating_add(g.advance))
+                .max()
+                .unwrap_or(underline_left)
+                .saturating_sub(underline_left);
             let color = contrast_floor(runs[first.leaf].2, style.background);
             commands.push(Command::Fill {
                 rect: Rect {
-                    x: i32::try_from(origin.0 + i64::from(first.x) + i64::from(offset))
+                    x: i32::try_from(origin.0 + i64::from(underline_left) + i64::from(offset))
                         .map_err(|_| "underline-x")?,
                     y: i32::try_from(origin.1 + line_tops[first.line as usize] + baseline + 1)
                         .map_err(|_| "underline-y")?,

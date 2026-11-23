@@ -1933,7 +1933,23 @@ dependencies = [
 name = "kobo-web-document"
 version = "0.1.0"
 dependencies = [
+<<<<<<< HEAD
  "html5ever 0.39.0",
+=======
+ "html5ever",
+ "unicode-bidi",
+]
+
+[[package]]
+name = "kobo-web-layout"
+version = "0.1.0"
+dependencies = [
+ "kobo-profile",
+ "kobo-sdk",
+ "kobo-text",
+ "kobo-ui",
+ "kobo-web-document",
+>>>>>>> c30c73a0a (Reorder shaped RTL clusters separately on wrapped lines)
 ]
 
 [[package]]
