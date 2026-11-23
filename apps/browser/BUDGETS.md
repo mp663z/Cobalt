@@ -88,3 +88,13 @@ the +5 MiB binary or +32 MiB RSS budget.
 Shaping input is capped at 65,536 bytes per run. A shaped cluster mask is capped
 at 262,144 bytes and cumulative shaped masks at 4 MiB per run. Font fallbacks
 remain capped at eight. These are safety caps, not a measured device budget.
+
+### Script fallback cuts
+
+Cyrillic bold 95,052 B, italic 102,940 B, bold-italic 104,424 B, and
+Devanagari bold 210,224 B add 512,640 font bytes. All are renamed subsets of
+the same OFL Noto distribution and retain all OpenType layout tables.
+Total bundled fallback bytes become 808,700 B. Devanagari italic is not
+available in these sources and is not synthesized. The font catalog allows
+16 explicit faces rather than eight to accommodate real style cuts; the
+shaping and raster-mask bounds are unchanged. ARM size/RSS remain unmeasured.

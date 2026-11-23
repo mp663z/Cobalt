@@ -28,3 +28,8 @@ Callers may install an external face through PageFontSession::add_fallback.
 For the bundled Hindi and Russian fixtures, no external face is needed.
 The Japanese fixture intentionally exercises the optional fallback path.
 A zero skipped-block count alone is not proof of glyph coverage or shaping.
+
+Additional style cuts use the same ranges and naming rules: NotoSans-Bold,
+NotoSans-Italic, NotoSans-BoldItalic and NotoSansDevanagari-Bold, from the
+same Debian distribution. These are selected by actual weight and slant.
+No Devanagari italic is synthesized. Catalog capacity is 16 explicit faces.

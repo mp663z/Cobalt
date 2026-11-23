@@ -41,6 +41,7 @@ pub struct PageFontSession {
     italic_bytes: Option<Vec<u8>>,
     bold_italic_bytes: Option<Vec<u8>>,
     fallback_bytes: Vec<Vec<u8>>,
+    fallback_styles: Vec<(bool, bool)>,
 }
 
 impl PageFontSession {
@@ -52,6 +53,26 @@ impl PageFontSession {
         let mut session = Self::from_bytes(crate::TEXT_FONT, crate::DISPLAY_FONT)?;
         session.add_fallback(include_bytes!("../fonts/NotoSans-Cyrillic.ttf"))?;
         session.add_fallback(include_bytes!("../fonts/NotoSansDevanagari.ttf"))?;
+        session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-cyrillic-bold.ttf"),
+            true,
+            false,
+        )?;
+        session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-cyrillic-italic.ttf"),
+            false,
+            true,
+        )?;
+        session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-cyrillic-bolditalic.ttf"),
+            true,
+            true,
+        )?;
+        session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-devanagari-bold.ttf"),
+            true,
+            false,
+        )?;
         Ok(session)
     }
 
@@ -71,6 +92,7 @@ impl PageFontSession {
             italic_bytes: None,
             bold_italic_bytes: None,
             fallback_bytes: Vec::new(),
+            fallback_styles: Vec::new(),
         })
     }
 
@@ -90,17 +112,31 @@ impl PageFontSession {
         Ok(())
     }
 
-    /// Add one coverage fallback. At most eight faces may be retained.
+    /// Add one coverage fallback. At most sixteen faces may be retained.
     ///
     /// # Errors
     /// Returns an error for malformed bytes or an exceeded face budget.
     pub fn add_fallback(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
-        if self.fallback.len() >= 8 {
+        self.add_styled_fallback(bytes, false, false)
+    }
+
+    /// Add a fallback face with its actual weight and slant, never synthetic styles.
+    ///
+    /// # Errors
+    /// Returns an error for malformed bytes or an exceeded face budget.
+    pub fn add_styled_fallback(
+        &mut self,
+        bytes: &[u8],
+        bold: bool,
+        italic: bool,
+    ) -> Result<(), &'static str> {
+        if self.fallback.len() >= 16 {
             return Err("fallback face budget exceeded");
         }
         self.fallback
             .push(Font::from_bytes(bytes, FontSettings::default())?);
         self.fallback_bytes.push(bytes.to_vec());
+        self.fallback_styles.push((bold, italic));
         Ok(())
     }
 
@@ -118,9 +154,25 @@ impl PageFontSession {
         if primary.lookup_glyph_index(ch) != 0 {
             return Some(primary);
         }
+        self.fallback_index(|face| face.lookup_glyph_index(ch) != 0, bold, italic)
+            .map(|i| &self.fallback[i])
+    }
+
+    fn fallback_index(
+        &self,
+        covers: impl Fn(&Font) -> bool,
+        bold: bool,
+        italic: bool,
+    ) -> Option<usize> {
         self.fallback
             .iter()
-            .find(|face| face.lookup_glyph_index(ch) != 0)
+            .enumerate()
+            .filter(|(_, font)| covers(font))
+            .min_by_key(|(i, _)| {
+                let (b, it) = self.fallback_styles[*i];
+                u8::from(b != bold) + 2 * u8::from(it != italic)
+            })
+            .map(|(i, _)| i)
     }
 
     /// Whether a real glyph, rather than a placeholder, will be used.
@@ -213,11 +265,8 @@ impl PageFontSession {
             let selected = if covers(primary) {
                 Some((primary, primary_bytes))
             } else {
-                self.fallback
-                    .iter()
-                    .zip(&self.fallback_bytes)
-                    .find(|(font, _)| covers(font))
-                    .map(|(font, bytes)| (font, bytes.as_slice()))
+                self.fallback_index(covers, bold, italic)
+                    .map(|i| (&self.fallback[i], self.fallback_bytes[i].as_slice()))
             };
             let Some((font, bytes)) = selected else {
                 for (offset, ch) in word.char_indices() {
@@ -433,6 +482,19 @@ mod tests {
             .chars()
             .all(|ch| session.has_glyph(ch, false, false)));
         assert!(!session.has_glyph('日', false, false));
+    }
+
+    #[test]
+    fn fallback_weight_and_slant_select_actual_cuts() {
+        let session = PageFontSession::bundled().unwrap();
+        let regular = session.shape("Русский", 24, false, false).unwrap();
+        let bold = session.shape("Русский", 24, true, false).unwrap();
+        let italic = session.shape("Русский", 24, false, true).unwrap();
+        assert_ne!(regular[0].glyph.coverage, bold[0].glyph.coverage);
+        assert_ne!(regular[0].glyph.coverage, italic[0].glyph.coverage);
+        let regular = session.shape("हिन्दी", 24, false, false).unwrap();
+        let bold = session.shape("हिन्दी", 24, true, false).unwrap();
+        assert_ne!(regular[0].glyph.coverage, bold[0].glyph.coverage);
     }
 
     #[test]
