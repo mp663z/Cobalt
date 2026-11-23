@@ -1764,3 +1764,47 @@ fn start_search_submits_words_and_library_returns_to_start() {
         "https://html.duckduckgo.com/html/?q=e+ink"
     );
 }
+
+#[test]
+fn inline_address_keyboard_preserves_page_and_suppresses_page_actions() {
+    for metrics in [kobo_ui::CLARA_BW_METRICS] {
+        let mut runner = AppRunner::with_metrics(Browser::default(), metrics);
+        runner.start();
+        runner.action(action_id("samples"));
+        for painted in [false, true] {
+            if painted {
+                runner.action(action_id("page-view"));
+            }
+            runner.action(action_id("edit-address"));
+            let screen = runner.app().screen(&metrics).build();
+            assert!(screen
+                .nodes
+                .iter()
+                .any(|n| matches!(n, kobo_sdk::Node::Grid { .. })));
+            assert!(screen
+                .top_bar
+                .as_ref()
+                .unwrap()
+                .actions
+                .iter()
+                .any(|a| a.action == action_id("kb.cancel")));
+            if painted {
+                assert!(screen
+                    .nodes
+                    .iter()
+                    .any(|n| matches!(n, kobo_sdk::Node::Picture { .. })));
+            }
+            let page = runner.app().loaded.as_ref().unwrap().page;
+            runner.action(action_id("next-page"));
+            assert_eq!(runner.app().loaded.as_ref().unwrap().page, page);
+            runner.action(action_id("kb.r0c0"));
+            assert_eq!(runner.app().address.text(), format!("{SAMPLES}q"));
+            runner.action(action_id("kb.cancel"));
+            assert!(!runner.app().address.is_open());
+            assert_eq!(
+                runner.app().loaded.as_ref().unwrap().url.to_string(),
+                SAMPLES
+            );
+        }
+    }
+}

@@ -133,7 +133,7 @@ struct Browser {
     library_loaded: bool,
     loaded: Option<Loaded>,
     view: View,
-    /// The address field. While it is open it covers the page.
+    /// The address field. Its inline keyboard leaves the page visible.
     address: TextEntry,
     form_entry: TextEntry,
     editing: Option<(usize, usize)>,
@@ -1108,10 +1108,14 @@ impl Browser {
     }
 
     fn show(&self, context: &mut Context) {
-        if matches!(self.view, View::Page) && !self.address.is_open() {
+        if matches!(self.view, View::Page) {
             if let Some(loaded) = &self.loaded {
                 if let Some(painted) = &loaded.painted {
-                    if !painted.publish(context, self.pictures.colour()) {
+                    if !painted.publish(
+                        context,
+                        self.pictures.colour(),
+                        self.address.is_open().then(|| self.address.keyboard()),
+                    ) {
                         context.set_screen(
                             page_screen_with_address(
                                 &loaded.title,
@@ -1456,15 +1460,76 @@ impl Browser {
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
+        let mut builder = self.browser_content(metrics);
+        if self.address.is_open() {
+            builder = builder.top_bar(
+                self.loaded
+                    .as_ref()
+                    .filter(|_| !matches!(self.view, View::Start))
+                    .map_or("Browse", |loaded| loaded.title.as_str()),
+            );
+            builder
+                .top_bar_action("kb.cancel", "Close keyboard")
+                .keyboard(self.address.keyboard(), "Go")
+        } else {
+            builder
+        }
+    }
+
+    fn keyboard_pieces(&self, metrics: &DisplayMetrics) -> &[Piece] {
+        let pieces = self.current_pieces();
+        if !self.address.is_open() {
+            return pieces;
+        }
+        let Some(loaded) = &self.loaded else {
+            return &[];
+        };
+        let mut count = pieces.len();
+        while count > 0 {
+            let candidate = page_screen_with_address(
+                &loaded.title,
+                &pieces[..count],
+                0,
+                None,
+                None,
+                metrics,
+                Some(self.address.text()),
+            )
+            .keyboard(self.address.keyboard(), "Go")
+            .build();
+            if kobo_web_layout::fits(&candidate, metrics) {
+                break;
+            }
+            count -= 1;
+        }
+        &pieces[..count]
+    }
+
+    fn displayed_address(&self) -> String {
+        if self.address.is_open() {
+            self.address.text().to_owned()
+        } else {
+            self.loaded
+                .as_ref()
+                .map_or_else(String::new, |loaded| loaded.url.to_string())
+        }
+    }
+
+    fn browser_content(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
         if self.form_entry.is_open() {
             return self.form_entry_screen();
         }
-        if self.address.is_open() {
-            return ScreenBuilder::new("browser-address")
-                .top_bar("Go to")
-                .text_entry(&self.address, "An address, or words to search for", "Go");
-        }
         match (&self.view, &self.loaded) {
+            (View::Start, _) if self.address.is_open() => {
+                ScreenBuilder::new("browser-start-typing")
+                    .top_bar("Browse")
+                    .field(
+                        "edit-address",
+                        self.address.text(),
+                        "Search or enter address",
+                    )
+                    .secondary("Search the web or enter a website address")
+            }
             (View::Start, _) => Self::start_screen(),
             (View::Loading(url), _) => ScreenBuilder::new("browser-loading")
                 .top_bar(url.host())
@@ -1538,18 +1603,20 @@ impl Browser {
                     pages.len(),
                 )
             }
-            (View::Page, Some(loaded)) if loaded.painted.is_some() => loaded
-                .painted
-                .as_ref()
-                .expect("painted")
-                .screen(&loaded.title, &loaded.url.to_string()),
+            (View::Page, Some(loaded)) if loaded.painted.is_some() => {
+                loaded.painted.as_ref().expect("painted").screen(
+                    &loaded.title,
+                    &self.displayed_address(),
+                    self.address.is_open().then(|| self.address.keyboard()),
+                )
+            }
             (_, Some(loaded)) => page_screen_with_address(
                 &if loaded.paint_refused {
                     format!("Reader: {}", loaded.title)
                 } else {
                     loaded.title.clone()
                 },
-                self.current_pieces(),
+                self.keyboard_pieces(metrics),
                 loaded.page,
                 // The count in the bar is only honest once every page exists.
                 loaded
@@ -1562,7 +1629,7 @@ impl Browser {
                     loaded.document.has_reader_view().then_some(false)
                 },
                 metrics,
-                Some(&loaded.url.to_string()),
+                Some(&self.displayed_address()),
             ),
             (_, None) => ScreenBuilder::new("browser-empty")
                 .top_bar("Browse")

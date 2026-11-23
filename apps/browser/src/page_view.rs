@@ -245,6 +245,27 @@ impl PageView {
         )
     }
 
+    /// End an address-editing preview between text lines without reflowing it.
+    pub(crate) fn preview_height(&self, page: usize, room: u32) -> u32 {
+        let top = self.cuts.get(page).copied().unwrap_or(0);
+        let nominal = top.saturating_add(room / self.scale.max(1));
+        let mut cut = nominal;
+        while cut > top && nominal - cut < CUT_BACKTRACK_CSS {
+            let crosses = self.commands.iter().any(|command| match command {
+                Command::GlyphRun { layout, .. } => {
+                    i64::from(layout.y) < i64::from(cut)
+                        && i64::from(layout.y) + i64::from(layout.height) > i64::from(cut)
+                }
+                _ => false,
+            });
+            if !crosses {
+                return (cut - top).saturating_mul(self.scale).max(1);
+            }
+            cut -= 1;
+        }
+        room.max(1)
+    }
+
     /// Whether the reader is the honest presentation for this page: the
     /// intake itself was cut short, or too much of the page never painted.
     pub(crate) fn falls_back_to_reader(&self) -> bool {
