@@ -1092,7 +1092,8 @@ impl Converter<'_> {
                 }
                 continue;
             }
-            if self.attr(node, "disabled").is_some()
+            if (matches!(self.tag(node),Some("input" | "select" | "button" | "textarea"))
+                && self.attr(node, "disabled").is_some())
                 || (node != handle && self.tag(node) == Some("form"))
             {
                 continue;

@@ -543,4 +543,12 @@ mod tests {
             Some("allowed=yes&outside=yes")
         );
     }
+
+    #[test]
+    fn get_form_keeps_controls_in_disabled_neutral_wrappers() {
+        let url = kobo_web_document::Url::parse("https://fixtures.invalid/form").unwrap();
+        let document = kobo_web_document::parse_document(b"<form><div disabled><input name=allowed value=yes></div><input name=blocked disabled></form>",&url,&kobo_web_document::Limits::DEFAULT);
+        let found = forms(&document.blocks);
+        assert_eq!(body(found[0], None).as_deref(), Some("allowed=yes"));
+    }
 }

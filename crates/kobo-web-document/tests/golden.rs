@@ -351,3 +351,19 @@ fn disabled_fieldset_keeps_only_controls_inside_its_first_legend() {
         .collect();
     assert_eq!(names, vec!["allowed", "outside"]);
 }
+
+
+#[test]
+fn disabled_attribute_on_neutral_wrapper_does_not_disable_controls() {
+    use kobo_web_document::{Block, Field};
+    let page=parse("<form><div disabled><input name=allowed value=yes></div><input disabled name=blocked></form>");
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|b| match b {
+            Block::Form(f) => Some(f),
+            _ => None,
+        })
+        .expect("form");
+    assert!(matches!(&form.fields[..],[Field::Text{name,..}] if name=="allowed"));
+}
