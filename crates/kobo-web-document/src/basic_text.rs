@@ -231,6 +231,20 @@ mod tests {
     }
 
     #[test]
+    fn an_overwide_cluster_keeps_its_zero_advance_continuation() {
+        let result = place(&[("a\u{301}b", false)], 2, false, |ch, _| {
+            Some(match ch {
+                'a' => 3,
+                '\u{301}' => 0,
+                _ => 1,
+            })
+        })
+        .unwrap();
+        assert_eq!(result.glyphs[0].line, result.glyphs[1].line);
+        assert_eq!(result.glyphs[2].line, result.glyphs[1].line + 1);
+    }
+
+    #[test]
     fn zero_advance_marks_do_not_disappear() {
         let result = place(&[("e\u{301}", false)], 2, false, |ch, _| {
             Some(u32::from(ch != '\u{301}'))
