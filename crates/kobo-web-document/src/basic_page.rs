@@ -802,7 +802,65 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
         out.push(input[i]);
         i += 1;
     }
-    out
+    // State-pseudo fold inside <style> regions: the engine's state-free
+    // matcher cannot match `a:link` / `a:visited`, so author colors keyed
+    // on them would lose to the UA link color. A static render has no
+    // link state; folding both to the bare element keeps author intent.
+    // BASIC-mode approximation; the fold count is reported by the caller.
+    let (folded, _) = fold_state_pseudos_in_style_tags(&out);
+    folded
+}
+
+/// Fold `:link` and `:visited` away inside <style>…</style> regions.
+/// Returns the rewritten bytes and the fold count.
+pub fn fold_state_pseudos_in_style_tags(input: &[u8]) -> (Vec<u8>, usize) {
+    let mut out = Vec::with_capacity(input.len());
+    let mut folds = 0usize;
+    let mut i = 0usize;
+    let mut in_style = false;
+    while i < input.len() {
+        if !in_style && input[i] == b'<' && input[i + 1..].starts_with(b"style") {
+            in_style = true;
+        } else if in_style && input[i] == b'<' && input[i + 1..].starts_with(b"/style") {
+            in_style = false;
+        }
+        if in_style && input[i] == b':' && input[i + 1..].starts_with(b"link") {
+            folds += 1;
+            i += 5;
+            continue;
+        }
+        if in_style && input[i] == b':' && input[i + 1..].starts_with(b"visited") {
+            folds += 1;
+            i += 8;
+            continue;
+        }
+        out.push(input[i]);
+        i += 1;
+    }
+    (out, folds)
+}
+
+/// Fold `:link` and `:visited` away in a whole stylesheet (for linked
+/// sheets supplied by the host). Same static-render approximation.
+pub fn fold_state_pseudos_css(input: &[u8]) -> (Vec<u8>, usize) {
+    let mut out = Vec::with_capacity(input.len());
+    let mut folds = 0usize;
+    let mut i = 0usize;
+    while i < input.len() {
+        if input[i] == b':' && input[i + 1..].starts_with(b"link") {
+            folds += 1;
+            i += 5;
+            continue;
+        }
+        if input[i] == b':' && input[i + 1..].starts_with(b"visited") {
+            folds += 1;
+            i += 8;
+            continue;
+        }
+        out.push(input[i]);
+        i += 1;
+    }
+    (out, folds)
 }
 
 /// Raw value of the first occurrence of an attribute in a tag's bytes,
