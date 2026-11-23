@@ -9,6 +9,17 @@ re-baseline, not a claim that the user has approved a particular engine or trade
 
 Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
+## Current colour work, November 24, 2026
+
+- [x] Supported fresh arrivals on confirmed Colour profiles open in RGB Page view.
+- [x] Late Colour identity republishes an already-visible Page raster in RGB.
+- [x] Keep authored chromatic text colours instead of the neutral contrast floor.
+  Regular, bold, italic, code, links and backgrounds have exact RGB pixel coverage.
+- [ ] Preserve authored CSS colours in semantic Reader paths: forms, saved-copy
+  notices, restored/fragment positions and unsupported Page fallback. Do not remove
+  these semantics merely to show colour. A source/style mapping is still needed.
+- [ ] Verify colour quality, memory and latency on physical hardware.
+
 ## Crates
 
 | Crate | Owns |

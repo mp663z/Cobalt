@@ -1029,6 +1029,32 @@ mod tests {
     }
 
     #[test]
+    fn authored_colour_survives_regular_bold_italic_code_links_and_backgrounds() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let html=br#"<!doctype html><style>body{margin:0;font-size:16px}p{margin:0;color:#cc2040}strong{color:#2070c0}em{color:#208040}code{color:#8040c0}a{color:#d07010}div{background-color:#20c0d0;width:80px;height:12px}</style><p>Regular</p><p><strong>Bold</strong></p><p><em>Italic</em></p><p><code>Code</code></p><p><a href='/target'>Link</a></p><div></div>"#;
+        let view = PageView::paint(html, 200, 200, 1, &face, &face, &face).unwrap();
+        let rgb = view.raster_page_rgb(0);
+        for colour in [
+            [204, 32, 64],
+            [32, 112, 192],
+            [32, 128, 64],
+            [128, 64, 192],
+            [208, 112, 16],
+            [32, 192, 208],
+        ] {
+            assert!(
+                rgb.chunks_exact(3).any(|pixel| pixel == colour),
+                "missing {colour:?}"
+            );
+        }
+        assert_eq!(view.screen_links(0), vec![0]);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        if let Ok(path) = std::env::var("COBALT_COLOUR_FONT_PREVIEW_OUT") {
+            std::fs::write(path, kobo_image::encode_png_rgb(200, 200, &rgb).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
     fn native_png_data_image_paints_real_rgb_not_marker_black() {
         let face = PageFontAdapter::bundled().expect("bundled faces");
         let png = kobo_image::encode_png_rgb(2, 1, &[220, 20, 40, 20, 100, 220]).unwrap();

@@ -403,3 +403,21 @@ form drive pass. Full browser: 204 passed, 0 failed, 2 ignored. Clippy completed
 with existing warnings. Locked ARM browser: 5,192,076 bytes, +3,942,696 over
 hello, leaving 1,300,184 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
 No hardware colour calibration, RSS or latency is established.
+
+
+### Chromatic text contrast correction, November 24, 2026
+
+The late-identity correction at `d2d786daa` republishes an already-painted
+page after the device confirms Colour support (browser 205/0, ARM 5,192,324).
+The next RGB regression found the shared contrast floor changed lighter
+chromatic text to grey. The floor now applies only to neutral greys. An exact
+pixel check covers regular, bold, italic, code, orange link text and a cyan
+background; the orange link failed before the correction and passes after.
+The 200x200 rendered test image was inspected. This is ideal RGB output,
+not physical panel colour qualification. Native Reader still loses CSS colours.
+
+Browser: 206 passed, 0 failed, 2 ignored. Engine: 1,399 passed, 0 failed,
+18 ignored across 147 groups. Clippy completed with existing warnings.
+Locked ARM browser: 5,192,260 bytes, +3,942,880 over the 1,249,380-byte hello,
+leaving 1,300,000 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
+No new crates, unsafe code, allocator change or protocol change.

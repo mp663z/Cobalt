@@ -26,12 +26,17 @@ pub(crate) struct Style {
     pub background: u32,
 }
 
-/// Darken low-contrast foregrounds against a light e-ink background.
+/// Darken neutral low-contrast foregrounds against a light e-ink background.
+/// Authored chromatic colours must retain their RGB values on colour panels;
+/// replacing them with a neutral floor silently discarded their hue.
 fn contrast_floor(color: u32, background: u32) -> u32 {
     let luminance = |c: u32| -> u32 {
         (((c >> 16) & 255) * 299 + ((c >> 8) & 255) * 587 + (c & 255) * 114) / 1000
     };
-    if luminance(background) > 160 && luminance(color) > 128 {
+    let red = (color >> 16) & 255;
+    let green = (color >> 8) & 255;
+    let blue = color & 255;
+    if red == green && green == blue && luminance(background) > 160 && luminance(color) > 128 {
         0x0040_4040
     } else {
         color
@@ -407,6 +412,13 @@ mod tests {
         assert_eq!(cursor, 1);
         assert_eq!(super::next_occurrence(text, &mut cursor, 'ब'), 4);
         assert_eq!(cursor, text.len());
+    }
+
+    #[test]
+    fn chromatic_text_keeps_authored_rgb_even_above_neutral_floor() {
+        for colour in [0xd07010, 0xffff00, 0x00ffff, 0xffaabb, 0xff00ff] {
+            assert_eq!(contrast_floor(colour, 0xffffff), colour);
+        }
     }
 
     #[test]
