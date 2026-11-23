@@ -280,6 +280,13 @@ The user wants a basic lightweight real browser, at least as good as the stock
 Kobo browser. This is not an exact-parity gate or a reader-only compromise.
 The historical sections above retain their original status and proposals.
 
+- Images: Page view now decodes bounded PNG/JPEG base64 data images using the
+  existing decoder. Successful images preserve link targets; unsupported or
+  over-budget images are counted and do not paint black sentinel boxes.
+  Aggregate compressed bytes are capped at 4 MiB and decoded pixels at
+  1,048,576. Geometry remains the counted marker approximation, with nearest
+  sampling, no external image fetch and no native SVG decoding. The local
+  image sample and image/link drive journey exercise the actual simulator.
 - Engine: native HTML tables now retain their tags and use Page-only UA table
   roles with shared intrinsic columns, padding, separated solid borders,
   short rows, bounded colspan, pixel row minima, row-group backgrounds and

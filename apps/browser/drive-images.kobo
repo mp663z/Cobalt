@@ -1,0 +1,16 @@
+wait-for Search the web
+tap-id samples
+wait-for Sample pages
+tap-id link-4
+wait-for Native image sample
+tap-id navigate
+tap-id page-view
+wait-for-id browser-close
+shot native-image-page
+tap-id navigate
+tap-id links
+expect links on this page
+shot native-image-links
+tap-id link-0
+wait-for Notes on reading from paper screens
+shot native-image-link-target

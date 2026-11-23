@@ -59,6 +59,7 @@ const PAGES: &[(&str, &str)] = &[
     ("article.html", include_str!("../pages/article.html")),
     ("links.html", include_str!("../pages/links.html")),
     ("forms.html", include_str!("../pages/forms.html")),
+    ("images.html", include_str!("../pages/images.html")),
 ];
 
 fn sample(url: &Url) -> Option<&'static str> {

@@ -311,6 +311,8 @@ impl PageView {
                             }
                             continue;
                         }
+                        // Alt-text decoration shares the image source too.
+                        if image.is_some() { continue; }
                     }
                     fill_rect(
                         &mut buffer,
@@ -1023,6 +1025,8 @@ mod tests {
         assert!(rgb.chunks_exact(3).any(|p| p == [20, 100, 220]));
         assert_eq!(view.screen_links(0), vec![0]);
         assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        // No alt glyphs or link underline remain below the one-pixel image.
+        assert!(rgb[100*3..].iter().all(|p| *p == 255));
     }
 
     #[test]
