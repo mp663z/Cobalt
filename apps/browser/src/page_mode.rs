@@ -10,7 +10,14 @@ pub(crate) struct PageMode {
     pub(crate) metrics: DisplayMetrics,
 }
 
-fn frame(title: &str, width: u32, height: u32, page: usize, pages: usize) -> ScreenBuilder {
+fn frame(
+    title: &str,
+    width: u32,
+    height: u32,
+    page: usize,
+    pages: usize,
+    address: &str,
+) -> ScreenBuilder {
     ScreenBuilder::new("browser-painted-page")
         .top_bar(format!("{}/{pages} {title}", page + 1))
         .top_bar_action("native-reader", "Reader")
@@ -22,6 +29,7 @@ fn frame(title: &str, width: u32, height: u32, page: usize, pages: usize) -> Scr
             ("address", "Go to"),
             ("forward", "Forward"),
         ])
+        .field("edit-address", address, "Search or enter address")
         .unframed_picture(TilePicture::new(HANDLE, width, height), 500)
 }
 
@@ -30,7 +38,7 @@ impl PageMode {
         let width = u32::try_from(metrics.width).ok()?;
         let height = u32::try_from(metrics.height).ok()?;
         // Measure actual chrome, never subtract remembered toolbar dimensions.
-        let placeholder = frame(title, width, height, 0, 1).build();
+        let placeholder = frame(title, width, height, 0, 1, "").build();
         let (room_width, room_height) =
             kobo_web_layout::picture_box(&placeholder, metrics, HANDLE)?;
         // Refuse before raster allocation when even RGB cannot fit the wire budget.
@@ -58,9 +66,9 @@ impl PageMode {
         })
     }
 
-    pub(crate) fn screen(&self, title: &str) -> ScreenBuilder {
+    pub(crate) fn screen(&self, title: &str, address: &str) -> ScreenBuilder {
         let (width, height) = self.view.screen_device_px();
-        frame(title, width, height, self.page, self.view.pages())
+        frame(title, width, height, self.page, self.view.pages(), address)
     }
 
     pub(crate) fn publish(&self, context: &mut Context, colour: bool) -> bool {

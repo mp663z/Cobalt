@@ -13,6 +13,7 @@ fn runner(text_scale: TextScale) -> AppRunner<Browser> {
         },
     );
     runner.start();
+    runner.action(action_id("samples"));
     runner
 }
 
@@ -38,8 +39,8 @@ fn link_to(runner: &AppRunner<Browser>, words: &str) -> ActionId {
 
 fn form_runner(scale: TextScale) -> AppRunner<Browser> {
     let mut runner = runner(scale);
-    let web = link_to(&runner, "example.com");
-    runner.action(web);
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(br#"
         <title>Form test</title><main><h1>Form test</h1>
         <form action="/search" method="get"><label for=q>Search</label><input id=q type=search name=q value=ink>
@@ -111,7 +112,8 @@ fn get_form_submits_current_values_and_waits_for_the_result() {
 #[test]
 fn post_review_does_not_send_and_cancel_returns_to_form() {
     let mut runner = runner(TextScale::Default);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(
         br#"<title>POST</title><form method=post action="/order"><input name=note value=hello><input type=submit name=go value=Send></form>"#.to_vec()));
     runner.action(action_id("form-0"));
@@ -161,7 +163,7 @@ fn form_control_screen_fits_on_three_profiles_and_sizes() {
 }
 
 #[test]
-fn starts_on_the_sample_index() {
+fn samples_action_opens_the_sample_index() {
     let runner = runner(TextScale::Default);
     assert_eq!(title(&runner), "Browse: sample pages");
     assert_eq!(runner.app().view, View::Page);
@@ -249,7 +251,8 @@ fn sections_jump_to_headings_and_return_to_page() {
 #[test]
 fn a_long_sections_list_fits_and_pages_on_a_small_screen() {
     let mut runner = runner(TextScale::ExtraLarge);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let mut html = "<title>Many headings</title>".to_owned();
     for i in 0..80 {
         write!(html, "<h2>Part {i}</h2><p>A sentence for part {i}.</p>").unwrap();
@@ -285,7 +288,8 @@ fn a_long_sections_list_fits_and_pages_on_a_small_screen() {
 #[test]
 fn links_list_does_not_offer_links_from_other_pages() {
     let mut runner = runner(TextScale::ExtraLarge);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let mut html = "<title>Long links</title>".to_owned();
     for i in 0..120 {
         write!(html, r#"<p><a href="/item/{i}">Item {i}</a> A sentence around the link, with plenty of room for words.</p>"#).unwrap();
@@ -592,7 +596,8 @@ fn pages_made(runner: &AppRunner<Browser>) -> usize {
 #[test]
 fn a_long_page_shows_at_once_and_counts_its_pages_in_the_background() {
     let mut runner = runner(TextScale::Default);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(long_page()));
     assert_eq!(title(&runner), "Long");
     assert_eq!(
@@ -636,7 +641,8 @@ fn a_long_page_shows_at_once_and_counts_its_pages_in_the_background() {
 #[test]
 fn leaving_a_long_page_stops_its_background_paging() {
     let mut runner = runner(TextScale::Default);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     runner.task_outcome(pending_task(&runner), TaskOutcome::Completed(long_page()));
     let nap = runner.app().pager.expect("paging in the background");
     runner.action(action_id("back"));
@@ -728,7 +734,8 @@ fn a_png(width: u32, height: u32) -> Vec<u8> {
 
 /// Opens a web page with `body` and returns the commands its arrival made.
 fn open_web_page(runner: &mut AppRunner<Browser>, body: &str) -> Vec<kobo_sdk::Command> {
-    runner.action(link_to(runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     runner.task_outcome(
         pending_task(runner),
         TaskOutcome::Completed(body.as_bytes().to_vec()),
@@ -923,6 +930,8 @@ fn runner_with(store: &mut Store) -> AppRunner<Browser> {
     let mut runner = AppRunner::with_metrics(Browser::default(), kobo_ui::CLARA_BW_METRICS);
     let started = runner.start();
     store.pump(&mut runner, started);
+    let samples = runner.action(action_id("samples"));
+    store.pump(&mut runner, samples);
     runner
 }
 
@@ -949,7 +958,8 @@ fn a_page_that_arrives_is_kept_and_read_back_when_offline() {
 
     runner.action(action_id("back"));
     assert_eq!(title(&runner), "Browse: sample pages");
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -976,7 +986,8 @@ fn a_page_that_arrives_is_kept_and_read_back_when_offline() {
 fn a_page_never_kept_or_a_slow_site_still_shows_the_error() {
     let mut store = Store::default();
     let mut runner = runner_with(&mut store);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -991,7 +1002,8 @@ fn a_page_never_kept_or_a_slow_site_still_shows_the_error() {
     let arrived = open_web_page(&mut runner, KEPT);
     store.pump(&mut runner, arrived);
     runner.action(action_id("back"));
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     // A site that answers slowly is there; an old copy would hide that.
     let failed = runner.task_outcome(
         pending_task(&runner),
@@ -1060,7 +1072,8 @@ fn kept_pages_outlive_the_app_and_strays_are_cleared() {
     let mut runner = runner_with(&mut store);
     assert!(!store.shelf.contains_key("page-stray"));
     assert!(store.shelf.contains_key("other-app-blob"));
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Unreachable),
@@ -1101,7 +1114,8 @@ fn a_shown_picture_is_kept_and_comes_back_with_its_page_offline() {
     );
 
     runner.action(action_id("back"));
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -1230,7 +1244,8 @@ fn a_saved_copy_reopens_at_the_same_words_though_its_note_moves_the_pages() {
 #[test]
 fn form_lists_page_and_only_visible_controls_can_change() {
     let mut runner = runner(TextScale::ExtraLarge);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let mut html = "<title>Long form</title><form method=get action=/find>".to_owned();
     for index in 0..35 {
         write!(
@@ -1264,7 +1279,8 @@ fn form_lists_page_and_only_visible_controls_can_change() {
 #[test]
 fn choices_only_accept_the_current_options_page() {
     let mut runner = runner(TextScale::ExtraLarge);
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let mut html = "<title>Long choice</title><form><select name=item>".to_owned();
     for index in 0..30 {
         write!(html, "<option value={index}>Choice number {index}</option>").unwrap();
@@ -1391,7 +1407,8 @@ fn failed_pages_are_not_added_and_saved_copy_titles_stay_clean() {
     let mut store = Store::default();
     let mut runner = runner_with(&mut store);
     let before = runner.app().library.recent.len();
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -1401,7 +1418,8 @@ fn failed_pages_are_not_added_and_saved_copy_titles_stay_clean() {
     let arrived = open_web_page(&mut runner, KEPT);
     store.pump(&mut runner, arrived);
     runner.action(action_id("back"));
-    runner.action(link_to(&runner, "example.com"));
+    runner.app_mut().retry = Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
     let failed = runner.task_outcome(
         pending_task(&runner),
         TaskOutcome::Failed(TaskError::Offline),
@@ -1670,4 +1688,79 @@ fn painted_fragment_link_uses_native_anchor_offsets() {
     let loaded = runner.app().loaded.as_ref().unwrap();
     assert!(loaded.paginator.page_of("refresh").is_some());
     assert_eq!(Some(loaded.page), loaded.paginator.page_of("refresh"));
+}
+
+#[test]
+fn launch_is_search_first_and_samples_remain_reachable() {
+    let mut runner = AppRunner::with_metrics(Browser::default(), kobo_ui::CLARA_BW_METRICS);
+    let commands = runner.start();
+    assert_eq!(runner.app().view, View::Start);
+    assert!(runner.app().loaded.is_none());
+    assert!(fetches(&commands).is_empty());
+    for scale in TextScale::STEPS {
+        let metrics = DisplayMetrics {
+            text_scale: scale,
+            ..kobo_ui::CLARA_BW_METRICS
+        };
+        assert!(kobo_web_layout::fits(
+            &runner.app().screen(&metrics).build(),
+            &metrics
+        ));
+    }
+    runner.action(action_id("address"));
+    assert!(runner.app().address.is_open());
+    assert!(runner.app().address.text().is_empty());
+    runner.action(action_id("kb.cancel"));
+    assert_eq!(runner.app().view, View::Start);
+    runner.action(action_id("samples"));
+    assert!(runner
+        .app()
+        .loaded
+        .as_ref()
+        .unwrap()
+        .title
+        .contains("sample pages"));
+    runner.action(action_id("edit-address"));
+    assert_eq!(runner.app().address.text(), SAMPLES);
+}
+
+#[test]
+fn persistent_address_field_is_above_native_and_painted_content() {
+    let mut runner = runner(TextScale::Default);
+    for painted in [false, true] {
+        if painted {
+            runner.action(action_id("page-view"));
+        }
+        let metrics = runner.context().metrics();
+        let screen = runner.app().screen(&metrics).build();
+        assert!(
+            matches!(screen.nodes.first(), Some(kobo_sdk::Node::Field { action, value, .. })
+            if *action == action_id("edit-address") && value == SAMPLES)
+        );
+        assert!(kobo_web_layout::fits(&screen, &metrics));
+    }
+}
+
+#[test]
+fn start_search_submits_words_and_library_returns_to_start() {
+    let mut runner = AppRunner::with_metrics(Browser::default(), kobo_ui::CLARA_BW_METRICS);
+    runner.start();
+    runner.action(action_id("bookmarks"));
+    runner.action(action_id("return"));
+    assert_eq!(runner.app().view, View::Start);
+    runner.action(action_id("address"));
+    for key in [
+        "kb.r0c2", "kb.space", "kb.r0c7", "kb.r2c5", "kb.r1c7", "kb.enter",
+    ] {
+        runner.action(action_id(key));
+    }
+    assert_eq!(
+        runner.app().pending.as_ref().unwrap().url.to_string(),
+        "https://html.duckduckgo.com/html/?q=e+ink"
+    );
+    runner.action(action_id("edit-address"));
+    assert_eq!(
+        runner.app().address.text(),
+        "https://html.duckduckgo.com/html/?q=e+ink"
+    );
 }
