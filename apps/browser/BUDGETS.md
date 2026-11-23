@@ -350,3 +350,18 @@ not physical-panel qualification.
 
 Locked ARM release browser: 5,189,532 bytes, +3,940,152 over hello, leaving
 1,302,728 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
+
+
+### Disabled option-group submission guard, November 24, 2026
+
+Measured source: `b0faa9ca86c56017eb66f2048480d96a3bb4ed26`. Native form parsing skips disabled
+optgroup descendants, not only individually disabled options. Before the fix,
+a selected option inside a disabled group could become the chosen successful
+control. Fail-before/pass-after parser coverage and app GET serialization
+coverage now keep only the enabled choice. No protocol or POST changes.
+
+Engine: 1,396 passed, 0 failed, 18 ignored across 147 result groups.
+Browser: 199 passed, 0 failed, 2 ignored. Clippy completed with existing
+warnings. Locked ARM browser: 5,189,684 bytes, +3,940,304 over hello, with
+1,302,576 bytes left under +5 MiB. Stripped static ARM EABI5 inspected.
+No new hardware measurement or visual-layout claim is made by this guard.
