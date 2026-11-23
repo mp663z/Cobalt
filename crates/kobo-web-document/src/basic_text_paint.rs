@@ -6,7 +6,7 @@ use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::GlyphBitmap;
 
 /// Source text, weight, colour and CSS size.
-pub(crate) type Run = (String, bool, u32, u32, bool, bool);
+pub(crate) type Run = (String, bool, u32, u32, bool, bool, Option<usize>);
 
 pub(crate) struct Style {
     pub size: u32,
@@ -206,7 +206,7 @@ pub(crate) fn paint(
                     (color & 255) as u8,
                 ),
                 source: Source {
-                    node: None,
+                    node: runs[first.leaf].6,
                     action: None,
                 },
             });
@@ -231,7 +231,7 @@ pub(crate) fn paint(
                     (color & 255) as u8,
                 ),
                 source: Source {
-                    node: None,
+                    node: runs[first.leaf].6,
                     action: None,
                 },
             });

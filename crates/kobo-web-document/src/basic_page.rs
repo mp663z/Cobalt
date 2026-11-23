@@ -14,8 +14,8 @@
 //!   nonzero ancestor size, else 16px,
 //! - backgrounds paint the padding box; border widths are not subtracted,
 //! - floats, positioned boxes, flex subtrees and replaced content are skipped,
-//! - line breaking is the existing narrow ASCII placer; blocks it refuses
-//!   are skipped whole.
+//! - Page view uses a source-preserving scalar line breaker; complex-script
+//!   shaping and bidi are not implemented. Missing glyphs draw placeholders.
 //!
 //! Bounds: node visits are capped (MAX_VISITS); emitted commands are NOT
 //! display-list budgeted - the caller replays the command vec into bounded
@@ -243,7 +243,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         parent = self.tree.boxes[p].parent;
                     }
                     runs.push((text, node.style.font_weight >= 600, node.style.color, run_size,
-                        node.style.font_style != crate::computed_style::FontStyle::Normal, underline));
+                        node.style.font_style != crate::computed_style::FontStyle::Normal, underline, node.source));
                 }
                 BoxKind::Inline => {
                     for &c in node.children.iter().rev() {
@@ -279,7 +279,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize, _, _) in &runs {
+        for (text, bold, _, rsize, _, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char
@@ -366,13 +366,19 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let face = self.face_for(index);
         let node = &self.tree.boxes[index];
         let size = self.font_size(index).clamp(1, 256);
+        let mut ancestor = Some(index);
+        let mut background = 0xffffff;
+        while let Some(i) = ancestor {
+            if let Some(color) = self.tree.boxes[i].style.used_background_color() { background = color; break; }
+            ancestor = self.tree.boxes[i].parent;
+        }
         let style = crate::basic_text_paint::Style {
             size,
             line_height: node.style.used_line_height(size + 4).unwrap_or(size + 4),
             align: node.style.text_align,
             direction: node.style.direction,
             pre: node.style.white_space_pre,
-            background: node.style.used_background_color().unwrap_or(0xffffff),
+            background,
         };
         let (mut runs, _) = self.collect_runs_of(children, node.style.color)?;
         if self.tree.boxes[index].kind == BoxKind::ListItem && !self.tree.boxes[index].style.list_style_none {
@@ -2491,26 +2497,15 @@ fn capped_block_width(
 }
 
 #[cfg(test)]
+#[test]
+fn basic_breaker_collapses_inter_word_space() {
+    let lines = crate::basic_text::place(&[("four five six", false)], 100, false,
+        |ch, _| Some(if ch == ' ' { 5 } else { 10 })).unwrap();
+    assert_eq!(lines.glyphs[5].character, 'f');
+    assert_eq!(lines.glyphs[5].x, 45);
+}
 
-    #[test]
-    fn greedy_wrap_collapses_inter_word_space() {
-        // Regression: the fallback used to emit the boundary space twice
-        // (trailing step + next-word step). Width fits one word per line
-        // plus its space, so any doubling shows as a second space glyph.
-        let mut stats = PartialStats::default();
-        let lines = greedy_wrap(
-            &[("four five six", false)],
-            100,
-            |ch, _| Some(if ch == ' ' { 5 } else { 10 }),
-            &mut stats,
-        )
-        .unwrap();
-        // Greedy spaces are implicit gaps (no space glyph): "four" is 40px,
-        // so "five" starts at x=45 with exactly one 5px space, not 50.
-        assert_eq!(lines.glyphs[4].character, 'f');
-        assert_eq!(lines.glyphs[4].x, 45);
-    }
-
+#[cfg(test)]
 mod hgeom_tests {
     use super::capped_block_width;
     use crate::computed_style::Length;

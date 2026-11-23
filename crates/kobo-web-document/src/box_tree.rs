@@ -2657,6 +2657,7 @@ impl BoxTree {
             .map(|(index, _)| (index, None))
             .rev()
             .collect();
+        let mut page_list_counts = std::collections::BTreeMap::<usize, usize>::new();
         while let Some((source, parent)) = stack.pop() {
             if collapsed[source] {
                 continue;
@@ -2753,12 +2754,12 @@ impl BoxTree {
             style.padding_bottom = style.padding_bottom.saturating_add(bottom);
             style.padding_left = style.padding_left.saturating_add(left);
             // Preserve semantic pre formatting and ordered-list numbering for Page view.
-            if node.tag == "pre" { style.white_space_pre = true; }
             if style.white_space_pre { tree.unsupported = true; }
             if kind == BoxKind::ListItem {
                 let marker = node.parent.and_then(|p| {
                     if styled.nodes[p].tag != "ol" { return None; }
-                    let number = styled.nodes[..source].iter().filter(|s| s.parent == Some(p) && s.tag == "li").count() + 1;
+                    let number = page_list_counts.entry(p).or_default();
+                    *number += 1;
                     Some(format!("{number}. "))
                 }).unwrap_or_else(|| "• ".to_owned());
                 tree.page_list_markers.insert(index, marker);

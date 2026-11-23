@@ -1050,6 +1050,7 @@ impl StyleTree {
                 }
             }
             let rem_refused = normalize_rem(&mut declarations, root_font_px);
+            if name.local.as_ref() == "pre" { declarations.insert(0, Declaration { property: Property::WhiteSpace, value: Value::WhiteSpacePre, origin: Origin::UserAgent, important: false, specificity: (0, 0, 0), source_order: 0 }); }
             let style = Computed::cascade(Some(inherited), &declarations);
             if style.white_space_pre { tree.unsupported = true; }
             if parent.is_none() {

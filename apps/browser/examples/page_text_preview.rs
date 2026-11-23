@@ -11,6 +11,9 @@ use kobo_web_document::{
 use std::io::Write;
 struct Face(PageFontSession);
 impl FontProvider for Face {
+    fn has_glyph(&self, c: char, b: bool) -> Option<bool> {
+        Some(self.0.has_glyph(c, b, false))
+    }
     fn advance(&self, c: char, s: u32, b: bool) -> Option<u32> {
         self.0.advance(c, s, b, false)
     }
@@ -41,8 +44,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     let html = std::fs::read(args.get(1).ok_or("input HTML required")?)?;
     let mut session = PageFontSession::bundled()?;
-    for font in args.iter().skip(3) {
-        session.add_fallback(&std::fs::read(font)?)?;
+    let mut fonts = args.iter().skip(3);
+    while let Some(font) = fonts.next() {
+        if font == "--italic" {
+            let regular = std::fs::read(fonts.next().ok_or("italic font required")?)?;
+            let bold = std::fs::read(fonts.next().ok_or("bold italic font required")?)?;
+            session.set_italic(&regular, &bold)?;
+        } else {
+            session.add_fallback(&std::fs::read(font)?)?;
+        }
     }
     let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         &html,
