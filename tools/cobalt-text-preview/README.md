@@ -1,3 +1,36 @@
+## Portable partial page harness (Phase 0)
+
+The supported basic-mode host command is now:
+
+```sh
+cargo +1.85.1 run --locked --manifest-path tools/cobalt-text-preview/Cargo.toml --bin basic-page -- \
+  --page path/to/page.html --stylesheet-dir path/to/sheets --output /tmp/page
+python3 tools/cobalt-text-preview/blit_images.py --rgba /tmp/page.rgba \
+  --images /tmp/page.imguris --output /tmp/page.png
+```
+
+`--fonts` defaults to the regular/bold/mono faces in `crates/kobo-text/fonts`.
+`--width` defaults to 800 CSS pixels. `--stylesheet-dir` is optional; sheets must
+be numbered consecutively from `sheet-0.css` in document link order. Gaps fail.
+The command writes RGBA, sorted census text, and temporary image URI sidecars.
+The final PNG is white-composited and includes any temporary image pastes.
+Do not present the raw sentinel raster as the final image.
+
+Render and check all ten frozen pages with one command (Python Pillow required):
+
+```sh
+python3 tools/cobalt-text-preview/render_corpus.py --out /tmp/cobalt-corpus
+cargo +1.85.1 test --locked --manifest-path tools/cobalt-text-preview/Cargo.toml --test basic_corpus
+```
+
+See `corpus/SOURCES.md` for source URLs, licences and limitations. The harness
+streams bounded raster strips and fails on display-list overflow. Layout still
+owns a full-page command list with coverage masks, so this is not a device
+memory qualification or a claim that the +32 MiB budget has been met.
+
+Older exact-painter and experimental examples below retain their original
+contracts. They are not the supported basic-page reproduction command.
+
 # Host text preview
 
 This restricted TrueType preview is a standalone host tool, not a device

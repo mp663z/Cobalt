@@ -1,13 +1,38 @@
 import sys, base64, io, subprocess, tempfile, os
 from PIL import Image
 
-page = sys.argv[1]
-W = 800
-rgba = open(f'/tmp/basic-{page}.rgba','rb').read()
-H = len(rgba)//(W*4)
-im = Image.frombytes('RGBA',(W,H),rgba).convert('RGB')
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description='Composite temporary image markers over a white raster.')
+parser.add_argument('page', nargs='?', help='legacy /tmp/basic-PAGE input name')
+parser.add_argument('--rgba', type=Path)
+parser.add_argument('--images', type=Path)
+parser.add_argument('--output', type=Path)
+parser.add_argument('--width', type=int, default=800)
+args = parser.parse_args()
+if not args.page and not (args.rgba and args.images and args.output):
+    parser.error('supply PAGE or --rgba, --images and --output')
+rgba_path = args.rgba or Path(f'/tmp/basic-{args.page}.rgba')
+images_path = args.images or Path(f'/tmp/basic-{args.page}.imguris')
+output_path = args.output or Path(f'/tmp/basic-{args.page}-blit.png')
+W = args.width
+rgba = rgba_path.read_bytes()
+if W <= 0 or len(rgba) % (W * 4):
+    parser.error('RGBA length must be a multiple of width * 4')
+H = len(rgba) // (W * 4)
+source = Image.frombytes('RGBA', (W, H), rgba)
+white = Image.new('RGBA', source.size, 'white')
+white.alpha_composite(source)
+im = white.convert('RGB')
 px = im.load()
-uris = open(f'/tmp/basic-{page}.imguris').read().splitlines()
+uris = images_path.read_text().splitlines()
+def white_composite(image):
+    layer = image.convert('RGBA')
+    background = Image.new('RGBA', layer.size, 'white')
+    background.alpha_composite(layer)
+    return background.convert('RGB')
+
 report=[]
 # Pass 1: locate every marker box on the PRISTINE raster. Pasted photos
 # contain near-black pixels that collide with the sentinel colors, so
@@ -79,7 +104,7 @@ for idx, uri in enumerate(uris):
                 dec=f'svg-FAILED:{e1}/{e}'
     else:
         try:
-            img = Image.open(io.BytesIO(data)).convert('RGB')
+            img = white_composite(Image.open(io.BytesIO(data)))
             dec=head.split(';')[0].replace('data:','')
         except Exception as e:
             img=None; dec=f'decode-FAILED:{e}'
@@ -100,6 +125,6 @@ for idx, uri in enumerate(uris):
     img = img.resize((tw,th), Image.LANCZOS)
     im.paste(img,(x0+(rw-tw)//2,y0))
     report.append((idx,f'{rw}x{rh}@{x0},{y0} pasted {tw}x{th}',dec))
-im.save(f'/tmp/basic-{page}-blit.png')
+im.save(output_path)
 for r in report: print(r)
-print('saved', f'/tmp/basic-{page}-blit.png', im.size)
+print('saved', str(output_path), im.size)

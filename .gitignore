@@ -25,3 +25,8 @@ secrets/
 
 # The running development log. Useful while building, not part of what ships.
 BUILD_IN_PUBLIC.md
+
+# Standalone preview builds and local visual captures.
+/tools/cobalt-text-preview/target/
+/evidence*/
+/tools/review-captures/

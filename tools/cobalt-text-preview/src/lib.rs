@@ -1,4 +1,5 @@
 //! Experimental font and panel-picture seam. Not linked into any shipping app.
+pub mod basic_preview;
 mod normal_metrics;
 use fontdue::{Font, FontSettings};
 use kobo_web_document::{css_text_page::FontProvider, inline_lines::GlyphBitmap};
@@ -557,6 +558,7 @@ pub fn prepare_page(
 /// every refusal in `prepare_page` applies unchanged.
 /// # Errors
 /// Refuses exactly as `prepare_page` does.
+#[allow(clippy::too_many_arguments)] // Shared legacy seam; mode flags are not new public API.
 fn prepare_page_impl(
     html: &[u8],
     sheets: &[Vec<u8>],

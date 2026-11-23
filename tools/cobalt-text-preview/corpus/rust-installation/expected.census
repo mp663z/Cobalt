@@ -1,0 +1,4 @@
+width=800 height=2673 height_clamped=false blocks=72 text_blocks=45 glyph_runs=90 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"greedy-wrap-fallback": 9, "inline-color-flattened": 13, "link-color-by-char-map": 13, "margin-collapse-adjacent": 8, "margin-zeroed": 48, "mixed-font-size-flattened": 11, "relative-as-static": 12, "unicode-folded-ascii": 32}
+images=0

@@ -1,0 +1,615 @@
+{
+  "fetched_at": "2026-11-23T10:04:40.574082+00:00",
+  "pages": [
+    {
+      "url": "https://docs.python.org/3/tutorial/introduction.html",
+      "resolved_url": "https://docs.python.org/3/tutorial/introduction.html",
+      "sha256": "d308681c52de4c69174a444d1eaa792a9ee34e06189048354793b51bd27d9f21",
+      "bytes": 71957,
+      "name": "python-introduction",
+      "license": "PSF License 2",
+      "stylesheets": [
+        {
+          "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "resolved_url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "sha256": "1391123c90891f96f975870647f0b2c364fbfda7cd9e9b02bbd84f2077608034",
+          "bytes": 4848
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "resolved_url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "sha256": "a3f4575ccc3820812c6fe0a38122a3f8ec38fe5a936c21074672843948638616",
+          "bytes": 5055
+        },
+        {
+          "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "resolved_url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "sha256": "94a00e0d0665461f189271938d429f1d92f5d5e3d8d54293346280b8144fefb5",
+          "bytes": 5290
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "sha256": "74fa3ad1b5ade44766b5a790da14427620dde3d351b426db2a724ac42f18cdc4",
+          "bytes": 19805
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "sha256": "93845fdda186e878dc784565b9dafe5643a34e0ccac6883786d01b6ac7ca57d0",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "url": "https://docs.python.org/3/tutorial/controlflow.html",
+      "resolved_url": "https://docs.python.org/3/tutorial/controlflow.html",
+      "sha256": "319a25d23443db6d86440545937da28562a33db08718a08fae8fea688b666b9b",
+      "bytes": 140178,
+      "name": "python-controlflow",
+      "license": "PSF License 2",
+      "stylesheets": [
+        {
+          "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "resolved_url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "sha256": "1391123c90891f96f975870647f0b2c364fbfda7cd9e9b02bbd84f2077608034",
+          "bytes": 4848
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "resolved_url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "sha256": "a3f4575ccc3820812c6fe0a38122a3f8ec38fe5a936c21074672843948638616",
+          "bytes": 5055
+        },
+        {
+          "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "resolved_url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "sha256": "94a00e0d0665461f189271938d429f1d92f5d5e3d8d54293346280b8144fefb5",
+          "bytes": 5290
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "sha256": "74fa3ad1b5ade44766b5a790da14427620dde3d351b426db2a724ac42f18cdc4",
+          "bytes": 19805
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "sha256": "93845fdda186e878dc784565b9dafe5643a34e0ccac6883786d01b6ac7ca57d0",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "url": "https://docs.python.org/3/tutorial/datastructures.html",
+      "resolved_url": "https://docs.python.org/3/tutorial/datastructures.html",
+      "sha256": "54bee530d9eb88ddcd91bc1214f3aa858fc785ecd8d1e9aec1907c4dd673c9e8",
+      "bytes": 111008,
+      "name": "python-datastructures",
+      "license": "PSF License 2",
+      "stylesheets": [
+        {
+          "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "resolved_url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "sha256": "1391123c90891f96f975870647f0b2c364fbfda7cd9e9b02bbd84f2077608034",
+          "bytes": 4848
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "resolved_url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "sha256": "a3f4575ccc3820812c6fe0a38122a3f8ec38fe5a936c21074672843948638616",
+          "bytes": 5055
+        },
+        {
+          "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "resolved_url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "sha256": "94a00e0d0665461f189271938d429f1d92f5d5e3d8d54293346280b8144fefb5",
+          "bytes": 5290
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "sha256": "74fa3ad1b5ade44766b5a790da14427620dde3d351b426db2a724ac42f18cdc4",
+          "bytes": 19805
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "sha256": "93845fdda186e878dc784565b9dafe5643a34e0ccac6883786d01b6ac7ca57d0",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "url": "https://docs.python.org/3/tutorial/modules.html",
+      "resolved_url": "https://docs.python.org/3/tutorial/modules.html",
+      "sha256": "d8748aff245ea3643995b7b43bf6e3f578288a9f672ff1ff69f361c2671188f6",
+      "bytes": 71013,
+      "name": "python-modules",
+      "license": "PSF License 2",
+      "stylesheets": [
+        {
+          "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "resolved_url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "sha256": "1391123c90891f96f975870647f0b2c364fbfda7cd9e9b02bbd84f2077608034",
+          "bytes": 4848
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "resolved_url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "sha256": "a3f4575ccc3820812c6fe0a38122a3f8ec38fe5a936c21074672843948638616",
+          "bytes": 5055
+        },
+        {
+          "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "resolved_url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "sha256": "94a00e0d0665461f189271938d429f1d92f5d5e3d8d54293346280b8144fefb5",
+          "bytes": 5290
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "sha256": "74fa3ad1b5ade44766b5a790da14427620dde3d351b426db2a724ac42f18cdc4",
+          "bytes": 19805
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "sha256": "93845fdda186e878dc784565b9dafe5643a34e0ccac6883786d01b6ac7ca57d0",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "url": "https://docs.python.org/3/tutorial/errors.html",
+      "resolved_url": "https://docs.python.org/3/tutorial/errors.html",
+      "sha256": "5289d9a92b9c9e2288023cc488c6a2047bb24ddd894e071f4cba00a87da66378",
+      "bytes": 85628,
+      "name": "python-errors",
+      "license": "PSF License 2",
+      "stylesheets": [
+        {
+          "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "resolved_url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+          "sha256": "1391123c90891f96f975870647f0b2c364fbfda7cd9e9b02bbd84f2077608034",
+          "bytes": 4848
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "resolved_url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+          "sha256": "a3f4575ccc3820812c6fe0a38122a3f8ec38fe5a936c21074672843948638616",
+          "bytes": 5055
+        },
+        {
+          "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "resolved_url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+          "sha256": "94a00e0d0665461f189271938d429f1d92f5d5e3d8d54293346280b8144fefb5",
+          "bytes": 5290
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+          "sha256": "74fa3ad1b5ade44766b5a790da14427620dde3d351b426db2a724ac42f18cdc4",
+          "bytes": 19805
+        },
+        {
+          "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "resolved_url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+          "sha256": "93845fdda186e878dc784565b9dafe5643a34e0ccac6883786d01b6ac7ca57d0",
+          "bytes": 3669
+        }
+      ]
+    },
+    {
+      "url": "https://doc.rust-lang.org/book/ch01-01-installation.html",
+      "resolved_url": "https://doc.rust-lang.org/book/ch01-01-installation.html",
+      "sha256": "a36167aea30bd22e4adc3d9e0a5c8ae5040f4ac8f78b2ac7dad6f720d1686a1c",
+      "bytes": 30726,
+      "name": "rust-installation",
+      "license": "MIT OR Apache-2.0",
+      "stylesheets": [
+        {
+          "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "sha256": "8adf115df892369c90b830767c4651a9e058b79273e219935f7c8a96c6eab9c0",
+          "bytes": 10422
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "sha256": "e96d0476741bfcbe8cc0ac02db00187c45a63946834361d0eab846016787c646",
+          "bytes": 11478
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "sha256": "d279d366359c0d588c9c10cb46afe2b543fc731dea722803639b4e45016d5fe2",
+          "bytes": 18032
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "sha256": "9e4910d8eb508863172430c60d49fd3b442e9e7f5963a18cd1d655c386ffeae9",
+          "bytes": 689
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "sha256": "94b5131beb9b75a55f9649fcf12de167350feae0fab2bab26c2703cd75c0c781",
+          "bytes": 3818
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "resolved_url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "sha256": "493f70e1527d895653b5ac7157abba8e2c656e43698da93b6c1997e2855a5059",
+          "bytes": 1209
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "resolved_url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "sha256": "4c0ae647a06ef1699806fb9b4b6d0ef72de026708c6e8581362641c9298cb5f7",
+          "bytes": 1694
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "sha256": "3fdfc3ac5e435e0cef96dafee74da487e4846ffce4dff5973bb45d68b678dd7f",
+          "bytes": 907
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "sha256": "d33b75bf65de036609f5aa6bf5e698541d3465a552d19e20e05faf4791385610",
+          "bytes": 1196
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "sha256": "4e126c6215d53926b8cf2122221b90259412d3a801000f9b75df128f2abd78bf",
+          "bytes": 122
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "sha256": "9b5766c0108f849f30c0e022feb305b9b8a4a0ef80a5976e82f05be45f7facf5",
+          "bytes": 419
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "sha256": "cab262219fedef9272bb6fac9e28c7eb3e34563059a3db5bc2775eac2025a29a",
+          "bytes": 97
+        }
+      ]
+    },
+    {
+      "url": "https://doc.rust-lang.org/book/ch01-02-hello-world.html",
+      "resolved_url": "https://doc.rust-lang.org/book/ch01-02-hello-world.html",
+      "sha256": "159593279bf18614c8e765c44b813853b539db6ab7fb44a706d32567f97b3b27",
+      "bytes": 31980,
+      "name": "rust-hello",
+      "license": "MIT OR Apache-2.0",
+      "stylesheets": [
+        {
+          "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "sha256": "8adf115df892369c90b830767c4651a9e058b79273e219935f7c8a96c6eab9c0",
+          "bytes": 10422
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "sha256": "e96d0476741bfcbe8cc0ac02db00187c45a63946834361d0eab846016787c646",
+          "bytes": 11478
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "sha256": "d279d366359c0d588c9c10cb46afe2b543fc731dea722803639b4e45016d5fe2",
+          "bytes": 18032
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "sha256": "9e4910d8eb508863172430c60d49fd3b442e9e7f5963a18cd1d655c386ffeae9",
+          "bytes": 689
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "sha256": "94b5131beb9b75a55f9649fcf12de167350feae0fab2bab26c2703cd75c0c781",
+          "bytes": 3818
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "resolved_url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "sha256": "493f70e1527d895653b5ac7157abba8e2c656e43698da93b6c1997e2855a5059",
+          "bytes": 1209
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "resolved_url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "sha256": "4c0ae647a06ef1699806fb9b4b6d0ef72de026708c6e8581362641c9298cb5f7",
+          "bytes": 1694
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "sha256": "3fdfc3ac5e435e0cef96dafee74da487e4846ffce4dff5973bb45d68b678dd7f",
+          "bytes": 907
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "sha256": "d33b75bf65de036609f5aa6bf5e698541d3465a552d19e20e05faf4791385610",
+          "bytes": 1196
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "sha256": "4e126c6215d53926b8cf2122221b90259412d3a801000f9b75df128f2abd78bf",
+          "bytes": 122
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "sha256": "9b5766c0108f849f30c0e022feb305b9b8a4a0ef80a5976e82f05be45f7facf5",
+          "bytes": 419
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "sha256": "cab262219fedef9272bb6fac9e28c7eb3e34563059a3db5bc2775eac2025a29a",
+          "bytes": 97
+        }
+      ]
+    },
+    {
+      "url": "https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html",
+      "resolved_url": "https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html",
+      "sha256": "5b47238cb842543e4026bed7560405ec5a2645b804ddedd3323ed05111469191",
+      "bytes": 83395,
+      "name": "rust-guessing",
+      "license": "MIT OR Apache-2.0",
+      "stylesheets": [
+        {
+          "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "sha256": "8adf115df892369c90b830767c4651a9e058b79273e219935f7c8a96c6eab9c0",
+          "bytes": 10422
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "sha256": "e96d0476741bfcbe8cc0ac02db00187c45a63946834361d0eab846016787c646",
+          "bytes": 11478
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "sha256": "d279d366359c0d588c9c10cb46afe2b543fc731dea722803639b4e45016d5fe2",
+          "bytes": 18032
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "sha256": "9e4910d8eb508863172430c60d49fd3b442e9e7f5963a18cd1d655c386ffeae9",
+          "bytes": 689
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "sha256": "94b5131beb9b75a55f9649fcf12de167350feae0fab2bab26c2703cd75c0c781",
+          "bytes": 3818
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "resolved_url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "sha256": "493f70e1527d895653b5ac7157abba8e2c656e43698da93b6c1997e2855a5059",
+          "bytes": 1209
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "resolved_url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "sha256": "4c0ae647a06ef1699806fb9b4b6d0ef72de026708c6e8581362641c9298cb5f7",
+          "bytes": 1694
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "sha256": "3fdfc3ac5e435e0cef96dafee74da487e4846ffce4dff5973bb45d68b678dd7f",
+          "bytes": 907
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "sha256": "d33b75bf65de036609f5aa6bf5e698541d3465a552d19e20e05faf4791385610",
+          "bytes": 1196
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "sha256": "4e126c6215d53926b8cf2122221b90259412d3a801000f9b75df128f2abd78bf",
+          "bytes": 122
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "sha256": "9b5766c0108f849f30c0e022feb305b9b8a4a0ef80a5976e82f05be45f7facf5",
+          "bytes": 419
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "sha256": "cab262219fedef9272bb6fac9e28c7eb3e34563059a3db5bc2775eac2025a29a",
+          "bytes": 97
+        }
+      ]
+    },
+    {
+      "url": "https://doc.rust-lang.org/book/ch03-01-variables-and-mutability.html",
+      "resolved_url": "https://doc.rust-lang.org/book/ch03-01-variables-and-mutability.html",
+      "sha256": "2c1e790cbc498281bd4e33b49eabeca1a914f3a4b0b7c86df617ebf72dfbcb64",
+      "bytes": 34512,
+      "name": "rust-variables",
+      "license": "MIT OR Apache-2.0",
+      "stylesheets": [
+        {
+          "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "sha256": "8adf115df892369c90b830767c4651a9e058b79273e219935f7c8a96c6eab9c0",
+          "bytes": 10422
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "sha256": "e96d0476741bfcbe8cc0ac02db00187c45a63946834361d0eab846016787c646",
+          "bytes": 11478
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "sha256": "d279d366359c0d588c9c10cb46afe2b543fc731dea722803639b4e45016d5fe2",
+          "bytes": 18032
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "sha256": "9e4910d8eb508863172430c60d49fd3b442e9e7f5963a18cd1d655c386ffeae9",
+          "bytes": 689
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "sha256": "94b5131beb9b75a55f9649fcf12de167350feae0fab2bab26c2703cd75c0c781",
+          "bytes": 3818
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "resolved_url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "sha256": "493f70e1527d895653b5ac7157abba8e2c656e43698da93b6c1997e2855a5059",
+          "bytes": 1209
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "resolved_url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "sha256": "4c0ae647a06ef1699806fb9b4b6d0ef72de026708c6e8581362641c9298cb5f7",
+          "bytes": 1694
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "sha256": "3fdfc3ac5e435e0cef96dafee74da487e4846ffce4dff5973bb45d68b678dd7f",
+          "bytes": 907
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "sha256": "d33b75bf65de036609f5aa6bf5e698541d3465a552d19e20e05faf4791385610",
+          "bytes": 1196
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "sha256": "4e126c6215d53926b8cf2122221b90259412d3a801000f9b75df128f2abd78bf",
+          "bytes": 122
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "sha256": "9b5766c0108f849f30c0e022feb305b9b8a4a0ef80a5976e82f05be45f7facf5",
+          "bytes": 419
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "sha256": "cab262219fedef9272bb6fac9e28c7eb3e34563059a3db5bc2775eac2025a29a",
+          "bytes": 97
+        }
+      ]
+    },
+    {
+      "url": "https://doc.rust-lang.org/book/ch03-03-how-functions-work.html",
+      "resolved_url": "https://doc.rust-lang.org/book/ch03-03-how-functions-work.html",
+      "sha256": "691c2c0f4d23d4adaef66531291c4bcad02e1b0c7c3cd91a407c42755bf34566",
+      "bytes": 37077,
+      "name": "rust-functions",
+      "license": "MIT OR Apache-2.0",
+      "stylesheets": [
+        {
+          "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+          "sha256": "8adf115df892369c90b830767c4651a9e058b79273e219935f7c8a96c6eab9c0",
+          "bytes": 10422
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+          "sha256": "e96d0476741bfcbe8cc0ac02db00187c45a63946834361d0eab846016787c646",
+          "bytes": 11478
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+          "sha256": "d279d366359c0d588c9c10cb46afe2b543fc731dea722803639b4e45016d5fe2",
+          "bytes": 18032
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "resolved_url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+          "sha256": "9e4910d8eb508863172430c60d49fd3b442e9e7f5963a18cd1d655c386ffeae9",
+          "bytes": 689
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "resolved_url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+          "sha256": "94b5131beb9b75a55f9649fcf12de167350feae0fab2bab26c2703cd75c0c781",
+          "bytes": 3818
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "resolved_url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+          "sha256": "493f70e1527d895653b5ac7157abba8e2c656e43698da93b6c1997e2855a5059",
+          "bytes": 1209
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "resolved_url": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css",
+          "sha256": "4c0ae647a06ef1699806fb9b4b6d0ef72de026708c6e8581362641c9298cb5f7",
+          "bytes": 1694
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css",
+          "sha256": "3fdfc3ac5e435e0cef96dafee74da487e4846ffce4dff5973bb45d68b678dd7f",
+          "bytes": 907
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "resolved_url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+          "sha256": "d33b75bf65de036609f5aa6bf5e698541d3465a552d19e20e05faf4791385610",
+          "bytes": 1196
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+          "sha256": "4e126c6215d53926b8cf2122221b90259412d3a801000f9b75df128f2abd78bf",
+          "bytes": 122
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+          "sha256": "9b5766c0108f849f30c0e022feb305b9b8a4a0ef80a5976e82f05be45f7facf5",
+          "bytes": 419
+        },
+        {
+          "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "resolved_url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+          "sha256": "cab262219fedef9272bb6fac9e28c7eb3e34563059a3db5bc2775eac2025a29a",
+          "bytes": 97
+        }
+      ]
+    }
+  ]
+}
