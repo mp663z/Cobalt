@@ -42,3 +42,12 @@ not fetch CSS imports, remote fonts, scripts or external images. In particular,
 Sphinx's imported basic.css is not resolved. These are recorded limitations,
 not claims of a fully loaded browser page. The engine's temporary normalizer
 and hard-coded intake media width remain until the engine lanes replace them.
+
+The harness now uses kobo-text's PageFontSession with real regular/bold cuts and
+the bundled DejaVu Sans Mono as a coverage fallback for proportional text. A
+missing glyph draws a box. This is still scalar text, not complex-script shaping.
+Natural line metrics include the fallback face. On the 2026-11-23 update this
+changed Python page heights by 2-5 px; the ten-page before/after census diff and
+representative final-composite crops were reviewed before the baseline update.
+The narrow Python body columns and overlapping navigation remain known engine
+layout defects, not accepted visual correctness or improvements from fonts.

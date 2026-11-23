@@ -1,10 +1,12 @@
 //! Portable host-only entry to the partial page painter.
-use crate::LocalFace;
+use kobo_text::page_font_session::PageFontSession;
 use kobo_web_document::basic_page::{
     normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
+use kobo_web_document::css_text_page::FontProvider;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
+use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
     parse_style_tree_with_state, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
 };
@@ -12,8 +14,8 @@ use std::path::Path;
 
 /// Font files selected explicitly, never discovered from the host.
 pub struct Faces {
-    regular: LocalFace,
-    mono: LocalFace,
+    regular: PageFace,
+    mono: PageFace,
 }
 impl Faces {
     /// Load the reader's checked-in regular, bold and monospace faces.
@@ -23,9 +25,13 @@ impl Faces {
         let regular = std::fs::read(directory.join("AtkinsonHyperlegible-Regular.ttf"))?;
         let bold = std::fs::read(directory.join("AtkinsonHyperlegible-Bold.ttf"))?;
         let mono = std::fs::read(directory.join("DejaVuSansMono.ttf"))?;
+        let mut regular_session = PageFontSession::from_bytes(&regular, &bold)?;
+        // The bundled mono face covers additional scripts, including Cyrillic.
+        // Missing glyphs in every face remain visible boxes, never dropped text.
+        regular_session.add_fallback(&mono)?;
         Ok(Self {
-            regular: LocalFace::with_verified_normal_bytes(&regular, Some(&bold))?,
-            mono: LocalFace::with_verified_normal_bytes(&mono, Some(&mono))?,
+            regular: PageFace(regular_session),
+            mono: PageFace(PageFontSession::from_bytes(&mono, &mono)?),
         })
     }
 }
@@ -177,5 +183,61 @@ impl Page {
             top += height;
         }
         Ok(())
+    }
+}
+
+/// Best-effort Page view adapter. This is intentionally not an exact-paint provider.
+struct PageFace(PageFontSession);
+impl FontProvider for PageFace {
+    fn has_glyph(&self, ch: char, bold: bool) -> Option<bool> {
+        Some(self.0.has_glyph(ch, bold, false))
+    }
+    fn advance(&self, ch: char, size: u32, bold: bool) -> Option<u32> {
+        self.0.advance(ch, size, bold, false)
+    }
+    fn line_height(&self, size: u32, bold: bool) -> Option<u32> {
+        self.0
+            .line_metrics(size, bold, false)
+            .map(|metrics| metrics.0)
+    }
+    fn baseline_offset(&self, size: u32, bold: bool) -> Option<i32> {
+        self.0
+            .line_metrics(size, bold, false)
+            .map(|metrics| metrics.1)
+    }
+    fn raster(&self, ch: char, size: u32, bold: bool) -> Option<GlyphBitmap> {
+        self.page_raster(ch, size, bold, false)
+    }
+    fn page_advance(&self, ch: char, size: u32, bold: bool, italic: bool) -> Option<u32> {
+        self.0.advance(ch, size, bold, italic)
+    }
+    fn page_raster(&self, ch: char, size: u32, bold: bool, italic: bool) -> Option<GlyphBitmap> {
+        let glyph = self.0.raster(ch, size, bold, italic)?;
+        Some(GlyphBitmap {
+            left: glyph.left,
+            top: glyph.top,
+            width: glyph.width,
+            height: glyph.height,
+            coverage: glyph.coverage,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn page_provider_keeps_bold_and_uses_coverage_fallback() {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/kobo-text/fonts");
+        let faces = Faces::load(&directory).unwrap();
+        assert_ne!(
+            faces.regular.raster('A', 24, false).unwrap().coverage,
+            faces.regular.raster('A', 24, true).unwrap().coverage
+        );
+        assert_eq!(faces.regular.has_glyph('Ж', false), Some(true));
+        assert_eq!(faces.regular.has_glyph('日', false), Some(false));
+        let missing = faces.regular.raster('日', 24, false).unwrap();
+        assert!(missing.coverage.contains(&255));
+        assert!(faces.regular.advance('日', 24, false).is_some());
     }
 }
