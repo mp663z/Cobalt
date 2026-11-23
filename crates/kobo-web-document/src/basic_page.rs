@@ -735,11 +735,18 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
 /// render made from normalized input.
-fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
+fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize) {
     const NAMES: [&[u8]; 10] = [
         b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
     ];
     let mut out = Vec::with_capacity(input.len());
+    let mut images: Vec<Vec<u8>> = Vec::new();
+    // Positions in `out` of currently-open <picture> tags. A marker div
+    // emitted for an <img> inside <picture> inside <a> is dropped by the
+    // box tree, so the marker replaces the whole picture element instead
+    // (a block child of the anchor paints). Counted as pictures_hoisted.
+    let mut picture_open: Vec<usize> = Vec::new();
+    let mut pictures_hoisted = 0usize;
     let mut i = 0usize;
     while i < input.len() {
         if input[i] == b'<' && i + 1 < input.len() && input[i + 1] != b'!' {
@@ -810,13 +817,61 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
                 i = skip_close(input, close);
                 continue;
             }
-            // <img ...> -> escaped alt text (or nothing when no alt).
+            // <img ...>: with a parseable data-URI src, a marker div
+            // reserves vertical space (padding-top = intrinsic height,
+            // scaled down to the 800px content width when wider) behind a
+            // sentinel background the harness swaps for the real pixels;
+            // the alt text stays inside as the pre-blit paint. Without a
+            // data URI, escaped alt text as before.
             if tag.len() >= 4
                 && tag[1..].starts_with(b"img")
-                && matches!(tag.get(3), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+                && matches!(tag.get(4), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
             {
-                if let Some(alt) = extract_attr(tag, b"alt") {
-                    push_escaped(&mut out, alt);
+                let src = extract_attr(tag, b"src");
+                let data_uri = src.filter(|s| s.starts_with(b"data:image/"));
+                let attr_dims = match (
+                    extract_attr(tag, b"width").and_then(attr_num),
+                    extract_attr(tag, b"height").and_then(attr_num),
+                ) {
+                    (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
+                    _ => None,
+                };
+                let parsed = attr_dims.or_else(|| data_uri.and_then(|s| parse_data_image(s)));
+                match (data_uri, parsed) {
+                    (Some(uri), Some((iw, ih))) if iw > 0 && ih > 0 && images.len() < 4096 => {
+                        let idx = images.len();
+                        images.push(uri.to_vec());
+                        let hoisted_now = if let Some(pic_pos) = picture_open.pop() {
+                            // Replace the whole <picture>: drop its already-
+                            // emitted open tag and skip to its close tag.
+                            out.truncate(pic_pos);
+                            pictures_hoisted += 1;
+                            true
+                        } else {
+                            false
+                        };
+                        let (r, g, b) = image_sentinel(idx);
+                        let width = 800u32;
+                        let sh = if iw > width { ih * width / iw } else { ih };
+                        let sh = sh.min(4096);
+                        out.extend_from_slice(
+                            format!("<div style=\"padding-top:{sh}px;background-color:rgb({r},{g},{b})\">").as_bytes(),
+                        );
+                        if let Some(alt) = extract_attr(tag, b"alt") {
+                            push_escaped(&mut out, alt);
+                        }
+                        out.extend_from_slice(b"</div>");
+                        if hoisted_now {
+                            let close = find_close(input, i, b"picture");
+                            i = skip_close(input, close);
+                            continue;
+                        }
+                    }
+                    _ => {
+                        if let Some(alt) = extract_attr(tag, b"alt") {
+                            push_escaped(&mut out, alt);
+                        }
+                    }
                 }
                 i = (tag_end + 1).min(input.len());
                 continue;
@@ -866,6 +921,12 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
                 i = tag_end;
                 continue;
             }
+            // <picture> open/close tracking for the marker hoist.
+            if tag.len() >= 8 && tag[1..].starts_with(b"picture") {
+                picture_open.push(out.len());
+            } else if tag.len() >= 9 && tag[1] == b'/' && tag[2..].starts_with(b"picture") {
+                picture_open.pop();
+            }
             out.extend_from_slice(tag);
             i = tag_end;
             continue;
@@ -873,7 +934,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
         out.push(input[i]);
         i += 1;
     }
-    out
+    (out, images, pictures_hoisted)
 }
 
 /// Full basic-mode intake normalization: table/presentational rewrite,
@@ -888,9 +949,24 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
 /// [`normalize_for_basic`] with the prefilter counts exposed for the
 /// harness census line.
 pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
-    let out = normalize_tables_and_presentational(input);
+    normalize_for_basic_full(input).0
+}
+
+/// Full intake: normalized html, prefilter counts, and the data-URI image
+/// payloads (in document order) that the marker-div lane reserves space
+/// for. The harness pairs these with sentinel rectangles in the raster.
+pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize) {
+    let (out, images, pictures_hoisted) = normalize_tables_and_presentational(input);
     let (folded, _, _) = normalize_css_in_style_tags(&out);
-    prefilter_data_sheets_for_basic(&folded)
+    let (filtered, pf) = prefilter_data_sheets_for_basic(&folded);
+    ((filtered, pf), images, pictures_hoisted)
+}
+
+/// Sentinel background colour for image marker div number `idx`
+/// (document order). rgb(1, hi, lo) is astronomically unlikely as author
+/// content and survives the engine's integer colour path.
+pub fn image_sentinel(idx: usize) -> (u8, u8, u8) {
+    (1, (idx >> 8) as u8, (idx & 0xff) as u8)
 }
 
 /// Counts from [`prefilter_data_sheets_for_basic`].
@@ -1518,6 +1594,113 @@ fn push_escaped(out: &mut Vec<u8>, text: &[u8]) {
     }
 }
 
+/// Intrinsic (width, height) of a data-URI image, from the first decoded
+/// bytes. PNG (IHDR), GIF (header), BMP and JPEG (SOF scan in the first
+/// 64KB of payload). Anything else is None (caller falls back to alt).
+fn parse_data_image(uri: &[u8]) -> Option<(u32, u32)> {
+    let comma = uri.iter().position(|&b| b == b',')?;
+    let head = &uri[..comma];
+    if !head.windows(6).any(|w| w.eq_ignore_ascii_case(b"base64")) {
+        return None;
+    }
+    let payload = &uri[comma + 1..];
+    let take = payload.len().min(1 << 16);
+    let raw = b64_decode(&payload[..take])?;
+    if raw.len() >= 26 && raw.starts_with(b"\x89PNG\r\n\x1a\n") {
+        let w = u32::from_be_bytes([raw[16], raw[17], raw[18], raw[19]]);
+        let h = u32::from_be_bytes([raw[20], raw[21], raw[22], raw[23]]);
+        return Some((w, h));
+    }
+    if raw.len() >= 10 && raw.starts_with(b"GIF8") {
+        let w = u32::from(u16::from_le_bytes([raw[6], raw[7]]));
+        let h = u32::from(u16::from_le_bytes([raw[8], raw[9]]));
+        return Some((w, h));
+    }
+    if raw.len() >= 26 && raw.starts_with(b"BM") {
+        let w = u32::from_le_bytes([raw[18], raw[19], raw[20], raw[21]]);
+        let h = u32::from_le_bytes([raw[22], raw[23], raw[24], raw[25]]) & 0x7fff_ffff;
+        return Some((w, h));
+    }
+    // SVG: decoded text; intrinsic size from width/height attributes,
+    // else the viewBox. Wiki icons ship as base64 SVG.
+    if raw.starts_with(b"<svg") || raw.starts_with(b"<?xml") || raw.starts_with(b"<SVG") {
+        if let Some(at) = raw.windows(4).position(|w| w.eq_ignore_ascii_case(b"<svg")) {
+            let tag_end = raw[at..]
+                .iter()
+                .position(|c| *c == b'>')
+                .map(|e| at + e)
+                .unwrap_or(raw.len());
+            let tag = &raw[at..tag_end];
+            let w = extract_attr(tag, b"width").and_then(attr_num);
+            let h = extract_attr(tag, b"height").and_then(attr_num);
+            if let (Some(w), Some(h)) = (w, h) {
+                if w > 0 && h > 0 {
+                    return Some((w, h));
+                }
+            }
+            if let Some(vb) = extract_attr(tag, b"viewBox") {
+                let nums: Vec<u32> = vb
+                    .split(|c: &u8| !c.is_ascii_digit())
+                    .filter(|t| !t.is_empty())
+                    .filter_map(|t| std::str::from_utf8(t).ok()?.parse::<u32>().ok())
+                    .collect();
+                if nums.len() >= 4 && nums[2] > 0 && nums[3] > 0 {
+                    return Some((nums[2], nums[3]));
+                }
+            }
+        }
+        return None;
+    }
+    // WebP RIFF: VP8 (lossy) / VP8L (lossless) / VP8X (extended canvas).
+    if raw.len() >= 30 && &raw[..4] == b"RIFF" && &raw[8..12] == b"WEBP" {
+        let kind = &raw[12..16];
+        if kind == b"VP8X" {
+            let w = 1 + u32::from_le_bytes([raw[24], raw[25], raw[26], 0]);
+            let h = 1 + u32::from_le_bytes([raw[27], raw[28], raw[29], 0]);
+            if w > 0 && h > 0 {
+                return Some((w, h));
+            }
+        } else if kind == b"VP8 " {
+            if raw[23] == 0x9D && raw[24] == 0x01 && raw[25] == 0x2A {
+                let w = (u16::from_le_bytes([raw[26], raw[27]]) & 0x3FFF) as u32;
+                let h = (u16::from_le_bytes([raw[28], raw[29]]) & 0x3FFF) as u32;
+                if w > 0 && h > 0 {
+                    return Some((w, h));
+                }
+            }
+        } else if kind == b"VP8L" && raw.len() >= 25 && raw[20] == 0x2F {
+            let bits = u32::from_le_bytes([raw[21], raw[22], raw[23], raw[24]]);
+            let w = (bits & 0x3FFF) + 1;
+            let h = ((bits >> 14) & 0x3FFF) + 1;
+            if w > 0 && h > 0 {
+                return Some((w, h));
+            }
+        }
+        return None;
+    }
+    if raw.len() >= 4 && raw[0] == 0xff && raw[1] == 0xd8 {
+        let mut i = 2usize;
+        while i + 9 < raw.len() {
+            if raw[i] != 0xff {
+                i += 1;
+                continue;
+            }
+            let marker = raw[i + 1];
+            if (0xc0..=0xc3).contains(&marker) || (0xc5..=0xc7).contains(&marker) {
+                let h = u32::from(u16::from_be_bytes([raw[i + 5], raw[i + 6]]));
+                let w = u32::from(u16::from_be_bytes([raw[i + 7], raw[i + 8]]));
+                return Some((w, h));
+            }
+            let seg = u16::from_be_bytes([raw[i + 2], raw[i + 3]]) as usize;
+            if seg < 2 {
+                return None;
+            }
+            i += 2 + seg;
+        }
+    }
+    None
+}
+
 /// Byte offset of the `</name` close tag at or after `from`, or the
 /// input length when unclosed.
 fn find_close(input: &[u8], from: usize, name: &[u8]) -> usize {
@@ -1608,6 +1791,18 @@ fn selected_option_text(inner: &[u8]) -> Option<Vec<u8>> {
 /// Raw value of the first occurrence of an attribute in a tag's bytes,
 /// if present and non-empty. Case-sensitive on the lowercase attribute
 /// name; callers lowercase the tag first if they need insensitivity.
+/// Parse a numeric attribute value ("120", "120px") as pixels.
+fn attr_num(v: &[u8]) -> Option<u32> {
+    let end = v
+        .iter()
+        .position(|c| !c.is_ascii_digit())
+        .unwrap_or(v.len());
+    if end == 0 {
+        return None;
+    }
+    std::str::from_utf8(&v[..end]).ok()?.parse().ok()
+}
+
 fn extract_attr<'a>(tag: &'a [u8], attr: &[u8]) -> Option<&'a [u8]> {
     let n = attr.len();
     let mut i = 0usize;
