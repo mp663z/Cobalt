@@ -365,3 +365,20 @@ Browser: 199 passed, 0 failed, 2 ignored. Clippy completed with existing
 warnings. Locked ARM browser: 5,189,684 bytes, +3,940,304 over hello, with
 1,302,576 bytes left under +5 MiB. Stripped static ARM EABI5 inspected.
 No new hardware measurement or visual-layout claim is made by this guard.
+
+
+### Disabled fieldset first-legend exception, November 24, 2026
+
+Measured source: `d1a7450f02da84a09b7cfcc04def932a3b0c6423`. Disabled fieldsets retain controls only
+inside the first direct legend child, while explicitly disabled inputs,
+later legends and nested fieldsets outside that exception remain excluded.
+Parser regression fails before and passes after; app form serialization
+keeps allowed=yes and outside=yes without blocked/later fields.
+Specification: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html
+section 4.10.19.5. No public Field model, protocol or POST changes.
+
+Engine: 1,397 passed, 0 failed, 18 ignored across 147 result groups.
+Browser: 200 passed, 0 failed, 2 ignored. Clippy completed with existing
+warnings. Locked ARM browser: 5,190,372 bytes, +3,940,992 over hello,
+leaving 1,301,888 bytes under +5 MiB; stripped static ARM EABI5 inspected.
+This is semantic form coverage, not a new visual or hardware qualification.
