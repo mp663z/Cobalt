@@ -293,3 +293,32 @@ fn separated_solid_cell_borders_use_the_shared_row_border_box() {
     assert_eq!(edges[1].height, edges[5].height);
     assert!(edges[1].height > 28);
 }
+
+#[test]
+fn native_outer_table_border_surrounds_grid_without_stacking() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:180px;border:3px solid #456789;background:#eeeeee}td{padding:4px}</style><table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let edges: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x45, 0x67, 0x89),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(edges.len(), 4);
+    assert_eq!(edges[0].width, 180);
+    assert_eq!(edges[0].height, 3);
+    assert_eq!(edges[1].x, edges[0].x + 177);
+    assert!(edges[1].height > 60);
+    assert_eq!(stats.text_blocks_painted, 4);
+}

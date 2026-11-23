@@ -164,18 +164,26 @@ impl<F: FontProvider> Painter<'_, F> {
         {
             return Err("table-style");
         }
+        let border = style.decor.used_border();
         if [
             style.padding_top,
+            style.padding_right,
             style.padding_bottom,
             style.padding_left,
-            style.padding_right,
-        ]
-        .iter()
-        .any(|v| *v != 0)
-            || style.decor.has_painted_border()
+        ] != border
+            || style
+                .decor
+                .border_style
+                .iter()
+                .any(|value| !matches!(value, BorderStyle::None | BorderStyle::Solid))
         {
             return Err("table-outer-edges");
         }
+        let horizontal_edges = border[1]
+            .checked_add(border[3])
+            .ok_or("table-outer-edges")?;
+        let width_edges = horizontal_edges.checked_add(4).ok_or("table-outer-edges")?;
+        let grid_x = x + i64::from(border[3]);
         let rows = self.table_rows(table)?;
         let mut grid = Vec::new();
         let mut cells = Vec::new();
@@ -269,26 +277,32 @@ impl<F: FontProvider> Painter<'_, F> {
         }
         let specified = match style.width {
             Length::Auto => None,
-            Length::Px(width) => Some(width.saturating_sub(4)),
+            Length::Px(width) => Some(width.saturating_sub(width_edges)),
             Length::Percent(value) => Some(
                 u32::try_from(u64::from(available) * u64::from(value) / 10000)
                     .map_err(|_| "table-width")?
-                    .saturating_sub(4),
+                    .saturating_sub(width_edges),
             ),
         };
         // Default HTML separated-border spacing is 2px on each axis. Author
         // spacing/collapsing declarations remain refused by the style census.
-        let columns = automatic_columns(count, &cells, available.saturating_sub(4), specified, 2)
-            .map_err(|_| "table-column-sizing")?;
+        let columns = automatic_columns(
+            count,
+            &cells,
+            available.saturating_sub(width_edges),
+            specified,
+            2,
+        )
+        .map_err(|_| "table-column-sizing")?;
         if columns.overflows {
             self.stats.approx("table-min-content-overflow");
         }
         self.stats.approx("table-cell-top-align");
         let entry = commands.len();
-        let mut y = top + 2;
+        let mut y = top + i64::from(border[0]) + 2;
         for (row_number, row) in grid.iter().enumerate() {
             let row_entry = commands.len();
-            let mut cell_x = x + 2;
+            let mut cell_x = grid_x + 2;
             let mut height = 0_i64;
             let mut painted_cells = Vec::new();
             for (&cell, &width) in row.iter().zip(&columns.widths) {
@@ -335,7 +349,7 @@ impl<F: FontProvider> Painter<'_, F> {
                     )?;
                     self.stats.fills += 1;
                 }
-                self.table_cell_border(cell, cell_x, y, width, height, commands)?;
+                self.table_box_border(cell, cell_x, y, width, height, commands)?;
                 commands.extend(ink);
                 self.stats.blocks_painted += 1;
             }
@@ -348,7 +362,7 @@ impl<F: FontProvider> Painter<'_, F> {
                 table_fill(
                     commands,
                     row_entry,
-                    x + 2,
+                    grid_x + 2,
                     y,
                     columns.width,
                     height,
@@ -358,24 +372,30 @@ impl<F: FontProvider> Painter<'_, F> {
             }
             y += height + 2;
         }
+        y += i64::from(border[2]);
+        let outer_width = columns
+            .width
+            .checked_add(width_edges)
+            .ok_or("table-width")?;
         if let Some(color) = style.used_background_color() {
             table_fill(
                 commands,
                 entry,
                 x,
                 top,
-                columns.width + 4,
+                outer_width,
                 y - top,
                 color,
                 self.tree.boxes[table].source,
             )?;
         }
+        self.table_box_border(table, x, top, outer_width, y - top, commands)?;
         self.stats.blocks_painted += 1;
         Ok(y - top)
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn table_cell_border(
+    fn table_box_border(
         &mut self,
         cell: usize,
         x: i64,
