@@ -933,7 +933,7 @@ mod tests {
     #[test]
     fn native_table_links_survive_grid_and_spanning_fallback() {
         let face = PageFontAdapter::bundled().expect("bundled faces");
-        let html = br#"<!doctype html><table><tr><td><a href="/grid">Grid link</a></td><td>Second</td></tr></table><table><caption>Caption retained</caption><tr><td colspan=2><a href="/stack">Stack link</a></td></tr></table><p>After</p>"#;
+        let html = br#"<!doctype html><table><tr><td><a href="/grid">Grid link</a></td><td>Second</td></tr></table><table><caption>Caption retained</caption><tr><td rowspan=2><a href="/stack">Stack link</a></td></tr></table><p>After</p>"#;
         let view = PageView::paint(html, 536, 724, 2, &face, &face, &face).expect("paint");
         assert_eq!(view.links(), &["/grid".to_string(), "/stack".to_string()]);
         assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
@@ -942,6 +942,21 @@ mod tests {
             Some(&1)
         );
         assert_eq!(view.stats.text_blocks_painted, 5);
+        assert_eq!(view.screen_links(0).len(), 2);
+    }
+
+    #[test]
+    fn native_caption_and_colspan_keep_links_without_stacking() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let html = br#"<!doctype html><table><caption><a href="/caption">Caption link</a></caption><tr><td colspan=2><a href="/span">Spanning link</a></td></tr><tr><td>First</td><td>Second</td></tr></table>"#;
+        let view = PageView::paint(html, 536, 724, 2, &face, &face, &face).expect("paint");
+        assert_eq!(view.links(), &["/caption".to_string(), "/span".to_string()]);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        assert!(!view
+            .stats
+            .approximations
+            .contains_key("table-stacked-fallback"));
+        assert_eq!(view.stats.text_blocks_painted, 4);
         assert_eq!(view.screen_links(0).len(), 2);
     }
 
