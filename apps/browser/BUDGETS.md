@@ -1,6 +1,7 @@
 # Cobalt Browse: budgets and measurements
 
-Measured September 25, 2026 on branch `agent/browser-m0`, from upstream beta fc88fd3.
+Historical baseline measured September 25, 2026 on branch `agent/browser-m0`, from upstream beta fc88fd3.
+Current branch measurement is recorded separately below.
 Device numbers (RSS, first paint, page turn on a real reader) are not measured yet
 and are left to hardware qualification (M6). Everything below says where it came from.
 
@@ -35,7 +36,8 @@ Saved pages, not merge gates. Peak RSS is for the whole probe process.
 | 2 MiB synthetic (Wikipedia repeated) | 2 MiB | 30 ms, 9.2 MB | 35 ms, 17.4 MB |
 
 Budget: peak RSS no more than 32 MiB over a simple app. The worst case above is
-8 MB over baseline with a reference-counted tree; the browser's own arena tree stores less.
+8 MB over baseline with a reference-counted tree. This does not measure the current
+browser process or establish its RSS budget compliance.
 
 ## Decision
 
@@ -110,3 +112,40 @@ ARM binary cost and device RSS are not established by this count.
 Arabic bold adds 224,260 B and Hebrew bold adds 22,988 B, both true Noto OFL
 cuts, bringing bundled fallback font bytes to 1,294,552. No italic substitute
 is synthesized. As above, this is not an ARM size or RSS measurement.
+
+
+## Current branch ARM cross-build, November 23, 2026
+
+Measured source: `4810a98808b33900fb445905d8f390ce75d73ad1`,
+`agent/browser-basic`. Local cross-build, not a GitHub Actions run. The fork's
+Actions permissions read enabled and both enable requests returned HTTP 204,
+but workflow dispatch still returned HTTP 422 reporting Actions disabled.
+No upstream repository settings were changed.
+
+Toolchain: Rust 1.85.1, `armv7-unknown-linux-musleabihf`, locked dependencies,
+workspace release profile (thin LTO, panic abort, symbols stripped). C compiler:
+Zig 0.16.0, archive SHA-256
+`70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00`,
+`cc -target arm-linux-musleabihf -fno-sanitize=undefined`, matching the spike's
+pinned wrapper. All six outputs inspected as stripped, static ARM EABI5 ELF.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobod | 5,077,268 | |
+| kobo-hello | 1,249,388 | baseline |
+| kobo-browser | 5,110,364 | +3,860,976 |
+| probe_baseline | 1,238,420 | |
+| probe_kobodoc | 1,380,756 | |
+| probe_html5ever | 1,772,572 | |
+
+The browser is 3.682 MiB over the simple app, below the +5 MiB binary limit
+by 1,381,904 bytes for this source revision. Probe parser deltas relative to
+probe_baseline are 142,336 bytes (kobodoc) and 534,152 bytes (html5ever).
+This is a binary-size result only. None of these ARM executables was run on
+a reader here; device peak RSS, first paint, page-turn speed and smoothness
+remain unverified. The older RSS table above is host-x86 only.
+
+Reproduce with `cargo +1.85.1 build --locked --release
+--target armv7-unknown-linux-musleabihf -p kobod -p kobo-hello -p kobo-browser`
+and the same build flags with `--manifest-path tools/browser-probe/Cargo.toml`.
+Set `CC_armv7_unknown_linux_musleabihf` to the pinned wrapper described above.
