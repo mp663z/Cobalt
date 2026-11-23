@@ -11,12 +11,14 @@
 //! Memory stays bounded by construction: the raster buffer is one screen,
 //! not one page.
 
+use kobo_text::page_font_session::PageFontSession;
 use kobo_web_document::basic_page::{
     normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
-use kobo_web_document::css_text_page::FontProvider;
+use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics};
 use kobo_web_document::display_list::{Command, Rect, Rgb};
+use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
     parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget,
 };
@@ -38,6 +40,75 @@ const FALLBACK_SKIP_PERCENT: usize = 25;
 /// harness clamp; a taller column is truncated paint, which the census
 /// already records.
 const MAX_CONTENT_HEIGHT_CSS: i64 = 100_000;
+
+/// Lane B's page font session wrapped as the engine's `FontProvider`.
+/// Best-effort by contract: coverage is checked before drawing and a
+/// missing glyph draws the session's visible box, never a terminal error.
+pub(crate) struct PageFontAdapter {
+    session: PageFontSession,
+}
+
+impl PageFontAdapter {
+    /// The bundled licensed faces (Atkinson regular and bold). Complex
+    /// scripts need a fallback face added on the session first.
+    pub(crate) fn bundled() -> Option<Self> {
+        PageFontSession::bundled()
+            .ok()
+            .map(|session| Self { session })
+    }
+
+    fn bitmap(&self, character: char, size: u32, bold: bool, italic: bool) -> Option<GlyphBitmap> {
+        let glyph = self.session.raster(character, size, bold, italic)?;
+        Some(GlyphBitmap {
+            left: glyph.left,
+            top: glyph.top,
+            width: glyph.width,
+            height: glyph.height,
+            coverage: glyph.coverage,
+        })
+    }
+}
+
+impl FontProvider for PageFontAdapter {
+    fn page_advance(&self, character: char, size: u32, bold: bool, italic: bool) -> Option<u32> {
+        self.session.advance(character, size, bold, italic)
+    }
+
+    fn page_raster(
+        &self,
+        character: char,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<GlyphBitmap> {
+        self.bitmap(character, size, bold, italic)
+    }
+
+    fn has_glyph(&self, character: char, bold: bool) -> Option<bool> {
+        Some(self.session.has_glyph(character, bold, false))
+    }
+
+    fn normal_line_metrics(&self, size: u32, bold: bool) -> Option<NormalLineMetrics> {
+        let (height, baseline) = self.session.line_metrics(size, bold, false)?;
+        Some(NormalLineMetrics { height, baseline })
+    }
+
+    fn advance(&self, character: char, size: u32, bold: bool) -> Option<u32> {
+        self.session.advance(character, size, bold, false)
+    }
+
+    fn line_height(&self, size: u32, bold: bool) -> Option<u32> {
+        self.session.line_metrics(size, bold, false).map(|(h, _)| h)
+    }
+
+    fn baseline_offset(&self, size: u32, bold: bool) -> Option<i32> {
+        self.session.line_metrics(size, bold, false).map(|(_, b)| b)
+    }
+
+    fn raster(&self, character: char, size: u32, bold: bool) -> Option<GlyphBitmap> {
+        self.bitmap(character, size, bold, false)
+    }
+}
 
 /// A painted page, laid out once and rastered per screen.
 pub(crate) struct PageView {
@@ -641,5 +712,19 @@ mod tests {
         let map = TapMap::from_commands(&[fill(0, 0, 100, 100, None)]);
         assert!(map.is_empty());
         assert_eq!(map.resolve(5, 5), None);
+    }
+
+    #[test]
+    fn bundled_page_font_measures_and_rasters() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let advance = face.page_advance('A', 16, false, false);
+        assert!(advance.is_some_and(|a| a > 0));
+        let bitmap = face.page_raster('A', 16, false, false).expect("glyph");
+        assert_eq!(
+            bitmap.coverage.len(),
+            bitmap.width as usize * bitmap.height as usize
+        );
+        let metrics = face.normal_line_metrics(16, false).expect("metrics");
+        assert!(metrics.height > 0 && metrics.baseline > 0);
     }
 }
