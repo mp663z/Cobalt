@@ -30,3 +30,5 @@ BUILD_IN_PUBLIC.md
 /tools/cobalt-text-preview/target/
 /evidence*/
 /tools/review-captures/
+
+/tools/cobalt-text-preview/__pycache__/

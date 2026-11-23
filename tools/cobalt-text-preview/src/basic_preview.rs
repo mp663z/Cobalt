@@ -80,13 +80,28 @@ pub fn prepare(
         budget,
     );
     let tree = BoxTree::from_style(&style);
-    let (commands, stats, height) =
+    let (mut commands, stats, height) =
         paint_basic_page_families(&tree, width, 1, &faces.regular, &faces.regular, &faces.mono)
             .map_err(|_| "basic paint failed")?;
+    let height_px = u32::try_from(height.clamp(1, 100_000)).map_err(|_| "height overflow")?;
+    // The measurement viewport is one pixel high. Stretch only the engine's
+    // leading canvas fill, not an arbitrary content background, after layout.
+    let root = tree.roots[0];
+    let body = tree.boxes[root].children.first().copied();
+    let has_canvas = tree.boxes[root]
+        .style
+        .used_background_color()
+        .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()))
+        .is_some();
+    if has_canvas {
+        if let Some(Command::Fill { rect, .. }) = commands.first_mut() {
+            rect.height = height_px;
+        }
+    }
     Ok(Page {
         commands,
         width,
-        height: u32::try_from(height.clamp(1, 100_000)).map_err(|_| "height overflow")?,
+        height: height_px,
         stats,
         images,
         height_clamped: height > 100_000,

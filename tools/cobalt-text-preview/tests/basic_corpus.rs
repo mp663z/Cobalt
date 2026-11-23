@@ -84,3 +84,21 @@ fn cli_checks_missing_arguments_and_stylesheet_gaps() {
     assert!(!result.status.success());
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn measured_canvas_background_covers_later_strips() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let faces = Faces::load(&root.join("../../crates/kobo-text/fonts")).unwrap();
+    let page = prepare(
+        b"<!doctype html><style>html{background:#112233}p{height:700px}</style><p>Some text</p>",
+        &[],
+        800,
+        &faces,
+    )
+    .unwrap();
+    assert!(page.height > 512);
+    let mut rgba = Vec::new();
+    page.write_rgba(&mut rgba).unwrap();
+    let offset = (600 * 800 + 790) * 4;
+    assert_eq!(&rgba[offset..offset + 4], &[0x11, 0x22, 0x33, 255]);
+}
