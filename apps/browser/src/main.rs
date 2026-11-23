@@ -26,14 +26,16 @@ mod arrival_prep;
 #[cfg(test)]
 mod arrival_prep_tests;
 #[cfg(test)]
-mod s0_native;
-#[cfg(test)]
 mod arrival_timing;
 mod bundled_pair_adapter;
 mod css_stage;
 mod forms;
 mod native_font_adapter;
+#[allow(dead_code)] // Page view compiles ahead of the view switch that installs it.
+mod page_view;
 mod pictures;
+#[cfg(test)]
+mod s0_native;
 mod saved;
 mod sheet_supply;
 use css_stage::CssStage;

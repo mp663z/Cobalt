@@ -9,7 +9,7 @@
 #![allow(dead_code)] // Compiled, not installed (fl78).
 
 use kobo_text::diagnostic_font_session::{NativeFontLimits, NativeFontSession, NativeFontSnapshot};
-use kobo_web_document::css_text_page::FontProvider;
+use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics};
 use kobo_web_document::inline_lines::GlyphBitmap;
 
 pub(crate) struct NativeFontAdapter {
@@ -35,6 +35,16 @@ impl NativeFontAdapter {
 }
 
 impl FontProvider for NativeFontAdapter {
+    /// The session's checked natural line metrics, so painters that need a
+    /// normal-line strut can place text in tests. The session validates
+    /// height and baseline before they are returned.
+    fn normal_line_metrics(&self, size: u32, bold: bool) -> Option<NormalLineMetrics> {
+        Some(NormalLineMetrics {
+            height: self.session.line_height(size, bold).ok()?,
+            baseline: self.session.baseline_offset(size, bold).ok()?,
+        })
+    }
+
     fn advance(&self, character: char, size: u32, bold: bool) -> Option<u32> {
         self.session.advance(character, size, bold).ok()
     }
