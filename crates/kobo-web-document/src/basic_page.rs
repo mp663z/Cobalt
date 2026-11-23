@@ -29,7 +29,6 @@ use crate::computed_style::{Length, Margin};
 use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
 
-
 const MAX_VISITS: usize = 200_000;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -60,7 +59,6 @@ impl PartialStats {
         self.skips.is_empty() && !self.output_truncated
     }
 }
-
 
 fn rgb(color: u32) -> Rgb {
     Rgb(
@@ -194,7 +192,8 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         if capped {
             self.stats.approx("max-width-capped");
         }
-        if matches!(cstyle.margin_left, Margin::Auto) || matches!(cstyle.margin_right, Margin::Auto) {
+        if matches!(cstyle.margin_left, Margin::Auto) || matches!(cstyle.margin_right, Margin::Auto)
+        {
             if geom.margin_left != 0 || geom.margin_right != 0 {
                 self.stats.approx("margin-auto-resolved");
             }
@@ -215,7 +214,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// `block_color` is the fallback color of the owning block.
     /// Runs as (text, bold, color, font_size). A text box's own size,
     /// falling back to its ancestors; 0 is impossible after the fallback.
-    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<crate::basic_text_paint::Run>, bool), &'static str> {
+    fn collect_runs_of(
+        &mut self,
+        children: &[usize],
+        block_color: u32,
+    ) -> Result<(Vec<crate::basic_text_paint::Run>, bool), &'static str> {
         if children.is_empty() {
             return Err("empty");
         }
@@ -236,14 +239,23 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 BoxKind::Text => {
                     let text = node.text.clone().ok_or("no-text")?;
                     let run_size = self.font_size(index);
-                    let mut underline = node.style.text_decoration == crate::computed_style::TextDecoration::Underline;
+                    let mut underline = node.style.text_decoration
+                        == crate::computed_style::TextDecoration::Underline;
                     let mut parent = node.parent;
                     while let Some(p) = parent {
-                        underline |= self.tree.boxes[p].style.text_decoration == crate::computed_style::TextDecoration::Underline;
+                        underline |= self.tree.boxes[p].style.text_decoration
+                            == crate::computed_style::TextDecoration::Underline;
                         parent = self.tree.boxes[p].parent;
                     }
-                    runs.push((text, node.style.font_weight >= 600, node.style.color, run_size,
-                        node.style.font_style != crate::computed_style::FontStyle::Normal, underline, node.source));
+                    runs.push((
+                        text,
+                        node.style.font_weight >= 600,
+                        node.style.color,
+                        run_size,
+                        node.style.font_style != crate::computed_style::FontStyle::Normal,
+                        underline,
+                        node.source,
+                    ));
                 }
                 BoxKind::Inline => {
                     for &c in node.children.iter().rev() {
@@ -295,7 +307,6 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
     }
 
-
     /// Deep single-line advance estimate of in-flow text descendants,
     /// used to size nested flex children whose structure is not pure
     /// inline. Absolutely/fixed-positioned subtrees (hover dropdowns)
@@ -321,7 +332,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             let Some(text) = text else { return 0 };
             let size = if size == 0 { 16 } else { size };
             let face = self.face_for(index);
-            return text.chars().map(|ch| i64::from(face.advance(ch, size, false).unwrap_or((size / 2).max(1)))).sum();
+            return text
+                .chars()
+                .map(|ch| i64::from(face.advance(ch, size, false).unwrap_or((size / 2).max(1))))
+                .sum();
         }
         let mut total = 0i64;
         for c in children {
@@ -369,7 +383,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut ancestor = Some(index);
         let mut background = 0xffffff;
         while let Some(i) = ancestor {
-            if let Some(color) = self.tree.boxes[i].style.used_background_color() { background = color; break; }
+            if let Some(color) = self.tree.boxes[i].style.used_background_color() {
+                background = color;
+                break;
+            }
             ancestor = self.tree.boxes[i].parent;
         }
         let style = crate::basic_text_paint::Style {
@@ -381,11 +398,28 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             background,
         };
         let (mut runs, _) = self.collect_runs_of(children, node.style.color)?;
-        if self.tree.boxes[index].kind == BoxKind::ListItem && !self.tree.boxes[index].style.list_style_none {
-            if let Some(first) = runs.first_mut() { first.0.insert_str(0, self.tree.page_list_markers.get(&index).map_or("• ", String::as_str)); }
+        if self.tree.boxes[index].kind == BoxKind::ListItem
+            && !self.tree.boxes[index].style.list_style_none
+        {
+            if let Some(first) = runs.first_mut() {
+                first.0.insert_str(
+                    0,
+                    self.tree
+                        .page_list_markers
+                        .get(&index)
+                        .map_or("• ", String::as_str),
+                );
+            }
         }
-        let (commands, height, missing) = crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
-        if missing > 0 { *self.stats.approximations.entry("missing-glyph-placeholder").or_insert(0) += missing; }
+        let (commands, height, missing) =
+            crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
+        if missing > 0 {
+            *self
+                .stats
+                .approximations
+                .entry("missing-glyph-placeholder")
+                .or_insert(0) += missing;
+        }
         self.stats.glyph_runs += commands.len();
         self.stats.text_blocks_painted += usize::from(!commands.is_empty());
         list.extend(commands);
@@ -491,7 +525,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                 let est = self.estimate_text_width(k, 0);
                                 // Icon-only kids (hamburger, search): a
                                 // small fixed estimate keeps the row.
-                                if est == 0 { 48 } else { est + 8 }
+                                if est == 0 {
+                                    48
+                                } else {
+                                    est + 8
+                                }
                             }
                         };
                         sub_total += nw
@@ -654,7 +692,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let r = self.margin_px(style.positioned.offsets[1], width);
                 let b = self.margin_px(style.positioned.offsets[2], width);
                 let l = self.margin_px(style.positioned.offsets[3], width);
-                if matches!(style.positioned.position, crate::computed_style::Position::Fixed) {
+                if matches!(
+                    style.positioned.position,
+                    crate::computed_style::Position::Fixed
+                ) {
                     self.stats.approx("fixed-as-absolute");
                     content_x = l - r;
                     top = t - b;
@@ -700,7 +741,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut content_height: i64 = 0;
         if pure_inline {
             let tree = self.tree;
-            match self.paint_text_block(index, &tree.boxes[index].children, content_x + pad_left, content_top, (i64::from(width) - pad_left - pad_right).max(0) as u32, list) {
+            match self.paint_text_block(
+                index,
+                &tree.boxes[index].children,
+                content_x + pad_left,
+                content_top,
+                (i64::from(width) - pad_left - pad_right).max(0) as u32,
+                list,
+            ) {
                 Ok(h) => content_height = h,
                 Err(reason) => self.stats.skip(reason),
             }
@@ -709,7 +757,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             let kids = &self.tree.boxes[index].children;
             let mut x = content_x + pad_left;
             let mut row_h = 0i64;
-            for (k, &c) in kids.iter().enumerate().filter(|(k, _)| slots[*k] != i64::MIN) {
+            for (k, &c) in kids
+                .iter()
+                .enumerate()
+                .filter(|(k, _)| slots[*k] != i64::MIN)
+            {
                 let cs = self.tree.boxes[c].style;
                 let ml = self.margin_px(cs.margin_left, width);
                 let mr = self.margin_px(cs.margin_right, width);
@@ -729,7 +781,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             macro_rules! flush_anon {
                 ($cursor:ident) => {
                     if !anon.is_empty() {
-                        match self.paint_text_block(index, &anon, content_x + pad_left, $cursor, child_width, list) {
+                        match self.paint_text_block(
+                            index,
+                            &anon,
+                            content_x + pad_left,
+                            $cursor,
+                            child_width,
+                            list,
+                        ) {
                             Ok(h) => $cursor += h,
                             Err(reason) => self.stats.skip(reason),
                         }
@@ -743,7 +802,8 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 // block (CSS 2.2 9.2.1.1); inline boxes with only inline
                 // content join the run, text is always run content.
                 if matches!(ckind, BoxKind::Text)
-                    || (matches!(ckind, BoxKind::Inline) && self.pure_inline_children(&self.tree.boxes[child].children))
+                    || (matches!(ckind, BoxKind::Inline)
+                        && self.pure_inline_children(&self.tree.boxes[child].children))
                 {
                     anon.push(child);
                     continue;
@@ -753,13 +813,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let containing = width;
                 let mt = self.margin_px(cstyle.margin_top, containing);
                 let mb = self.margin_px(cstyle.margin_bottom, containing);
-                let (ml, cw, _mr) = match self
-                    .widths
-                    .widths
-                    .get(child)
-                    .copied()
-                    .flatten()
-                {
+                let (ml, cw, _mr) = match self.widths.widths.get(child).copied().flatten() {
                     Some(w) => {
                         // Engine width pass already resolved geometry;
                         // honor its margins (auto splits included). Its
@@ -821,9 +875,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         list.insert(
                             bg_insert_at,
                             Command::Fill {
-                                rect: Rect { x, y, width: w, height: h },
+                                rect: Rect {
+                                    x,
+                                    y,
+                                    width: w,
+                                    height: h,
+                                },
                                 color: rgb(color),
-                                source: Source { node: self.tree.boxes[index].source, action: None },
+                                source: Source {
+                                    node: self.tree.boxes[index].source,
+                                    action: None,
+                                },
                             },
                         );
                         self.stats.fills += 1;
@@ -849,8 +911,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     }
                 };
                 if style.decor.border_style.iter().any(|bs| {
-                    matches!(bs, crate::computed_style::BorderStyle::Dashed
-                        | crate::computed_style::BorderStyle::Dotted)
+                    matches!(
+                        bs,
+                        crate::computed_style::BorderStyle::Dashed
+                            | crate::computed_style::BorderStyle::Dotted
+                    )
                 }) {
                     self.stats.approx("border-style-solid-approx");
                 }
@@ -868,9 +933,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         list.insert(
                             bg_insert_at,
                             Command::Fill {
-                                rect: Rect { x, y, width: w, height: h },
+                                rect: Rect {
+                                    x,
+                                    y,
+                                    width: w,
+                                    height: h,
+                                },
                                 color: rgb(col),
-                                source: Source { node: self.tree.boxes[index].source, action: None },
+                                source: Source {
+                                    node: self.tree.boxes[index].source,
+                                    action: None,
+                                },
                             },
                         );
                         bg_insert_at += 1;
@@ -909,7 +982,6 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     }
 }
 
-
 /// BASIC-mode intake normalization: rewrite table-structure tags
 /// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
 /// `colgroup`, `col`) to `div` so their content flows as blocks,
@@ -919,9 +991,20 @@ impl<'a, F: FontProvider> Painter<'a, F> {
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
 /// render made from normalized input.
-fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize, usize) {
+fn normalize_tables_and_presentational(
+    input: &[u8],
+) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize, usize) {
     const NAMES: [&[u8]; 10] = [
-        b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
+        b"table",
+        b"thead",
+        b"tbody",
+        b"tfoot",
+        b"tr",
+        b"td",
+        b"th",
+        b"caption",
+        b"colgroup",
+        b"col",
     ];
     let mut out = Vec::with_capacity(input.len());
     let mut images: Vec<Vec<u8>> = Vec::new();
@@ -992,9 +1075,13 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                         out.extend_from_slice(b"\"");
                     }
                     if is_button {
-                        out.extend_from_slice(b" style=\"border:1px solid #808080;padding:2px 6px;margin:2px 0\">");
+                        out.extend_from_slice(
+                            b" style=\"border:1px solid #808080;padding:2px 6px;margin:2px 0\">",
+                        );
                     } else {
-                        out.extend_from_slice(b" style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
+                        out.extend_from_slice(
+                            b" style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">",
+                        );
                     }
                     push_escaped(&mut out, &decode_attr_entities(text));
                     out.extend_from_slice(b"</div>");
@@ -1009,7 +1096,9 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
             {
                 let close = find_close(input, tag_end, b"textarea");
                 let inner = &input[tag_end + 1..close];
-                out.extend_from_slice(b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
+                out.extend_from_slice(
+                    b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">",
+                );
                 push_escaped(&mut out, inner);
                 out.extend_from_slice(b"</div>");
                 form_chrome += 1;
@@ -1023,7 +1112,9 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                 let close = find_close(input, tag_end, b"select");
                 let inner = &input[tag_end + 1..close];
                 if let Some(text) = selected_option_text(inner) {
-                    out.extend_from_slice(b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
+                    out.extend_from_slice(
+                        b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">",
+                    );
                     push_escaped(&mut out, &text);
                     out.extend_from_slice(b"</div>");
                     form_chrome += 1;
@@ -1100,12 +1191,13 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                 k += 1;
             }
             let name = &input[name_start..k];
-            let bounded = k >= tag_end
-                || matches!(input[k], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
+            let bounded =
+                k >= tag_end || matches!(input[k], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
             let lower: Vec<u8> = name.iter().map(|b| b.to_ascii_lowercase()).collect();
             // <form>/<button>/<fieldset>/<legend> keep their children;
             // the tags themselves become neutral containers/phrases.
-            let is_form_tag = bounded && matches!(lower.as_slice(), b"form" | b"fieldset" | b"legend")
+            let is_form_tag = bounded
+                && matches!(lower.as_slice(), b"form" | b"fieldset" | b"legend")
                 && !name.is_empty();
             let is_button = bounded && lower == b"button" && !name.is_empty();
             let is_table_tag = bounded && !name.is_empty() && NAMES.contains(&lower.as_slice());
@@ -1114,7 +1206,8 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
             // style attribute already).
             let bg = extract_attr(tag, b"bgcolor").filter(|v| {
                 !v.is_empty()
-                    && v.iter().all(|b| b.is_ascii_alphanumeric() || *b == b'#' || *b == b'%')
+                    && v.iter()
+                        .all(|b| b.is_ascii_alphanumeric() || *b == b'#' || *b == b'%')
                     && extract_attr(tag, b"style").is_none()
             });
             if is_table_tag || is_form_tag || is_button || bg.is_some() {
@@ -1161,14 +1254,22 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
         out.push(input[i]);
         i += 1;
     }
-    (out, images, pictures_hoisted, table_rows_flexed, form_chrome)
+    (
+        out,
+        images,
+        pictures_hoisted,
+        table_rows_flexed,
+        form_chrome,
+    )
 }
 
 /// Full basic-mode intake normalization: table/presentational rewrite,
-/// then CSS folds inside <style> regions (`:link`/`:visited` fold for the
-/// state-free matcher; `pt` to whole `px`, 1pt = 4/3px rounded, since the
-/// engine parses only px/%/rem/em), then the data-sheet rule prefilter.
-/// All are BASIC-mode intake approximations.
+/// then the data-sheet rule prefilter. Both are BASIC-mode intake
+/// approximations. CSS is NO LONGER byte-folded here: `:link`/`:visited`
+/// are handled by the state-aware parse entry (`:link` matches an
+/// href-present hyperlink under the caller's FreshNoHistory guarantee,
+/// `:visited` never matches), and `pt` lengths are parsed by the length
+/// parser (1pt = 4/3px in the existing fixed-point contract).
 pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
     normalize_for_basic_stats(input).0
 }
@@ -1182,11 +1283,19 @@ pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
 /// Full intake: normalized html, prefilter counts, and the data-URI image
 /// payloads (in document order) that the marker-div lane reserves space
 /// for. The harness pairs these with sentinel rectangles in the raster.
-pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize, usize) {
-    let (out, images, pictures_hoisted, table_rows_flexed, form_chrome) = normalize_tables_and_presentational(input);
-    let (folded, _, _) = normalize_css_in_style_tags(&out);
-    let (filtered, pf) = prefilter_data_sheets_for_basic(&folded);
-    ((filtered, pf), images, pictures_hoisted, table_rows_flexed, form_chrome)
+pub fn normalize_for_basic_full(
+    input: &[u8],
+) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize, usize) {
+    let (out, images, pictures_hoisted, table_rows_flexed, form_chrome) =
+        normalize_tables_and_presentational(input);
+    let (filtered, pf) = prefilter_data_sheets_for_basic(&out);
+    (
+        (filtered, pf),
+        images,
+        pictures_hoisted,
+        table_rows_flexed,
+        form_chrome,
+    )
 }
 
 /// Sentinel background colour for image marker div number `idx`
@@ -1231,7 +1340,11 @@ struct Census {
 }
 
 fn census_of(html: &[u8]) -> Census {
-    let mut c = Census { tags: BTreeSet::new(), classes: BTreeSet::new(), ids: BTreeSet::new() };
+    let mut c = Census {
+        tags: BTreeSet::new(),
+        classes: BTreeSet::new(),
+        ids: BTreeSet::new(),
+    };
     let mut i = 0usize;
     while i < html.len() {
         if html[i] == b'<' && i + 1 < html.len() {
@@ -1249,7 +1362,10 @@ fn census_of(html: &[u8]) -> Census {
                 while j < html.len() && html[j].is_ascii_alphanumeric() {
                     j += 1;
                 }
-                let tag: Vec<u8> = html[i + 1..j].iter().map(|b| b.to_ascii_lowercase()).collect();
+                let tag: Vec<u8> = html[i + 1..j]
+                    .iter()
+                    .map(|b| b.to_ascii_lowercase())
+                    .collect();
                 if !tag.is_empty() {
                     c.tags.insert(tag);
                 }
@@ -1476,14 +1592,19 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, 
             e += 1;
         }
         let block = &css[j + 1..e.saturating_sub(1).max(j + 1)];
-        let head: Vec<u8> = prelude
+        let head: Vec<u8> = prelude.iter().map(|b| b.to_ascii_lowercase()).collect();
+        let head_trim: Vec<u8> = head
             .iter()
-            .map(|b| b.to_ascii_lowercase())
+            .copied()
+            .filter(|b| !b.is_ascii_whitespace())
             .collect();
-        let head_trim: Vec<u8> = head.iter().copied().filter(|b| !b.is_ascii_whitespace()).collect();
-        let recurse = [b"@media".as_slice(), b"@supports".as_slice(), b"@layer".as_slice()]
-            .iter()
-            .any(|p| head_trim.starts_with(p));
+        let recurse = [
+            b"@media".as_slice(),
+            b"@supports".as_slice(),
+            b"@layer".as_slice(),
+        ]
+        .iter()
+        .any(|p| head_trim.starts_with(p));
         if head_trim.starts_with(b"@media") {
             match eval_media_query_list(prelude) {
                 Some(false) => {
@@ -1685,10 +1806,7 @@ fn has_visually_hidden_pattern(block: &[u8]) -> bool {
         .filter(|b| !b.is_ascii_whitespace())
         .collect();
     let has = |needle: &[u8]| lower.windows(needle.len()).any(|w| w == needle);
-    has(b"position:absolute")
-        && has(b"width:1px")
-        && has(b"height:1px")
-        && has(b"overflow:hidden")
+    has(b"position:absolute") && has(b"width:1px") && has(b"height:1px") && has(b"overflow:hidden")
 }
 
 /// True when a rule both positions itself (fixed or absolute) and
@@ -1751,7 +1869,10 @@ fn rule_droppable(prelude: &[u8], census: &Census) -> bool {
         }
     }
     parts.push(&prelude[start..]);
-    if parts.iter().any(|p| p.iter().all(|b| b.is_ascii_whitespace())) {
+    if parts
+        .iter()
+        .any(|p| p.iter().all(|b| b.is_ascii_whitespace()))
+    {
         return false; // an empty part: malformed, keep
     }
     parts.iter().all(|p| match rightmost_key(p) {
@@ -1775,10 +1896,18 @@ enum Key {
 fn rightmost_key(part: &[u8]) -> Option<Key> {
     let mut part = part;
     while let Some((&b, rest)) = part.split_first() {
-        if b.is_ascii_whitespace() { part = rest; } else { break; }
+        if b.is_ascii_whitespace() {
+            part = rest;
+        } else {
+            break;
+        }
     }
     while let Some((&b, rest)) = part.split_last() {
-        if b.is_ascii_whitespace() { part = rest; } else { break; }
+        if b.is_ascii_whitespace() {
+            part = rest;
+        } else {
+            break;
+        }
     }
     if part.is_empty() {
         return None;
@@ -1795,7 +1924,9 @@ fn rightmost_key(part: &[u8]) -> Option<Key> {
             b')' => pa -= 1,
             b'>' | b'+' | b'~' if br == 0 && pa == 0 => last_break = idx + 1,
             b' ' | b'\t' | b'\n' | b'\r' if br == 0 && pa == 0 => {
-                if prev.is_some_and(|p| !matches!(p, b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'+' | b'~')) {
+                if prev.is_some_and(|p| {
+                    !matches!(p, b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'+' | b'~')
+                }) {
                     last_break = idx;
                 }
             }
@@ -1826,7 +1957,9 @@ fn rightmost_key(part: &[u8]) -> Option<Key> {
                 if i < compound.len() && compound[i] == b':' {
                     i += 1;
                 }
-                while i < compound.len() && (compound[i].is_ascii_alphanumeric() || compound[i] == b'-') {
+                while i < compound.len()
+                    && (compound[i].is_ascii_alphanumeric() || compound[i] == b'-')
+                {
                     i += 1;
                 }
                 if i < compound.len() && compound[i] == b'(' {
@@ -1869,7 +2002,12 @@ fn rightmost_key(part: &[u8]) -> Option<Key> {
         while idx < clean.len() && (clean[idx].is_ascii_alphanumeric() || clean[idx] == b'-') {
             idx += 1;
         }
-        tag = Some(clean[s..idx].iter().map(|b| b.to_ascii_lowercase()).collect());
+        tag = Some(
+            clean[s..idx]
+                .iter()
+                .map(|b| b.to_ascii_lowercase())
+                .collect(),
+        );
     } else if clean[0] == b'*' {
         idx += 1;
     }
@@ -1882,7 +2020,9 @@ fn rightmost_key(part: &[u8]) -> Option<Key> {
         }
         idx += 1;
         let s = idx;
-        while idx < clean.len() && (clean[idx].is_ascii_alphanumeric() || matches!(clean[idx], b'-' | b'_')) {
+        while idx < clean.len()
+            && (clean[idx].is_ascii_alphanumeric() || matches!(clean[idx], b'-' | b'_'))
+        {
             idx += 1;
         }
         if s == idx {
@@ -1959,100 +2099,18 @@ fn b64_encode(input: &[u8]) -> Vec<u8> {
         let acc = (b0 << 16) | (b1 << 8) | b2;
         out.push(ALPHA[(acc >> 18) as usize & 63]);
         out.push(ALPHA[(acc >> 12) as usize & 63]);
-        out.push(if chunk.len() > 1 { ALPHA[(acc >> 6) as usize & 63] } else { b'=' });
-        out.push(if chunk.len() > 2 { ALPHA[acc as usize & 63] } else { b'=' });
+        out.push(if chunk.len() > 1 {
+            ALPHA[(acc >> 6) as usize & 63]
+        } else {
+            b'='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHA[acc as usize & 63]
+        } else {
+            b'='
+        });
     }
     out
-}
-
-/// Intake CSS normalization inside <style>…</style> regions: folds
-/// `:link`/`:visited` away (state-free matcher) and rewrites `pt` lengths
-/// to whole `px` (1pt = 4/3px, rounded to nearest). Returns the rewritten
-/// bytes and (state-pseudo folds, pt folds).
-pub fn normalize_css_in_style_tags(input: &[u8]) -> (Vec<u8>, usize, usize) {
-    let mut out = Vec::with_capacity(input.len());
-    let mut pseudo_folds = 0usize;
-    let mut pt_folds = 0usize;
-    let mut i = 0usize;
-    let mut in_style = false;
-    while i < input.len() {
-        if !in_style && input[i] == b'<' && input[i + 1..].starts_with(b"style") {
-            in_style = true;
-        } else if in_style && input[i] == b'<' && input[i + 1..].starts_with(b"/style") {
-            in_style = false;
-        }
-        if in_style {
-            if input[i] == b':' && input[i + 1..].starts_with(b"link") {
-                pseudo_folds += 1;
-                i += 5;
-                continue;
-            }
-            if input[i] == b':' && input[i + 1..].starts_with(b"visited") {
-                pseudo_folds += 1;
-                i += 8;
-                continue;
-            }
-            if let Some((px, len)) = pt_length(&input[i..]) {
-                out.extend_from_slice(px.as_bytes());
-                pt_folds += 1;
-                i += len;
-                continue;
-            }
-        }
-        out.push(input[i]);
-        i += 1;
-    }
-    (out, pseudo_folds, pt_folds)
-}
-
-/// Same intake CSS normalization for a whole host-supplied stylesheet.
-pub fn normalize_css_for_basic(input: &[u8]) -> (Vec<u8>, usize, usize) {
-    let mut out = Vec::with_capacity(input.len());
-    let mut pseudo_folds = 0usize;
-    let mut pt_folds = 0usize;
-    let mut i = 0usize;
-    while i < input.len() {
-        if input[i] == b':' && input[i + 1..].starts_with(b"link") {
-            pseudo_folds += 1;
-            i += 5;
-            continue;
-        }
-        if input[i] == b':' && input[i + 1..].starts_with(b"visited") {
-            pseudo_folds += 1;
-            i += 8;
-            continue;
-        }
-        if let Some((px, len)) = pt_length(&input[i..]) {
-            out.extend_from_slice(px.as_bytes());
-            pt_folds += 1;
-            i += len;
-            continue;
-        }
-        out.push(input[i]);
-        i += 1;
-    }
-    (out, pseudo_folds, pt_folds)
-}
-
-/// At a digit run immediately followed by `pt` (not `ptx` etc.), returns
-/// the whole-pixel `px` string (1pt = 4/3px, rounded) and the byte length
-/// consumed. Decimal points are left alone (a fractional pt folds only
-/// its integer part, which would be wrong — refuse instead).
-fn pt_length(input: &[u8]) -> Option<(String, usize)> {
-    let mut n = 0usize;
-    while n < input.len() && input[n].is_ascii_digit() {
-        n += 1;
-    }
-    if n == 0 || !input[n..].starts_with(b"pt") {
-        return None;
-    }
-    let next = input.get(n + 2);
-    if next.is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'.') {
-        return None;
-    }
-    let value: u64 = std::str::from_utf8(&input[..n]).ok()?.parse().ok()?;
-    let px = (value * 4 + 1) / 3;
-    Some((format!("{px}px"), n + 2))
 }
 
 fn push_escaped(out: &mut Vec<u8>, text: &[u8]) {
@@ -2181,7 +2239,10 @@ fn find_close(input: &[u8], from: usize, name: &[u8]) -> usize {
         if input[i] == b'<'
             && input[i + 1] == b'/'
             && input[i + 2..].starts_with(name)
-            && matches!(input.get(i + 2 + name.len()), Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/'))
+            && matches!(
+                input.get(i + 2 + name.len()),
+                Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/')
+            )
         {
             return i;
         }
@@ -2210,7 +2271,10 @@ fn selected_option_text(inner: &[u8]) -> Option<Vec<u8>> {
     while i < inner.len() {
         if inner[i] == b'<'
             && inner[i + 1..].starts_with(b"option")
-            && matches!(inner.get(i + 7), Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/'))
+            && matches!(
+                inner.get(i + 7),
+                Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/')
+            )
         {
             let mut j = i + 1;
             let mut quote: Option<u8> = None;
@@ -2241,10 +2305,18 @@ fn selected_option_text(inner: &[u8]) -> Option<Vec<u8>> {
             }
             let mut text: Vec<u8> = inner[j + 1..k.min(inner.len())].to_vec();
             while let Some((&b, rest)) = text.split_first() {
-                if b.is_ascii_whitespace() { text = rest.to_vec(); } else { break; }
+                if b.is_ascii_whitespace() {
+                    text = rest.to_vec();
+                } else {
+                    break;
+                }
             }
             while let Some((&b, rest)) = text.split_last() {
-                if b.is_ascii_whitespace() { text = rest.to_vec(); } else { break; }
+                if b.is_ascii_whitespace() {
+                    text = rest.to_vec();
+                } else {
+                    break;
+                }
             }
             options.push((selected, text));
             i = k;
@@ -2294,9 +2366,11 @@ fn decode_attr_entities(v: &[u8]) -> Vec<u8> {
                         b"quot" => Some(b'"'),
                         b"apos" => Some(b'\''),
                         b"nbsp" => Some(b' '),
-                        _ if ent.first() == Some(&b'#') => {
-                            std::str::from_utf8(&ent[1..]).ok().and_then(|d| d.parse::<u32>().ok()).and_then(|n| u8::try_from(n).ok()).filter(|&n| n >= 0x20)
-                        }
+                        _ if ent.first() == Some(&b'#') => std::str::from_utf8(&ent[1..])
+                            .ok()
+                            .and_then(|d| d.parse::<u32>().ok())
+                            .and_then(|n| u8::try_from(n).ok())
+                            .filter(|&n| n >= 0x20),
                         _ => None,
                     };
                     if let Some(c) = decoded {
@@ -2391,13 +2465,25 @@ pub fn paint_basic_page_families<F: FontProvider>(
         .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()));
     if let Some(color) = canvas {
         list.push(Command::Fill {
-            rect: Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
+            rect: Rect {
+                x: 0,
+                y: 0,
+                width: viewport_width,
+                height: viewport_height,
+            },
             color: rgb(color),
-            source: Source { node: tree.boxes[root].source, action: None },
+            source: Source {
+                node: tree.boxes[root].source,
+                action: None,
+            },
         });
     }
     let content_h = painter.layout_block(root, 0, 0, viewport_width, &mut list, (0, 0));
-    let h = if content_h > 0 { content_h } else { i64::from(viewport_height) };
+    let h = if content_h > 0 {
+        content_h
+    } else {
+        i64::from(viewport_height)
+    };
     Ok((list, painter.stats, h))
 }
 
@@ -2435,9 +2521,17 @@ pub fn paint_basic_page(
         .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()));
     if let Some(color) = canvas {
         list.push(Command::Fill {
-            rect: Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
+            rect: Rect {
+                x: 0,
+                y: 0,
+                width: viewport_width,
+                height: viewport_height,
+            },
             color: rgb(color),
-            source: Source { node: tree.boxes[root].source, action: None },
+            source: Source {
+                node: tree.boxes[root].source,
+                action: None,
+            },
         });
         painter.stats.fills += 1;
     }
@@ -2499,8 +2593,10 @@ fn capped_block_width(
 #[cfg(test)]
 #[test]
 fn basic_breaker_collapses_inter_word_space() {
-    let lines = crate::basic_text::place(&[("four five six", false)], 100, false,
-        |ch, _| Some(if ch == ' ' { 5 } else { 10 })).unwrap();
+    let lines = crate::basic_text::place(&[("four five six", false)], 100, false, |ch, _| {
+        Some(if ch == ' ' { 5 } else { 10 })
+    })
+    .unwrap();
     assert_eq!(lines.glyphs[5].character, 'f');
     assert_eq!(lines.glyphs[5].x, 45);
 }
@@ -2513,15 +2609,8 @@ mod hgeom_tests {
     #[test]
     fn auto_margins_split_free_space() {
         // 700px block in an 800px container, both margins auto.
-        let (geom, capped) = capped_block_width(
-            Length::Px(700),
-            Length::Auto,
-            800,
-            0,
-            0,
-            None,
-            None,
-        );
+        let (geom, capped) =
+            capped_block_width(Length::Px(700), Length::Auto, 800, 0, 0, None, None);
         assert!(!capped);
         assert_eq!(geom.content, 700);
         assert_eq!(geom.margin_left, 50);
@@ -2532,15 +2621,8 @@ mod hgeom_tests {
     fn max_width_cap_recenters() {
         // width:auto fills 800, capped to 768: the re-run splits the
         // 32px leftover across the two auto margins.
-        let (geom, capped) = capped_block_width(
-            Length::Auto,
-            Length::Px(768),
-            800,
-            0,
-            0,
-            None,
-            None,
-        );
+        let (geom, capped) =
+            capped_block_width(Length::Auto, Length::Px(768), 800, 0, 0, None, None);
         assert!(capped);
         assert_eq!(geom.content, 768);
         assert_eq!(geom.margin_left, 16);
@@ -2549,15 +2631,8 @@ mod hgeom_tests {
 
     #[test]
     fn cap_below_content_does_not_fire_and_one_sided_auto_absorbs() {
-        let (geom, capped) = capped_block_width(
-            Length::Px(500),
-            Length::Px(768),
-            800,
-            0,
-            0,
-            Some(10),
-            None,
-        );
+        let (geom, capped) =
+            capped_block_width(Length::Px(500), Length::Px(768), 800, 0, 0, Some(10), None);
         assert!(!capped);
         assert_eq!(geom.margin_left, 10);
         assert_eq!(geom.margin_right, 290);
@@ -2567,15 +2642,7 @@ mod hgeom_tests {
     fn over_wide_content_overruns_the_right_margin() {
         // CSS 2.2 §10.3.3 over-constrained LTR: the right margin absorbs
         // the overflow (goes negative); content keeps its used width.
-        let (geom, _) = capped_block_width(
-            Length::Px(900),
-            Length::Auto,
-            800,
-            0,
-            0,
-            None,
-            None,
-        );
+        let (geom, _) = capped_block_width(Length::Px(900), Length::Auto, 800, 0, 0, None, None);
         assert_eq!(geom.content, 900);
         assert_eq!(geom.margin_left, 0);
         assert_eq!(geom.margin_right, -100);
@@ -2592,11 +2659,20 @@ mod media_eval_tests {
 
     #[test]
     fn media_width_verdicts_at_basic_viewport() {
-        assert_eq!(eval("@media only screen and (max-width: 700px)"), Some(false));
-        assert_eq!(eval("@media only screen and (max-width: 900px)"), Some(true));
+        assert_eq!(
+            eval("@media only screen and (max-width: 700px)"),
+            Some(false)
+        );
+        assert_eq!(
+            eval("@media only screen and (max-width: 900px)"),
+            Some(true)
+        );
         assert_eq!(eval("@media screen and (min-width: 45em)"), Some(true)); // 720px
         assert_eq!(eval("@media screen and (min-width: 60em)"), Some(false));
-        assert_eq!(eval("@media (min-width: 700px) and (max-width: 900px)"), Some(true));
+        assert_eq!(
+            eval("@media (min-width: 700px) and (max-width: 900px)"),
+            Some(true)
+        );
         assert_eq!(eval("@media print"), Some(false));
         assert_eq!(eval("@media print, (max-width: 900px)"), Some(true));
         assert_eq!(eval("@media screen"), Some(true));
@@ -2616,7 +2692,10 @@ mod media_eval_tests {
         let text = String::from_utf8(out).unwrap();
         assert!(!text.contains("color: red"), "false block must go: {text}");
         assert!(text.contains("color: blue"), "true block stays: {text}");
-        assert!(text.contains("color: green"), "undecidable block stays: {text}");
+        assert!(
+            text.contains("color: green"),
+            "undecidable block stays: {text}"
+        );
         assert_eq!(media_dropped, 1);
         assert!(kept >= 2);
     }

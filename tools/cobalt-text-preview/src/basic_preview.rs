@@ -1,12 +1,12 @@
 //! Portable host-only entry to the partial page painter.
 use crate::LocalFace;
 use kobo_web_document::basic_page::{
-    normalize_css_for_basic, normalize_for_basic_full, paint_basic_page_families, PartialStats,
+    normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::{
-    parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget,
+    parse_style_tree_with_state, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
 };
 use std::path::Path;
 
@@ -58,10 +58,9 @@ pub fn prepare(
         return Err("width must be in 1..=4096");
     }
     let ((bytes, _), images, _, _, _) = normalize_for_basic_full(html);
-    let sheets: Vec<Vec<u8>> = sheets
-        .iter()
-        .map(|s| normalize_css_for_basic(s).0)
-        .collect();
+    // Sheets pass through RAW: `:link`/`:visited` are resolved by the
+    // state-aware entry below and `pt` by the length parser.
+    let sheets: Vec<Vec<u8>> = sheets.to_vec();
     let budget = SupplyBudget {
         max_linked_sheets: 48,
         max_sheet_bytes: 2 * 1024 * 1024,
@@ -72,13 +71,18 @@ pub fn prepare(
         ..Limits::DEFAULT
     };
     let media = MediaContext::new(width).ok_or("invalid media width")?;
-    let style = parse_style_tree_with_inline_sheets_and_selectors(
-        &bytes,
-        &sheets,
-        &limits,
-        Some(media),
-        budget,
-    );
+    // Static capture contract: a fresh profile with no prior navigation, so
+    // every href-present hyperlink is unvisited (`:link` matches) and none is
+    // visited (`:visited` never matches). No hover/active/focus/target
+    // guarantee is asserted; those families keep failing closed.
+    let snapshot = SnapshotState {
+        history: Some(HistoryState::FreshNoHistory),
+        input: None,
+        focus: None,
+        target: None,
+    };
+    let style =
+        parse_style_tree_with_state(&bytes, &sheets, &limits, Some(media), budget, &snapshot);
     let tree = BoxTree::from_style(&style);
     let (mut commands, stats, height) =
         paint_basic_page_families(&tree, width, 1, &faces.regular, &faces.regular, &faces.mono)

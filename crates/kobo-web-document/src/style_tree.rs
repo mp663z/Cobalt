@@ -4,9 +4,10 @@
 //! arena keeps DOM ancestry and computed values for a separate box renderer.
 //! It is not painted yet. Unsupported CSS does not become a guessed layout.
 
-use crate::computed_style::{Shadow, Clear, Float,
-    AlignItems, BorderColor, BoxSizing, Clip, Computed, Declaration, Direction, Display, FontStyle, JustifyContent, Length,
-    Margin, Origin, Position, Property, TextAlign, Value,
+use crate::computed_style::{
+    AlignItems, BorderColor, BoxSizing, Clear, Clip, Computed, Declaration, Direction, Display,
+    Float, FontStyle, JustifyContent, Length, Margin, Origin, Position, Property, Shadow,
+    TextAlign, Value,
 };
 use crate::css;
 use crate::custom_props::{self, Def, Map};
@@ -153,7 +154,10 @@ fn block_entries(
     if !stripped.contains("--") && !custom_props::has_var(&stripped) {
         let (typed, unknown) = properties_with(body, text_deco, family_bind, em_font, fam);
         return (
-            typed.into_iter().map(|(p, v, i)| Entry::Typed(p, v, i)).collect(),
+            typed
+                .into_iter()
+                .map(|(p, v, i)| Entry::Typed(p, v, i))
+                .collect(),
             unknown,
         );
     }
@@ -180,13 +184,21 @@ fn block_entries(
         }
         if name.starts_with("--") {
             if !custom_props::valid_name(&name)
-                || !(custom_props::valid_definition(value) || (em_font && custom_props::valid_definition_with_strings(value)))
+                || !(custom_props::valid_definition(value)
+                    || (em_font && custom_props::valid_definition_with_strings(value)))
             {
                 unknown = true;
                 continue;
             }
-            deferred.push(Deferred { name, value: value.to_owned(), custom: true });
-            entries.push(Entry::Deferred(u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX), important));
+            deferred.push(Deferred {
+                name,
+                value: value.to_owned(),
+                custom: true,
+            });
+            entries.push(Entry::Deferred(
+                u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX),
+                important,
+            ));
         } else if custom_props::has_var(value) {
             if custom_props::find_vars(value).is_none() {
                 unknown = true;
@@ -197,7 +209,10 @@ fn block_entries(
                 value: value.to_owned(),
                 custom: false,
             });
-            entries.push(Entry::Deferred(u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX), important));
+            entries.push(Entry::Deferred(
+                u32::try_from(deferred.len() - 1).unwrap_or(u32::MAX),
+                important,
+            ));
         } else {
             let one = format!("{name}:{raw}");
             let (typed, bad) = properties_with(&one, text_deco, family_bind, em_font, fam);
@@ -299,7 +314,8 @@ impl StyleTree {
             Some(target_state) => {
                 let mut fuel = crate::css::EXT_FUEL;
                 let resolved = crate::css::resolve_target_element(nodes, target_state, &mut fuel);
-                match_work = match_work.saturating_add(crate::css::EXT_FUEL as usize - fuel as usize);
+                match_work =
+                    match_work.saturating_add(crate::css::EXT_FUEL as usize - fuel as usize);
                 match resolved {
                     Ok(handle) if match_work <= MAX_MATCH_WORK => Some(handle),
                     _ => {
@@ -486,13 +502,19 @@ impl StyleTree {
                     break;
                 }
                 let mut fuel = css::EXT_FUEL;
-                let outcome =
-                    rule.selector
-                        .matches_checked_scoped_budget_with_snapshot(nodes, handle, &mut fuel, position, resolved_target, snapshot);
+                let outcome = rule.selector.matches_checked_scoped_budget_with_snapshot(
+                    nodes,
+                    handle,
+                    &mut fuel,
+                    position,
+                    resolved_target,
+                    snapshot,
+                );
                 // Charge what the match actually consumed (selector steps and
                 // every visited sibling in a scan) to the global work budget;
                 // one unit was already charged for the test itself.
-                match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
+                match_work =
+                    match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
                 if match_work > MAX_MATCH_WORK {
                     tree.diagnostics.record(RefusalReason::MatchWork);
                     tree.truncated = true;
@@ -524,7 +546,12 @@ impl StyleTree {
                 };
                 if selected {
                     if let Some(index) = rule.deferred {
-                        hits.push((index, rule.important, rule.selector.specificity, rule.source_order));
+                        hits.push((
+                            index,
+                            rule.important,
+                            rule.selector.specificity,
+                            rule.source_order,
+                        ));
                         if hits.len() + declarations.len() >= MAX_DECLARATIONS_PER_ELEMENT {
                             tree.diagnostics.record(RefusalReason::MatchedDeclarations);
                             tree.truncated = true;
@@ -570,10 +597,18 @@ impl StyleTree {
                     break;
                 }
                 let mut fuel = css::EXT_FUEL;
-                let outcome = rule.selector.matches_originating_checked_scoped_budget_with_snapshot(
-                    nodes, handle, &mut fuel, position, resolved_target, snapshot,
-                );
-                match_work = match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
+                let outcome = rule
+                    .selector
+                    .matches_originating_checked_scoped_budget_with_snapshot(
+                        nodes,
+                        handle,
+                        &mut fuel,
+                        position,
+                        resolved_target,
+                        snapshot,
+                    );
+                match_work =
+                    match_work.saturating_add(((css::EXT_FUEL - fuel) as usize).saturating_sub(1));
                 if match_work > MAX_MATCH_WORK {
                     tree.diagnostics.record(RefusalReason::MatchWork);
                     tree.truncated = true;
@@ -645,8 +680,14 @@ impl StyleTree {
             }
             if let Some(inline) = css::attribute(nodes, handle, "style") {
                 let mut inline_table = Vec::new();
-                let (entries, unknown) =
-                    block_entries(inline, &mut inline_table, text_deco, family_bind, ext_selectors, &mut fam);
+                let (entries, unknown) = block_entries(
+                    inline,
+                    &mut inline_table,
+                    text_deco,
+                    family_bind,
+                    ext_selectors,
+                    &mut fam,
+                );
                 let mut parsed: Vec<(Property, Value, bool, u32)> = Vec::new();
                 for (offset, entry) in entries.iter().enumerate() {
                     // ONE authored offset per entry, shared by typed and deferred
@@ -664,7 +705,12 @@ impl StyleTree {
                                 value: inline_table[index as usize].value.clone(),
                                 custom: inline_table[index as usize].custom,
                             });
-                            inline_hits.push((slot, important, INLINE_SPECIFICITY, u32::try_from(offset).unwrap_or(u32::MAX)));
+                            inline_hits.push((
+                                slot,
+                                important,
+                                INLINE_SPECIFICITY,
+                                u32::try_from(offset).unwrap_or(u32::MAX),
+                            ));
                         }
                     }
                 }
@@ -719,7 +765,8 @@ impl StyleTree {
             // `text-decoration: none` (admitted below). `s`/`strike`/`del` get an unpainted decoration below; so do `abbr[title]`/`acronym[title]` (dotted underline); `mark` gets its UA yellow background/black text above. Default entry unchanged.
             if ext_selectors
                 && (matches!(name.local.as_ref(), "s" | "strike" | "del")
-                    || (matches!(name.local.as_ref(), "abbr" | "acronym") && css::attribute(nodes, handle, "title").is_some()))
+                    || (matches!(name.local.as_ref(), "abbr" | "acronym")
+                        && css::attribute(nodes, handle, "title").is_some()))
             {
                 // UA line-through (s/strike/del) and dotted underline (abbr/acronym with title): unpainted, so the page
                 // is refused unless the author sets `text-decoration: none`.
@@ -735,7 +782,10 @@ impl StyleTree {
             // `mark`: Chrome 156 (unforced, light scheme) computes background rgb(255,255,0) and color rgb(0,0,0).
             if ext_selectors && name.local.as_ref() == "mark" {
                 for (property, value) in [
-                    (Property::BackgroundColor, Value::BackgroundColor(Some(0xff_ff_00))),
+                    (
+                        Property::BackgroundColor,
+                        Value::BackgroundColor(Some(0xff_ff_00)),
+                    ),
                     (Property::Color, Value::Color(0x00_00_00)),
                 ] {
                     declarations.push(Declaration {
@@ -750,7 +800,8 @@ impl StyleTree {
             }
             if ext_selectors
                 && (matches!(name.local.as_ref(), "u" | "ins")
-                    || (name.local.as_ref() == "a" && css::attribute(nodes, handle, "href").is_some()))
+                    || (name.local.as_ref() == "a"
+                        && css::attribute(nodes, handle, "href").is_some()))
             {
                 declarations.push(Declaration {
                     property: Property::TextDecoration,
@@ -963,7 +1014,8 @@ impl StyleTree {
                 if !var_refused {
                     match custom_props::compute_map(&inherited_vars, &local) {
                         Ok(map) => {
-                            var_map_bytes = var_map_bytes.saturating_add(custom_props::map_bytes(&map));
+                            var_map_bytes =
+                                var_map_bytes.saturating_add(custom_props::map_bytes(&map));
                             if var_map_bytes > MAX_VAR_MAP_BYTES_TOTAL {
                                 var_refused = true;
                             }
@@ -987,8 +1039,19 @@ impl StyleTree {
                                     var_refused = true;
                                     break;
                                 }
-                                let text = format!("{}:{}{}", d.name, sub, if imp { " !important" } else { "" });
-                                let (typed, bad) = properties_with(&text, text_deco, family_bind, ext_selectors, &mut fam);
+                                let text = format!(
+                                    "{}:{}{}",
+                                    d.name,
+                                    sub,
+                                    if imp { " !important" } else { "" }
+                                );
+                                let (typed, bad) = properties_with(
+                                    &text,
+                                    text_deco,
+                                    family_bind,
+                                    ext_selectors,
+                                    &mut fam,
+                                );
                                 var_refused |= bad;
                                 for (property, value, important) in typed {
                                     declarations.push(Declaration {
@@ -1014,9 +1077,23 @@ impl StyleTree {
             // A var resolving to `revert` never reaches here (refused upstream by classify, page unsupported).)
             if ext_selectors {
                 let required: Option<&[Property]> = match name.local.as_ref() {
-                    "h1" | "h2" | "h3" | "h5" | "h6" => Some(&[Property::FontSize, Property::FontWeight, Property::MarginTop, Property::MarginBottom]),
-                    "h4" => Some(&[Property::FontWeight, Property::MarginTop, Property::MarginBottom]),
-                    "blockquote" | "figure" => Some(&[Property::MarginTop, Property::MarginBottom, Property::MarginLeft, Property::MarginRight]),
+                    "h1" | "h2" | "h3" | "h5" | "h6" => Some(&[
+                        Property::FontSize,
+                        Property::FontWeight,
+                        Property::MarginTop,
+                        Property::MarginBottom,
+                    ]),
+                    "h4" => Some(&[
+                        Property::FontWeight,
+                        Property::MarginTop,
+                        Property::MarginBottom,
+                    ]),
+                    "blockquote" | "figure" => Some(&[
+                        Property::MarginTop,
+                        Property::MarginBottom,
+                        Property::MarginLeft,
+                        Property::MarginRight,
+                    ]),
                     "code" | "samp" | "kbd" | "tt" => Some(&[Property::FontFamily]),
                     "small" | "big" => Some(&[Property::FontSize]),
                     // dl/dt/dd have no arm on purpose (U2): their defaults are modelled (ext-only UA-origin declarations plus the
@@ -1025,8 +1102,11 @@ impl StyleTree {
                     // (margin-block 1em when no list ancestor, padding-inline-start 40px, computed-RTL refused).
                     "address" => Some(&[Property::Display, Property::FontStyle]),
                     "cite" | "dfn" | "var" => Some(&[Property::FontStyle]),
-                    "pre" | "sub" | "sup" | "button" | "textarea" | "select" | "details" | "summary" | "fieldset"
-                    | "legend" | "center" | "table" | "caption" | "colgroup" | "col" | "thead" | "tbody" | "tfoot" | "tr" | "th" | "td" | "hr" | "input" | "iframe" | "ruby" | "rt" | "q" | "img" | "svg" | "video" | "audio" | "canvas" | "object" | "embed" | "hgroup" => None,
+                    "pre" | "sub" | "sup" | "button" | "textarea" | "select" | "details"
+                    | "summary" | "fieldset" | "legend" | "center" | "table" | "caption"
+                    | "colgroup" | "col" | "thead" | "tbody" | "tfoot" | "tr" | "th" | "td"
+                    | "hr" | "input" | "iframe" | "ruby" | "rt" | "q" | "img" | "svg" | "video"
+                    | "audio" | "canvas" | "object" | "embed" | "hgroup" => None,
                     _ => Some(&[]),
                 };
                 let missing = match required {
@@ -1038,10 +1118,14 @@ impl StyleTree {
                     // admitted replacement; `--r:revert` through var() is Chrome unset-like but refused upstream by classify (no unset
                     // emulation). unset/initial/inherit literals are replacements only when otherwise supported (Chrome probe ua1/revert).
                     Some(props) => props.iter().any(|want| {
-                        !declarations.iter().any(|d| d.origin == Origin::Author && d.property == *want)
-                            || declarations
-                                .iter()
-                                .any(|d| d.origin == Origin::Author && d.property == *want && matches!(d.value, Value::Revert))
+                        !declarations
+                            .iter()
+                            .any(|d| d.origin == Origin::Author && d.property == *want)
+                            || declarations.iter().any(|d| {
+                                d.origin == Origin::Author
+                                    && d.property == *want
+                                    && matches!(d.value, Value::Revert)
+                            })
                     }),
                 };
                 if missing {
@@ -1050,9 +1134,23 @@ impl StyleTree {
                 }
             }
             let rem_refused = normalize_rem(&mut declarations, root_font_px);
-            if name.local.as_ref() == "pre" { declarations.insert(0, Declaration { property: Property::WhiteSpace, value: Value::WhiteSpacePre, origin: Origin::UserAgent, important: false, specificity: (0, 0, 0), source_order: 0 }); }
+            if name.local.as_ref() == "pre" {
+                declarations.insert(
+                    0,
+                    Declaration {
+                        property: Property::WhiteSpace,
+                        value: Value::WhiteSpacePre,
+                        origin: Origin::UserAgent,
+                        important: false,
+                        specificity: (0, 0, 0),
+                        source_order: 0,
+                    },
+                );
+            }
             let style = Computed::cascade(Some(inherited), &declarations);
-            if style.white_space_pre { tree.unsupported = true; }
+            if style.white_space_pre {
+                tree.unsupported = true;
+            }
             if parent.is_none() {
                 root_font_px = style.font_size;
             }
@@ -1067,8 +1165,13 @@ impl StyleTree {
                 || style.font_size == 0
                 || crate::computed_style::length_em_unresolved(style.width)
                 || crate::computed_style::length_em_unresolved(style.height)
-                || [style.padding_top, style.padding_right, style.padding_bottom, style.padding_left]
-                    .contains(&crate::computed_style::PADDING_UNREPRESENTABLE);
+                || [
+                    style.padding_top,
+                    style.padding_right,
+                    style.padding_bottom,
+                    style.padding_left,
+                ]
+                .contains(&crate::computed_style::PADDING_UNREPRESENTABLE);
             if refused {
                 tree.diagnostics.record(RefusalReason::ComputedValue);
             }
@@ -1087,8 +1190,10 @@ impl StyleTree {
                 // body background, text colour and margins (a1,a2,c9,c1,c2 differed). Author declarations beat hints, so a body that
                 // overrides them with an explicit style would match (c8), but that is not modelled either: refuse.
                 "align" => true,
-                "bgcolor" | "background" | "text" | "link" | "vlink" | "alink" | "leftmargin" | "rightmargin" | "topmargin" | "bottommargin"
-                | "marginwidth" | "marginheight" => name.local.as_ref() == "body",
+                "bgcolor" | "background" | "text" | "link" | "vlink" | "alink" | "leftmargin"
+                | "rightmargin" | "topmargin" | "bottommargin" | "marginwidth" | "marginheight" => {
+                    name.local.as_ref() == "body"
+                }
                 _ => false,
             });
             if attr_refused {
@@ -1223,7 +1328,9 @@ fn normalize_rem(declarations: &mut [Declaration], root_font_px: u32) -> bool {
             }
             Value::WidthRem(tt) | Value::HeightRem(tt) => {
                 let product = u64::from(tt) * u64::from(root_font_px);
-                let px = (product % 10_000 == 0).then(|| u32::try_from(product / 10_000).ok()).flatten();
+                let px = (product % 10_000 == 0)
+                    .then(|| u32::try_from(product / 10_000).ok())
+                    .flatten();
                 match px {
                     Some(px) => {
                         declaration.value = if matches!(declaration.value, Value::WidthRem(_)) {
@@ -1256,10 +1363,14 @@ fn normalize_rem(declarations: &mut [Declaration], root_font_px: u32) -> bool {
                     && v & crate::computed_style::PADDING_EM_FLAG == 0
                     && matches!(
                         declaration.property,
-                        Property::PaddingTop | Property::PaddingRight | Property::PaddingBottom | Property::PaddingLeft
+                        Property::PaddingTop
+                            | Property::PaddingRight
+                            | Property::PaddingBottom
+                            | Property::PaddingLeft
                     ) =>
             {
-                let product = u64::from(v & !crate::computed_style::PADDING_REM_FLAG) * u64::from(root_font_px);
+                let product = u64::from(v & !crate::computed_style::PADDING_REM_FLAG)
+                    * u64::from(root_font_px);
                 declaration.value = Value::Padding(if product % 10_000 == 0 {
                     u32::try_from(product / 10_000)
                         .ok()
@@ -1277,7 +1388,9 @@ fn normalize_rem(declarations: &mut [Declaration], root_font_px: u32) -> bool {
             // to 0 and is refused as ComputedValue.
             let product = rem.checked_mul(root_font_px);
             declaration.value = Value::FontSize(
-                product.filter(|p| p % 10_000 == 0).map_or(0, |p| p / 10_000),
+                product
+                    .filter(|p| p % 10_000 == 0)
+                    .map_or(0, |p| p / 10_000),
             );
         }
     }
@@ -1645,9 +1758,11 @@ fn matched_rules(
                 style_syntax::MediaFit::Screen => {}
                 style_syntax::MediaFit::Skip | style_syntax::MediaFit::Unknown => continue,
             }
-            let mut selectors: Box<dyn Iterator<Item=&str> + '_> = if ext_selectors {
+            let mut selectors: Box<dyn Iterator<Item = &str> + '_> = if ext_selectors {
                 Box::new(css::ExtSelectorMembers::new(rule.prelude))
-            } else { Box::new(rule.prelude.split(',')) };
+            } else {
+                Box::new(rule.prelude.split(','))
+            };
             let (properties, unknown) = block_entries(
                 rule.declarations,
                 &mut deferred_table,
@@ -1688,9 +1803,12 @@ fn matched_rules(
                 for entry in &properties {
                     let (property, value, important, deferred) = match *entry {
                         Entry::Typed(p, v, i) => (p, v, i, None),
-                        Entry::Deferred(index, i) => {
-                            (Property::Display, Value::Display(Display::Block), i, Some(index))
-                        }
+                        Entry::Deferred(index, i) => (
+                            Property::Display,
+                            Value::Display(Display::Block),
+                            i,
+                            Some(index),
+                        ),
                     };
                     rules.push(MatchedRule {
                         selector: selector.clone(),
@@ -1722,9 +1840,20 @@ fn matched_rules(
 fn is_px_calc_longhand(name: &str) -> bool {
     matches!(
         name,
-        "width" | "height" | "min-width" | "max-width" | "min-height" | "max-height"
-            | "margin-top" | "margin-right" | "margin-bottom" | "margin-left"
-            | "padding-top" | "padding-right" | "padding-bottom" | "padding-left"
+        "width"
+            | "height"
+            | "min-width"
+            | "max-width"
+            | "min-height"
+            | "max-height"
+            | "margin-top"
+            | "margin-right"
+            | "margin-bottom"
+            | "margin-left"
+            | "padding-top"
+            | "padding-right"
+            | "padding-bottom"
+            | "padding-left"
     )
 }
 
@@ -1739,7 +1868,8 @@ fn fold_px_calc(value: &str) -> Option<String> {
     for tok in inner.split(' ') {
         if expect_term {
             let digits = tok.strip_suffix("px")?;
-            if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_digit())
+            {
                 return None;
             }
             total += sign * digits.parse::<i64>().ok()?;
@@ -1761,7 +1891,13 @@ fn fold_px_calc(value: &str) -> Option<String> {
 
 #[allow(clippy::too_many_lines)] // Explicit supported-property parsing rejects all unknown CSS.
 pub(crate) fn properties(body: &str) -> (Vec<(Property, Value, bool)>, bool) {
-    properties_with(body, false, false, false, &mut crate::font_family::FamilyTable::new())
+    properties_with(
+        body,
+        false,
+        false,
+        false,
+        &mut crate::font_family::FamilyTable::new(),
+    )
 }
 
 /// `text_deco` is the opt-in for the EXPERIMENTAL `text-decoration` declaration. When false the
@@ -1834,7 +1970,11 @@ pub(crate) fn properties_with(
         // Nothing here models any of these properties. Excluded on purpose: pointer-events/user-select (own earlier none-only contract), flex-flow (earlier tests pin it refused), font-* and text-rendering (font lane held),
         // unicode-bidi:normal and outline:0 (Chrome computed style differs from the undeclared div), tab-size, color-scheme,
         // appearance, font-synthesis. A defined var() resolving to one of these is admitted through deferred substitution.
-        if em_font && INITIAL_NOOPS.iter().any(|(n, v)| *n == name.as_str() && *v == value) {
+        if em_font
+            && INITIAL_NOOPS
+                .iter()
+                .any(|(n, v)| *n == name.as_str() && *v == value)
+        {
             continue;
         }
         // CANDIDATE (extended-CSS opt-in entry only). `overflow-wrap: break-word|normal` (and the `word-wrap` alias):
@@ -1843,7 +1983,10 @@ pub(crate) fn properties_with(
         // `break-word` does not change min-content (unlike `anywhere`), so shrink-to-fit also agrees. `anywhere`,
         // global keywords, `word-break`, `hyphens` and everything else stay refused. The word-fit refusal lives in the
         // placer, not here: REVISIT if the placer ever learns to break inside words.
-        if em_font && matches!(name.as_str(), "overflow-wrap" | "word-wrap") && matches!(value, "break-word" | "normal") {
+        if em_font
+            && matches!(name.as_str(), "overflow-wrap" | "word-wrap")
+            && matches!(value, "break-word" | "normal")
+        {
             continue;
         }
         // CANDIDATE (extended-CSS opt-in entry only). `flex-direction: row` and `flex-wrap: nowrap` are the INITIAL
@@ -1852,7 +1995,8 @@ pub(crate) fn properties_with(
         // `column*`, `row-reverse`, `wrap*`, `flex-flow`, global keywords stay refused. On a non-flex box the
         // properties have no effect in Chrome either. Not browser-computed-style equivalence.
         if em_font
-            && ((name == "flex-direction" && value == "row") || (name == "flex-wrap" && value == "nowrap"))
+            && ((name == "flex-direction" && value == "row")
+                || (name == "flex-wrap" && value == "nowrap"))
         {
             continue;
         }
@@ -1866,10 +2010,36 @@ pub(crate) fn properties_with(
             && ((name == "cursor"
                 && matches!(
                     value,
-                    "auto" | "default" | "pointer" | "text" | "not-allowed" | "move" | "grab" | "grabbing" | "help"
-                        | "wait" | "progress" | "crosshair" | "none" | "context-menu" | "cell" | "vertical-text"
-                        | "alias" | "copy" | "no-drop" | "all-scroll" | "zoom-in" | "zoom-out" | "col-resize"
-                        | "row-resize" | "n-resize" | "e-resize" | "s-resize" | "w-resize" | "ew-resize" | "ns-resize"
+                    "auto"
+                        | "default"
+                        | "pointer"
+                        | "text"
+                        | "not-allowed"
+                        | "move"
+                        | "grab"
+                        | "grabbing"
+                        | "help"
+                        | "wait"
+                        | "progress"
+                        | "crosshair"
+                        | "none"
+                        | "context-menu"
+                        | "cell"
+                        | "vertical-text"
+                        | "alias"
+                        | "copy"
+                        | "no-drop"
+                        | "all-scroll"
+                        | "zoom-in"
+                        | "zoom-out"
+                        | "col-resize"
+                        | "row-resize"
+                        | "n-resize"
+                        | "e-resize"
+                        | "s-resize"
+                        | "w-resize"
+                        | "ew-resize"
+                        | "ns-resize"
                 ))
                 || (name == "border-image" && value == "none"))
         {
@@ -1898,20 +2068,53 @@ pub(crate) fn properties_with(
         // accepted as inert under the contract; do not read this as "all invalid values refuse". `cubic-bezier(`,
         // `steps(`, `linear(`, global keywords, `allow-discrete`, `normal`, empty, bad units and other shapes refuse.
         // REVISIT if the renderer ever re-styles.
-        if em_font && matches!(name.as_str(), "transition" | "transition-property" | "transition-duration" | "transition-delay" | "transition-timing-function") {
+        if em_font
+            && matches!(
+                name.as_str(),
+                "transition"
+                    | "transition-property"
+                    | "transition-duration"
+                    | "transition-delay"
+                    | "transition-timing-function"
+            )
+        {
             let item_ok = |item: &str| {
                 let toks: Vec<&str> = item.split_ascii_whitespace().collect();
                 !toks.is_empty()
                     && toks.len() <= 4
                     && toks.iter().all(|t| {
-                        let time = t.strip_suffix("ms").or_else(|| t.strip_suffix('s')).is_some_and(|n| {
-                            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit() || b == b'.') && n.bytes().filter(|&b| b == b'.').count() <= 1 && n.bytes().any(|b| b.is_ascii_digit())
-                        });
-                        let timing = matches!(*t, "ease" | "linear" | "ease-in" | "ease-out" | "ease-in-out" | "step-start" | "step-end");
+                        let time = t
+                            .strip_suffix("ms")
+                            .or_else(|| t.strip_suffix('s'))
+                            .is_some_and(|n| {
+                                !n.is_empty()
+                                    && n.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+                                    && n.bytes().filter(|&b| b == b'.').count() <= 1
+                                    && n.bytes().any(|b| b.is_ascii_digit())
+                            });
+                        let timing = matches!(
+                            *t,
+                            "ease"
+                                | "linear"
+                                | "ease-in"
+                                | "ease-out"
+                                | "ease-in-out"
+                                | "step-start"
+                                | "step-end"
+                        );
                         let ident = !t.is_empty()
                             && t.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
                             && !t.starts_with('-')
-                            && !matches!(*t, "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "allow-discrete" | "normal");
+                            && !matches!(
+                                *t,
+                                "inherit"
+                                    | "initial"
+                                    | "unset"
+                                    | "revert"
+                                    | "revert-layer"
+                                    | "allow-discrete"
+                                    | "normal"
+                            );
                         time || timing || ident
                     })
             };
@@ -1939,7 +2142,11 @@ pub(crate) fn properties_with(
         // `thin|medium|thick`, dashed/dotted/double/groove/ridge/inset/outset/hidden/auto, `invert` and lists refuse.
         if em_font && name == "outline" {
             if let Some(keyword) = parse_keyword(value) {
-                for property in [Property::OutlineSolid, Property::OutlineWidth, Property::OutlineColor] {
+                for property in [
+                    Property::OutlineSolid,
+                    Property::OutlineWidth,
+                    Property::OutlineColor,
+                ] {
                     result.push((property, keyword, important));
                 }
                 continue;
@@ -1964,26 +2171,54 @@ pub(crate) fn properties_with(
                 unsupported = true;
                 continue;
             }
-            result.push((Property::OutlineSolid, Value::OutlineSolid(solid.unwrap_or(false)), important));
-            result.push((Property::OutlineWidth, Value::OutlineWidth(width.unwrap_or(3)), important));
-            result.push((Property::OutlineColor, Value::OutlineColor(colour.unwrap_or(None)), important));
+            result.push((
+                Property::OutlineSolid,
+                Value::OutlineSolid(solid.unwrap_or(false)),
+                important,
+            ));
+            result.push((
+                Property::OutlineWidth,
+                Value::OutlineWidth(width.unwrap_or(3)),
+                important,
+            ));
+            result.push((
+                Property::OutlineColor,
+                Value::OutlineColor(colour.unwrap_or(None)),
+                important,
+            ));
             continue;
         }
         if em_font && name == "inset" {
             let sides: Vec<_> = value.split_ascii_whitespace().collect();
-            let one = |v: &str| parse_margin(v).filter(|m| matches!(m, Margin::Auto | Margin::Px(_)));
+            let one =
+                |v: &str| parse_margin(v).filter(|m| matches!(m, Margin::Auto | Margin::Px(_)));
             let parsed = match sides.as_slice() {
                 [a] => one(a).map(|a| [a; 4]),
                 [a, b] => one(a).zip(one(b)).map(|(a, b)| [a, b, a, b]),
-                [a, b, c] => one(a).zip(one(b)).zip(one(c)).map(|((a, b), c)| [a, b, c, b]),
-                [a, b, c, d] => one(a).zip(one(b)).zip(one(c)).zip(one(d)).map(|(((a, b), c), d)| [a, b, c, d]),
+                [a, b, c] => one(a)
+                    .zip(one(b))
+                    .zip(one(c))
+                    .map(|((a, b), c)| [a, b, c, b]),
+                [a, b, c, d] => one(a)
+                    .zip(one(b))
+                    .zip(one(c))
+                    .zip(one(d))
+                    .map(|(((a, b), c), d)| [a, b, c, d]),
                 _ => None,
             };
             let Some(offsets) = parsed else {
                 unsupported = true;
                 continue;
             };
-            for (property, offset) in [Property::Top, Property::Right, Property::Bottom, Property::Left].into_iter().zip(offsets) {
+            for (property, offset) in [
+                Property::Top,
+                Property::Right,
+                Property::Bottom,
+                Property::Left,
+            ]
+            .into_iter()
+            .zip(offsets)
+            {
                 result.push((property, Value::Offset(offset), important));
             }
             continue;
@@ -2116,7 +2351,11 @@ pub(crate) fn properties_with(
             // `none | auto | <n> <n>? || <px|auto|0%>`. Fractions, negatives,
             // other percentages, content keywords and calc refuse.
             if let Some(keyword) = parse_keyword(value) {
-                for property in [Property::FlexGrow, Property::FlexShrink, Property::FlexBasis] {
+                for property in [
+                    Property::FlexGrow,
+                    Property::FlexShrink,
+                    Property::FlexBasis,
+                ] {
                     result.push((property, keyword, important));
                 }
                 continue;
@@ -2141,8 +2380,10 @@ pub(crate) fn properties_with(
         // exact INITIAL values `visibility:visible`, `letter-spacing:normal`, `word-spacing:normal` and (FL24) `text-transform:none` are skipped earlier by
         // INITIAL_NOOPS and never reach this gate; every other value of these properties, and every value on the default
         // entry, still lands here and refuses.
-        if matches!(name.as_str(), "text-transform" | "letter-spacing" | "word-spacing")
-            || (name == "visibility" && !em_font)
+        if matches!(
+            name.as_str(),
+            "text-transform" | "letter-spacing" | "word-spacing"
+        ) || (name == "visibility" && !em_font)
         {
             unsupported = true;
             continue;
@@ -2179,7 +2420,9 @@ pub(crate) fn properties_with(
             "content" if em_font => parse_keyword(value)
                 .or(match value {
                     "\"\"" | "''" => Some(Value::Content(crate::computed_style::Content::Empty)),
-                    "normal" | "none" => Some(Value::Content(crate::computed_style::Content::Normal)),
+                    "normal" | "none" => {
+                        Some(Value::Content(crate::computed_style::Content::Normal))
+                    }
                     _ => None,
                 })
                 .map(|v| (Property::Content, v)),
@@ -2228,7 +2471,10 @@ pub(crate) fn properties_with(
                             }
                             _ => None,
                         }
-                    } else if let Some(high_precision) = em_font.then(|| unitless_number_3_to_5_decimals(value)).flatten() {
+                    } else if let Some(high_precision) = em_font
+                        .then(|| unitless_number_3_to_5_decimals(value))
+                        .flatten()
+                    {
                         // CANDIDATE (ext entry only): 3-5 decimal unitless multiplier, floored to 1/64 px like Chrome's
                         // LayoutUnit (see Computed::used_line_height). Default entry keeps refusing these.
                         Some(Value::LineHeightPrecise(high_precision))
@@ -2250,7 +2496,13 @@ pub(crate) fn properties_with(
                 // SansSerif without the whole-render refusal. Painting still
                 // requires the family-bound painter with proven face hashes.
                 match fam.intern(value) {
-                    Some(key) => Some((Property::FontFamily, Value::FontFamily(Some(crate::computed_style::GenericFamily::SansSerif), Some(key)))),
+                    Some(key) => Some((
+                        Property::FontFamily,
+                        Value::FontFamily(
+                            Some(crate::computed_style::GenericFamily::SansSerif),
+                            Some(key),
+                        ),
+                    )),
                     None => {
                         unsupported = true; // handle capacity exhausted: refuse, never wrap
                         None
@@ -2370,20 +2622,41 @@ pub(crate) fn properties_with(
                 .map(|value| (Property::Color, value)),
             "width" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Width))
-                .or_else(|| if em_font { parse_rem(value).map(Value::WidthRem) } else { None })
-                .or_else(|| if em_font { parse_em_length(value).map(Value::Width) } else { None })
+                .or_else(|| {
+                    if em_font {
+                        parse_rem(value).map(Value::WidthRem)
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| {
+                    if em_font {
+                        parse_em_length(value).map(Value::Width)
+                    } else {
+                        None
+                    }
+                })
                 .map(|value| (Property::Width, value)),
             // CANDIDATE (ext only): a POSITIVE px `min-height` (0/auto emit an explicit reset below). Admission of the
             // resulting box is decided by the box tree (block, auto height, in-flow, not a flex item, no escaping margin).
             // CANDIDATE FL40 (ext only): `max-height` as a px length (zero included) or `none`; every other form refuses. The box
             // tree folds it into a px `height` only; any other use of a non-none max-height refuses there.
-            "max-height" if em_font => parse_keyword(value).or_else(|| match value {
-                "none" => Some(Value::MaxHeight(Length::Auto)),
-                _ => match parse_width(value) { Some(l @ Length::Px(_)) => Some(Value::MaxHeight(l)), _ => None },
-            }).map(|v| (Property::MaxHeight, v)),
+            "max-height" if em_font => parse_keyword(value)
+                .or_else(|| match value {
+                    "none" => Some(Value::MaxHeight(Length::Auto)),
+                    _ => match parse_width(value) {
+                        Some(l @ Length::Px(_)) => Some(Value::MaxHeight(l)),
+                        _ => None,
+                    },
+                })
+                .map(|v| (Property::MaxHeight, v)),
             "min-height" if em_font => match parse_width(value) {
-                Some(l @ Length::Px(n)) if n > 0 => Some((Property::MinHeight, Value::MinHeight(l))),
-                Some(Length::Auto) | Some(Length::Px(0)) => Some((Property::MinHeight, Value::MinHeight(Length::Auto))),
+                Some(l @ Length::Px(n)) if n > 0 => {
+                    Some((Property::MinHeight, Value::MinHeight(l)))
+                }
+                Some(Length::Auto) | Some(Length::Px(0)) => {
+                    Some((Property::MinHeight, Value::MinHeight(Length::Auto)))
+                }
                 _ => parse_rem(value).map(|tt| (Property::MinHeight, Value::MinHeightRem(tt))),
             },
             // CANDIDATE (ext only, FL18): `column-gap`/`gap` as ONE non-negative px value or `normal` (=0). Only a single-line
@@ -2392,7 +2665,10 @@ pub(crate) fn properties_with(
             "column-gap" | "gap" if em_font => parse_keyword(value)
                 .or_else(|| match value {
                     "normal" => Some(Value::ColumnGap(Length::Auto)),
-                    _ => match parse_width(value) { Some(l @ Length::Px(_)) => Some(Value::ColumnGap(l)), _ => None },
+                    _ => match parse_width(value) {
+                        Some(l @ Length::Px(_)) => Some(Value::ColumnGap(l)),
+                        _ => None,
+                    },
                 })
                 .map(|value| (Property::ColumnGap, value)),
             // CANDIDATE (ext only, FL22): the SINGLE-value `overflow` shorthand, `visible` or `hidden`, as an explicit typed
@@ -2438,7 +2714,10 @@ pub(crate) fn properties_with(
                 .or_else(|| parse_outline_colour(value).map(Value::OutlineColor))
                 .map(|value| (Property::OutlineColor, value)),
             "outline-offset" if em_font => parse_keyword(value)
-                .or_else(|| match parse_width(value) { Some(Length::Px(n)) if n <= 10_000 => Some(Value::OutlineOffset(n)), _ => None })
+                .or_else(|| match parse_width(value) {
+                    Some(Length::Px(n)) if n <= 10_000 => Some(Value::OutlineOffset(n)),
+                    _ => None,
+                })
                 .map(|value| (Property::OutlineOffset, value)),
             "min-width" => parse_keyword(value)
                 .or_else(|| match parse_width(value) {
@@ -2474,8 +2753,20 @@ pub(crate) fn properties_with(
                 .map(|value| (Property::MaxWidth, value)),
             "height" => parse_keyword(value)
                 .or_else(|| parse_width(value).map(Value::Height))
-                .or_else(|| if em_font { parse_rem(value).map(Value::HeightRem) } else { None })
-                .or_else(|| if em_font { parse_em_length(value).map(Value::Height) } else { None })
+                .or_else(|| {
+                    if em_font {
+                        parse_rem(value).map(Value::HeightRem)
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| {
+                    if em_font {
+                        parse_em_length(value).map(Value::Height)
+                    } else {
+                        None
+                    }
+                })
                 .map(|value| (Property::Height, value)),
             "flex-grow" => parse_keyword(value)
                 .or_else(|| {
@@ -2533,38 +2824,33 @@ pub(crate) fn properties_with(
                 })
                 .map(|value| (Property::BoxSizing, value)),
             "padding-top" => parse_keyword(value)
-                .or_else(|| {
-                    parse_padding(value).map(Value::Padding)
-                })
+                .or_else(|| parse_padding(value).map(Value::Padding))
                 .map(|value| (Property::PaddingTop, value)),
             "padding-bottom" => parse_keyword(value)
-                .or_else(|| {
-                    parse_padding(value).map(Value::Padding)
-                })
+                .or_else(|| parse_padding(value).map(Value::Padding))
                 .map(|value| (Property::PaddingBottom, value)),
             "padding-left" => parse_keyword(value)
-                .or_else(|| {
-                    parse_padding(value).map(Value::Padding)
-                })
+                .or_else(|| parse_padding(value).map(Value::Padding))
                 .map(|value| (Property::PaddingLeft, value)),
             "padding-right" => parse_keyword(value)
-                .or_else(|| {
-                    parse_padding(value).map(Value::Padding)
-                })
+                .or_else(|| parse_padding(value).map(Value::Padding))
                 .map(|value| (Property::PaddingRight, value)),
             // EXPERIMENTAL: exactly `none` or `underline` (no color/style/thickness/line forms, no
             // longhands). The paint path decides separately whether the page may draw it.
             // CANDIDATE (ext entry only): exactly `none` (turns off the UA underline of a[href]/u/ins; longhands,
             // colour/style/thickness forms and every other value stay refused).
-            "text-decoration" if em_font && !text_deco && value == "none" => {
-                Some((Property::TextDecoration, Value::TextDecoration(crate::computed_style::TextDecoration::None)))
-            }
+            "text-decoration" if em_font && !text_deco && value == "none" => Some((
+                Property::TextDecoration,
+                Value::TextDecoration(crate::computed_style::TextDecoration::None),
+            )),
             "text-decoration" if text_deco => parse_keyword(value)
                 .or(match value {
-                    "none" => Some(Value::TextDecoration(crate::computed_style::TextDecoration::None)),
-                    "underline" => {
-                        Some(Value::TextDecoration(crate::computed_style::TextDecoration::Underline))
-                    }
+                    "none" => Some(Value::TextDecoration(
+                        crate::computed_style::TextDecoration::None,
+                    )),
+                    "underline" => Some(Value::TextDecoration(
+                        crate::computed_style::TextDecoration::Underline,
+                    )),
                     _ => None,
                 })
                 .map(|v| (Property::TextDecoration, v)),
@@ -2581,7 +2867,9 @@ pub(crate) fn properties_with(
             // CANDIDATE (ext entry only): the `list-style` shorthand with exactly `none` resets type and image to none
             // (position resets to outside, which only matters when a marker exists), so it equals `list-style-type: none`
             // here. Any other shorthand value (`none inside`, `disc`, url, global keywords) stays refused.
-            "list-style" if em_font && value == "none" => Some((Property::ListStyleType, Value::ListStyleNone(true))),
+            "list-style" if em_font && value == "none" => {
+                Some((Property::ListStyleType, Value::ListStyleNone(true)))
+            }
             // CANDIDATE (ext entry only): `white-space: nowrap|normal`. Every other value (pre, pre-wrap, pre-line,
             // break-spaces, wrap/nowrap shorthands) refuses. `nowrap` is only paint-equivalent where the text has no
             // break opportunity; BoxTree::from_style refuses the rest.
@@ -2664,7 +2952,8 @@ fn parse_em(value: &str) -> Option<u32> {
 /// `<n>em` width/height carrier (ext only): `Length::Percent(LENGTH_EM_FLAG | ten-thousandths)`.
 fn parse_em_length(value: &str) -> Option<Length> {
     let tt = parse_em(value)?;
-    (tt < crate::computed_style::LENGTH_EM_FLAG).then_some(Length::Percent(crate::computed_style::LENGTH_EM_FLAG | tt))
+    (tt < crate::computed_style::LENGTH_EM_FLAG)
+        .then_some(Length::Percent(crate::computed_style::LENGTH_EM_FLAG | tt))
 }
 
 fn parse_ten_thousandths(number: &str) -> Option<u32> {
@@ -2679,7 +2968,11 @@ fn parse_ten_thousandths(number: &str) -> Option<u32> {
     {
         return None;
     }
-    let mut v = if whole.is_empty() { 0 } else { whole.parse::<u32>().ok()?.checked_mul(10_000)? };
+    let mut v = if whole.is_empty() {
+        0
+    } else {
+        whole.parse::<u32>().ok()?.checked_mul(10_000)?
+    };
     if !fractional.is_empty() {
         let scale = 10u32.pow(4 - u32::try_from(fractional.len()).ok()?);
         v = v.checked_add(fractional.parse::<u32>().ok()?.checked_mul(scale)?)?;
@@ -2698,18 +2991,25 @@ fn parse_ten_thousandths(number: &str) -> Option<u32> {
 fn pinned_family_list(value: &str) -> bool {
     const WS: &[char] = &[' ', '\t', '\n', '\r', '\x0c'];
     let tokens: Vec<&str> = value.split(',').map(|t| t.trim_matches(WS)).collect();
-    matches!(tokens.as_slice(), ["sans-serif"] | ["\"gds transport\"", "arial", "sans-serif"])
+    matches!(
+        tokens.as_slice(),
+        ["sans-serif"] | ["\"gds transport\"", "arial", "sans-serif"]
+    )
 }
 
 /// `<whole>.<3..5 decimals>` with whole in 0..=99, value > 0, as number * 100_000 (own `Value::LineHeightPrecise` domain).
 fn unitless_number_3_to_5_decimals(value: &str) -> Option<u32> {
     let (whole, frac) = value.split_once('.')?;
-    if whole.is_empty() || whole.len() > 2 || !(3..=5).contains(&frac.len())
-        || !whole.bytes().all(|c| c.is_ascii_digit()) || !frac.bytes().all(|c| c.is_ascii_digit())
+    if whole.is_empty()
+        || whole.len() > 2
+        || !(3..=5).contains(&frac.len())
+        || !whole.bytes().all(|c| c.is_ascii_digit())
+        || !frac.bytes().all(|c| c.is_ascii_digit())
     {
         return None;
     }
-    let n = whole.parse::<u32>().ok()? * 100_000 + frac.parse::<u32>().ok()? * 10u32.pow(5 - frac.len() as u32);
+    let n = whole.parse::<u32>().ok()? * 100_000
+        + frac.parse::<u32>().ok()? * 10u32.pow(5 - frac.len() as u32);
     (n > 0).then_some(n)
 }
 
@@ -2717,10 +3017,16 @@ fn parse_width(value: &str) -> Option<Length> {
     if value == "auto" {
         return Some(Length::Auto);
     }
-    let (number, percent) = if let Some(n) = value.strip_suffix("px") {
-        (n, false)
+    // `pt` is an absolute unit (1pt = 4/3px, CSS 2.1 §4.3.2): it converts
+    // into the same fixed-point hundredths domain as `px` and follows the
+    // same whole-pixel used-value contract (a pt length that resolves to a
+    // fractional pixel refuses, exactly like a fractional px).
+    let (number, percent, pt) = if let Some(n) = value.strip_suffix("px") {
+        (n, false, false)
     } else if let Some(n) = value.strip_suffix('%') {
-        (n, true)
+        (n, true, false)
+    } else if let Some(n) = value.strip_suffix("pt") {
+        (n, false, true)
     } else {
         return (value == "0").then_some(Length::Px(0));
     };
@@ -2742,11 +3048,20 @@ fn parse_width(value: &str) -> Option<Length> {
     if percent {
         // Bit 31 of a percent payload is the em carrier flag; an absurd percentage that would collide refuses.
         (value < crate::computed_style::LENGTH_EM_FLAG).then_some(Length::Percent(value))
-    } else if value % 100 == 0 {
-        Some(Length::Px(value / 100))
     } else {
-        // Fractional px needs fixed-point support in used values.
-        None
+        // pt -> px hundredths: *4/3 rounded to the nearest hundredth. Exact
+        // for whole-pixel results (9pt -> 1200); a fractional-pixel result
+        // rounds to a non-whole hundredth and refuses below, the same
+        // contract fractional px follows.
+        if pt {
+            value = value.checked_mul(4)?.checked_add(1)? / 3;
+        }
+        if value % 100 == 0 {
+            Some(Length::Px(value / 100))
+        } else {
+            // Fractional px needs fixed-point support in used values.
+            None
+        }
     }
 }
 
@@ -2818,8 +3133,13 @@ fn parse_hard_shadow(value: &str) -> Option<Option<Shadow>> {
     if !(3..=5).contains(&tokens.len()) {
         return None;
     }
-    let colour_at_start = !tokens[0].bytes().next()?.is_ascii_digit() && !tokens[0].starts_with('-');
-    let (colour, lengths) = if colour_at_start { (tokens[0], &tokens[1..]) } else { (tokens[tokens.len() - 1], &tokens[..tokens.len() - 1]) };
+    let colour_at_start =
+        !tokens[0].bytes().next()?.is_ascii_digit() && !tokens[0].starts_with('-');
+    let (colour, lengths) = if colour_at_start {
+        (tokens[0], &tokens[1..])
+    } else {
+        (tokens[tokens.len() - 1], &tokens[..tokens.len() - 1])
+    };
     let rgb = opaque_color(colour)?;
     let px = |t: &str, signed: bool| -> Option<i32> {
         let (neg, body) = match t.strip_prefix('-') {
@@ -2841,8 +3161,17 @@ fn parse_hard_shadow(value: &str) -> Option<Option<Shadow>> {
     if lengths.len() >= 3 && px(lengths[2], false)? != 0 {
         return None;
     }
-    let spread = if lengths.len() == 4 { px(lengths[3], false)? } else { 0 };
-    Some(Some(Shadow { dx, dy, spread: u32::try_from(spread).ok()?, rgb }))
+    let spread = if lengths.len() == 4 {
+        px(lengths[3], false)?
+    } else {
+        0
+    };
+    Some(Some(Shadow {
+        dx,
+        dy,
+        spread: u32::try_from(spread).ok()?,
+        rgb,
+    }))
 }
 
 /// FL28: `none` -> no outline, `solid` -> solid; everything else (dashed, dotted, double, groove, ridge, inset, outset, hidden, auto) refuses.
@@ -3243,6 +3572,33 @@ mod tests {
         assert_eq!(section.style.direction, Direction::Rtl);
         assert_eq!(section.style.margin_left, Margin::Px(7));
         assert_eq!(section.style.margin_right, Margin::Px(0));
+    }
+
+    #[test]
+    fn pt_lengths_convert_at_four_thirds_px() {
+        // 12pt = 16px, 9pt = 12px exactly; a pt length resolving to a
+        // fractional pixel (10pt = 13.33px) refuses like a fractional px.
+        let t = tree(
+            "<html><body><p style='font-size:12pt'>a</p><p style='font-size:9pt'>b</p><p style='font-size:10pt'>c</p></body></html>",
+            &[],
+        );
+        let sizes: Vec<u32> = t
+            .nodes
+            .iter()
+            .filter(|n| n.tag == "p")
+            .map(|n| n.style.font_size)
+            .collect();
+        assert_eq!(sizes, [16, 12, 16]);
+    }
+
+    #[test]
+    fn zero_pt_is_zero_px() {
+        let t = tree(
+            "<html><body><p style='margin-left:0pt;font-size:15pt'>a</p></body></html>",
+            &[],
+        );
+        let p = t.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(p.style.font_size, 20);
     }
 
     #[test]
@@ -4193,7 +4549,14 @@ mod percentage_font_size_tests {
     #[test]
     fn rem_font_size_resolves_against_root_and_refuses_subpixel() {
         let t = |h: &str| parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
-        let size = |tr: &crate::style_tree::StyleTree, tag: &str| tr.nodes.iter().find(|n| n.tag == tag).unwrap().style.font_size;
+        let size = |tr: &crate::style_tree::StyleTree, tag: &str| {
+            tr.nodes
+                .iter()
+                .find(|n| n.tag == tag)
+                .unwrap()
+                .style
+                .font_size
+        };
         let a = t("<!doctype html><p style='font-size:1.5rem'>a</p>");
         assert!(!a.unsupported);
         assert_eq!(size(&a, "p"), 24);
@@ -4207,7 +4570,18 @@ mod percentage_font_size_tests {
         let d = t("<!doctype html><p style='font-size:.5rem'>a</p>");
         assert!(!d.unsupported);
         assert_eq!(size(&d, "p"), 8);
-        for bad in ["font-size:0rem", "font-size:1.rem", "font-size:.rem", "font-size:1e1rem", "font-size:+1rem", "font-size:1.4rem", "font-size:1.00001rem", "font-size:-1rem", "font-size:1REMx", "font-size:99999999rem"] {
+        for bad in [
+            "font-size:0rem",
+            "font-size:1.rem",
+            "font-size:.rem",
+            "font-size:1e1rem",
+            "font-size:+1rem",
+            "font-size:1.4rem",
+            "font-size:1.00001rem",
+            "font-size:-1rem",
+            "font-size:1REMx",
+            "font-size:99999999rem",
+        ] {
             let h = format!("<!doctype html><p style='{bad}'>a</p>");
             assert!(t(&h).unsupported, "{bad}");
         }
@@ -4275,7 +4649,10 @@ fn border_width(token: &str) -> Option<u32> {
 fn fractional_border_px(token: &str) -> Option<u32> {
     // Blink's rule is floor(w * dsf) / dsf with a 1-device-px minimum; the
     // integer result below is only that rule at dsf == 1.
-    const _: () = assert!(crate::DEVICE_PX_PER_CSS_PX == 1, "border snap is the dsf == 1 case only");
+    const _: () = assert!(
+        crate::DEVICE_PX_PER_CSS_PX == 1,
+        "border snap is the dsf == 1 case only"
+    );
     let number = token.strip_suffix("px")?;
     let (whole, frac) = number.split_once('.')?;
     if whole.is_empty()
@@ -4322,7 +4699,10 @@ fn border_color(token: &str, ext: bool) -> Option<BorderColor> {
 /// else (`0.0`, `0%`, a non-zero alpha, out-of-range or signed channels, other forms)
 /// stays refused by the caller.
 fn fully_transparent_rgba(token: &str) -> bool {
-    let Some(inner) = token.strip_prefix("rgba(").and_then(|t| t.strip_suffix(')')) else {
+    let Some(inner) = token
+        .strip_prefix("rgba(")
+        .and_then(|t| t.strip_suffix(')'))
+    else {
         return false;
     };
     let parts: Vec<&str> = inner.split(',').map(|p| p.trim_matches(' ')).collect();
@@ -4422,7 +4802,9 @@ fn border_declarations(name: &str, value: &str, ext: bool) -> BorderParse {
             match rest {
                 "width" => four_sides(&tokens, border_width).map(|w| w.map(Value::Padding)),
                 "style" => four_sides(&tokens, border_style).map(|v| v.map(Value::BorderStyle)),
-                _ => four_sides(&tokens, |t| border_color(t, ext)).map(|v| v.map(Value::BorderColor)),
+                _ => {
+                    four_sides(&tokens, |t| border_color(t, ext)).map(|v| v.map(Value::BorderColor))
+                }
             }
         };
         return sides
@@ -4794,7 +5176,8 @@ mod root_selector_tests {
 fn parse_padding(value: &str) -> Option<u32> {
     if value.ends_with("rem") {
         let tt = parse_rem(value)?;
-        return (tt < crate::computed_style::PADDING_REM_FLAG).then_some(crate::computed_style::PADDING_REM_FLAG | tt);
+        return (tt < crate::computed_style::PADDING_REM_FLAG)
+            .then_some(crate::computed_style::PADDING_REM_FLAG | tt);
     }
     if let Some(number) = value.strip_suffix("em") {
         if let Some(Length::Percent(hundredths)) = parse_width(&format!("{number}%")) {
@@ -4852,10 +5235,16 @@ fn parse_flex_shorthand(value: &str) -> Option<(u32, u32, Length)> {
 }
 
 fn parse_margin_value(value: &str) -> Option<Value> {
-    let (negative, unsigned) = value.strip_prefix('-').map_or((false, value), |r| (true, r));
+    let (negative, unsigned) = value
+        .strip_prefix('-')
+        .map_or((false, value), |r| (true, r));
     if unsigned.ends_with("rem") {
         let tt = i32::try_from(parse_rem(unsigned)?).ok()?;
-        return Some(Value::MarginRem(if negative { tt.checked_neg()? } else { tt }));
+        return Some(Value::MarginRem(if negative {
+            tt.checked_neg()?
+        } else {
+            tt
+        }));
     }
     parse_margin(value).map(Value::Margin)
 }
@@ -4889,7 +5278,9 @@ mod custom_property_tests {
 
     #[test]
     fn names_are_case_sensitive() {
-        assert!(refused("<!doctype html><style>html{--Foo:red}p{color:var(--foo)}</style><p>x</p>"));
+        assert!(refused(
+            "<!doctype html><style>html{--Foo:red}p{color:var(--foo)}</style><p>x</p>"
+        ));
         assert_eq!(
             p_color("<!doctype html><style>html{--Foo:#00ff00;--foo:#0000ff}p{color:var(--Foo)}</style><p>x</p>"),
             Some(0x00_ff_00)
@@ -4898,7 +5289,10 @@ mod custom_property_tests {
 
     #[test]
     fn fallback_used_only_when_undefined_and_may_nest() {
-        assert_eq!(p_color("<!doctype html><style>p{color:var(--x,#00f)}</style><p>x</p>"), Some(0x00_00_ff));
+        assert_eq!(
+            p_color("<!doctype html><style>p{color:var(--x,#00f)}</style><p>x</p>"),
+            Some(0x00_00_ff)
+        );
         assert_eq!(
             p_color("<!doctype html><style>p{color:var(--x,var(--y,#00f))}</style><p>x</p>"),
             Some(0x00_00_ff)
@@ -4945,9 +5339,13 @@ mod custom_property_tests {
     #[test]
     fn invalid_winning_var_never_falls_back_to_a_lower_declaration() {
         // Chrome: the winner is invalid at computed-value time -> unset (inherited black), not red.
-        assert!(refused("<!doctype html><style>p{color:#f00}p{color:var(--nope)}</style><p>x</p>"));
+        assert!(refused(
+            "<!doctype html><style>p{color:#f00}p{color:var(--nope)}</style><p>x</p>"
+        ));
         // Even when the invalid var() declaration would lose, the page refuses (stricter).
-        assert!(refused("<!doctype html><style>p{color:var(--nope)}p{color:#00f}</style><p>x</p>"));
+        assert!(refused(
+            "<!doctype html><style>p{color:var(--nope)}p{color:#00f}</style><p>x</p>"
+        ));
     }
 
     #[test]
@@ -4982,13 +5380,21 @@ mod custom_property_tests {
         let get = |html: &str| {
             let t = style(html);
             assert!(!t.unsupported, "{html}");
-            t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap()
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .map(|n| n.style)
+                .unwrap()
         };
         // Shorthand authored AFTER the longhand overrides it; before it, loses.
-        let after = get("<!doctype html><style>html{--m:5px}p{margin-top:9px;margin:var(--m)}</style><p>x</p>");
+        let after = get(
+            "<!doctype html><style>html{--m:5px}p{margin-top:9px;margin:var(--m)}</style><p>x</p>",
+        );
         let lit_after = get("<!doctype html><style>p{margin-top:9px;margin:5px}</style><p>x</p>");
         assert_eq!(after, lit_after);
-        let before = get("<!doctype html><style>html{--m:5px}p{margin:var(--m);margin-top:9px}</style><p>x</p>");
+        let before = get(
+            "<!doctype html><style>html{--m:5px}p{margin:var(--m);margin-top:9px}</style><p>x</p>",
+        );
         let lit_before = get("<!doctype html><style>p{margin:5px;margin-top:9px}</style><p>x</p>");
         assert_eq!(before, lit_before);
     }
@@ -5020,7 +5426,11 @@ mod custom_property_tests {
         let get = |html: &str| {
             let t = style(html);
             assert!(!t.unsupported, "{html}");
-            t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap()
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .map(|n| n.style)
+                .unwrap()
         };
         // Shorthand via var() vs typed longhand, inline, both orders.
         assert_eq!(
@@ -5060,7 +5470,9 @@ mod custom_property_tests {
             Some(0xff_00_00)
         );
         assert_eq!(
-            p_color("<!doctype html><style>html{--a:#f00;/* note */}p{color:var(--a)}</style><p>x</p>"),
+            p_color(
+                "<!doctype html><style>html{--a:#f00;/* note */}p{color:var(--a)}</style><p>x</p>"
+            ),
             Some(0xff_00_00)
         );
     }
@@ -5069,10 +5481,14 @@ mod custom_property_tests {
     fn custom_property_work_is_bounded() {
         // 300 distinct definitions in one element refuse (rule/declaration caps) rather than allocate unboundedly.
         let defs: String = (0..300).map(|i| format!("--v{i}:1;")).collect();
-        assert!(refused(&format!("<!doctype html><style>html{{{defs}}}</style><p>x</p>")));
+        assert!(refused(&format!(
+            "<!doctype html><style>html{{{defs}}}</style><p>x</p>"
+        )));
         // Over-long value refuses.
         let long = "a".repeat(2000);
-        assert!(refused(&format!("<!doctype html><style>html{{--l:{long}}}</style><p>x</p>")));
+        assert!(refused(&format!(
+            "<!doctype html><style>html{{--l:{long}}}</style><p>x</p>"
+        )));
     }
 
     #[test]
@@ -5085,7 +5501,8 @@ mod custom_property_tests {
         assert!(t.unsupported);
         assert!(t.diagnostics.count(RefusalReason::ComputedValue) >= 1);
         // The same page with a few elements is within budget.
-        let few = format!("<!doctype html><style>html{{{defs}}}</style><body><div style='--z:1'>x</div>");
+        let few =
+            format!("<!doctype html><style>html{{{defs}}}</style><body><div style='--z:1'>x</div>");
         assert!(!style(&few).unsupported);
     }
 
@@ -5104,7 +5521,9 @@ mod custom_property_tests {
             "-x:1",
         ] {
             assert!(
-                refused(&format!("<!doctype html><style>html{{{decl}}}</style><p>x</p>")),
+                refused(&format!(
+                    "<!doctype html><style>html{{{decl}}}</style><p>x</p>"
+                )),
                 "{decl}"
             );
         }
@@ -5112,8 +5531,15 @@ mod custom_property_tests {
         // KNOWN LIMITATION (measured): `--e:;` and `--e: ;` are valid empty values per the
         // spec (Chrome accepts them) but the existing declaration splitter rejects an empty
         // value, so the page refuses. Stricter than Chrome, never a wrong accept.
-        for (css, expect_refused) in [("html{--e: ;color:#f00}", true), ("html{--e:;color:#f00}", true)] {
-            assert_eq!(refused(&format!("<!doctype html><style>{css}</style><p>x</p>")), expect_refused, "{css}");
+        for (css, expect_refused) in [
+            ("html{--e: ;color:#f00}", true),
+            ("html{--e:;color:#f00}", true),
+        ] {
+            assert_eq!(
+                refused(&format!("<!doctype html><style>{css}</style><p>x</p>")),
+                expect_refused,
+                "{css}"
+            );
         }
     }
 
@@ -5128,18 +5554,27 @@ mod custom_property_tests {
             Some(0x00_ff_00)
         );
         assert_eq!(
-            p_color("<!doctype html><style>html{--c:#f00}p{--c:inherit;color:var(--c)}</style><p>x</p>"),
+            p_color(
+                "<!doctype html><style>html{--c:#f00}p{--c:inherit;color:var(--c)}</style><p>x</p>"
+            ),
             Some(0xff_00_00)
         );
     }
 
     #[test]
     fn shorthand_and_multi_token_values_substitute_before_parsing() {
-        let html = "<!doctype html><style>html{--b:2px solid #00f}p{border:var(--b)}</style><p>x</p>";
+        let html =
+            "<!doctype html><style>html{--b:2px solid #00f}p{border:var(--b)}</style><p>x</p>";
         assert!(!refused(html));
         let plain = style("<!doctype html><style>p{border:2px solid #00f}</style><p>x</p>");
         let var = style(html);
-        let get = |t: &StyleTree| t.nodes.iter().find(|n| n.tag == "p").map(|n| n.style).unwrap();
+        let get = |t: &StyleTree| {
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .map(|n| n.style)
+                .unwrap()
+        };
         assert_eq!(get(&plain), get(&var));
     }
 
@@ -5182,24 +5617,57 @@ mod custom_property_tests {
     fn float_clear_cascade_var_and_non_inheritance() {
         use crate::computed_style::{Clear, Float};
         let t = style("<!doctype html><style>html{--f:left}.a{float:var(--f);clear:both}</style><div class=a><p>x</p></div><p class=b>y</p>");
-        let div = t.nodes.iter().find(|n| n.tag == "div").unwrap().style.positioned;
+        let div = t
+            .nodes
+            .iter()
+            .find(|n| n.tag == "div")
+            .unwrap()
+            .style
+            .positioned;
         assert_eq!((div.float, div.clear), (Float::Left, Clear::Both));
         assert!(!t.unsupported);
         // not inherited: the child p and a later p keep the initial values
         for n in t.nodes.iter().filter(|n| n.tag == "p") {
-            assert_eq!((n.style.positioned.float, n.style.positioned.clear), (Float::None, Clear::None));
+            assert_eq!(
+                (n.style.positioned.float, n.style.positioned.clear),
+                (Float::None, Clear::None)
+            );
         }
         // later declaration wins; none/default parses
         let c = style("<!doctype html><style>p{float:left}p{float:none}</style><p>x</p>");
-        let p = c.nodes.iter().find(|n| n.tag == "p").unwrap().style.positioned;
+        let p = c
+            .nodes
+            .iter()
+            .find(|n| n.tag == "p")
+            .unwrap()
+            .style
+            .positioned;
         assert_eq!(p.float, Float::None);
         // inherit takes the parent's computed value
-        let i = style("<!doctype html><style>div{float:left}p{float:inherit}</style><div><p>x</p></div>");
-        let p = i.nodes.iter().find(|n| n.tag == "p").unwrap().style.positioned;
+        let i = style(
+            "<!doctype html><style>div{float:left}p{float:inherit}</style><div><p>x</p></div>",
+        );
+        let p = i
+            .nodes
+            .iter()
+            .find(|n| n.tag == "p")
+            .unwrap()
+            .style
+            .positioned;
         assert_eq!(p.float, Float::Left);
         // unset and initial on a non-inherited property give none
-        let u = style("<!doctype html><style>div{float:left}p{float:unset}</style><div><p>x</p></div>");
-        assert_eq!(u.nodes.iter().find(|n| n.tag == "p").unwrap().style.positioned.float, Float::None);
+        let u =
+            style("<!doctype html><style>div{float:left}p{float:unset}</style><div><p>x</p></div>");
+        assert_eq!(
+            u.nodes
+                .iter()
+                .find(|n| n.tag == "p")
+                .unwrap()
+                .style
+                .positioned
+                .float,
+            Float::None
+        );
     }
 
     #[test]
@@ -5212,8 +5680,12 @@ mod custom_property_tests {
             "width:50%;height:30px;box-sizing:border-box;display:block",
             "background-color:red;background-color:blue",
         ] {
-            let a = style(&format!("<!doctype html><style>p{{{body}}}</style><p>x</p>"));
-            let b = style(&format!("<!doctype html><style>p{{{body};--unused:1}}</style><p>x</p>"));
+            let a = style(&format!(
+                "<!doctype html><style>p{{{body}}}</style><p>x</p>"
+            ));
+            let b = style(&format!(
+                "<!doctype html><style>p{{{body};--unused:1}}</style><p>x</p>"
+            ));
             assert_eq!(a.unsupported, b.unsupported, "{body}");
             assert_eq!(
                 a.nodes.iter().map(|n| n.style).collect::<Vec<_>>(),
@@ -5439,7 +5911,6 @@ mod link_state_tests {
     #[test]
     fn other_state_pseudos_stay_refused_under_state_entry() {
         for pseudo in [
-            ":visited",
             ":hover",
             ":active",
             ":focus",
@@ -5458,6 +5929,36 @@ mod link_state_tests {
                 "{pseudo}"
             );
         }
+    }
+
+    #[test]
+    fn visited_enrolls_under_fresh_history_and_never_matches() {
+        // Under FreshNoHistory a:visited ENROLLS (parsed, guaranteed) and
+        // never matches: no hyperlink is visited in a fresh profile. The
+        // a:link rule on the same element still applies.
+        // Declaration order puts the never-matching rule LAST so that an
+        // erroneous match would win the cascade and fail the assertion.
+        let h = sheet(
+            "a:link{font-size:22px} a:visited{font-size:44px}",
+            "<a href=https://x>one</a><p>two</p>",
+        );
+        let t = state_with(&h, &FRESH);
+        assert!(!t.unsupported);
+        let a = t.nodes.iter().find(|n| n.tag == "a").unwrap();
+        assert_eq!(a.style.font_size, 22);
+        let p = t.nodes.iter().find(|n| n.tag == "p").unwrap();
+        assert_eq!(p.style.font_size, 16);
+    }
+
+    #[test]
+    fn visited_refuses_without_a_history_guarantee() {
+        let h = sheet("a:visited{font-size:33px}", "<a href=https://x>one</a>");
+        let t = state_with(&h, &QUIESCENT);
+        assert!(t.unsupported);
+        assert_eq!(
+            t.diagnostics.first_reason(),
+            Some(RefusalReason::CssSelector)
+        );
     }
 
     #[test]
@@ -5614,7 +6115,12 @@ mod link_state_tests {
             assert!(!t.unsupported);
             for (tag, size) in [("span", 16), ("a", 16), ("p", 16)] {
                 assert_eq!(
-                    t.nodes.iter().find(|n| n.tag == tag).unwrap().style.font_size,
+                    t.nodes
+                        .iter()
+                        .find(|n| n.tag == tag)
+                        .unwrap()
+                        .style
+                        .font_size,
                     size,
                     "{tag}"
                 );
@@ -5646,10 +6152,7 @@ mod link_state_tests {
         // The engine observes `autofocus` itself: with one present, the
         // caller's UnfocusedInitial guarantee cannot hold and enrollment
         // fails closed EXACTLY like the absent-guarantee path.
-        let h = sheet(
-            "p:focus{font-size:33px}",
-            "<p autofocus>one</p>",
-        );
+        let h = sheet("p:focus{font-size:33px}", "<p autofocus>one</p>");
         let gated = state_with(&h, &UNFOCUSED);
         let absent = state_with(&h, &BOTH);
         assert!(gated.unsupported);
@@ -5679,7 +6182,12 @@ mod link_state_tests {
             Some(RefusalReason::CssSelector)
         );
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "b")
+                .unwrap()
+                .style
+                .font_size,
             44
         );
     }
@@ -5689,7 +6197,11 @@ mod link_state_tests {
         // `:hover:focus` carries two state pseudo-classes in one compound:
         // a grammar bound (at most one), refused at parse even when every
         // family guarantee is present.
-        for selector in ["a:hover:focus", "a:focus:hover", "a:focus-visible:focus-within"] {
+        for selector in [
+            "a:hover:focus",
+            "a:focus:hover",
+            "a:focus-visible:focus-within",
+        ] {
             let h = sheet(
                 &format!("{selector}{{font-size:33px}}"),
                 "<a href=https://x>one</a>",
@@ -5716,7 +6228,12 @@ mod link_state_tests {
         let t = state_with(&h, &UNFOCUSED);
         assert!(!t.unsupported);
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "span").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "span")
+                .unwrap()
+                .style
+                .font_size,
             16
         );
         let t = state_with(&h, &BOTH);
@@ -5731,21 +6248,39 @@ mod link_state_tests {
     fn focus_group_member_is_independently_fail_closed() {
         // Group semantics: the :focus member enrolls or refuses on its own;
         // the plain member applies either way (the applying twin).
-        let h = sheet("a:focus, b{font-size:33px}", "<a href=https://x>one</a><b>two</b>");
+        let h = sheet(
+            "a:focus, b{font-size:33px}",
+            "<a href=https://x>one</a><b>two</b>",
+        );
         let t = state_with(&h, &UNFOCUSED);
         assert!(!t.unsupported);
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "b")
+                .unwrap()
+                .style
+                .font_size,
             33
         );
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "a").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "a")
+                .unwrap()
+                .style
+                .font_size,
             16
         );
         let t = state_with(&h, &BOTH);
         assert!(t.unsupported);
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "b")
+                .unwrap()
+                .style
+                .font_size,
             33
         );
     }
@@ -5765,11 +6300,21 @@ mod link_state_tests {
         let t = state_with(&h, &UNFOCUSED);
         assert!(!t.unsupported);
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "b").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "b")
+                .unwrap()
+                .style
+                .font_size,
             16
         );
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "i").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "i")
+                .unwrap()
+                .style
+                .font_size,
             44
         );
         let t = state_with(&h, &BOTH);
@@ -5779,14 +6324,23 @@ mod link_state_tests {
             Some(RefusalReason::CssSelector)
         );
         assert_eq!(
-            t.nodes.iter().find(|n| n.tag == "i").unwrap().style.font_size,
+            t.nodes
+                .iter()
+                .find(|n| n.tag == "i")
+                .unwrap()
+                .style
+                .font_size,
             44
         );
     }
 
     #[test]
     fn repeated_focus_compounds_are_grammar_bound_refusals() {
-        for selector in ["a:focus:focus", "a:focus-visible:focus-within", "a:focus:link"] {
+        for selector in [
+            "a:focus:focus",
+            "a:focus-visible:focus-within",
+            "a:focus:link",
+        ] {
             let h = sheet(
                 &format!("{selector}{{font-size:33px}}"),
                 "<a href=https://x>one</a>",

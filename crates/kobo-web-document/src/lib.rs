@@ -24,28 +24,28 @@ pub mod box_tree;
 pub mod computed_style;
 mod convert;
 mod css;
-mod custom_props;
 pub mod css_background;
 mod css_border;
 pub mod css_paint_bridge;
 pub mod css_text_page;
+mod custom_props;
 pub mod data_stylesheet;
 pub mod display_list;
-pub mod flex_units;
-pub mod font_family;
+mod dom;
 pub mod family_page;
+pub mod flex_units;
 pub mod flex_units_v2;
 pub mod flex_units_v3;
-mod dom;
+pub mod font_family;
 pub use dom::measure;
 mod host;
 pub mod inline_lines;
 mod media_query;
+#[doc(hidden)]
+pub mod refusal_classify;
 pub mod source_facts;
 pub mod style_diagnostics;
 mod style_syntax;
-#[doc(hidden)]
-pub mod refusal_classify;
 pub mod style_tree;
 pub mod stylesheet_bytes;
 #[cfg(test)]
@@ -547,7 +547,10 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
 /// programmatic focus, with the engine additionally refusing the guarantee
 /// when the DOM carries `autofocus`) enrolls only the focus family, which
 /// then never matches - the correct CSS semantic for an unfocused initial
-/// capture. `:visited` and every other pseudo-class stay refused, as does any state pseudo-class at every
+/// capture. Under the same `FreshNoHistory` guarantee `:visited` enrolls and
+/// never matches - no hyperlink is visited in a fresh profile; that is the
+/// CSS semantic for the asserted state, not a silent never-match. Every other
+/// pseudo-class stays refused, as does any state pseudo-class at every
 /// other entry (fail-closed selector refusal). Default entries are
 /// byte-unchanged.
 #[must_use]
@@ -845,18 +848,46 @@ mod pinned_family_generated {
     //! family) is reachable only from here; it adds no public API.
     use super::*;
     use crate::box_tree::{BoxKind, BoxTree};
-    use crate::css_text_page::{paint_direct_text_blocks_family_bound, FamilyProfile, FontProvider};
+    use crate::css_text_page::{
+        paint_direct_text_blocks_family_bound, FamilyProfile, FontProvider,
+    };
     use crate::inline_lines::GlyphBitmap;
     struct Face;
     impl FontProvider for Face {
-        fn face_sha256_hex(&self) -> Option<String> { Some(FamilyProfile::Chrome156HostLiberation2Sans.regular_sha256_hex().into()) }
-        fn bold_face_sha256_hex(&self) -> Option<String> { Some(FamilyProfile::Chrome156HostLiberation2Sans.bold_sha256_hex().into()) }
-        fn has_glyph(&self, _: char, _: bool) -> Option<bool> { Some(true) }
-        fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> { Some(5) }
-        fn line_height(&self, _: u32, _: bool) -> Option<u32> { Some(20) }
-        fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> { Some(15) }
+        fn face_sha256_hex(&self) -> Option<String> {
+            Some(
+                FamilyProfile::Chrome156HostLiberation2Sans
+                    .regular_sha256_hex()
+                    .into(),
+            )
+        }
+        fn bold_face_sha256_hex(&self) -> Option<String> {
+            Some(
+                FamilyProfile::Chrome156HostLiberation2Sans
+                    .bold_sha256_hex()
+                    .into(),
+            )
+        }
+        fn has_glyph(&self, _: char, _: bool) -> Option<bool> {
+            Some(true)
+        }
+        fn advance(&self, _: char, _: u32, _: bool) -> Option<u32> {
+            Some(5)
+        }
+        fn line_height(&self, _: u32, _: bool) -> Option<u32> {
+            Some(20)
+        }
+        fn baseline_offset(&self, _: u32, _: bool) -> Option<i32> {
+            Some(15)
+        }
         fn raster(&self, _: char, _: u32, _: bool) -> Option<GlyphBitmap> {
-            Some(GlyphBitmap { left: 0, top: -1, width: 1, height: 1, coverage: vec![255] })
+            Some(GlyphBitmap {
+                left: 0,
+                top: -1,
+                width: 1,
+                height: 1,
+                coverage: vec![255],
+            })
         }
     }
     fn run(css: &str, body: &str) -> (bool, Option<bool>, usize) {
@@ -877,23 +908,52 @@ mod pinned_family_generated {
             return (true, None, 0);
         }
         let t = BoxTree::from_style(&s);
-        let generated_text = t.boxes.iter().filter(|b| b.kind == BoxKind::Text && b.text.as_deref() == Some("x")).count();
-        (false, Some(paint_direct_text_blocks_family_bound(&t, 200, 100, &Face, FamilyProfile::Chrome156HostLiberation2Sans).is_ok()), generated_text)
+        let generated_text = t
+            .boxes
+            .iter()
+            .filter(|b| b.kind == BoxKind::Text && b.text.as_deref() == Some("x"))
+            .count();
+        (
+            false,
+            Some(
+                paint_direct_text_blocks_family_bound(
+                    &t,
+                    200,
+                    100,
+                    &Face,
+                    FamilyProfile::Chrome156HostLiberation2Sans,
+                )
+                .is_ok(),
+            ),
+            generated_text,
+        )
     }
     const F: &str = "\"GDS Transport\", arial, sans-serif";
     #[test]
     fn generated_after_text_follows_the_same_gate() {
         // Inherited family on the generated box (originating div has the pinned family).
-        let (refused, painted, _) = run(&format!("div{{font-family:{F}}} div::after{{content:\"x\"}}"), "<div>ab</div>");
+        let (refused, painted, _) = run(
+            &format!("div{{font-family:{F}}} div::after{{content:\"x\"}}"),
+            "<div>ab</div>",
+        );
         println!("inherit+content x: refused_at_intake={refused} painted={painted:?}");
         // Generated text with a family only on the ::after rule, originating text unbound.
-        let (refused2, painted2, _) = run(&format!("div::after{{content:\"x\";font-family:{F}}}"), "<div>ab</div>");
+        let (refused2, painted2, _) = run(
+            &format!("div::after{{content:\"x\";font-family:{F}}}"),
+            "<div>ab</div>",
+        );
         println!("after-only family: refused_at_intake={refused2} painted={painted2:?}");
         // Non-ASCII generated text.
-        let (refused3, painted3, _) = run(&format!("div{{font-family:{F}}} div::after{{content:\"\u{e9}\"}}"), "<div>ab</div>");
+        let (refused3, painted3, _) = run(
+            &format!("div{{font-family:{F}}} div::after{{content:\"\u{e9}\"}}"),
+            "<div>ab</div>",
+        );
         println!("non-ascii content: refused_at_intake={refused3} painted={painted3:?}");
         // Empty content (GOV shape) with the pinned family: no text leaf.
-        let (refused4, painted4, _) = run(&format!("div{{font-family:{F}}} div::after{{content:\"\"}}"), "<div>ab</div>");
+        let (refused4, painted4, _) = run(
+            &format!("div{{font-family:{F}}} div::after{{content:\"\"}}"),
+            "<div>ab</div>",
+        );
         println!("empty content: refused_at_intake={refused4} painted={painted4:?}");
         // Controls: the same generated text is refused at intake with NO family at all, so the
         // intake refusal of content:"x" is independent of the family binding (generated TEXT is
@@ -941,9 +1001,24 @@ mod pinned_family_generated {
         )
         .is_ok();
         println!("empty content, family-less twin, ordinary painter ok={ordinary}");
-        assert_eq!(painted4 == Some(true), ordinary, "family binding must not change the empty-content outcome");
-        assert!(refused && refused2 && refused3, "generated text refuses at intake");
-        assert_ne!(painted3, Some(true), "non-ASCII generated text must not paint");
-        assert_ne!(painted2, Some(true), "unbound originating text must not paint");
+        assert_eq!(
+            painted4 == Some(true),
+            ordinary,
+            "family binding must not change the empty-content outcome"
+        );
+        assert!(
+            refused && refused2 && refused3,
+            "generated text refuses at intake"
+        );
+        assert_ne!(
+            painted3,
+            Some(true),
+            "non-ASCII generated text must not paint"
+        );
+        assert_ne!(
+            painted2,
+            Some(true),
+            "unbound originating text must not paint"
+        );
     }
 }
