@@ -523,3 +523,22 @@ Browser 212/0/2 ignored; engine 1,409/0/18 ignored over 148 groups; layout25/0.
 Clippy completed with existing warnings. Locked stripped static ARM EABI5:
 5,198,868 bytes, +3,949,488 over hello, 1,293,392 bytes under +5 MiB.
 No new crate, unsafe or allocator change. Protocol-16 matching runtime required.
+
+
+### Native colour link decoration and workspace repair
+
+Native rich-text link targets now split at bounded colour-span boundaries,
+retaining the same action while underlining each segment in its authored RGB.
+This avoids a neutral link mark painting over colour. Pixel test covers red
+and blue segments and action identity; replacing colour targets with neutral
+ones fails. Actual native frame inspected: 2,108 non-grey pixels. No new wire
+change. Whole-workspace cargo check caught two full TextPresentation literals
+in book reader/flashcards missing optional fields from the preceding RGB API
+addition. Both now explicitly default colours to None; workspace check passes.
+The earlier browser-only checks did not establish whole-workspace build health.
+
+Browser 213/0/2 ignored; UI289/0/2 ignored; reader82/0; flashcards library suite
+passes. Clippy completed with existing warnings. Locked static stripped ARM:
+5,199,220 bytes, delta3,949,840, headroom1,293,040 under +5 MiB. First broad
+reader build hit disk exhaustion; disposable caches cleared, affected library
+suite and workspace check rerun green. Not claiming full workspace tests.

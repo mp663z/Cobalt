@@ -3322,6 +3322,8 @@ fn piece_presentation(
             start: start - from,
             end: end - from,
             presentation: kobo_ui::TextPresentation {
+                foreground:None,
+                background:None,
                 strong: span.style.strong,
                 emphasis: span.style.emphasis,
                 underline: span.style.underline,

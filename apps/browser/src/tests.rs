@@ -2260,3 +2260,33 @@ fn colour_native_form_page_keeps_authored_prose_rgb_and_controls() {
     runner.action(action_id("submit-form"));
     assert_eq!(runner.app().pending.as_ref().unwrap().url.to_string(),"https://example.com/search?q=ink");
 }
+
+#[test]
+fn native_multicolour_link_keeps_each_underline_colour_and_one_action() {
+    let mut runner=runner(TextScale::Default);
+    runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><p><a href='/next'><span style='color:red'>Red </span><span style='color:blue'>blue</span></a></p><form><input name=q></form>");
+    let metrics=kobo_ui::CLARA_BW_METRICS;
+    let screen=runner.app().screen(&metrics).build();
+    let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+    let mut colours=Vec::new();
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for node in &layout.nodes {
+        if let kobo_ui::LayoutKind::InlineColourLink(action,rgb)=node.kind {
+            assert_eq!(action,action_id("link-0"));
+            let thickness=metrics.rule_thickness();
+            let y=node.rect.y+kobo_ui::FontSize::Body.line_height_in(kobo_ui::Face::Reading)-thickness*2;
+            let index=(y as usize)*metrics.width as usize+node.rect.x as usize;
+            assert_eq!(surface.rgb_at(index),Some(rgb));
+            colours.push(rgb);
+        }
+    }
+    assert!(colours.contains(&[255,0,0]));assert!(colours.contains(&[0,0,255]));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some() {
+        use std::io::Write;
+        let mut file=std::fs::File::create("/tmp/native-colour-link.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}

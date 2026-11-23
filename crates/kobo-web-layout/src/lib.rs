@@ -486,7 +486,7 @@ fn prose(builder: ScreenBuilder, runs: &[Run]) -> ScreenBuilder {
                     background:run.background,
                     strong: run.strong,
                     emphasis: run.emphasis,
-                    underline:run.link.is_some() && run.foreground.is_some(),
+
                     ..TextPresentation::default()
                 },
             });

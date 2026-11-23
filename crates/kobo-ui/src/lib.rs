@@ -5949,6 +5949,8 @@ pub enum LayoutKind {
     /// and hit-tested ahead of the page turn beneath it because it is pushed
     /// after the paragraph. One of these per line the run covers.
     InlineLink(ActionId),
+    /// Same native hit target, with authored RGB decoration from its span.
+    InlineColourLink(ActionId, [u8;3]),
     /// A line of metadata: smaller than the body, and in the muted tone.
     Secondary,
     /// The name of a group, with a hairline to the right margin and an
@@ -6189,6 +6191,7 @@ impl LayoutKind {
             | Self::QuoteFold(action, _)
             | Self::PagePrevious(action)
             | Self::InlineLink(action)
+            | Self::InlineColourLink(action, _)
             | Self::SectionLink(action)
             | Self::PageNext(action) => Some(action),
             Self::Back | Self::OverlayClose => Some(ActionId::BACK),
@@ -7385,8 +7388,14 @@ fn layout_node(
                     if layout.nodes.len() >= rich_text_limit {
                         break;
                     }
-                    let start = max(from, link.start);
-                    let end = min(to, link.end);
+                    let mut segment = max(from, link.start);
+                    let limit = min(to, link.end);
+                    while segment < limit {
+                    let start = segment;
+                    let (end,style) = rich_run_at(start,limit,spans);
+                    if end <= start || end > limit || !text.is_char_boundary(end) {break;}
+                    segment = end;
+                    if layout.nodes.len() >= rich_text_limit {break;}
                     if start < end && text.is_char_boundary(start) && text.is_char_boundary(end) {
                         // Measured the way the line is set, not the way it was
                         // written: a formula earlier on the line takes the width
@@ -7418,9 +7427,10 @@ fn layout_node(
                                 width: through.saturating_sub(before),
                                 height: line_height,
                             },
-                            kind: LayoutKind::InlineLink(link.action),
+                            kind: style.foreground.map_or(LayoutKind::InlineLink(link.action),|rgb|LayoutKind::InlineColourLink(link.action,rgb)),
                             text_lines: Vec::new(),
                         });
+                    }
                     }
                 }
                 if let Some(selection) = selection {
@@ -15011,14 +15021,14 @@ fn render_all_with_selected_font(
             // somewhere" since long before anybody put it on a screen. Set
             // clear of the descenders rather than through them, and a rule
             // thick, because a single pixel at this density is not there.
-            LayoutKind::InlineLink(_) => {
+            LayoutKind::InlineLink(_) | LayoutKind::InlineColourLink(_,_) => {
                 let thickness = metrics.rule_thickness();
                 let baseline = node
                     .rect
                     .y
                     .saturating_add(FontSize::Body.line_height_in(prose))
                     .saturating_sub(thickness.saturating_mul(2));
-                fill_clipped(
+                fill_text_ink(
                     surface,
                     Rect {
                         x: node.rect.x,
@@ -15027,6 +15037,7 @@ fn render_all_with_selected_font(
                         height: thickness,
                     },
                     tone::INK,
+                    match node.kind {LayoutKind::InlineColourLink(_,rgb)=>Some(rgb),_=>None},
                     clip,
                 );
             }
