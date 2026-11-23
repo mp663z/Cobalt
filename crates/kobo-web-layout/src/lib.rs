@@ -226,6 +226,15 @@ pub fn page_screen_with_metrics(
     reader: Option<bool>,
     metrics: &DisplayMetrics,
 ) -> ScreenBuilder {
+    page_screen_with_address(title, pieces, page, of, reader, metrics, None)
+}
+
+/// Browser page with a persistent, editable address entry point above content.
+#[must_use]
+pub fn page_screen_with_address(
+    title: &str, pieces: &[Piece], page: usize, of: Option<usize>,
+    reader: Option<bool>, metrics: &DisplayMetrics, address: Option<&str>,
+) -> ScreenBuilder {
     let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
     if let Some(reading) = reader {
         builder = builder.top_bar_action("reader", if reading { "Whole page" } else { "Reader" });
@@ -245,6 +254,9 @@ pub fn page_screen_with_metrics(
             u16::try_from(of.max(1)).unwrap_or(u16::MAX),
         );
     }
+    if let Some(address) = address {
+        builder = builder.field("edit-address", address, "Search or enter address");
+    }
     append_with_metrics(builder, pieces, metrics)
 }
 
@@ -262,8 +274,14 @@ pub fn paginate_for(document: &Document, title: &str, metrics: &DisplayMetrics) 
 /// every picture must also get the full size it has on a page of its own.
 #[must_use]
 pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> bool {
+    page_fits_with_address(title, pieces, metrics, None)
+}
+
+/// Measures the same address field used on the displayed browser page.
+#[must_use]
+pub fn page_fits_with_address(title: &str, pieces: &[Piece], metrics: &DisplayMetrics, address: Option<&str>) -> bool {
     let screen =
-        page_screen_with_metrics(title, pieces, 998, Some(999), Some(false), metrics).build();
+        page_screen_with_address(title, pieces, 998, Some(999), Some(false), metrics, address).build();
     if !fits(&screen, metrics) {
         return false;
     }
@@ -278,13 +296,14 @@ pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> boo
         let Piece::Picture { image, .. } = piece else {
             return true;
         };
-        let alone = page_screen_with_metrics(
+        let alone = page_screen_with_address(
             title,
             std::slice::from_ref(piece),
             998,
             Some(999),
             Some(false),
             metrics,
+            address,
         )
         .build();
         let whole = picture_heights(&alone, metrics);
@@ -937,6 +956,7 @@ pub struct Paginator {
     starts: BTreeMap<usize, usize>,
     pages: Vec<Vec<Piece>>,
     truncated: bool,
+    break_before: Option<usize>,
 }
 
 impl Paginator {
@@ -948,6 +968,7 @@ impl Paginator {
             starts: BTreeMap::new(),
             pages: Vec::new(),
             truncated: false,
+            break_before: None,
         }
     }
 
@@ -970,8 +991,28 @@ impl Paginator {
         self.queue.is_empty() || self.truncated
     }
 
+    /// Preserve a restored reading position as a page boundary after reflow.
+    pub fn break_before_place(&mut self, place: usize) {
+        self.break_before = Some(place);
+    }
+
     /// Makes the next page. Returns false once there is nothing left to make.
     pub fn next_page(&mut self, fits: &mut impl FnMut(&[Piece]) -> bool) -> bool {
+        // Hold the restored piece and everything after it out of this pass.
+        // Once the prefix is consumed, the piece starts the following page.
+        let split = self.break_before.and_then(|place|
+            self.queue.iter().position(|(origin, _)| *origin >= place));
+        let mut tail = match split {
+            Some(0) => { self.break_before = None; None }
+            Some(at) => Some(self.queue.split_off(at)),
+            None => None,
+        };
+        let made = self.next_page_inner(fits);
+        if let Some(tail) = tail.as_mut() { self.queue.append(tail); }
+        made
+    }
+
+    fn next_page_inner(&mut self, fits: &mut impl FnMut(&[Piece]) -> bool) -> bool {
         if self.done() {
             return false;
         }

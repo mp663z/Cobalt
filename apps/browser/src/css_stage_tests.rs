@@ -29,6 +29,7 @@ fn runner(scale: TextScale) -> AppRunner<Browser> {
         },
     );
     runner.start();
+    runner.action(action_id("samples"));
     runner
 }
 

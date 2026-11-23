@@ -54,3 +54,18 @@ positions, and device memory measurements remain follow-up work.
 page turns and the Reader switch. Run with the current checkout's simulator
 on `clara-bw-391` and `clara-colour-393`. The normal `drive.kobo` continues
 to cover the native reader. No live network is required for either script.
+
+### Start page and address field
+
+Launch opens a local search-first start page, not the sample document. Tap
+Search or enter address to type a query or URL. Search uses the existing
+HTML search provider; the start page does not contact a site until you submit.
+Sample pages remain available from the start page, along with Bookmarks and
+History. Navigate > Start returns there.
+
+Native pages and Page view retain a URL field above content. Tap it to edit
+the current URL. The bottom Go to action starts a fresh query. Both page
+measurement paths reserve the address field before pagination or raster,
+so it cannot hide the last line. The keyboard is modal and static; no
+animation, script, or refresh timer was added. `drive-start.kobo` exercises
+the start field, samples, Page view's address field, and its editor.

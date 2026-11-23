@@ -1,0 +1,15 @@
+wait-for Search the web
+shot start-page
+tap-id address
+expect An address, or words
+shot start-keyboard
+tap-id kb.cancel
+tap-id samples
+expect Sample pages
+tap-id navigate
+tap-id page-view
+wait-for-id native-reader
+shot page-address-bar
+tap-id edit-address
+expect samples.browse.invalid
+shot page-address-edit

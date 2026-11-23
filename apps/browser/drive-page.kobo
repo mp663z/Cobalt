@@ -1,3 +1,5 @@
+wait-for Search the web
+tap-id samples
 wait-for Sample pages
 tap-id navigate
 tap-id page-view

@@ -1,3 +1,5 @@
+wait-for Search the web
+tap-id samples
 wait-for Sample pages
 expect 1 of
 clean

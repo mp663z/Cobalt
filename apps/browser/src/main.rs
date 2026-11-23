@@ -17,7 +17,7 @@ use kobo_sdk::{
 };
 use kobo_web_document::{Document, Field, Limits, Url};
 use kobo_web_layout::{
-    link_action, page_screen_with_metrics, picture_handle, pieces, Paginator, Piece,
+    link_action, page_screen_with_address, picture_handle, pieces, Paginator, Piece,
 };
 
 #[cfg(test)]
@@ -92,6 +92,7 @@ struct Loaded {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum View {
     Page,
+    Start,
     /// The Links list, at this screen of it.
     Links(usize),
     /// The heading list, at this screen of it.
@@ -584,6 +585,10 @@ impl Browser {
             .history
             .current()
             .map_or((0, None), |entry| (entry.page, entry.place));
+        let mut paginator = paginator;
+        if let Some(place) = place.filter(|_| restore > 0 && note.is_some()) {
+            paginator.break_before_place(place + lead);
+        }
         self.editing = None;
         self.form_entry.close();
         self.loaded = Some(Loaded {
@@ -650,7 +655,14 @@ impl Browser {
             return;
         };
         let title = loaded.title.clone();
-        let mut fits = |pieces: &[Piece]| kobo_web_layout::page_fits(&title, pieces, &metrics);
+        let mut fits = |pieces: &[Piece]| {
+            kobo_web_layout::page_fits_with_address(
+                &title,
+                pieces,
+                &metrics,
+                Some(&loaded.url.to_string()),
+            )
+        };
         while loaded.paginator.pages().len() <= page.saturating_add(1)
             && loaded.paginator.next_page(&mut fits)
         {}
@@ -1101,13 +1113,14 @@ impl Browser {
                 if let Some(painted) = &loaded.painted {
                     if !painted.publish(context, self.pictures.colour()) {
                         context.set_screen(
-                            page_screen_with_metrics(
+                            page_screen_with_address(
                                 &loaded.title,
                                 self.current_pieces(),
                                 loaded.page,
                                 None,
                                 Some(false),
                                 &context.metrics(),
+                                Some(&loaded.url.to_string()),
                             )
                             .build(),
                         );
@@ -1201,6 +1214,20 @@ impl Browser {
     }
 
     fn handle_address(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action == action_id("edit-address") && !self.address.is_open() {
+            let value = if matches!(self.view, View::Start) {
+                String::new()
+            } else if let View::Loading(url) = &self.view {
+                url.to_string()
+            } else {
+                self.loaded
+                    .as_ref()
+                    .map_or(String::new(), |loaded| loaded.url.to_string())
+            };
+            self.address.open_with(value);
+            self.show(context);
+            return true;
+        }
         match self.address.handle(action) {
             Some(Typing::Submitted(typed)) => {
                 if let Some(to) = address::resolve(&typed, DEFAULT_SEARCH) {
@@ -1264,6 +1291,7 @@ impl Browser {
         ScreenBuilder::new("browser-navigate")
             .top_bar(heading)
             .top_bar_action("return", "Done")
+            .top_bar_action("home", "Start")
             .rows([
                 (
                     "page-view",
@@ -1404,6 +1432,29 @@ impl Browser {
         )
     }
 
+    fn start_screen() -> ScreenBuilder {
+        ScreenBuilder::new("browser-start")
+            .top_bar("Browse")
+            .field("address", "", "Search or enter address")
+            .heading("Search the web")
+            .secondary("Type a search or a website address.")
+            .rows([
+                ("bookmarks", "Bookmarks", "Pages you saved", Glyph::Bookmark),
+                (
+                    "recent",
+                    "History",
+                    "Recently visited pages",
+                    Glyph::Bookmark,
+                ),
+                (
+                    "samples",
+                    "Sample pages",
+                    "Try the browser without a network",
+                    Glyph::Note,
+                ),
+            ])
+    }
+
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
         if self.form_entry.is_open() {
             return self.form_entry_screen();
@@ -1414,8 +1465,10 @@ impl Browser {
                 .text_entry(&self.address, "An address, or words to search for", "Go");
         }
         match (&self.view, &self.loaded) {
+            (View::Start, _) => Self::start_screen(),
             (View::Loading(url), _) => ScreenBuilder::new("browser-loading")
                 .top_bar(url.host())
+                .field("edit-address", url.to_string(), "Search or enter address")
                 .activity("Loading the page", None)
                 .secondary(self.clock.waited_words())
                 .secondary(url.to_string())
@@ -1489,8 +1542,8 @@ impl Browser {
                 .painted
                 .as_ref()
                 .expect("painted")
-                .screen(&loaded.title),
-            (_, Some(loaded)) => page_screen_with_metrics(
+                .screen(&loaded.title, &loaded.url.to_string()),
+            (_, Some(loaded)) => page_screen_with_address(
                 &if loaded.paint_refused {
                     format!("Reader: {}", loaded.title)
                 } else {
@@ -1509,6 +1562,7 @@ impl Browser {
                     loaded.document.has_reader_view().then_some(false)
                 },
                 metrics,
+                Some(&loaded.url.to_string()),
             ),
             (_, None) => ScreenBuilder::new("browser-empty")
                 .top_bar("Browse")
@@ -1538,15 +1592,24 @@ impl KoboApp for Browser {
         Saved::start(context);
         context.store().load("browser-library");
         context.device().read_identity();
-        if let Ok(home) = Url::parse(SAMPLES) {
-            if let Ok(index) = home.join("index.html") {
-                self.open(context, &index);
-            }
-        }
+        self.view = View::Start;
+        self.show(context);
     }
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         self.validate_css(context);
+        if action == action_id("home") {
+            self.view = View::Start;
+            self.address.close();
+            self.show(context);
+            return;
+        }
+        if action == action_id("samples") {
+            if let Ok(url) = Url::parse(SAMPLES) {
+                self.open(context, &url);
+            }
+            return;
+        }
         if self.form_entry.is_open() {
             self.handle_form_entry(context, action);
             return;
@@ -1599,7 +1662,11 @@ impl KoboApp for Browser {
                     | View::Recent(_)
             )
         {
-            self.view = View::Page;
+            self.view = if self.loaded.is_some() {
+                View::Page
+            } else {
+                View::Start
+            };
         } else if action == action_id("back") {
             self.stepped_from = Some(self.history.position());
             let go = self.history.back();
@@ -1643,7 +1710,11 @@ impl KoboApp for Browser {
         } else if matches!(self.view, View::Sections(_)) {
             self.select_section(context, action);
         } else if action == action_id("return") {
-            self.view = View::Page;
+            self.view = if self.loaded.is_some() {
+                View::Page
+            } else {
+                View::Start
+            };
         } else if let Some(index) = self.link_named(action) {
             if let Some(target) = self
                 .loaded
