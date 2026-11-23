@@ -375,6 +375,19 @@ impl<F: FontProvider> Painter<'_, F> {
                     Length::Auto => {}
                     Length::Percent(_) => return Err("table-cell-percent-width"),
                 }
+                // CSS 2.2 leaves min-width on table cells undefined. The
+                // basic path uses a counted pixel lower-bound extension,
+                // never reducing intrinsic or authored width constraints.
+                if let Length::Px(width) = cs.min_width {
+                    let outer = if cs.box_sizing == crate::computed_style::BoxSizing::BorderBox {
+                        width
+                    } else {
+                        width.checked_add(edges).ok_or("table-cell-edges")?
+                    };
+                    minimum = minimum.max(outer);
+                    maximum = maximum.max(outer);
+                    self.stats.approx("table-cell-min-width");
+                }
                 cells.push(CellIntrinsic {
                     column,
                     span: self.tree.boxes[cell].table_span.0 as usize,
