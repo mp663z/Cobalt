@@ -309,3 +309,21 @@ fn multipart_form_is_modelled_but_marked_as_not_urlencoded() {
         .unwrap();
     assert!(!form.urlencoded);
 }
+
+
+#[test]
+fn disabled_option_groups_do_not_supply_select_choices() {
+    use kobo_web_document::{Block, Field};
+    let page = parse("<form><select name=choice><optgroup disabled label=Unavailable><option value=bad selected>Unavailable</option></optgroup><optgroup label=Available><option value=good>Available</option></optgroup></select><input name=q></form>");
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Form(form) => Some(form),
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        matches!(&form.fields[0],Field::Select{options,chosen:Some(0),..} if options.len()==1 && options[0].value=="good")
+    );
+}

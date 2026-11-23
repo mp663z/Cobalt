@@ -989,6 +989,9 @@ impl Converter<'_> {
         let mut chosen = None;
         let mut nodes = vec![node];
         while let Some(option) = nodes.pop() {
+            if self.tag(option) == Some("optgroup") && self.attr(option,"disabled").is_some() {
+                continue;
+            }
             if self.tag(option) == Some("option") {
                 if self.attr(option, "disabled").is_none() && options.len() < 32 {
                     let text = collapse_keep_edges(&self.option_text(option));

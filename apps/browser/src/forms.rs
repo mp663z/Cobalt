@@ -519,4 +519,17 @@ mod tests {
         form.urlencoded = false;
         assert!(get_url(&form, None).is_none());
     }
+
+    #[test]
+    fn get_form_never_serializes_a_disabled_optgroup_default() {
+        let url = kobo_web_document::Url::parse("https://fixtures.invalid/form").unwrap();
+        let document = kobo_web_document::parse_document(b"<form><select name=choice><optgroup disabled><option value=blocked selected>Blocked</option></optgroup><option value=allowed>Allowed</option></select></form>",&url,&kobo_web_document::Limits::DEFAULT);
+        let found = forms(&document.blocks);
+        let form = found[0];
+        assert_eq!(body(form, None).as_deref(), Some("choice=allowed"));
+        assert_eq!(
+            get_url(form, None).unwrap().to_string(),
+            "https://fixtures.invalid/form?choice=allowed"
+        );
+    }
 }
