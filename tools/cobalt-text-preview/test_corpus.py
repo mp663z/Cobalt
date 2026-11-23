@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 class CorpusTests(unittest.TestCase):
     def test_every_source_matches_its_frozen_hash(self):
         manifest = json.loads((ROOT / 'corpus' / 'manifest.json').read_text())
-        self.assertEqual(len(manifest['pages']), 10)
+        self.assertEqual(len(manifest['pages']), 13)
         for page in manifest['pages']:
             directory = ROOT / 'corpus' / page['name']
             sources = [(directory / 'page.html', page)]
@@ -23,7 +23,10 @@ class CorpusTests(unittest.TestCase):
                     data = path.read_bytes()
                     self.assertEqual(len(data), source['bytes'])
                     self.assertEqual(hashlib.sha256(data).hexdigest(), source['sha256'])
-                    self.assertTrue(source['url'].startswith('https://'))
+                    if 'url' in source:
+                        self.assertTrue(source['url'].startswith('https://'))
+                    else:
+                        self.assertEqual(data, (ROOT.parent.parent / source['source_path']).read_bytes())
 
     def test_transparent_raster_composites_on_white(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -610,6 +610,30 @@
           "bytes": 97
         }
       ]
+    },
+    {
+      "name": "hindi",
+      "source_path": "crates/kobo-web-document/tests/fixtures/page-text/hindi.html",
+      "license": "AGPL-3.0-only",
+      "bytes": 517,
+      "sha256": "2b98737812e2bec84f79d624ba8614a46b2a94228b2db7336433a50d42671d22",
+      "stylesheets": []
+    },
+    {
+      "name": "russian",
+      "source_path": "crates/kobo-web-document/tests/fixtures/page-text/russian.html",
+      "license": "AGPL-3.0-only",
+      "bytes": 397,
+      "sha256": "cc543d2d8950ac30707d6d03bb3d6afb456a8131a8f96d2d094df8a18c276145",
+      "stylesheets": []
+    },
+    {
+      "name": "japanese",
+      "source_path": "crates/kobo-web-document/tests/fixtures/page-text/japanese.html",
+      "license": "AGPL-3.0-only",
+      "bytes": 315,
+      "sha256": "dcda4a70afdb9821b6b682e6d28d96c18ee86b1775e51490df4d9670559a723f",
+      "stylesheets": []
     }
   ]
 }

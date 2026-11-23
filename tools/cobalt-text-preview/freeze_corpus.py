@@ -42,6 +42,7 @@ def download(url, path):
     return {'url': url, 'resolved_url': resolved, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
 
 def main():
+    synthetic = [page for page in json.loads((ROOT / 'manifest.json').read_text())['pages'] if 'source_path' in page]
     manifest = {'fetched_at': datetime.now(timezone.utc).isoformat(), 'pages': []}
     for name, url in PAGES.items():
         directory = ROOT / name
@@ -52,6 +53,7 @@ def main():
         page['stylesheets'] = [download(urljoin(url, link), directory / f'sheet-{i}.css') for i, link in enumerate(parser.links)]
         manifest['pages'].append(page)
         print(name, page['bytes'], len(page['stylesheets']), flush=True)
+    manifest['pages'].extend(synthetic)
     (ROOT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 if __name__ == '__main__':
     main()

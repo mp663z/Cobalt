@@ -1,4 +1,4 @@
-width=800 height=20400 height_clamped=false blocks=247 text_blocks=183 glyph_runs=1396 fills=24 output_truncated=false intake_truncated=false
+width=800 height=20380 height_clamped=false blocks=247 text_blocks=183 glyph_runs=1396 fills=24 output_truncated=false intake_truncated=false
 skips={}
 approximations={"border-side": 24, "inline-block-as-block": 6, "margin-collapse-adjacent": 55, "margin-zeroed": 148, "missing-glyph-placeholder": 1, "relative-as-static": 37}
 images=0

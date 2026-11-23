@@ -51,3 +51,24 @@ changed Python page heights by 2-5 px; the ten-page before/after census diff and
 representative final-composite crops were reviewed before the baseline update.
 The narrow Python body columns and overlapping navigation remain known engine
 layout defects, not accepted visual correctness or improvements from fonts.
+
+## Authored language fixtures
+
+`hindi`, `russian` and `japanese` are short original test pages copied byte for
+byte from `crates/kobo-web-document/tests/fixtures/page-text/`. They use the
+repository's AGPL-3.0-only licence, not fetched third-party content. Their source
+paths and hashes are in the manifest. The offline integrity check compares the
+copies against the originals. A source-fixture edit requires both to be updated.
+
+The shaped harness now loads the already-bundled Noto Cyrillic and Devanagari
+subsets (their OFL notice and measured sizes are in `crates/kobo-text/fonts`).
+Hindi and Russian have real glyph coverage and zero dropped text blocks in the
+fixtures. Japanese deliberately records missing-glyph placeholders: no CJK face
+is bundled. A zero skipped-block count must never be called Japanese support.
+
+The harness uses per-character metrics from the line-used face, while retaining
+the primary strut. This avoids enlarging Latin-only lines merely because a
+Devanagari fallback is installed. Census baselines were refreshed only after
+reviewing all 13 renders and the diffs. The language comparison also confirms
+real bold fallback cuts for Hindi and Russian. Japanese still has 48 missing
+glyph placeholders, explicitly counted; no CJK support is claimed.
