@@ -56,6 +56,60 @@ pub(super) fn prepare(
     images
 }
 
+/// Page-view-only fit. Keep the engine's offline marker contract unchanged.
+/// Width comes from the actual first layout, so a narrow parent is respected.
+/// One re-layout is enough for ordinary blocks; this remains counted basic
+/// marker geometry, not a replaced-element CSS conformance claim.
+pub(super) fn fit_geometry(
+    tree: &mut BoxTree,
+    commands: &[kobo_web_document::display_list::Command],
+    images: &BTreeMap<
+        usize,
+        (
+            kobo_web_document::display_list::Rgb,
+            Option<kobo_image::Picture>,
+        ),
+    >,
+) -> bool {
+    let mut changed = false;
+    for node in &mut tree.boxes {
+        if node.kind != kobo_web_document::box_tree::BoxKind::Image {
+            continue;
+        }
+        let Some(source) = node.source else {
+            continue;
+        };
+        let Some((marker, Some(image))) = images.get(&source) else {
+            continue;
+        };
+        let width = commands.iter().find_map(|command| match command {
+            kobo_web_document::display_list::Command::Fill {
+                rect,
+                color,
+                source: origin,
+            } if origin.node == Some(source) && color == marker => Some(rect.width),
+            _ => None,
+        });
+        let Some(width) = width else {
+            continue;
+        };
+        let (_, height) = kobo_image::fitted_size(
+            (image.width(), image.height()),
+            width.min(image.width()),
+            4096,
+        );
+        if node.style.padding_top != height || !node.children.is_empty() {
+            node.style.padding_top = height;
+            // Successful decode replaces alt content in layout as well as paint.
+            // The detached text box remains inert in the arena; failed images
+            // are untouched and keep their readable fallback.
+            node.children.clear();
+            changed = true;
+        }
+    }
+    changed
+}
+
 fn decode_uri(uri: &str, budget: usize) -> Option<Vec<u8>> {
     let (header, payload) = uri.split_once(',')?;
     if !["data:image/png;base64", "data:image/jpeg;base64"]

@@ -198,15 +198,30 @@ impl PageView {
         };
         let media = MediaContext::new(css_width).ok_or("viewport")?;
         let tree = parse_basic_style_tree(&bytes, &[], &limits, Some(media), budget, None);
-        let boxes = BoxTree::from_style(&tree);
+        let mut boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
         // covers it, the same two passes the research harness runs.
         let (_, _, measured) = paint_basic_page_families(&boxes, css_width, 1, serif, sans, mono)?;
-        let content_height =
+        let mut content_height =
             u32::try_from(measured.clamp(1, MAX_CONTENT_HEIGHT_CSS)).map_err(|_| "viewport")?;
         let (mut commands, mut stats, _) =
             paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
-        let images = crate::page_images::prepare(&boxes, &mut stats);
+        let mut image_stats = PartialStats::default();
+        let images = crate::page_images::prepare(&boxes, &mut image_stats);
+        if crate::page_images::fit_geometry(&mut boxes, &commands, &images) {
+            let (_, _, measured) =
+                paint_basic_page_families(&boxes, css_width, 1, serif, sans, mono)?;
+            content_height =
+                u32::try_from(measured.clamp(1, MAX_CONTENT_HEIGHT_CSS)).map_err(|_| "viewport")?;
+            (commands, stats, _) =
+                paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
+        }
+        for (key, count) in image_stats.skips {
+            *stats.skips.entry(key).or_default() += count;
+        }
+        for (key, count) in image_stats.approximations {
+            *stats.approximations.entry(key).or_default() += count;
+        }
         let cuts = paginate(&commands, content_height, page_height_css);
         let (links, targets) = link_targets(&tree, &mut commands);
         Ok(Self {
@@ -1108,6 +1123,41 @@ mod tests {
             "image-preview skips={:?} approximations={:?}",
             view.stats.skips, view.stats.approximations
         );
+    }
+
+    #[test]
+    fn native_wide_image_reserves_fitted_height_inside_its_container() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let png = kobo_image::encode_png_rgb(400, 200, &vec![160; 400 * 200 * 3]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        let html = format!("<!doctype html><style>body{{margin:0}}div{{width:80px}}</style><div><img src='{uri}' alt='ALT'></div>");
+        let view = PageView::paint(html.as_bytes(), 200, 100, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.content_height, 40);
+        assert_eq!(view.pages(), 1);
+        assert!(view.stats.skips.is_empty());
+        let rgb = view.raster_page_rgb(0);
+        assert!(rgb[..80 * 3].chunks_exact(3).all(|p| p == [160, 160, 160]));
+        assert!(rgb[40 * 200 * 3..].iter().all(|p| *p == 255));
+        if let Ok(path) = std::env::var("COBALT_FITTED_IMAGE_PREVIEW_OUT") {
+            std::fs::write(path, kobo_image::encode_png_rgb(200, 100, &rgb).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn decoded_image_relayout_preserves_links_following_text_and_page_cuts() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let png = kobo_image::encode_png_rgb(40, 240, &vec![160; 40 * 240 * 3]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        let html = format!("<!doctype html><style>body{{margin:0}}p{{margin:0}}</style><a href='/image'><img src='{uri}' alt='ALT'></a><p>After</p>");
+        let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.pages(), 4);
+        assert_eq!(view.screen_links(0), vec![0]);
+        assert_eq!(view.screen_links(2), vec![0]);
+        for page in 0..3 {
+            let rgb = view.raster_page_rgb(page);
+            assert_eq!(&rgb[..3], &[160, 160, 160]);
+        }
+        assert!(view.commands.iter().any(|command| matches!(command,Command::GlyphRun{layout,..} if (240..265).contains(&layout.y))));
     }
 
     #[test]
