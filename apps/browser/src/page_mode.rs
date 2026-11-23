@@ -142,14 +142,18 @@ impl PageMode {
         let mut pixels =
             Vec::with_capacity(width as usize * height as usize * if colour { 3 } else { 1 });
         for y in 0..height {
-            let sy =
-                (u64::from(y) * u64::from(source_height) / u64::from(self.viewport.1)) as usize;
             for x in 0..width {
-                let sx = (u64::from(x) * u64::from(source_width) / u64::from(width)) as usize;
-                let at = (sy * source_width as usize + sx) * 3;
-                let rgb = &source[at..at + 3];
+                let rgb = sample_rgb(
+                    &source,
+                    source_width,
+                    source_height,
+                    x,
+                    y,
+                    width,
+                    self.viewport.1,
+                );
                 if colour {
-                    pixels.extend_from_slice(rgb);
+                    pixels.extend_from_slice(&rgb);
                 } else {
                     pixels.push(
                         ((u32::from(rgb[0]) * 77
@@ -173,4 +177,42 @@ impl PageMode {
 
 pub(crate) fn retain_source(bytes: &[u8]) -> Option<Vec<u8>> {
     (bytes.len() <= 8 * 1024 * 1024).then(|| bytes.to_vec())
+}
+
+/// Pixel-centred bilinear reconstruction. Identity sampling remains byte exact.
+fn sample_rgb(source: &[u8], sw: u32, sh: u32, x: u32, y: u32, dw: u32, dh: u32) -> [u8; 3] {
+    fn axis(at: u32, source: u32, dest: u32) -> (usize, usize, u64) {
+        let position =
+            (((u64::from(at) * 2 + 1) * u64::from(source) * 256 / u64::from(dest)) as i64 - 256)
+                .max(0) as u64;
+        let left = (position / 512).min(u64::from(source - 1));
+        (
+            left as usize,
+            (left + 1).min(u64::from(source - 1)) as usize,
+            position % 512,
+        )
+    }
+    let (x0, x1, fx) = axis(x, sw, dw);
+    let (y0, y1, fy) = axis(y, sh, dh);
+    let pixel = |x: usize, y: usize, c: usize| u64::from(source[(y * sw as usize + x) * 3 + c]);
+    let mut result = [0; 3];
+    for (c, out) in result.iter_mut().enumerate() {
+        let top = pixel(x0, y0, c) * (512 - fx) + pixel(x1, y0, c) * fx;
+        let bottom = pixel(x0, y1, c) * (512 - fx) + pixel(x1, y1, c) * fx;
+        *out = ((top * (512 - fy) + bottom * fy + 131072) / 262144) as u8;
+    }
+    result
+}
+
+#[cfg(test)]
+mod sampling_tests {
+    use super::sample_rgb;
+    #[test]
+    fn zoom_sampling_interpolates_without_changing_identity() {
+        let pixels = [0, 0, 0, 255, 255, 255];
+        assert_eq!(sample_rgb(&pixels, 2, 1, 0, 0, 2, 1), [0; 3]);
+        assert_eq!(sample_rgb(&pixels, 2, 1, 1, 0, 2, 1), [255; 3]);
+        assert_eq!(sample_rgb(&pixels, 2, 1, 1, 0, 4, 1), [64; 3]);
+        assert_eq!(sample_rgb(&pixels, 2, 1, 2, 0, 4, 1), [191; 3]);
+    }
 }

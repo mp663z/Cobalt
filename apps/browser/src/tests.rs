@@ -1959,3 +1959,22 @@ fn compact_slider_coordinates_update_zoom_without_affecting_page_taps() {
     assert!((167..=169).contains(&runner.app().zoom));
     assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
 }
+
+#[test]
+fn address_cursor_inserts_and_deletes_in_the_middle_without_navigating() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    runner.action(action_id("edit-address"));
+    runner.action(action_id("kb.home"));
+    runner.action(action_id("kb.right"));
+    runner.action(action_id("url-com"));
+    let mut expected = SAMPLES.to_owned();
+    expected.insert_str(1, ".com");
+    assert_eq!(runner.app().address.text(), expected);
+    runner.action(action_id("kb.backspace"));
+    expected.remove(4);
+    assert_eq!(runner.app().address.text(), expected);
+    assert_eq!(runner.app().loaded.as_ref().unwrap().url.to_string(), SAMPLES);
+    runner.action(action_id("kb.cancel"));
+    assert!(!runner.app().address.is_open());
+}

@@ -12,13 +12,17 @@ pub(crate) fn toolbar(builder: ScreenBuilder, zoom: u16, _typing: bool) -> Scree
 
 pub(crate) fn address_keys(builder: ScreenBuilder) -> ScreenBuilder {
     builder.fill().grid(
-        4,
+        8,
         false,
         [
             ("url-slash", "/"),
             ("url-dot", "."),
             ("url-com", ".com"),
             ("url-colon", ":"),
+            ("kb.home", "|<"),
+            ("kb.left", "<"),
+            ("kb.right", ">"),
+            ("kb.end", ">|"),
         ],
     )
 }

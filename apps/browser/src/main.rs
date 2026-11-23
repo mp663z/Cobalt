@@ -1368,11 +1368,7 @@ impl Browser {
                 ("url-colon", ":"),
             ] {
                 if action == action_id(name) {
-                    let mut text = self.address.text().to_owned();
-                    if text.len() + value.len() <= kobo_sdk::keyboard::MAX_TEXT {
-                        text.push_str(value);
-                    }
-                    self.address.open_with(text);
+                    self.address.insert(value);
                     self.show(context);
                     return true;
                 }
@@ -1583,26 +1579,24 @@ impl Browser {
     }
 
     fn start_screen() -> ScreenBuilder {
-        ScreenBuilder::new("browser-start")
+        browser_chrome::toolbar(
+            ScreenBuilder::new("browser-start")
             .top_bar("Browse")
+            .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
             .field("address", "", "Search or enter address")
             .heading("Search the web")
-            .secondary("Type a search or a website address.")
+            .secondary("Your bookmarks and recent pages, one tap away.")
+            .divider()
             .rows([
-                ("bookmarks", "Bookmarks", "Pages you saved", Glyph::Bookmark),
-                (
-                    "recent",
-                    "History",
-                    "Recently visited pages",
-                    Glyph::Bookmark,
-                ),
-                (
-                    "samples",
-                    "Sample pages",
-                    "Try the browser without a network",
-                    Glyph::Note,
-                ),
+                ("bookmarks", "Bookmarks", "Saved for later", Glyph::Bookmark),
+                ("recent", "History", "Pick up where you left off", Glyph::Clock),
             ])
+            .fill()
+            .divider()
+            .rows([("samples", "Sample pages", "Explore offline", Glyph::Note)]),
+            100,
+            false,
+        )
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
@@ -1694,7 +1688,7 @@ impl Browser {
 
     fn displayed_address(&self) -> String {
         if self.address.is_open() {
-            self.address.text().to_owned()
+            self.address.keyboard().caret_text()
         } else {
             self.loaded
                 .as_ref()
@@ -1712,7 +1706,7 @@ impl Browser {
                     .top_bar("Browse")
                     .field(
                         "edit-address",
-                        self.address.text(),
+                        self.displayed_address(),
                         "Search or enter address",
                     )
                     .secondary("Search the web or enter a website address")
@@ -1723,7 +1717,7 @@ impl Browser {
                 .field(
                     "edit-address",
                     if self.address.is_open() {
-                        self.address.text().to_owned()
+                        self.address.keyboard().caret_text()
                     } else {
                         url.to_string()
                     },

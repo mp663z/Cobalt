@@ -14720,27 +14720,14 @@ fn render_all_with_selected_font(
             // Nothing at all: the picture is the whole of it.
             LayoutKind::Cell(_, CellStyle::Plain, _) => {}
             LayoutKind::Cell(_, CellStyle::Key, selected) => {
-                if screen
-                    .nav_bar
-                    .as_ref()
-                    .is_some_and(|bar| bar.style == BarStyle::Browser)
-                {
-                    stroke_rounded_clipped(
-                        surface,
-                        node.rect,
-                        metrics.tenth_mm(10),
-                        tone::RULE,
-                        metrics.rule_thickness(),
-                        clip,
-                    );
+                let browser = screen.nav_bar.as_ref().is_some_and(|bar| bar.style == BarStyle::Browser);
+                let radius = metrics.tenth_mm(if browser { 10 } else { BUTTON_RADIUS_TENTH_MM });
+                fill_rounded_clipped(surface, node.rect, radius,
+                    if browser { tone::PAPER } else { tone::SURFACE }, clip);
+                if browser {
+                    stroke_rounded_clipped(surface, node.rect, radius, tone::MUTED,
+                        metrics.rule_thickness(), clip);
                 }
-                fill_rounded_clipped(
-                    surface,
-                    node.rect,
-                    metrics.tenth_mm(BUTTON_RADIUS_TENTH_MM),
-                    tone::SURFACE,
-                    clip,
-                );
                 if selected {
                     stroke_rounded_clipped(
                         surface,

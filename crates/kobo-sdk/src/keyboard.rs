@@ -17,13 +17,8 @@
 //! per layer, which is four times the identifiers and one more thing to get
 //! out of step with what is drawn.
 //!
-//! ## Why there is no cursor
-//!
-//! Text is only ever appended to or deleted from the end. Moving a caret needs
-//! a caret to be visible, which needs a repaint per tap on a panel that takes
-//! tens of milliseconds a repaint, and the payoff is editing in the middle of
-//! a search query. Applications that want prose should be asking a question
-//! with [`ScreenBuilder::choose`] instead.
+//! Cursor movement is explicit and character-boundary safe. Applications can
+//! expose the optional movement controls when editing existing text.
 
 use crate::ScreenBuilder;
 use kobo_ui::ActionId;
@@ -48,6 +43,7 @@ const LETTERS: [&str; 3] = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 /// was a feature only reachable by somebody who had typed their list
 /// somewhere else and imported it.
 const SYMBOLS: [&str; 3] = ["1234567890", "-/:;()&@\"", ".,?!'+=#"];
+const MORE_SYMBOLS: [&str; 3] = ["[]{}#%^*+=", "_\\|~<>$€£", ".,?!`\";"];
 
 /// What a tap on the keyboard meant.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,6 +73,7 @@ pub enum Layer {
 #[derive(Clone, Debug, Default)]
 pub struct Keyboard {
     text: String,
+    cursor: usize,
     shift: bool,
     layer: Layer,
 }
@@ -119,10 +116,12 @@ impl Keyboard {
 
     pub fn clear(&mut self) {
         self.text.clear();
+        self.cursor = 0;
     }
 
     /// Takes the text, leaving the keyboard empty and ready for the next entry.
     pub fn take(&mut self) -> String {
+        self.cursor = 0;
         std::mem::take(&mut self.text)
     }
 
@@ -132,11 +131,34 @@ impl Keyboard {
     /// action it receives here first and handle its own afterwards without
     /// having to know which identifiers the keyboard claimed.
     pub fn press(&mut self, action: ActionId) -> Option<Pressed> {
+        if action == crate::action_id("kb.left") {
+            self.cursor = self.text[..self.cursor]
+                .char_indices()
+                .last()
+                .map_or(0, |(i, _)| i);
+            return Some(Pressed::Edited);
+        }
+        if action == crate::action_id("kb.right") {
+            self.cursor += self.text[self.cursor..]
+                .chars()
+                .next()
+                .map_or(0, char::len_utf8);
+            return Some(Pressed::Edited);
+        }
+        if action == crate::action_id("kb.home") {
+            self.cursor = 0;
+            return Some(Pressed::Edited);
+        }
+        if action == crate::action_id("kb.end") {
+            self.cursor = self.text.len();
+            return Some(Pressed::Edited);
+        }
         if action == crate::action_id(SHIFT) {
             self.shift = !self.shift;
             return Some(Pressed::Shifted);
         }
         if action == crate::action_id(LAYER) {
+            self.shift = false;
             self.layer = match self.layer {
                 Layer::Letters => Layer::Symbols,
                 Layer::Symbols => Layer::Letters,
@@ -151,7 +173,10 @@ impl Keyboard {
             // By character, not by byte. Truncating a multi-byte character
             // would leave the string invalid, and this is the one operation a
             // reader repeats without looking.
-            self.text.pop();
+            if let Some((previous, _)) = self.text[..self.cursor].char_indices().last() {
+                self.text.drain(previous..self.cursor);
+                self.cursor = previous;
+            }
             return Some(Pressed::Edited);
         }
         if action == crate::action_id(ENTER) {
@@ -195,15 +220,38 @@ impl Keyboard {
     pub(crate) fn rows(&self) -> [&'static str; 3] {
         match self.layer {
             Layer::Letters => LETTERS,
+            Layer::Symbols if self.shift => MORE_SYMBOLS,
             Layer::Symbols => SYMBOLS,
         }
+    }
+
+    /// Inserts text at the caret without changing the active layer or shift.
+    pub fn insert(&mut self, text: &str) {
+        for ch in text.chars() {
+            self.push(ch);
+        }
+    }
+
+    /// Display-only caret and a bounded window that keeps the caret visible.
+    #[must_use]
+    pub fn caret_text(&self) -> String {
+        let before = &self.text[..self.cursor];
+        let after = &self.text[self.cursor..];
+        let start = before.char_indices().rev().nth(19).map_or(0, |(i, _)| i);
+        format!(
+            "{}{}|{}",
+            if start > 0 { "..." } else { "" },
+            &before[start..],
+            after.chars().take(18).collect::<String>()
+        )
     }
 
     fn push(&mut self, character: char) {
         // Counted in characters rather than bytes so the limit means the same
         // thing whatever alphabet the reader is using.
         if self.text.chars().count() < MAX_TEXT {
-            self.text.push(character);
+            self.text.insert(self.cursor, character);
+            self.cursor += character.len_utf8();
         }
     }
 }
@@ -280,6 +328,11 @@ impl TextEntry {
     pub fn open_with(&mut self, text: impl Into<String>) {
         self.keyboard = Keyboard::with_text(text);
         self.open = true;
+    }
+
+    /// Inserts at the current caret while preserving keyboard modifiers.
+    pub fn insert(&mut self, text: &str) {
+        self.keyboard.insert(text);
     }
 
     /// Closes the field and throws away anything typed.
@@ -371,10 +424,11 @@ impl ScreenBuilder {
             if index == 2 {
                 cells.push((
                     SHIFT.to_string(),
-                    if keyboard.is_shifted() {
-                        "Shift on".to_string()
-                    } else {
-                        "Shift".to_string()
+                    match (keyboard.layer(), keyboard.is_shifted()) {
+                        (Layer::Symbols, false) => "More symbols".to_string(),
+                        (Layer::Symbols, true) => "Numbers".to_string(),
+                        (Layer::Letters, true) => "Shift on".to_string(),
+                        _ => "Shift".to_string(),
                     },
                 ));
             }
@@ -394,7 +448,12 @@ impl ScreenBuilder {
             if index == 2 {
                 if let Some(kobo_ui::Node::Grid { cells, .. }) = screen.nodes.last_mut() {
                     if let Some(cell) = cells.first_mut() {
-                        cell.glyph = Some(kobo_ui::Glyph::Shift);
+                        cell.glyph =
+                            (keyboard.layer() == Layer::Letters).then_some(kobo_ui::Glyph::Shift);
+                        if keyboard.layer() == Layer::Symbols {
+                            cell.label =
+                                if keyboard.is_shifted() { "123" } else { "#+=" }.to_string();
+                        }
                         cell.selected = keyboard.is_shifted();
                     }
                     if let Some(cell) = cells.last_mut() {
@@ -687,5 +746,32 @@ mod tests {
                 assert!(typed.contains(' '), "{name}: the space bar types a space");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod cursor_tests {
+    use super::*;
+    #[test]
+    fn edits_at_utf8_boundaries_and_preserves_layer_during_insertion() {
+        let mut keyboard = Keyboard::with_text("aéz");
+        keyboard.press(crate::action_id("kb.left"));
+        keyboard.insert("/");
+        assert_eq!(keyboard.text(), "aé/z");
+        keyboard.press(crate::action_id(BACKSPACE));
+        keyboard.press(crate::action_id(BACKSPACE));
+        assert_eq!(keyboard.text(), "az");
+        keyboard.press(crate::action_id("kb.home"));
+        keyboard.press(crate::action_id("kb.left"));
+        keyboard.press(crate::action_id(BACKSPACE));
+        assert_eq!(keyboard.text(), "az");
+        keyboard.press(crate::action_id(LAYER));
+        keyboard.insert(":");
+        assert_eq!(keyboard.layer(), Layer::Symbols);
+        assert_eq!(keyboard.text(), ":az");
+        assert_eq!(keyboard.caret_text(), ":|az");
+        keyboard.press(crate::action_id("kb.end"));
+        keyboard.press(crate::action_id("kb.right"));
+        assert_eq!(keyboard.caret_text(), ":az|");
     }
 }

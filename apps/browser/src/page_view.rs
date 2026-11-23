@@ -589,11 +589,8 @@ fn fill_rect(
     }
 }
 
-/// Paints a coverage mask at `scale`: each mask pixel covers a `scale x
-/// scale` device block (nearest neighbour). Text drawn this way is sized
-/// for the panel but upscaled from a 1x mask; the text lane's font session
-/// replaces the masks with native-size rasters when it lands, and the seam
-/// is this one function.
+/// Reconstructs CSS coverage masks with bilinear filtering, not repeated square
+/// pixels. Native-resolution masks remain a separate typography improvement.
 #[allow(clippy::too_many_arguments)]
 fn paint_glyphs(
     buffer: &mut [u8],
@@ -623,23 +620,37 @@ fn paint_glyphs(
     let x1 = (base_x + mask_w * s).min(clip_right);
     let y1 = (base_y + mask_h * s).min(clip_bottom);
     for y in y0..y1 {
-        let mask_y = (y - base_y) / s;
+        let mask_y = (y - base_y) * 256 / s - (256 - 256 / s) / 2;
         let Ok(row) = usize::try_from(y) else {
             continue;
         };
         for x in x0..x1 {
-            let mask_x = (x - base_x) / s;
-            let (Ok(col), Ok(mask_at)) = (
-                usize::try_from(x),
-                usize::try_from(mask_y * mask_w + mask_x),
-            ) else {
+            let mask_x = (x - base_x) * 256 / s - (256 - 256 / s) / 2;
+            let Ok(col) = usize::try_from(x) else {
                 continue;
             };
-            let a = coverage[mask_at];
+            let a = sample_coverage(coverage, mask_w as usize, mask_h as usize, mask_x, mask_y);
             let at = (row * width as usize + col) * 3;
             blend(&mut buffer[at..at + 3], color, a);
         }
     }
+}
+
+fn sample_coverage(mask: &[u8], width: usize, height: usize, x: i64, y: i64) -> u8 {
+    let x0 = x.div_euclid(256);
+    let y0 = y.div_euclid(256);
+    let fx = x.rem_euclid(256) as u32;
+    let fy = y.rem_euclid(256) as u32;
+    let at = |x: i64, y: i64| -> u32 {
+        if x < 0 || y < 0 || x >= width as i64 || y >= height as i64 {
+            0
+        } else {
+            u32::from(mask[y as usize * width + x as usize])
+        }
+    };
+    let top = at(x0, y0) * (256 - fx) + at(x0 + 1, y0) * fx;
+    let bottom = at(x0, y0 + 1) * (256 - fx) + at(x0 + 1, y0 + 1) * fx;
+    ((top * (256 - fy) + bottom * fy + 32768) / 65536) as u8
 }
 
 /// Tap targets over a painted column, in CSS px.
@@ -988,5 +999,16 @@ mod tests {
         );
         let metrics = face.normal_line_metrics(16, false).expect("metrics");
         assert!(metrics.height > 0 && metrics.baseline > 0);
+    }
+}
+
+#[cfg(test)]
+mod coverage_tests {
+    #[test]
+    fn reconstruction_has_subpixel_edges_not_repeated_blocks() {
+        assert_eq!(super::sample_coverage(&[0, 255], 2, 1, 0, 0), 0);
+        assert_eq!(super::sample_coverage(&[0, 255], 2, 1, 64, 0), 64);
+        assert_eq!(super::sample_coverage(&[0, 255], 2, 1, 192, 0), 191);
+        assert_eq!(super::sample_coverage(&[255], 1, 1, 0, 0), 255);
     }
 }

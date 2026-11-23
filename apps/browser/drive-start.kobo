@@ -1,8 +1,13 @@
 wait-for Search the web
 shot start-page
 tap-id address
-expect Search or enter address
+expect Search the web or enter a website address
 shot start-keyboard
+tap-id kb.layer
+shot number-keyboard
+tap-id kb.shift
+shot symbol-keyboard
+tap-id kb.layer
 tap-id kb.cancel
 tap-id samples
 expect Sample pages
@@ -11,11 +16,16 @@ tap-id page-view
 expect Sample pages
 shot page-address-bar
 tap-id edit-address
-expect samples.browse.invalid
+expect browse.invalid/|
 shot page-address-edit
+tap-id kb.home
+tap-id kb.r0c0
+expect q|https
+tap-id kb.backspace
+tap-id kb.end
 
 tap-id kb.r0c0
-expect samples.browse.invalid/q
+expect browse.invalid/q|
 tap-id kb.cancel
 expect Sample pages
 shot page-keyboard-dismissed
