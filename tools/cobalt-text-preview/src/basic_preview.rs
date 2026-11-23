@@ -1,14 +1,14 @@
 //! Portable host-only entry to the partial page painter.
 use kobo_text::page_font_session::PageFontSession;
 use kobo_web_document::basic_page::{
-    normalize_for_basic_full, paint_basic_page_families, PartialStats,
+    PartialStats, normalize_for_basic_full, paint_basic_page_families,
 };
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageCluster};
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
-    parse_style_tree_with_state, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
+    HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget, parse_style_tree_with_state,
 };
 use std::path::Path;
 
@@ -145,7 +145,21 @@ impl Page {
     /// Stable, sorted census text suitable for reviewable regression snapshots.
     #[must_use]
     pub fn census(&self) -> String {
-        format!("width={} height={} height_clamped={} blocks={} text_blocks={} glyph_runs={} fills={} output_truncated={} intake_truncated={}\nskips={:?}\napproximations={:?}\nimages={}\n", self.width, self.height, self.height_clamped, self.stats.blocks_painted, self.stats.text_blocks_painted, self.stats.glyph_runs, self.stats.fills, self.stats.output_truncated, self.stats.intake_truncated, self.stats.skips, self.stats.approximations, self.images.len())
+        format!(
+            "width={} height={} height_clamped={} blocks={} text_blocks={} glyph_runs={} fills={} output_truncated={} intake_truncated={}\nskips={:?}\napproximations={:?}\nimages={}\n",
+            self.width,
+            self.height,
+            self.height_clamped,
+            self.stats.blocks_painted,
+            self.stats.text_blocks_painted,
+            self.stats.glyph_runs,
+            self.stats.fills,
+            self.stats.output_truncated,
+            self.stats.intake_truncated,
+            self.stats.skips,
+            self.stats.approximations,
+            self.images.len()
+        )
     }
 
     /// Stream RGBA strips without allocating a second full-page framebuffer.
@@ -236,6 +250,7 @@ impl FontProvider for PageFace {
                     start: cluster.start,
                     end: cluster.end,
                     advance: cluster.glyph.advance,
+                    missing: cluster.glyph.missing,
                     bitmap: GlyphBitmap {
                         left: cluster.glyph.left,
                         top: cluster.glyph.top,
