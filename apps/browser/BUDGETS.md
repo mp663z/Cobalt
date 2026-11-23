@@ -196,3 +196,21 @@ remains 1,325,056 bytes below the +5 MiB allowance. All three files were
 inspected as stripped, statically linked ARM EABI5 executables. This is a
 linked-size check, not a hardware run. Device RSS, paint time, input latency
 and smoothness remain unverified.
+
+### Row groups, neutral wrappers and caption edges, November 23, 2026
+
+Measured source: `b2433ce09d5a91bc142a1cf786f32ab41011e9a2`.
+The same pinned locked ARM release build now includes row-group background
+layers, neutral cell wrappers with formatting whitespace, padded solid-border
+captions and the restored synthetic test fixture.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,171,348 | +3,921,968 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,087,012 | |
+
+The browser grew 4,144 bytes since the prior checkpoint and leaves 1,320,912
+bytes under the +5 MiB allowance. All three outputs were inspected as
+stripped, static ARM EABI5 executables. No physical reader was used; device
+RSS, paint time, input latency and smoothness remain unverified.
