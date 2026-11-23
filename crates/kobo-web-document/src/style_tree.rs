@@ -2510,16 +2510,8 @@ pub(crate) fn properties_with(
                     "inline-block" => Some(Value::Display(Display::InlineBlock)),
                     "list-item" => Some(Value::Display(Display::ListItem)),
                     "flex" => Some(Value::Display(Display::Flex)),
-                    "table" => Some(Value::Display(Display::Table)),
-                    "table-row-group" | "table-header-group" | "table-footer-group" => {
-                        Some(Value::Display(Display::TableRowGroup))
-                    }
-                    "table-row" => Some(Value::Display(Display::TableRow)),
-                    "table-cell" => Some(Value::Display(Display::TableCell)),
-                    "table-caption" => Some(Value::Display(Display::TableCaption)),
-                    "table-column" | "table-column-group" => {
-                        Some(Value::Display(Display::TableColumn))
-                    }
+                    // Table roles are retained in the model, but author display
+                    // activation waits for anonymous-table fixup and grid paint.
                     _ => None,
                 })
                 .map(|value| (Property::Display, value)),
