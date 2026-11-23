@@ -16,7 +16,7 @@ use kobo_web_document::basic_page::{
     normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
-use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics};
+use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageCluster};
 use kobo_web_document::display_list::{Command, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::style_tree::StyleTree;
@@ -73,6 +73,33 @@ impl PageFontAdapter {
 impl FontProvider for PageFontAdapter {
     fn page_advance(&self, character: char, size: u32, bold: bool, italic: bool) -> Option<u32> {
         self.session.advance(character, size, bold, italic)
+    }
+
+    fn page_shape(
+        &self,
+        text: &str,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<Vec<PageCluster>> {
+        Some(
+            self.session
+                .shape(text, size, bold, italic)?
+                .into_iter()
+                .map(|cluster| PageCluster {
+                    start: cluster.start,
+                    end: cluster.end,
+                    advance: cluster.glyph.advance,
+                    bitmap: GlyphBitmap {
+                        left: cluster.glyph.left,
+                        top: cluster.glyph.top,
+                        width: cluster.glyph.width,
+                        height: cluster.glyph.height,
+                        coverage: cluster.glyph.coverage,
+                    },
+                })
+                .collect(),
+        )
     }
 
     fn page_raster(
@@ -755,6 +782,17 @@ mod tests {
         stats.blocks_painted = 75;
         stats.skips.insert("non-ascii-text", 25);
         assert!(falls_back(&stats));
+    }
+
+    #[test]
+    fn page_shape_clusters_complex_script() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let text = "हिन्दी";
+        let clusters = face.page_shape(text, 24, false, false).expect("shaped");
+        assert_eq!(clusters.first().expect("first").start, 0);
+        assert_eq!(clusters.last().expect("last").end, text.len());
+        assert!(clusters.len() < text.chars().count());
+        assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
     }
 
     #[test]
