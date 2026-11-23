@@ -232,8 +232,13 @@ pub fn page_screen_with_metrics(
 /// Browser page with a persistent, editable address entry point above content.
 #[must_use]
 pub fn page_screen_with_address(
-    title: &str, pieces: &[Piece], page: usize, of: Option<usize>,
-    reader: Option<bool>, metrics: &DisplayMetrics, address: Option<&str>,
+    title: &str,
+    pieces: &[Piece],
+    page: usize,
+    of: Option<usize>,
+    reader: Option<bool>,
+    metrics: &DisplayMetrics,
+    address: Option<&str>,
 ) -> ScreenBuilder {
     let mut builder = ScreenBuilder::new("browser-page").top_bar(title);
     if let Some(reading) = reader {
@@ -279,9 +284,15 @@ pub fn page_fits(title: &str, pieces: &[Piece], metrics: &DisplayMetrics) -> boo
 
 /// Measures the same address field used on the displayed browser page.
 #[must_use]
-pub fn page_fits_with_address(title: &str, pieces: &[Piece], metrics: &DisplayMetrics, address: Option<&str>) -> bool {
+pub fn page_fits_with_address(
+    title: &str,
+    pieces: &[Piece],
+    metrics: &DisplayMetrics,
+    address: Option<&str>,
+) -> bool {
     let screen =
-        page_screen_with_address(title, pieces, 998, Some(999), Some(false), metrics, address).build();
+        page_screen_with_address(title, pieces, 998, Some(999), Some(false), metrics, address)
+            .build();
     if !fits(&screen, metrics) {
         return false;
     }
@@ -1000,15 +1011,21 @@ impl Paginator {
     pub fn next_page(&mut self, fits: &mut impl FnMut(&[Piece]) -> bool) -> bool {
         // Hold the restored piece and everything after it out of this pass.
         // Once the prefix is consumed, the piece starts the following page.
-        let split = self.break_before.and_then(|place|
-            self.queue.iter().position(|(origin, _)| *origin >= place));
+        let split = self
+            .break_before
+            .and_then(|place| self.queue.iter().position(|(origin, _)| *origin >= place));
         let mut tail = match split {
-            Some(0) => { self.break_before = None; None }
+            Some(0) => {
+                self.break_before = None;
+                None
+            }
             Some(at) => Some(self.queue.split_off(at)),
             None => None,
         };
         let made = self.next_page_inner(fits);
-        if let Some(tail) = tail.as_mut() { self.queue.append(tail); }
+        if let Some(tail) = tail.as_mut() {
+            self.queue.append(tail);
+        }
         made
     }
 

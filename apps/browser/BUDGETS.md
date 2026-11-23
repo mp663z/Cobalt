@@ -149,3 +149,12 @@ Reproduce with `cargo +1.85.1 build --locked --release
 --target armv7-unknown-linux-musleabihf -p kobod -p kobo-hello -p kobo-browser`
 and the same build flags with `--manifest-path tools/browser-probe/Cargo.toml`.
 Set `CC_armv7_unknown_linux_musleabihf` to the pinned wrapper described above.
+
+
+### Address-bar/start-page follow-up
+
+Source `dc792fa8f` includes the persistent address field and local start page.
+The same locked ARM release build produced a 5,117,932-byte browser, 7,568
+bytes more than the pre-chrome binary above. Relative to the same hello
+baseline, the delta is 3,868,544 bytes, leaving 1,374,336 bytes under the
++5 MiB binary limit. Device RSS and runtime behavior remain unmeasured.
