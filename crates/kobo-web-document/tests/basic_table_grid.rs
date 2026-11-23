@@ -741,3 +741,55 @@ fn unsupported_caption_edges_keep_counted_fallback() {
         assert_eq!(stats.text_blocks_painted, 3, "{declaration}");
     }
 }
+
+#[test]
+fn declared_cell_content_width_reserves_padding_and_border_edges() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}td{width:100px;padding:10px;border:2px solid #456789;background:#123456}</style><table><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 400, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].width, 124);
+    assert_eq!(cells[1].x, cells[0].x + 126);
+}
+
+#[test]
+fn declared_border_box_cell_width_already_includes_edges() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}td{box-sizing:border-box;width:100px;padding:10px;border:2px solid #456789;background:#123456}</style><table><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 400, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].width, 100);
+    assert_eq!(cells[1].x, cells[0].x + 102);
+}

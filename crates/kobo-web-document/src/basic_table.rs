@@ -362,8 +362,14 @@ impl<F: FontProvider> Painter<'_, F> {
                 maximum = maximum.checked_add(edges).ok_or("table-cell-edges")?;
                 match cs.width {
                     Length::Px(width) => {
-                        minimum = minimum.max(width);
-                        maximum = maximum.max(width);
+                        let outer = if cs.box_sizing == crate::computed_style::BoxSizing::BorderBox
+                        {
+                            width
+                        } else {
+                            width.checked_add(edges).ok_or("table-cell-edges")?
+                        };
+                        minimum = minimum.max(outer);
+                        maximum = maximum.max(outer);
                     }
                     Length::Auto => {}
                     Length::Percent(_) => return Err("table-cell-percent-width"),
