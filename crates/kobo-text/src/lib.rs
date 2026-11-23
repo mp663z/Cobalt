@@ -47,8 +47,6 @@ pub mod bundled_face_pair;
 #[cfg(feature = "native-font-session")]
 pub mod diagnostic_font_session;
 
-pub mod page_font_session;
-
 use fontdue::{Font, FontSettings};
 use kobo_ui::{BreakOpportunity, DisplayMetrics, Face, FontSize, Typesetter};
 use unicode_linebreak::{linebreaks, BreakOpportunity as UnicodeBreakOpportunity};
