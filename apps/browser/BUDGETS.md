@@ -451,3 +451,18 @@ Full browser: 210 passed, 0 failed, 2 ignored. Test/document changes only;
 production and measured ARM remain `1c2d834f3`, 5,192,500 bytes. No new pixel
 behavior is claimed for this coverage increment. Native text implementation
 boundaries and an incremental plan are recorded in PLAN.md.
+
+
+### Same-DOM native colour provenance foundation, November 24, 2026
+
+Crate-private optional source map emitted by the existing bounded style walk;
+normal entry points supply no map and do not allocate one. Generated pseudo
+nodes carry None, retained elements/text carry their actual DOM handles.
+No native Reader colour behavior changes yet. Duplicate-text/hidden/generated
+mapping and unchanged ordinary style-output tests pass; an index-substitution
+mutation fails. Engine: 1,401 passed, 0 failed, 18 ignored across 147 groups.
+Browser: 210 passed, 0 failed, 2 ignored. Clippy completed with existing warnings.
+Locked stripped static ARM EABI5 remains 5,192,500 bytes, unchanged from the
+preceding production checkpoint. No added crates, unsafe, allocator or wire
+changes. No new visual support claim, so prior actual RGB frames remain the
+latest visual evidence.

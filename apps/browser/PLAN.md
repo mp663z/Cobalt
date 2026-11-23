@@ -370,3 +370,19 @@ A safe implementation should proceed in independently testable increments:
 
 This is a plan, not completed support. Do not remove the current native-form,
 position or saved-copy safeguards to make the Colour screenshot pass.
+
+
+### Native colour provenance increment
+
+The style walk now has a crate-private opt-in source-map entry. Each retained
+style node maps to its exact handle in the caller's same DOM; generated pseudo
+nodes map to None. Default parse entries do not allocate this map. Tests cover
+identical words with different inherited colours, hidden subtrees, generated
+pseudo boxes and equality with ordinary style-walk output. Substituting the
+style-arena index for the DOM handle makes the regression fail.
+
+This does not yet preserve provenance through semantic Inline conversion and
+does not paint native text in colour. The next increment must carry provenance
+through semantic whitespace collapse/trim and code/link conversion before any
+RGB span is sent to the native renderer. The helper is deliberately private;
+no new protocol or public model fields have been introduced.

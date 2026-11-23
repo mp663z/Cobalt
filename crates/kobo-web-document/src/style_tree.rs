@@ -296,6 +296,43 @@ impl StyleTree {
         snapshot: Option<&crate::css::SnapshotState>,
         page_tables: bool,
     ) -> Self {
+        Self::from_dom_recording_sources(
+            nodes, sheets, media, budget, ext_selectors, text_deco, family_bind,
+            snapshot, page_tables, None,
+        )
+    }
+
+    /// Opt-in same-DOM provenance for a future semantic colour path. The map
+    /// is parallel to the retained style arena, not a DOM-indexed array.
+    /// Generated pseudo nodes have no DOM handle. Normal parse paths allocate
+    /// no map. A partial tree carries only mappings for its retained nodes.
+    #[allow(dead_code)] // First bounded provenance increment, not wired to Reader.
+    pub(crate) fn from_dom_with_sources(
+        nodes: &[Node],
+        sheets: &[Vec<u8>],
+        media: Option<crate::media_query::MediaContext>,
+    ) -> (Self, Vec<Option<Handle>>) {
+        let mut sources = Vec::new();
+        let tree = Self::from_dom_recording_sources(
+            nodes, sheets, media, SupplyBudget::CANONICAL, true, true, false,
+            None, true, Some(&mut sources),
+        );
+        (tree, sources)
+    }
+
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    fn from_dom_recording_sources(
+        nodes: &[Node],
+        sheets: &[Vec<u8>],
+        media: Option<crate::media_query::MediaContext>,
+        budget: SupplyBudget,
+        ext_selectors: bool,
+        text_deco: bool,
+        family_bind: bool,
+        snapshot: Option<&crate::css::SnapshotState>,
+        page_tables: bool,
+        mut sources: Option<&mut Vec<Option<Handle>>>,
+    ) -> Self {
         let mut tree = Self::default();
         tree.ext = ext_selectors;
         let mut fam = crate::font_family::FamilyTable::new();
@@ -413,6 +450,9 @@ impl StyleTree {
                     break;
                 }
                 let index = tree.nodes.len();
+                if let Some(sources) = sources.as_deref_mut() {
+                    sources.push(None);
+                }
                 tree.nodes.push(StyledNode {
                     inline_phrase: false,
                     inline_attributes: false,
@@ -440,6 +480,9 @@ impl StyleTree {
                     break;
                 }
                 let index = tree.nodes.len();
+                if let Some(sources) = sources.as_deref_mut() {
+                    sources.push(Some(handle));
+                }
                 tree.nodes.push(StyledNode {
                     inline_phrase: false,
                     inline_attributes: false,
@@ -1232,6 +1275,9 @@ impl StyleTree {
                 tree.unsupported = true;
             }
             let index = tree.nodes.len();
+            if let Some(sources) = sources.as_deref_mut() {
+                sources.push(Some(handle));
+            }
             tree.nodes.push(StyledNode {
                 inline_phrase: matches!(
                     name.local.as_ref(),
@@ -3365,6 +3411,57 @@ mod tests {
         );
         let nodes = parser.one(html).into_nodes();
         StyleTree::from_dom(&nodes, sheets, None)
+    }
+
+    #[test]
+    fn source_map_binds_duplicate_text_to_same_dom_not_style_indices() {
+        let parser = html5ever::parse_document(
+            dom::Sink::new(Limits::DEFAULT.max_text_bytes),
+            html5ever::ParseOpts::default(),
+        );
+        let nodes = parser.one("<!doctype html><style>div::before{content:''}</style><!-- gap --><div><p style='color:red'>same</p><p style='color:blue'>same</p></div>").into_nodes();
+        let (tree, sources) = StyleTree::from_dom_with_sources(&nodes, &[], None);
+        assert_eq!(sources.len(), tree.nodes.len());
+        let ordinary = StyleTree::from_dom_with(&nodes,&[],None,SupplyBudget::CANONICAL,
+            true,true,false,None,true);
+        assert_eq!(format!("{:?}", tree.nodes), format!("{:?}", ordinary.nodes));
+        assert_eq!(tree.truncated,ordinary.truncated);
+        assert_eq!(tree.unsupported,ordinary.unsupported);
+        let same: Vec<_> = tree.nodes.iter().enumerate()
+            .filter(|(_,n)|n.text.as_deref()==Some("same"))
+            .map(|(i,n)|(i,sources[i].unwrap(),n.style.color))
+            .collect();
+        assert_eq!(same.len(),2);
+        assert_ne!(same[0].1,same[1].1);
+        assert_eq!(same[0].2,0xff0000);
+        assert_eq!(same[1].2,0x0000ff);
+        assert!(same.iter().any(|(i,dom,_)|i!=dom));
+        assert!(tree.nodes.iter().enumerate().any(|(i,n)|n.tag=="::before" && sources[i].is_none()));
+        for (styled, source) in tree.nodes.iter().zip(&sources) {
+            let Some(handle) = source else {continue};
+            match &nodes[*handle].data {
+                Data::Text(text)=>assert_eq!(styled.text.as_deref(),Some(text.as_str())),
+                Data::Element{name,..}=>assert_eq!(styled.tag,name.local.as_ref()),
+                _=>panic!("retained style source must be element or text"),
+            }
+        }
+    }
+
+    #[test]
+    fn source_map_remains_parallel_with_hidden_subtrees() {
+        let parser = html5ever::parse_document(
+            dom::Sink::new(Limits::DEFAULT.max_text_bytes),
+            html5ever::ParseOpts::default(),
+        );
+        let nodes=parser.one("<!doctype html><div style='display:none'><p>hidden</p></div><p style='color:red'>kept</p>").into_nodes();
+        let (tree,sources)=StyleTree::from_dom_with_sources(&nodes,&[],None);
+        assert_eq!(sources.len(),tree.nodes.len());
+        for (i,node) in tree.nodes.iter().enumerate().filter(|(_,n)|n.text.is_some()) {
+            assert!(matches!(&nodes[sources[i].unwrap()].data,Data::Text(text) if Some(text)==node.text.as_ref()));
+        }
+        let (i,node)=tree.nodes.iter().enumerate().find(|(_,n)|n.text.as_deref()==Some("kept")).unwrap();
+        assert_eq!(node.style.color,0xff0000);
+        assert!(matches!(&nodes[sources[i].unwrap()].data,Data::Text(text) if text=="kept"));
     }
 
     #[test]
