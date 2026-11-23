@@ -989,16 +989,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
 
 /// BASIC-mode intake normalization: rewrite table-structure tags
 /// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
-/// `colgroup`, `col`) to `div` so their content flows as blocks,
-/// `<img>` tags to their `alt` text (empty when no alt), and
+/// `colgroup`, `col`) to `div` so their content flows as blocks, and
 /// presentational `bgcolor` attributes to an inline style background. The engine has no
-/// table display and no replaced content; without this the content
-/// vanishes. Cells stack vertically (no column geometry) and images show
-/// as their alt text - approximations that MUST be disclosed with any
-/// render made from normalized input.
-fn normalize_tables_and_presentational(
-    input: &[u8],
-) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize, usize) {
+/// table display; without this the content
+/// vanishes. Cells stack vertically (no column geometry) - an
+/// approximation that MUST be disclosed with any render made from
+/// normalized input. `<img>` is NO LONGER rewritten here: img elements
+/// reach the box tree as BoxKind::Image (see box_tree).
+fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) {
     const NAMES: [&[u8]; 10] = [
         b"table",
         b"thead",
@@ -1012,13 +1010,6 @@ fn normalize_tables_and_presentational(
         b"col",
     ];
     let mut out = Vec::with_capacity(input.len());
-    let mut images: Vec<Vec<u8>> = Vec::new();
-    // Positions in `out` of currently-open <picture> tags. A marker div
-    // emitted for an <img> inside <picture> inside <a> is dropped by the
-    // box tree, so the marker replaces the whole picture element instead
-    // (a block child of the anchor paints). Counted as pictures_hoisted.
-    let mut picture_open: Vec<usize> = Vec::new();
-    let mut pictures_hoisted = 0usize;
     let mut table_rows_flexed = 0usize;
     let mut form_chrome = 0usize;
     let mut i = 0usize;
@@ -1127,65 +1118,6 @@ fn normalize_tables_and_presentational(
                 i = skip_close(input, close);
                 continue;
             }
-            // <img ...>: with a parseable data-URI src, a marker div
-            // reserves vertical space (padding-top = intrinsic height,
-            // scaled down to the 800px content width when wider) behind a
-            // sentinel background the harness swaps for the real pixels;
-            // the alt text stays inside as the pre-blit paint. Without a
-            // data URI, escaped alt text as before.
-            if tag.len() >= 4
-                && tag[1..].starts_with(b"img")
-                && matches!(tag.get(4), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
-            {
-                let src = extract_attr(tag, b"src");
-                let data_uri = src.filter(|s| s.starts_with(b"data:image/"));
-                let attr_dims = match (
-                    extract_attr(tag, b"width").and_then(attr_num),
-                    extract_attr(tag, b"height").and_then(attr_num),
-                ) {
-                    (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
-                    _ => None,
-                };
-                let parsed = attr_dims.or_else(|| data_uri.and_then(|s| parse_data_image(s)));
-                match (data_uri, parsed) {
-                    (Some(uri), Some((iw, ih))) if iw > 0 && ih > 0 && images.len() < 4096 => {
-                        let idx = images.len();
-                        images.push(uri.to_vec());
-                        let hoisted_now = if let Some(pic_pos) = picture_open.pop() {
-                            // Replace the whole <picture>: drop its already-
-                            // emitted open tag and skip to its close tag.
-                            out.truncate(pic_pos);
-                            pictures_hoisted += 1;
-                            true
-                        } else {
-                            false
-                        };
-                        let (r, g, b) = image_sentinel(idx);
-                        let width = 800u32;
-                        let sh = if iw > width { ih * width / iw } else { ih };
-                        let sh = sh.min(4096);
-                        out.extend_from_slice(
-                            format!("<div style=\"padding-top:{sh}px;background-color:rgb({r},{g},{b})\">").as_bytes(),
-                        );
-                        if let Some(alt) = extract_attr(tag, b"alt") {
-                            push_escaped(&mut out, alt);
-                        }
-                        out.extend_from_slice(b"</div>");
-                        if hoisted_now {
-                            let close = find_close(input, i, b"picture");
-                            i = skip_close(input, close);
-                            continue;
-                        }
-                    }
-                    _ => {
-                        if let Some(alt) = extract_attr(tag, b"alt") {
-                            push_escaped(&mut out, alt);
-                        }
-                    }
-                }
-                i = (tag_end + 1).min(input.len());
-                continue;
-            }
             // Tag name span (after optional '/').
             let mut k = i + 1;
             if k < tag_end && input[k] == b'/' {
@@ -1246,12 +1178,6 @@ fn normalize_tables_and_presentational(
                 i = tag_end;
                 continue;
             }
-            // <picture> open/close tracking for the marker hoist.
-            if tag.len() >= 8 && tag[1..].starts_with(b"picture") {
-                picture_open.push(out.len());
-            } else if tag.len() >= 9 && tag[1] == b'/' && tag[2..].starts_with(b"picture") {
-                picture_open.pop();
-            }
             out.extend_from_slice(tag);
             i = tag_end;
             continue;
@@ -1259,13 +1185,7 @@ fn normalize_tables_and_presentational(
         out.push(input[i]);
         i += 1;
     }
-    (
-        out,
-        images,
-        pictures_hoisted,
-        table_rows_flexed,
-        form_chrome,
-    )
+    (out, table_rows_flexed, form_chrome)
 }
 
 /// Full basic-mode intake normalization: table/presentational rewrite,
@@ -1285,22 +1205,14 @@ pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
     normalize_for_basic_full(input).0
 }
 
-/// Full intake: normalized html, prefilter counts, and the data-URI image
-/// payloads (in document order) that the marker-div lane reserves space
-/// for. The harness pairs these with sentinel rectangles in the raster.
-pub fn normalize_for_basic_full(
-    input: &[u8],
-) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize, usize) {
-    let (out, images, pictures_hoisted, table_rows_flexed, form_chrome) =
-        normalize_tables_and_presentational(input);
+/// Full intake: normalized html, prefilter counts, and the table-row and
+/// form-chrome rewrite counters. Image payloads travel with the box tree
+/// now (`BoxTree::images_in_order`); the harness pairs them with the
+/// sentinel rectangles in the raster.
+pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), usize, usize) {
+    let (out, table_rows_flexed, form_chrome) = normalize_tables_and_presentational(input);
     let (filtered, pf) = prefilter_data_sheets_for_basic(&out);
-    (
-        (filtered, pf),
-        images,
-        pictures_hoisted,
-        table_rows_flexed,
-        form_chrome,
-    )
+    ((filtered, pf), table_rows_flexed, form_chrome)
 }
 
 /// Sentinel background colour for image marker div number `idx`
@@ -2132,7 +2044,7 @@ fn push_escaped(out: &mut Vec<u8>, text: &[u8]) {
 /// Intrinsic (width, height) of a data-URI image, from the first decoded
 /// bytes. PNG (IHDR), GIF (header), BMP and JPEG (SOF scan in the first
 /// 64KB of payload). Anything else is None (caller falls back to alt).
-fn parse_data_image(uri: &[u8]) -> Option<(u32, u32)> {
+pub(crate) fn parse_data_image(uri: &[u8]) -> Option<(u32, u32)> {
     let comma = uri.iter().position(|&b| b == b',')?;
     let head = &uri[..comma];
     if !head.windows(6).any(|w| w.eq_ignore_ascii_case(b"base64")) {

@@ -49,6 +49,21 @@ pub struct CssBox {
     pub(crate) generated: bool,
 }
 
+/// Intrinsic dimensions of a usable image: both `width` and `height`
+/// attributes when positive, else the data-URI payload's own header.
+/// Mirrors the deleted intake rewrite exactly: the source must be a
+/// `data:image/` URI AND dimensions must resolve one way or the other.
+fn image_intrinsic(facts: &crate::style_tree::ImageFacts) -> Option<(u32, u32)> {
+    facts.src_data_uri.as_ref()?;
+    match (facts.attr_width, facts.attr_height) {
+        (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
+        _ => facts
+            .src_data_uri
+            .as_deref()
+            .and_then(|s| crate::basic_page::parse_data_image(s.as_bytes())),
+    }
+}
+
 /// Which explicit paint consumer is validating a tree. `Default` refuses all
 /// generated boxes; `FloatKernel` admits only the confined cleared generated
 /// child; `GeneratedBlock` admits only `generated_block_admitted` ordinary
@@ -65,6 +80,9 @@ pub struct BoxTree {
     pub boxes: Vec<CssBox>,
     pub roots: Vec<usize>,
     pub truncated: bool,
+    /// Image boxes created so far; assigns sentinel indexes in document
+    /// (box creation) order.
+    image_count: usize,
     pub unsupported: bool,
     /// Quirks is a visual paint gate, not a block geometry diagnostic gate.
     pub quirks: bool,
@@ -1093,7 +1111,7 @@ impl HeightPass {
                 result.unsupported = true;
             }
             let height = match node.kind {
-                BoxKind::Block | BoxKind::ListItem | BoxKind::Flex => {
+                BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image => {
                     specified_block_height(node.style.height, containing).map(|declared| {
                         if node.style.box_sizing == BoxSizing::BorderBox {
                             declared.saturating_sub(
@@ -1107,12 +1125,6 @@ impl HeightPass {
                     })
                 }
                 BoxKind::AnonymousBlock => None,
-                BoxKind::Image => {
-                    // Inert until the Phase 1 image slice wires geometry;
-                    // refuse rather than guess if a tree ever carries one.
-                    result.unsupported = true;
-                    None
-                }
                 BoxKind::InlineBlock | BoxKind::Inline | BoxKind::Text => {
                     if node.kind == BoxKind::InlineBlock {
                         result.unsupported = true;
@@ -2055,7 +2067,7 @@ impl WidthPass {
                 continue;
             }
             let (content, x) = match node.kind {
-                BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock | BoxKind::Flex => {
+                BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock | BoxKind::Flex | BoxKind::Image => {
                     let width = containing.map(|base| {
                         if node.kind == BoxKind::AnonymousBlock {
                             used_block_width(Length::Auto, base)
@@ -2192,11 +2204,6 @@ impl WidthPass {
                     (width.map(|w| w.content), x)
                 }
                 BoxKind::InlineBlock => {
-                    result.unsupported = true;
-                    (None, None)
-                }
-                BoxKind::Image => {
-                    // Inert until the Phase 1 image slice wires geometry.
                     result.unsupported = true;
                     (None, None)
                 }
@@ -2642,6 +2649,23 @@ impl BoxTree {
     /// mixed text. At most two boxes per styled node are allocated.
     #[must_use]
     #[allow(clippy::too_many_lines)] // Bounded box construction and positioned-leaf validation.
+    /// Data-URI payloads of the image boxes in document order; the harness
+    /// pairs them with sentinel rectangles in the raster. Capped at 4096,
+    /// the deleted intake rewrite's cap.
+    #[must_use]
+    pub fn images_in_order(&self) -> Vec<Vec<u8>> {
+        self.boxes
+            .iter()
+            .filter(|b| b.kind == BoxKind::Image)
+            .take(4096)
+            .filter_map(|b| {
+                b.image
+                    .as_ref()
+                    .and_then(|f| f.src_data_uri.clone().map(String::into_bytes))
+            })
+            .collect()
+    }
+
     pub fn from_style(styled: &StyleTree) -> Self {
         Self::from_style_inner(styled, false)
     }
@@ -2681,14 +2705,37 @@ impl BoxTree {
                 continue;
             }
             let node = &styled.nodes[source];
+            // <picture> with a qualifying img child: the box tree cannot
+            // keep a block-level image inside the inline chain, so the
+            // picture element vanishes and its children attach to the
+            // picture's parent (the old marker-div hoist's shape).
+            if node.tag == "picture"
+                && node.children.iter().any(|&c| {
+                    styled.nodes[c]
+                        .image
+                        .as_ref()
+                        .is_some_and(|f| image_intrinsic(f).is_some())
+                })
+            {
+                for &child in node.children.iter().rev() {
+                    stack.push((child, parent));
+                }
+                continue;
+            }
             let kind = if node.text.is_some() {
                 Some(BoxKind::Text)
-            } else if node.image.is_some() {
-                // Replaced `img` keeps its display in `style`; the box kind
-                // records WHAT it is. `display:none` still removes it.
+            } else if let Some(facts) = &node.image {
                 match node.style.display {
                     Display::None => None,
-                    _ => Some(BoxKind::Image),
+                    // Replaced image with a data-URI source and resolvable
+                    // dimensions. `display:none` still removes it.
+                    _ if image_intrinsic(facts).is_some() => Some(BoxKind::Image),
+                    // No usable image: the alt text, exactly the old intake
+                    // rewrite's fallback.
+                    _ => match &facts.alt {
+                        Some(alt) if !alt.is_empty() => Some(BoxKind::Text),
+                        _ => None,
+                    },
                 }
             } else {
                 match node.style.display {
@@ -2797,7 +2844,12 @@ impl BoxTree {
                 parent,
                 children: Vec::new(),
                 style,
-                text: node.text.clone(),
+                text: if kind == BoxKind::Text && node.image.is_some() {
+                    // The alt-text fallback box: the element carries the text.
+                    node.image.as_ref().and_then(|f| f.alt.clone())
+                } else {
+                    node.text.clone()
+                },
                 image: node.image.clone(),
                 // Same generated-box paint confinement for both pseudo families:
                 // kernel-cleared only, by the explicit kernel painter.
@@ -2807,6 +2859,50 @@ impl BoxTree {
                 tree.boxes[parent].children.push(index);
             } else {
                 tree.roots.push(index);
+            }
+            if kind == BoxKind::Image {
+                // Marker geometry, moved from the deleted intake rewrite:
+                // block box, padding-top = intrinsic height scaled to the
+                // 800px content width (capped), sentinel background the
+                // harness swaps for decoded pixels, alt text as the
+                // pre-blit paint. Image-specific author styles are not
+                // applied, matching the marker div.
+                let facts = node.image.as_ref().expect("image box facts").clone();
+                let (iw, ih) = image_intrinsic(&facts).expect("qualified image box");
+                let idx = tree.image_count;
+                tree.image_count += 1;
+                let (r, g, b) = crate::basic_page::image_sentinel(idx);
+                let width = 800u32;
+                let sh = if iw > width { ih * width / iw } else { ih }.min(4096);
+                let style = &mut tree.boxes[index].style;
+                style.display = Display::Block;
+                style.padding_top = sh;
+                style.padding_right = 0;
+                style.padding_bottom = 0;
+                style.padding_left = 0;
+                style.background_color =
+                    Some((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b));
+                style.background_current_color = false;
+                if let Some(alt) = facts.alt.filter(|a| !a.is_empty()) {
+                    let alt_style = Computed {
+                        display: Display::Inline,
+                        ..Computed::cascade(Some(tree.boxes[index].style), &[])
+                    };
+                    let alt_index = tree.boxes.len();
+                    tree.boxes.push(CssBox {
+                        inline_phrase: false,
+                        inline_attributes: false,
+                        kind: BoxKind::Text,
+                        source: Some(source),
+                        parent: Some(index),
+                        children: Vec::new(),
+                        style: alt_style,
+                        text: Some(alt),
+                        image: None,
+                        generated: false,
+                    });
+                    tree.boxes[index].children.push(alt_index);
+                }
             }
             for &child in node.children.iter().rev() {
                 stack.push((child, Some(index)));
@@ -2971,7 +3067,7 @@ impl BoxTree {
             let children = &tree.boxes[parent].children;
             let has_block = children
                 .iter()
-                .any(|&child| matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex));
+                .any(|&child| matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image));
             if kind == BoxKind::Inline && has_block {
                 // CSS 2.1 §9.2.1.1 requires splitting inline boxes. Do not
                 // mislabel this partial tree as a valid used box tree.
@@ -2983,7 +3079,7 @@ impl BoxTree {
             let old = std::mem::take(&mut tree.boxes[parent].children);
             let mut run = Vec::new();
             for child in old {
-                if matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex) {
+                if matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image) {
                     tree.wrap_inline_run(parent, &mut run, limit);
                     tree.boxes[parent].children.push(child);
                 } else {

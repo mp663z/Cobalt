@@ -179,7 +179,8 @@ fn unsupported_css_never_yields_partial_paint_even_empty_selection() {
         "<style>html{height:600px}body{height:300px}main{height:20px;border-top:2px solid red}</style><body><main></main></body>",
         "<style>html{height:600px}body{height:300px}main{height:20px;clear:both}</style><body><main></main></body>",
         "<style>html{height:600px}body{height:300px}main{height:20px}</style><body><main>text</main></body>",
-        "<style>html{height:600px}body{height:300px}main{height:20px}</style><body><main><img src=x></main></body>",
+        // A data-URI img is a real Image box now, still refused by this bridge.
+        "<style>html{height:600px}body{height:300px}main{height:20px}</style><body><main><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='></main></body>",
     ] {
         let (tree, widths, vertical) = setup(html);
         assert_eq!(paint(&tree, &widths, &vertical, &[]).err(), Some(BridgeError::Unsupported), "{html}");
