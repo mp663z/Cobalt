@@ -758,22 +758,67 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
             }
             let tag_end = j.min(input.len());
             let tag = &input[i..tag_end];
+            // Form controls -> static text approximations (the engine has
+            // no form-control boxes; same philosophy as img->alt).
+            // <input>: hidden/checkbox/radio vanish; submit/button/reset
+            // show their value; text-like inputs show value or
+            // placeholder. <textarea>: its text content. <select>: the
+            // selected (else first) option's text. All escaped.
+            if tag.len() >= 6
+                && tag[1..].starts_with(b"input")
+                && matches!(tag.get(6), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+            {
+                let ty = extract_attr(tag, b"type").unwrap_or(b"text");
+                let emit = if ty.eq_ignore_ascii_case(b"hidden")
+                    || ty.eq_ignore_ascii_case(b"checkbox")
+                    || ty.eq_ignore_ascii_case(b"radio")
+                {
+                    None
+                } else if ty.eq_ignore_ascii_case(b"submit")
+                    || ty.eq_ignore_ascii_case(b"button")
+                    || ty.eq_ignore_ascii_case(b"reset")
+                {
+                    extract_attr(tag, b"value").or(Some(b"Submit" as &[u8]))
+                } else {
+                    extract_attr(tag, b"value").or_else(|| extract_attr(tag, b"placeholder"))
+                };
+                if let Some(text) = emit {
+                    push_escaped(&mut out, text);
+                }
+                i = (tag_end + 1).min(input.len());
+                continue;
+            }
+            if tag.len() >= 9
+                && tag[1..].starts_with(b"textarea")
+                && matches!(tag.get(9), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+            {
+                let close = find_close(input, tag_end, b"textarea");
+                let inner = &input[tag_end + 1..close];
+                push_escaped(&mut out, inner);
+                i = skip_close(input, close);
+                continue;
+            }
+            if tag.len() >= 7
+                && tag[1..].starts_with(b"select")
+                && matches!(tag.get(7), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+            {
+                let close = find_close(input, tag_end, b"select");
+                let inner = &input[tag_end + 1..close];
+                if let Some(text) = selected_option_text(inner) {
+                    push_escaped(&mut out, &text);
+                }
+                i = skip_close(input, close);
+                continue;
+            }
             // <img ...> -> escaped alt text (or nothing when no alt).
             if tag.len() >= 4
                 && tag[1..].starts_with(b"img")
                 && matches!(tag.get(3), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
             {
                 if let Some(alt) = extract_attr(tag, b"alt") {
-                    for &b in alt {
-                        match b {
-                            b'&' => out.extend_from_slice(b"&amp;"),
-                            b'<' => out.extend_from_slice(b"&lt;"),
-                            b'>' => out.extend_from_slice(b"&gt;"),
-                            _ => out.push(b),
-                        }
-                    }
+                    push_escaped(&mut out, alt);
                 }
-                i = tag_end;
+                i = (tag_end + 1).min(input.len());
                 continue;
             }
             // Tag name span (after optional '/').
@@ -789,6 +834,11 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
             let bounded = k >= tag_end
                 || matches!(input[k], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
             let lower: Vec<u8> = name.iter().map(|b| b.to_ascii_lowercase()).collect();
+            // <form>/<button>/<fieldset>/<legend> keep their children;
+            // the tags themselves become neutral containers/phrases.
+            let is_form_tag = bounded && matches!(lower.as_slice(), b"form" | b"fieldset" | b"legend")
+                && !name.is_empty();
+            let is_button = bounded && lower == b"button" && !name.is_empty();
             let is_table_tag = bounded && !name.is_empty() && NAMES.contains(&lower.as_slice());
             // Presentational bgcolor -> style="background-color:..." (only
             // #hex and plain color names, and only when the tag has no
@@ -798,10 +848,12 @@ fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
                     && v.iter().all(|b| b.is_ascii_alphanumeric() || *b == b'#' || *b == b'%')
                     && extract_attr(tag, b"style").is_none()
             });
-            if is_table_tag || bg.is_some() {
+            if is_table_tag || is_form_tag || is_button || bg.is_some() {
                 out.extend_from_slice(&input[i..name_start]);
-                if is_table_tag {
+                if is_table_tag || is_form_tag {
                     out.extend_from_slice(b"div");
+                } else if is_button {
+                    out.extend_from_slice(b"span");
                 } else {
                     out.extend_from_slice(name);
                 }
@@ -1453,6 +1505,104 @@ fn pt_length(input: &[u8]) -> Option<(String, usize)> {
     let value: u64 = std::str::from_utf8(&input[..n]).ok()?.parse().ok()?;
     let px = (value * 4 + 1) / 3;
     Some((format!("{px}px"), n + 2))
+}
+
+fn push_escaped(out: &mut Vec<u8>, text: &[u8]) {
+    for &b in text {
+        match b {
+            b'&' => out.extend_from_slice(b"&amp;"),
+            b'<' => out.extend_from_slice(b"&lt;"),
+            b'>' => out.extend_from_slice(b"&gt;"),
+            _ => out.push(b),
+        }
+    }
+}
+
+/// Byte offset of the `</name` close tag at or after `from`, or the
+/// input length when unclosed.
+fn find_close(input: &[u8], from: usize, name: &[u8]) -> usize {
+    let mut i = from;
+    while i + name.len() + 2 < input.len() {
+        if input[i] == b'<'
+            && input[i + 1] == b'/'
+            && input[i + 2..].starts_with(name)
+            && matches!(input.get(i + 2 + name.len()), Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/'))
+        {
+            return i;
+        }
+        i += 1;
+    }
+    input.len()
+}
+
+/// First index past the close tag starting at `close` (or input length).
+fn skip_close(input: &[u8], close: usize) -> usize {
+    if close >= input.len() {
+        return input.len();
+    }
+    let mut i = close;
+    while i < input.len() && input[i] != b'>' {
+        i += 1;
+    }
+    (i + 1).min(input.len())
+}
+
+/// Text of the selected (else first) <option> in a <select> body's
+/// bytes. Option text runs to the next <option/<optgroup/</select.
+fn selected_option_text(inner: &[u8]) -> Option<Vec<u8>> {
+    let mut options: Vec<(bool, Vec<u8>)> = Vec::new();
+    let mut i = 0usize;
+    while i < inner.len() {
+        if inner[i] == b'<'
+            && inner[i + 1..].starts_with(b"option")
+            && matches!(inner.get(i + 7), Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/'))
+        {
+            let mut j = i + 1;
+            let mut quote: Option<u8> = None;
+            while j < inner.len() {
+                match (quote, inner[j]) {
+                    (None, b'"') => quote = Some(b'"'),
+                    (None, b'\'') => quote = Some(b'\''),
+                    (Some(q), c) if c == q => quote = None,
+                    (None, b'>') => break,
+                    _ => {}
+                }
+                j += 1;
+            }
+            let tag = &inner[i..j.min(inner.len())];
+            let selected = extract_attr(tag, b"selected").is_some();
+            // text until next <option, <optgroup or end
+            let mut k = j + 1;
+            while k < inner.len() {
+                if inner[k] == b'<'
+                    && (inner[k + 1..].starts_with(b"option")
+                        || inner[k + 1..].starts_with(b"optgroup")
+                        || (inner[k + 1..].starts_with(b"/")
+                            && inner[k + 2..].starts_with(b"option")))
+                {
+                    break;
+                }
+                k += 1;
+            }
+            let mut text: Vec<u8> = inner[j + 1..k.min(inner.len())].to_vec();
+            while let Some((&b, rest)) = text.split_first() {
+                if b.is_ascii_whitespace() { text = rest.to_vec(); } else { break; }
+            }
+            while let Some((&b, rest)) = text.split_last() {
+                if b.is_ascii_whitespace() { text = rest.to_vec(); } else { break; }
+            }
+            options.push((selected, text));
+            i = k;
+            continue;
+        }
+        i += 1;
+    }
+    options
+        .iter()
+        .find(|(s, _)| *s)
+        .or_else(|| options.first())
+        .map(|(_, t)| t.clone())
+        .filter(|t| !t.is_empty())
 }
 
 /// Raw value of the first occurrence of an attribute in a tag's bytes,
