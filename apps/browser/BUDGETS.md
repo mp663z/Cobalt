@@ -106,3 +106,7 @@ and visual ordering separately on each wrapped line. Arabic regular adds
 215,640 B and Hebrew regular adds 22,964 B, renamed OFL Noto subsets, making
 1,047,304 B of bundled fallback fonts in total. This is font bytes only;
 ARM binary cost and device RSS are not established by this count.
+
+Arabic bold adds 224,260 B and Hebrew bold adds 22,988 B, both true Noto OFL
+cuts, bringing bundled fallback font bytes to 1,294,552. No italic substitute
+is synthesized. As above, this is not an ARM size or RSS measurement.

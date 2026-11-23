@@ -56,6 +56,16 @@ impl PageFontSession {
         session.add_fallback(include_bytes!("../fonts/KoboPage-arabic.ttf"))?;
         session.add_fallback(include_bytes!("../fonts/KoboPage-hebrew.ttf"))?;
         session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-arabic-bold.ttf"),
+            true,
+            false,
+        )?;
+        session.add_styled_fallback(
+            include_bytes!("../fonts/KoboPage-hebrew-bold.ttf"),
+            true,
+            false,
+        )?;
+        session.add_styled_fallback(
             include_bytes!("../fonts/KoboPage-cyrillic-bold.ttf"),
             true,
             false,
@@ -554,6 +564,16 @@ mod tests {
             }
             assert!(text.chars().all(|ch| session.has_glyph(ch, false, false)));
             assert!(shaped.iter().all(|c| !c.glyph.missing));
+        }
+    }
+
+    #[test]
+    fn arabic_and_hebrew_bold_use_distinct_real_cuts() {
+        let session = PageFontSession::bundled().unwrap();
+        for text in ["مرحبا", "שלום"] {
+            let regular = session.shape(text, 28, false, false).unwrap();
+            let bold = session.shape(text, 28, true, false).unwrap();
+            assert_ne!(regular[0].glyph.coverage, bold[0].glyph.coverage);
         }
     }
 

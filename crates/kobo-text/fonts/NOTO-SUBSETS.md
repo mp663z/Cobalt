@@ -40,3 +40,7 @@ U+0020-007E, U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF,
 U+FE70-FEFF. Hebrew ranges: U+0020-007E, U+0590-05FF, U+FB1D-FB4F.
 Modified names are Kobo Page Arabic and Kobo Page Hebrew. These sources have
 no italic cuts; none is synthesized.
+
+Arabic bold and Hebrew bold use the same ranges as their regular cuts, from
+NotoSansArabic-Bold.ttf and NotoSansHebrew-Bold.ttf, same source distribution.
+Renamed families stay Kobo Page Arabic and Kobo Page Hebrew, style Bold.
