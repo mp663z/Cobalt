@@ -278,3 +278,20 @@ These are host tests and a cross-build. No physical-reader RSS, latency or
 panel behavior is established. Image geometry remains a counted marker-based
 approximation; external images and SVG are unavailable. The earlier live
 simulator image/link journey is greyscale, not evidence of colour-panel fidelity.
+
+
+### Image dimension overflow guard, November 24, 2026
+
+Measured source: `4a11dc307418e07ce0bed150e6a2c62aea0f1ecf`. Image marker proportional height now
+uses a u64 intermediate and clamps to the existing 4096px limit before
+narrowing. A width=801, height=u32::MAX fixture panicked before the fix and
+passes afterwards; equal maximum dimensions reserve 800px rather than wrapping.
+
+The locked ARM release browser is 5,184,564 bytes, +3,935,184 over the
+unchanged 1,249,380-byte hello baseline. Remaining +5 MiB headroom is 1,307,696
+bytes. The browser was inspected as stripped, static ARM EABI5.
+Engine suite: 1,395 passed, 0 failed, 18 ignored across 147 result groups.
+Browser suite: 191 passed, 0 failed, 2 ignored. The normal native image RGB
+raster was regenerated and visually inspected with no new skips, one counted
+marker-geometry approximation. This does not change the image support scope
+or establish physical-reader behavior.
