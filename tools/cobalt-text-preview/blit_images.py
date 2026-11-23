@@ -60,7 +60,10 @@ for idx, uri in enumerate(uris):
         img=None
         try:
             import cairosvg
-            png = cairosvg.svg2png(bytestring=data, background_color='white')
+            # Render at 2x the target box so the later LANCZOS pass
+            # only ever downscales; intrinsic-size renders (often ~100px)
+            # upscaled 5-8x are the blur the user sees.
+            png = cairosvg.svg2png(bytestring=data, background_color='white', output_width=max(rw*2, 64))
             img = Image.open(io.BytesIO(png)).convert('RGB')
             dec='svg(cairosvg)'
         except Exception as e1:
