@@ -289,7 +289,26 @@ impl PageFontSession {
         let mut output = Vec::new();
         let mut mask_bytes = 0_usize;
         let mut base = 0;
-        for word in text.split_inclusive(char::is_whitespace) {
+        // Separate ASCII punctuation from joining-script words so a bracket
+        // absent from the fallback face cannot force a whole word to scalar paint.
+        let mut spans = Vec::new();
+        let mut start = 0;
+        for (i, ch) in text.char_indices() {
+            if ch.is_ascii_punctuation() {
+                if start < i {
+                    spans.push(&text[start..i]);
+                }
+                spans.push(&text[i..i + ch.len_utf8()]);
+                start = i + ch.len_utf8();
+            } else if ch.is_whitespace() {
+                spans.push(&text[start..i + ch.len_utf8()]);
+                start = i + ch.len_utf8();
+            }
+        }
+        if start < text.len() {
+            spans.push(&text[start..]);
+        }
+        for word in spans {
             let covers = |font: &Font| {
                 word.chars()
                     .all(|ch| ch.is_whitespace() || font.lookup_glyph_index(ch) != 0)
@@ -574,6 +593,17 @@ mod tests {
             let regular = session.shape(text, 28, false, false).unwrap();
             let bold = session.shape(text, 28, true, false).unwrap();
             assert_ne!(regular[0].glyph.coverage, bold[0].glyph.coverage);
+        }
+    }
+
+    #[test]
+    fn punctuation_does_not_disable_joining_script_shaping() {
+        let session = PageFontSession::bundled().unwrap();
+        let plain = session.shape("بالعالم", 28, false, false).unwrap();
+        let bracketed = session.shape("(بالعالم)", 28, false, false).unwrap();
+        assert_eq!(bracketed.len(), plain.len() + 2);
+        for (a, b) in plain.iter().zip(bracketed.iter().skip(1)) {
+            assert_eq!(a.glyph.coverage, b.glyph.coverage);
         }
     }
 

@@ -1,24 +1,57 @@
 //! Per-line Unicode bidi reordering of already shaped logical clusters.
-use crate::computed_style::Direction;
+use crate::computed_style::{Direction, UnicodeBidi};
 use crate::inline_lines::Lines;
 use unicode_bidi::{BidiInfo, Level};
 
+#[cfg(test)]
 pub(crate) fn reorder(lines: &mut Lines, runs: &[(&str, bool)], direction: Direction) {
-    let text: String = runs.iter().map(|r| r.0).collect();
+    let modes = vec![(UnicodeBidi::Normal, direction); runs.len()];
+    let _ = reorder_styled(lines, runs, direction, &modes);
+}
+
+pub(crate) fn reorder_styled(
+    lines: &mut Lines,
+    runs: &[(&str, bool)],
+    direction: Direction,
+    modes: &[(UnicodeBidi, Direction)],
+) -> Vec<bool> {
+    let mut mirrored = vec![false; lines.glyphs.len()];
+    let mut text = String::new();
+    let mut bases = Vec::with_capacity(runs.len());
+    for (i, run) in runs.iter().enumerate() {
+        let (mode, dir) = modes
+            .get(i)
+            .copied()
+            .unwrap_or((UnicodeBidi::Normal, direction));
+        let rtl = dir == Direction::Rtl;
+        let (open, close) = match mode {
+            UnicodeBidi::Normal | UnicodeBidi::Plaintext => ("", ""),
+            UnicodeBidi::Embed => (if rtl { "\u{202b}" } else { "\u{202a}" }, "\u{202c}"),
+            UnicodeBidi::Override => (if rtl { "\u{202e}" } else { "\u{202d}" }, "\u{202c}"),
+            UnicodeBidi::Isolate => (if rtl { "\u{2067}" } else { "\u{2066}" }, "\u{2069}"),
+            UnicodeBidi::IsolateOverride => (
+                if rtl {
+                    "\u{2067}\u{202e}"
+                } else {
+                    "\u{2066}\u{202d}"
+                },
+                "\u{202c}\u{2069}",
+            ),
+        };
+        text.push_str(open);
+        bases.push(text.len());
+        text.push_str(run.0);
+        text.push_str(close);
+    }
     let base = if direction == Direction::Rtl {
         Level::rtl()
     } else {
         Level::ltr()
     };
-    let info = BidiInfo::new(&text, Some(base));
+    let auto = modes.iter().any(|(m, _)| *m == UnicodeBidi::Plaintext);
+    let info = BidiInfo::new(&text, if auto { None } else { Some(base) });
     if !info.levels.iter().any(Level::is_rtl) {
-        return;
-    }
-    let mut bases = Vec::with_capacity(runs.len());
-    let mut total = 0;
-    for r in runs {
-        bases.push(total);
-        total += r.0.len();
+        return mirrored;
     }
     let mut cursors = vec![0; runs.len()];
     let bytes: Vec<_> = lines
@@ -68,6 +101,13 @@ pub(crate) fn reorder(lines: &mut Lines, runs: &[(&str, bool)], direction: Direc
             .iter()
             .map(|(i, _)| levels.get(bytes[*i]).copied().unwrap_or(base))
             .collect();
+        for ((a, b), level) in groups.iter().zip(&group_levels) {
+            if level.is_rtl() {
+                for flag in &mut mirrored[*a..*b] {
+                    *flag = true;
+                }
+            }
+        }
         let order = BidiInfo::reorder_visual(&group_levels);
         let mut x = 0_u32;
         for visual in order {
@@ -81,6 +121,7 @@ pub(crate) fn reorder(lines: &mut Lines, runs: &[(&str, bool)], direction: Direc
         }
         start = end;
     }
+    mirrored
 }
 
 #[cfg(test)]
@@ -107,6 +148,62 @@ mod tests {
         let gimel = lines.glyphs.iter().find(|g| g.character == 'ג').unwrap();
         assert_eq!((aleph.leaf, gimel.leaf), (0, 1));
         assert!(aleph.x > gimel.x);
+    }
+
+    #[test]
+    fn css_override_reverses_latin_without_reversing_source() {
+        let runs = [("abc 123", false)];
+        let mut lines = crate::basic_text::place(&runs, 100, false, |_, _| Some(1)).unwrap();
+        reorder_styled(
+            &mut lines,
+            &runs,
+            Direction::Ltr,
+            &[(UnicodeBidi::Override, Direction::Rtl)],
+        );
+        let mut glyphs = lines.glyphs;
+        glyphs.sort_by_key(|g| g.x);
+        assert_eq!(
+            glyphs.iter().map(|g| g.character).collect::<String>(),
+            "321 cba"
+        );
+    }
+    #[test]
+    fn isolate_keeps_digits_with_its_inline_direction() {
+        let runs = [("start ", false), ("אבג 123", false), (" end", false)];
+        let mut lines = crate::basic_text::place(&runs, 100, false, |_, _| Some(1)).unwrap();
+        reorder_styled(
+            &mut lines,
+            &runs,
+            Direction::Ltr,
+            &[
+                (UnicodeBidi::Normal, Direction::Ltr),
+                (UnicodeBidi::Isolate, Direction::Rtl),
+                (UnicodeBidi::Normal, Direction::Ltr),
+            ],
+        );
+        let mut glyphs = lines.glyphs;
+        glyphs.sort_by_key(|g| g.x);
+        assert_eq!(
+            glyphs.iter().map(|g| g.character).collect::<String>(),
+            "start 123 גבא end"
+        );
+    }
+
+    #[test]
+    fn paired_neutrals_resolve_rtl_for_mirrored_paint() {
+        let runs = [("אבג (דהו) [123]", false)];
+        let mut lines = crate::basic_text::place(&runs, 100, false, |_, _| Some(1)).unwrap();
+        let flags = reorder_styled(
+            &mut lines,
+            &runs,
+            Direction::Rtl,
+            &[(UnicodeBidi::Normal, Direction::Rtl)],
+        );
+        for (g, flag) in lines.glyphs.iter().zip(flags) {
+            if matches!(g.character, '(' | ')' | '[' | ']') {
+                assert!(flag);
+            }
+        }
     }
 
     #[test]

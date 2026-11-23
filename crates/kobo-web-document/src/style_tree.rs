@@ -1153,7 +1153,7 @@ impl StyleTree {
                 );
             }
             let style = Computed::cascade(Some(inherited), &declarations);
-            if style.white_space_pre {
+            if style.white_space_pre || style.unicode_bidi != crate::computed_style::UnicodeBidi::Normal {
                 tree.unsupported = true;
             }
             if parent.is_none() {
@@ -2920,6 +2920,15 @@ pub(crate) fn properties_with(
             "margin-bottom" => parse_keyword(value)
                 .or_else(|| parse_margin_value(value))
                 .map(|value| (Property::MarginBottom, value)),
+            "unicode-bidi" => parse_keyword(value).or(match value {
+                "normal" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::Normal)),
+                "embed" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::Embed)),
+                "bidi-override" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::Override)),
+                "isolate" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::Isolate)),
+                "isolate-override" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::IsolateOverride)),
+                "plaintext" => Some(Value::UnicodeBidi(crate::computed_style::UnicodeBidi::Plaintext)),
+                _ => None,
+            }).map(|v| (Property::UnicodeBidi,v)),
             "direction" => parse_keyword(value)
                 .or(match value {
                     "ltr" => Some(Value::Direction(Direction::Ltr)),

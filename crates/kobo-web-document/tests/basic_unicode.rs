@@ -173,3 +173,35 @@ fn centered_underlines_follow_the_glyph_run() {
     assert_eq!(glyph.x, underline.x);
     assert_eq!(glyph.width, underline.width);
 }
+
+#[test]
+fn css_bidi_modes_are_retained_without_enabling_exact_paint() {
+    for value in [
+        "normal",
+        "embed",
+        "bidi-override",
+        "isolate",
+        "isolate-override",
+        "plaintext",
+    ] {
+        let html = format!(
+            "<!doctype html><span style='direction:rtl;unicode-bidi:{value}'>abc 123</span>"
+        );
+        let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+        );
+        let box_tree = BoxTree::from_style(&styled);
+        if value != "normal" {
+            assert!(styled.unsupported);
+            assert!(box_tree
+                .boxes
+                .iter()
+                .any(|b| b.style.unicode_bidi
+                    != kobo_web_document::computed_style::UnicodeBidi::Normal));
+        }
+    }
+}
