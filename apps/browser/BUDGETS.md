@@ -314,3 +314,19 @@ following text, linked-image targets and fallback tests pass. Actual normal
 and narrow app rasters were inspected. The fresh Clara Colour simulator
 image-to-links-to-article journey passes; its screenshots are greyscale and
 do not qualify colour-panel fidelity, device RSS or latency.
+
+
+### Zero-width and nested EXIF images, November 24, 2026
+
+Measured source: `8b2e1955922339050f5dc68faf6e0a842bde7e5f`. A successful image inside a directly
+containing normal block with explicit width:0 now collapses even when the
+painter omits its zero-area marker fill. The fixture reserved 40px before,
+then 1px document minimum after; its raster is entirely white. Nested edge
+and EXIF regression checks a 240x320 oriented JPEG fitted into 60px content,
+with 10px padding and 2px borders outside. It reserves 104px total and keeps
+the first decoded pixel at (12,12); the actual raster was inspected.
+
+Browser suite: 197 passed, 0 failed, 2 ignored. Clippy completed with existing
+warnings. Locked ARM release browser: 5,189,612 bytes, +3,940,232 over hello,
+leaving 1,302,648 bytes below +5 MiB; stripped static ARM EABI5 inspected.
+The image support scope and physical-device measurement caveats are unchanged.
