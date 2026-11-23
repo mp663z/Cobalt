@@ -241,4 +241,51 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn deterministic_mixed_spans_preserve_every_constraint_and_total() {
+        // Dependency-free seeded stress coverage. No renderer or parity gate:
+        // check the sizing kernel's own bounds, overlap and accounting rules.
+        let mut seed = 0x6a09_e667_f3bc_c909_u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for case in 0..512 {
+            let count = usize::try_from(next() % 16 + 1).unwrap();
+            let gap = u32::try_from(next() % 5).unwrap();
+            let mut cells = Vec::new();
+            for _ in 0..64 {
+                let column = usize::try_from(next() % count as u64).unwrap();
+                let span = usize::try_from(next() % (count - column) as u64 + 1).unwrap();
+                let minimum = u32::try_from(next() % 200).unwrap();
+                let maximum = minimum + u32::try_from(next() % 400).unwrap();
+                cells.push(cell(column, span, minimum, maximum));
+            }
+            let available = u32::try_from(next() % 2000).unwrap();
+            let specified = (case % 2 == 0).then(|| u32::try_from(next() % 2400).unwrap());
+            let layout = automatic_columns(count, &cells, available, specified, gap).unwrap();
+            assert_eq!(layout.widths.len(), count);
+            assert_eq!(
+                layout.width,
+                layout.widths.iter().sum::<u32>() + gap * (u32::try_from(count).unwrap() - 1)
+            );
+            assert_eq!(layout.overflows, layout.width > available);
+            if let Some(specified) = specified {
+                assert!(layout.width >= specified);
+            }
+            for cell in &cells {
+                let actual = layout.widths[cell.column..cell.column + cell.span]
+                    .iter()
+                    .sum::<u32>()
+                    + gap * (u32::try_from(cell.span).unwrap() - 1);
+                assert!(actual >= cell.minimum, "case {case}: {cell:?} has {actual}");
+            }
+            assert_eq!(
+                layout,
+                automatic_columns(count, &cells, available, specified, gap).unwrap()
+            );
+        }
+    }
 }
