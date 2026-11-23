@@ -1286,6 +1286,9 @@ impl Browser {
             }
             self.browser_menu = false;
         } else if action == action_id("reload") {
+            // The old raster is retired before the new document arrives.
+            // Reset the label before publishing that intermediate native frame.
+            self.zoom = 100;
             if let Some(url) = self.loaded.as_ref().map(|loaded| loaded.url.clone()) {
                 // Stop referencing the old raster before retiring its cache entry.
                 if let Some(loaded) = self.loaded.as_mut() {
