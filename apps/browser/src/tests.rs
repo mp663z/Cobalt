@@ -2133,3 +2133,80 @@ fn colour_identity_change_cancels_pending_native_images_once() {
         kobo_sdk::DeviceResult::Identity(identity));
     assert!(fetches(&context.take_commands()).is_empty(),"same identity must not refetch");
 }
+
+#[test]
+fn late_colour_identity_ignores_pending_grey_shelf_completion() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let commands = open_web_page(&mut runner, PLATE);
+    let commands = store.pump(&mut runner, commands);
+    let png = kobo_image::encode_png_rgb(2, 1, &[255,0,0,0,128,255]).unwrap();
+    let commands = runner.task_outcome(fetches(&commands)[0].0, TaskOutcome::Completed(png.clone()));
+    store.pump(&mut runner, commands);
+    let commands = runner.action(action_id("back"));
+    store.pump(&mut runner, commands);
+    let commands = open_web_page(&mut runner, PLATE);
+    assert_eq!(runner.app().pictures.state(0),Some(pictures::State::Reading));
+    let shelf = commands.into_iter().find_map(|c|match c {
+        kobo_sdk::Command::Store(request @ kobo_sdk::StoreRequest::ShelfRead{..})=>Some(request),
+        _=>None
+    }).expect("grey shelf read started");
+    let stale = store.answer(shelf);
+    let mut context = runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(kobo_sdk::DeviceIdentity {
+            profile_id:"SIMULATOR:clara-colour-393".into(),
+            ..kobo_sdk::DeviceIdentity::default()
+        }));
+    let changed = context.take_commands();
+    let wanted = fetches(&changed);
+    assert_eq!(wanted.len(),1,"grey shelf cannot satisfy a Colour request");
+    let stale_commands = runner.store_result(stale);
+    assert!(put_pictures(&stale_commands).is_empty(),"stale grey shelf answer must not publish");
+    assert_eq!(runner.app().pictures.state(0),Some(pictures::State::Fetching(wanted[0].0)));
+    let shown = runner.task_outcome(wanted[0].0,TaskOutcome::Completed(png));
+    let shown = store.pump(&mut runner,shown);
+    assert!(shown.iter().any(|c|matches!(c,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Rgb,..})));
+    let index=runner.app().saved.index().unwrap();
+    assert!(index.entries().iter().any(|entry|entry.url.starts_with("picture:rgb:")));
+    assert!(index.entries().iter().any(|entry|entry.url.starts_with("picture:grey:")));
+}
+
+#[test]
+fn colour_identity_switch_prefers_existing_rgb_shelf_over_grey() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    let commands = open_web_page(&mut runner,PLATE);
+    let commands = store.pump(&mut runner,commands);
+    let png=kobo_image::encode_png_rgb(2,1,&[255,0,0,0,128,255]).unwrap();
+    let shown=runner.task_outcome(fetches(&commands)[0].0,TaskOutcome::Completed(png.clone()));
+    store.pump(&mut runner,shown);
+    let grey_key=runner.app().saved.index().unwrap().entries().iter()
+        .find(|entry|entry.url.starts_with("picture:grey:")).unwrap().url.clone();
+    let rgb_key=grey_key.replacen("picture:grey:","picture:rgb:",1);
+    let prepared=pictures::prepare_for(&png,400,300,true).unwrap();
+    let mut context=runner.context();
+    runner.app_mut().saved.keep(&mut context,&rgb_key,&pictures::pack(&prepared));
+    let commands=context.take_commands();
+    store.pump(&mut runner,commands);
+    let back=runner.action(action_id("back"));
+    store.pump(&mut runner,back);
+    let commands=open_web_page(&mut runner,PLATE);
+    let stale_request=commands.into_iter().find_map(|c|match c {
+        kobo_sdk::Command::Store(request @ kobo_sdk::StoreRequest::ShelfRead{..})=>Some(request),_=>None
+    }).unwrap();
+    let stale=store.answer(stale_request);
+    let mut context=runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(kobo_sdk::DeviceIdentity {
+            profile_id:"SIMULATOR:clara-colour-393".into(),
+            ..kobo_sdk::DeviceIdentity::default()
+        }));
+    let changed=context.take_commands();
+    assert!(fetches(&changed).is_empty(),"RGB cache avoids network");
+    assert_eq!(runner.app().pictures.state(0),Some(pictures::State::Reading));
+    assert!(put_pictures(&runner.store_result(stale)).is_empty());
+    let changed=store.pump(&mut runner,changed);
+    assert!(changed.iter().any(|c|matches!(c,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Rgb,..})));
+    assert_eq!(runner.app().pictures.state(0),Some(pictures::State::Shown));
+}

@@ -331,3 +331,42 @@ The historical sections above retain their original status and proposals.
 - Provider stays unchanged until the pending user choice is answered.
 - Measurements: current ARM binary size is in BUDGETS.md; device RSS, speed
   and hardware interaction remain unverified. Upstream app port is incomplete.
+
+
+## Native authored colour implementation plan, November 24, 2026
+
+The current native renderer cannot carry arbitrary authored RGB text. This is
+not an image decoder limitation. `Inline` loses source/style identity during
+semantic conversion, layout `Run` retains only strong/emphasis/link, and the
+shared `TextPresentation` wire byte encodes six style flags, no colour.
+
+A safe implementation should proceed in independently testable increments:
+
+1. Preserve source provenance during the same bounded DOM conversion, before
+   whitespace collapse, nested emphasis/link construction, trimming and code
+   flattening. Style-tree indices are NOT DOM handles: generated content and
+   filtered nodes change the index space. Use an explicit mapping emitted by
+   the style walk over the same parsed DOM. No second parse/string matching.
+   Synthesized labels and truncation notices have no author source and retain
+   toolkit colours. Preserve existing unstyled parse entry-point behavior.
+2. Carry optional authored foreground/background on bounded semantic spans,
+   then through native flattening, paragraph splitting, link splitting and
+   pagination. Do not recolour whole paragraphs from the first matching text.
+   Test duplicate words with different colours, adjacent source nodes joined
+   by whitespace collapse, inherited colours, nested links/emphasis/code,
+   hidden content, generated content, truncation and reader-view selection.
+3. Add explicit RGB span representation with versioned wire compatibility.
+   The existing style byte has two spare bits, not room for RGB; never change
+   its interpretation silently. Verify old peers refuse unsupported nodes
+   cleanly. Runtime, app and simulator must be rebuilt and qualified together.
+   Keep uncoloured native frames allocation-compatible where possible.
+4. Render native RGB glyph coverage and matching link decoration against the
+   span background. Use the existing colour Surface support rather than a
+   full-screen picture overlay, which would discard native control semantics.
+   Verify neutral and chromatic behaviour separately on BW and Colour paths.
+5. Exercise native form controls, restored/fragment positions, saved-copy
+   notices, small/large text, missing glyphs, cache reopen and late identity.
+   Inspect actual full rendered frames and remeasure ARM size and memory.
+
+This is a plan, not completed support. Do not remove the current native-form,
+position or saved-copy safeguards to make the Colour screenshot pass.

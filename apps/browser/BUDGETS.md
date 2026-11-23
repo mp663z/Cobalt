@@ -438,3 +438,16 @@ remains neutral. This is a rendered app test, not a hardware panel result.
 Browser 208 passed, 0 failed, 2 ignored. Clippy completed with existing warnings.
 Locked ARM: 5,192,500 bytes, +3,943,120 over hello, 1,299,760 bytes headroom
 under +5 MiB; stripped static ARM EABI5. Engine unchanged at 1,399/0/18 ignored.
+
+
+### Colour cache-transition coverage, November 24, 2026
+
+Two additional app regressions exercise a grey shelf read pending during
+Colour confirmation: a stale grey answer cannot publish or displace the new
+RGB task, and an existing RGB shelf entry satisfies the replacement without
+network fetch. Grey and RGB cache keys remain separate. Removing the native
+picture retirement step makes the first regression fail; restored code passes.
+Full browser: 210 passed, 0 failed, 2 ignored. Test/document changes only;
+production and measured ARM remain `1c2d834f3`, 5,192,500 bytes. No new pixel
+behavior is claimed for this coverage increment. Native text implementation
+boundaries and an incremental plan are recorded in PLAN.md.
