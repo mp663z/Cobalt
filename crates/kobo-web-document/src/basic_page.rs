@@ -258,25 +258,15 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// true when any leaf colour differs from the block's (v1 flattens them).
     /// Runs carry (text, bold, color). Color is the leaf's own computed
     /// color; the caller maps glyphs back to runs to paint link colors.
-    fn collect_runs(&mut self, parent: usize) -> Result<(Vec<(String, bool, u32)>, bool), &'static str> {
-        let owner = &self.tree.boxes[parent];
-        if owner.kind != BoxKind::Block && owner.kind != BoxKind::AnonymousBlock && owner.kind != BoxKind::ListItem {
-            return Err("not-block");
-        }
-        if owner.children.is_empty() {
+    /// Collect runs from a pure-inline child list (Text | Inline only).
+    /// `block_color` is the fallback color of the owning block.
+    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<(String, bool, u32)>, bool), &'static str> {
+        if children.is_empty() {
             return Err("empty");
         }
-        if !owner
-            .children
-            .iter()
-            .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline))
-        {
-            return Err("mixed-content");
-        }
-        let block_color = owner.style.color;
         let mut mixed_color = false;
         let mut runs: Vec<(String, bool, u32)> = Vec::new();
-        let mut stack: Vec<usize> = owner.children.iter().rev().copied().collect();
+        let mut stack: Vec<usize> = children.iter().rev().copied().collect();
         let mut visited = 0usize;
         while let Some(index) = stack.pop() {
             visited += 1;
@@ -306,11 +296,37 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         Ok((runs, mixed_color))
     }
 
-    /// Paint one pure-inline text block at (content_x, top) with `width`.
-    /// Returns the painted content height in px.
+    /// True when every child is Text or Inline (a pure-inline run group).
+    /// Shallow: an Inline child with block descendants is still Inline
+    /// here; use `deep_pure_inline` where recursion matters.
+    fn pure_inline_children(&self, children: &[usize]) -> bool {
+        !children.is_empty()
+            && children
+                .iter()
+                .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline))
+    }
+
+    /// True when the subtree is entirely Text/Inline content.
+    fn deep_pure_inline(&self, children: &[usize]) -> bool {
+        !children.is_empty()
+            && children.iter().all(|&c| {
+                let node = &self.tree.boxes[c];
+                match node.kind {
+                    BoxKind::Text => true,
+                    BoxKind::Inline => self.deep_pure_inline(&node.children),
+                    _ => false,
+                }
+            })
+    }
+
+    /// Paint one pure-inline text block (or an anonymous inline run group
+    /// of a mixed-content block) at (content_x, top) with `width`.
+    /// `index` supplies the block style (font size, line height, color);
+    /// `children` is the run source. Returns the painted height in px.
     fn paint_text_block(
         &mut self,
         index: usize,
+        children: &[usize],
         content_x: i64,
         top: i64,
         width: u32,
@@ -322,7 +338,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             size = self.font_size(index);
             self.stats.approx("font-size-fallback");
         }
-        let (mut runs, mixed_color) = self.collect_runs(index)?;
+        let (mut runs, mixed_color) = self.collect_runs_of(children, self.tree.boxes[index].style.color)?;
         // Unordered-list marker approximation: a literal bullet glyph
         // prefixed to the item's first run (list-style-type is not read).
         if self.tree.boxes[index].kind == BoxKind::ListItem {
@@ -576,14 +592,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let pad_right = pad(style.padding_right, &mut self.stats);
         let content_top = top + pad_top;
         let node = &self.tree.boxes[index];
-        let pure_inline = !node.children.is_empty()
-            && node
-                .children
-                .iter()
-                .all(|&c| matches!(self.tree.boxes[c].kind, BoxKind::Text | BoxKind::Inline));
+        let pure_inline = self.deep_pure_inline(&self.tree.boxes[index].children);
         let mut content_height: i64 = 0;
         if pure_inline {
-            match self.paint_text_block(index, content_x + pad_left, content_top, (i64::from(width) - pad_left - pad_right).max(0) as u32, list) {
+            let tree = self.tree;
+            match self.paint_text_block(index, &tree.boxes[index].children, content_x + pad_left, content_top, (i64::from(width) - pad_left - pad_right).max(0) as u32, list) {
                 Ok(h) => content_height = h,
                 Err(reason) => self.stats.skip(reason),
             }
@@ -591,12 +604,30 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             let mut cursor = content_top;
             let mut prev_mb = 0i64;
             let child_width = (i64::from(width) - pad_left - pad_right).max(0) as u32;
+            let mut anon: Vec<usize> = Vec::new();
+            macro_rules! flush_anon {
+                ($cursor:ident) => {
+                    if !anon.is_empty() {
+                        match self.paint_text_block(index, &anon, content_x + pad_left, $cursor, child_width, list) {
+                            Ok(h) => $cursor += h,
+                            Err(reason) => self.stats.skip(reason),
+                        }
+                        anon.clear();
+                    }
+                };
+            }
             for &child in &self.tree.boxes[index].children {
                 let ckind = self.tree.boxes[child].kind;
-                if matches!(ckind, BoxKind::Text | BoxKind::Inline) {
-                    self.stats.skip("stray-inline");
+                // Inline runs between block children form an anonymous
+                // block (CSS 2.2 9.2.1.1); inline boxes with only inline
+                // content join the run, text is always run content.
+                if matches!(ckind, BoxKind::Text)
+                    || (matches!(ckind, BoxKind::Inline) && self.pure_inline_children(&self.tree.boxes[child].children))
+                {
+                    anon.push(child);
                     continue;
                 }
+                flush_anon!(cursor);
                 let cstyle = self.tree.boxes[child].style;
                 let containing = width;
                 let ml = self.margin_px(cstyle.margin_left, containing);
@@ -623,6 +654,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 cursor += h;
                 prev_mb = mb;
             }
+            flush_anon!(cursor);
             cursor += prev_mb;
             content_height = cursor - content_top;
         }

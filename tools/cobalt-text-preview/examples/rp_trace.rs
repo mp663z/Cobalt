@@ -49,7 +49,11 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
-    let bytes = std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap();
+    let bytes = if page.contains('/') {
+        kobo_web_document::basic_page::normalize_for_basic(&std::fs::read(page).unwrap())
+    } else {
+        kobo_web_document::basic_page::normalize_for_basic(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap())
+    };
     let budget = SupplyBudget { max_linked_sheets: 24, max_sheet_bytes: 512 * 1024, max_aggregate_bytes: 3 * 1024 * 1024 };
     let limits = Limits { max_input_bytes: 4 * 1024 * 1024, ..Limits::DEFAULT };
     let media = MediaContext::new(800).unwrap();
