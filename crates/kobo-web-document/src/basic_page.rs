@@ -29,6 +29,9 @@ use crate::computed_style::{Length, Margin};
 use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
 
+#[path = "basic_table.rs"]
+mod table;
+
 const MAX_VISITS: usize = 200_000;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -453,19 +456,16 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut bg_insert_at = list.len();
         let entry_len = list.len();
         let node_kind = self.tree.boxes[index].kind;
-        if matches!(
-            node_kind,
-            BoxKind::Table
-                | BoxKind::TableRowGroup
-                | BoxKind::TableRow
-                | BoxKind::TableCell
-                | BoxKind::TableCaption
-                | BoxKind::TableColumn
-        ) {
-            // Table roles are retained, but the grid painter is not wired yet.
-            // Never silently call a vertical block stack a supported table.
-            self.stats.skip("table-grid-not-wired");
-            return 0;
+        if node_kind == BoxKind::Table {
+            let entry = list.len();
+            return match self.layout_table(index, content_x, top, width, list, abs_origin) {
+                Ok(height) => height,
+                Err(reason) => {
+                    list.truncate(entry);
+                    self.stats.skip(reason);
+                    0
+                }
+            };
         }
         let style = self.tree.boxes[index].style;
         // visibility:hidden (FL38 ext, inherited): layout runs and flow
