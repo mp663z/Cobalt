@@ -5,7 +5,7 @@
 //! full-height image. Never a shipping path; the census must travel with
 //! the image.
 use cobalt_text_preview::LocalFace;
-use kobo_web_document::basic_page::{normalize_table_tags_basic, paint_basic_page};
+use kobo_web_document::basic_page::{normalize_for_basic, paint_basic_page};
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::{parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget};
@@ -51,7 +51,7 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
-    let bytes = normalize_table_tags_basic(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
+    let bytes = normalize_for_basic(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
     let budget = SupplyBudget { max_linked_sheets: 48, max_sheet_bytes: 2 * 1024 * 1024, max_aggregate_bytes: 16 * 1024 * 1024 };
     let limits = Limits { max_input_bytes: 8 * 1024 * 1024, ..Limits::DEFAULT };
     let media = MediaContext::new(WIDTH).unwrap();

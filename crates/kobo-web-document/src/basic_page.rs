@@ -677,11 +677,13 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 
 /// BASIC-mode intake normalization: rewrite table-structure tags
 /// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
-/// `colgroup`, `col`) to `div` so their content flows as blocks. The engine
-/// has no table display; without this the content vanishes. Cells stack
-/// vertically (no column geometry) - an approximation that MUST be
-/// disclosed with any render made from normalized input.
-pub fn normalize_table_tags_basic(input: &[u8]) -> Vec<u8> {
+/// `colgroup`, `col`) to `div` so their content flows as blocks, and
+/// `<img>` tags to their `alt` text (empty when no alt). The engine has no
+/// table display and no replaced content; without this the content
+/// vanishes. Cells stack vertically (no column geometry) and images show
+/// as their alt text - approximations that MUST be disclosed with any
+/// render made from normalized input.
+pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
     const NAMES: [&[u8]; 10] = [
         b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
     ];
@@ -689,6 +691,38 @@ pub fn normalize_table_tags_basic(input: &[u8]) -> Vec<u8> {
     let mut i = 0usize;
     while i < input.len() {
         if input[i] == b'<' {
+            // <img ...> -> escaped alt text (or nothing when no alt).
+            if input.len() - i >= 4
+                && input[i + 1..].starts_with(b"img")
+                && matches!(input.get(i + 3), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+            {
+                let mut j = i + 4;
+                let mut quote: Option<u8> = None;
+                while j < input.len() {
+                    match (quote, input[j]) {
+                        (None, b'"') => quote = Some(b'"'),
+                        (None, b'\'') => quote = Some(b'\''),
+                        (Some(q), c) if c == q => quote = None,
+                        (None, b'>') => break,
+                        _ => {}
+                    }
+                    j += 1;
+                }
+                let tag = &input[i..j.min(input.len())];
+                if let Some(alt) = extract_alt(tag) {
+                    for &b in alt {
+                        match b {
+                            b'&' => out.extend_from_slice(b"&amp;"),
+                            b'<' => out.extend_from_slice(b"&lt;"),
+                            b'>' => out.extend_from_slice(b"&gt;"),
+                            _ => out.push(b),
+                        }
+                    }
+                }
+                i = j;
+                continue;
+            }
+            // table-structure tags -> div.
             let mut j = i + 1;
             if j < input.len() && input[j] == b'/' {
                 j += 1;
@@ -718,6 +752,38 @@ pub fn normalize_table_tags_basic(input: &[u8]) -> Vec<u8> {
         i += 1;
     }
     out
+}
+
+/// Raw value of the first `alt` attribute in a tag, if present and non-empty.
+fn extract_alt(tag: &[u8]) -> Option<&[u8]> {
+    let mut i = 0usize;
+    while i + 4 < tag.len() {
+        if (tag[i] == b' ' || tag[i] == b'\t' || tag[i] == b'\n')
+            && tag[i + 1..].starts_with(b"alt")
+            && tag.get(i + 4) == Some(&b'=')
+        {
+            let mut j = i + 5;
+            if j >= tag.len() {
+                return None;
+            }
+            let q = tag[j];
+            if q != b'"' && q != b'\'' {
+                continue;
+            }
+            j += 1;
+            let val_start = j;
+            while j < tag.len() && tag[j] != q {
+                j += 1;
+            }
+            let v = &tag[val_start..j];
+            if !v.is_empty() {
+                return Some(v);
+            }
+            return None;
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Paint a best-effort partial page. The returned stats MUST travel with any

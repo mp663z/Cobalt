@@ -3,7 +3,7 @@
 //! with strip replay. The supply handshake requires sheets.len() == claimed
 //! host sheet links, so the fetch pipeline must deliver every linked sheet.
 use cobalt_text_preview::LocalFace;
-use kobo_web_document::basic_page::{normalize_table_tags_basic, paint_basic_page};
+use kobo_web_document::basic_page::{normalize_for_basic, paint_basic_page};
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::{parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget};
@@ -50,7 +50,7 @@ fn main() {
     let html_path = &a[1];
     let sheet_dir = &a[2];
     let out_path = &a[3];
-    let bytes = normalize_table_tags_basic(&std::fs::read(html_path).unwrap());
+    let bytes = normalize_for_basic(&std::fs::read(html_path).unwrap());
     let mut sheets: Vec<Vec<u8>> = Vec::new();
     for i in 0..64 {
         match std::fs::read(format!("{sheet_dir}/sheet-{i}.css")) {
