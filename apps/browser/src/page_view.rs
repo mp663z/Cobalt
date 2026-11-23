@@ -198,10 +198,10 @@ impl PageView {
         let (_, _, measured) = paint_basic_page_families(&boxes, css_width, 1, serif, sans, mono)?;
         let content_height =
             u32::try_from(measured.clamp(1, MAX_CONTENT_HEIGHT_CSS)).map_err(|_| "viewport")?;
-        let (commands, stats, _) =
+        let (mut commands, stats, _) =
             paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
         let cuts = paginate(&commands, content_height, page_height_css);
-        let (links, targets) = link_targets(&tree, &commands);
+        let (links, targets) = link_targets(&tree, &mut commands);
         Ok(Self {
             commands,
             stats,
@@ -256,8 +256,17 @@ impl PageView {
             .get(page.min(self.cuts.len().saturating_sub(1)))
             .copied()
             .unwrap_or(0);
-        let bottom = top.saturating_add(self.page_height_css);
-        let mut clips: Vec<Rect> = Vec::new();
+        let bottom = self
+            .cuts
+            .get(page + 1)
+            .copied()
+            .unwrap_or(self.content_height);
+        let mut clips: Vec<Rect> = vec![Rect {
+            x: 0,
+            y: 0,
+            width: self.css_width,
+            height: bottom.saturating_sub(top),
+        }];
         for command in &self.commands {
             match command {
                 Command::Fill { rect, color, .. } => {
@@ -295,12 +304,17 @@ impl PageView {
                     );
                 }
                 Command::PushClip(rect) => {
-                    if let Some(rect) = shift(rect, top, bottom) {
-                        clips.push(rect);
-                    }
+                    clips.push(shift(rect, top, bottom).unwrap_or(Rect {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    }));
                 }
                 Command::PopClip => {
-                    clips.pop();
+                    if clips.len() > 1 {
+                        clips.pop();
+                    }
                 }
             }
         }
@@ -309,14 +323,32 @@ impl PageView {
 
     /// A tap map over the painted column: every command carrying a source
     /// action contributes its rect. Resolution expands each target to a
-    /// minimum tap size and refuses ambiguous clusters, where the caller
-    /// falls back to a link list. Empty until the painter attaches
-    /// actions; the resolution logic is exercised by unit tests with
-    /// synthetic commands.
+    /// minimum tap size and refuses ambiguous clusters. The app uses the
+    /// scoped Links list until the protocol supports coordinate taps.
     pub(crate) fn tap_map(&self) -> TapMap {
         TapMap {
             targets: self.targets.clone(),
         }
+    }
+
+    /// Link actions with visible geometry on this screen, in paint order.
+    pub(crate) fn screen_links(&self, page: usize) -> Vec<usize> {
+        let top = self.cuts[page.min(self.pages().saturating_sub(1))];
+        let bottom = self
+            .cuts
+            .get(page + 1)
+            .copied()
+            .unwrap_or(self.content_height);
+        let mut links = Vec::new();
+        for (rect, action) in &self.targets {
+            if i64::from(rect.y) < i64::from(bottom)
+                && i64::from(rect.y) + i64::from(rect.height) > i64::from(top)
+                && !links.contains(action)
+            {
+                links.push(*action);
+            }
+        }
+        links
     }
 
     /// The page's link targets in first-paint order, for the Links list.
@@ -328,16 +360,16 @@ impl PageView {
 /// Resolves every command's source node to the nearest ancestor `a` href,
 /// interning targets in first-paint order. The walk is depth-bounded: the
 /// tree comes from an untrusted document.
-fn link_targets(tree: &StyleTree, commands: &[Command]) -> (Vec<String>, Vec<(Rect, usize)>) {
+fn link_targets(tree: &StyleTree, commands: &mut [Command]) -> (Vec<String>, Vec<(Rect, usize)>) {
     let mut links: Vec<String> = Vec::new();
     let mut targets: Vec<(Rect, usize)> = Vec::new();
     for command in commands {
-        let (rect, node) = match command {
-            Command::Fill { rect, source, .. } => (rect, source.node),
-            Command::GlyphRun { layout, source, .. } => (layout, source.node),
+        let (rect, source) = match command {
+            Command::Fill { rect, source, .. } => (rect, source),
+            Command::GlyphRun { layout, source, .. } => (layout, source),
             Command::PushClip(_) | Command::PopClip => continue,
         };
-        let Some(node) = node else {
+        let Some(node) = source.node else {
             continue;
         };
         let mut at = Some(node);
@@ -364,6 +396,7 @@ fn link_targets(tree: &StyleTree, commands: &[Command]) -> (Vec<String>, Vec<(Re
                     links.push(href);
                     links.len() - 1
                 });
+            source.action = Some(action);
             targets.push((*rect, action));
         }
     }
@@ -373,7 +406,7 @@ fn link_targets(tree: &StyleTree, commands: &[Command]) -> (Vec<String>, Vec<(Re
 /// The fallback decision on a census alone, so the app can ask before it
 /// keeps a painted view around.
 pub(crate) fn falls_back(stats: &PartialStats) -> bool {
-    if stats.intake_truncated {
+    if stats.intake_truncated || stats.output_truncated {
         return true;
     }
     let skipped: usize = stats.skips.values().sum();
@@ -387,11 +420,14 @@ pub(crate) fn falls_back(stats: &PartialStats) -> bool {
 /// crosses it is split.
 fn paginate(commands: &[Command], content_height: u32, page_height: u32) -> Vec<u32> {
     let mut ink: Vec<(i64, i64)> = Vec::new();
+    let has_text = commands
+        .iter()
+        .any(|command| matches!(command, Command::GlyphRun { .. }));
     for command in commands {
         let rect = match command {
             Command::GlyphRun { layout, .. } => Some(layout),
-            Command::Fill { rect, .. } => Some(rect),
-            Command::PushClip(_) | Command::PopClip => None,
+            Command::Fill { rect, .. } if !has_text => Some(rect),
+            Command::Fill { .. } | Command::PushClip(_) | Command::PopClip => None,
         };
         if let Some(rect) = rect {
             ink.push((
@@ -582,7 +618,7 @@ fn paint_glyphs(
 
 /// Tap targets over a painted column, in CSS px.
 pub(crate) struct TapMap {
-    /// `(rect, action)` in paint order; the last painted target wins a hit.
+    /// `(rect, action)` in paint order; ambiguous actions refuse the hit.
     targets: Vec<(Rect, usize)>,
 }
 
@@ -699,6 +735,26 @@ mod tests {
     }
 
     #[test]
+    fn pagination_ignores_backgrounds_and_does_not_repeat_next_line() {
+        let commands = vec![fill(0, 0, 100, 200, None), glyph_line(80, 30)];
+        assert_eq!(paginate(&commands, 200, 100), vec![0, 80, 180]);
+        let view = PageView {
+            commands,
+            stats: PartialStats::default(),
+            links: vec![],
+            targets: vec![],
+            content_height: 200,
+            css_width: 100,
+            scale: 1,
+            page_height_css: 100,
+            cuts: vec![0, 80, 180],
+        };
+        let pixels = view.raster_page_grey(0);
+        // The first screen ends before the next line, rather than showing it twice.
+        assert!(pixels[80 * 100..].iter().all(|pixel| *pixel == 255));
+    }
+
+    #[test]
     fn raster_scales_fills_and_upsizes_the_screen() {
         let view = PageView {
             commands: vec![fill(5, 5, 10, 10, None)],
@@ -764,6 +820,14 @@ mod tests {
     }
 
     #[test]
+    fn fallback_on_truncated_output() {
+        assert!(falls_back(&PartialStats {
+            output_truncated: true,
+            ..PartialStats::default()
+        }));
+    }
+
+    #[test]
     fn fallback_on_truncated_intake() {
         let stats = PartialStats {
             intake_truncated: true,
@@ -793,6 +857,20 @@ mod tests {
         assert_eq!(clusters.last().expect("last").end, text.len());
         assert!(clusters.len() < text.chars().count());
         assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
+    }
+
+    #[test]
+    fn screen_links_follow_source_actions_and_page_boundaries() {
+        let face = PageFontAdapter::bundled().expect("faces");
+        let view = PageView::paint(
+            b"<p><a href='/first'>First</a></p><div style='height:800px'></div><p><a href='/last'>Last</a></p>",
+            536, 300, 2, &face, &face, &face,
+        ).expect("paint");
+        assert_eq!(view.screen_links(0), vec![0]);
+        assert!(!view.screen_links(0).contains(&1));
+        assert!(view.commands.iter().any(|command| matches!(command,
+            Command::GlyphRun { source, .. } if source.action == Some(1))));
+        assert!((1..view.pages()).any(|page| view.screen_links(page).contains(&1)));
     }
 
     #[test]

@@ -33,3 +33,24 @@ There is no JavaScript. Images are not drawn yet; a linked image is offered
 as a link. Pages are read up to 2 MB. The runtime reports only the body of a
 response, so relative links on a page that was redirected are resolved from
 the address that was asked for, unless the page names its own base.
+
+### Painted Page view prototype
+
+Navigate > Page view paints the arriving HTML at 2 device pixels per CSS
+pixel, lays it out once, and sends only the current screen as a picture.
+Reader returns to the native reader at its previous place. The count is in
+the title bar so it cannot cover page ink. Page view uses the measured
+picture slot inside the toolbars, not a full-panel picture behind them.
+
+Links are listed under Navigate > Links for the painted screen only. The
+current SDK reports named actions, not coordinates inside pictures, so a
+painted link cannot yet be tapped directly. Form documents stay in the
+native reader, where controls work. Truncated or substantially skipped
+paint also keeps Reader. Page view is opt-in and is not a parity claim.
+Images, external stylesheets, painted form controls, saved painted-page
+positions, and device memory measurements remain follow-up work.
+
+`drive-page.kobo` covers Page view, scoped links, link navigation and Back,
+page turns and the Reader switch. Run with the current checkout's simulator
+on `clara-bw-391` and `clara-colour-393`. The normal `drive.kobo` continues
+to cover the native reader. No live network is required for either script.

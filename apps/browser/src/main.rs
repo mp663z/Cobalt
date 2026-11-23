@@ -31,6 +31,7 @@ mod bundled_pair_adapter;
 mod css_stage;
 mod forms;
 mod native_font_adapter;
+mod page_mode;
 #[allow(dead_code)] // Page view compiles ahead of the view switch that installs it.
 mod page_view;
 mod pictures;
@@ -73,6 +74,9 @@ fn sample(url: &Url) -> Option<&'static str> {
 
 /// A document on screen.
 struct Loaded {
+    page_source: Option<Vec<u8>>,
+    painted: Option<page_mode::PageMode>,
+    paint_refused: bool,
     url: Url,
     title: String,
     document: Document,
@@ -507,6 +511,7 @@ impl Browser {
         if let Some(task) = self.pager.take() {
             context.cancel(task);
         }
+        context.drop_picture(page_mode::HANDLE);
         // A new document replaces any staged frame before it is parsed.
         self.css.clear();
         self.sheets.clear(context);
@@ -577,6 +582,9 @@ impl Browser {
         self.editing = None;
         self.form_entry.close();
         self.loaded = Some(Loaded {
+            page_source: page_mode::retain_source(bytes),
+            painted: None,
+            paint_refused: false,
             url: url.clone(),
             title,
             document,
@@ -729,6 +737,8 @@ impl Browser {
         let Some(loaded) = self.loaded.as_mut() else {
             return;
         };
+        loaded.painted = None;
+        context.drop_picture(page_mode::HANDLE);
         let (document, full, page) = if let Some(full) = loaded.full.take() {
             let page = self.history.current().map_or(0, |entry| entry.page);
             (full, None, page)
@@ -761,6 +771,14 @@ impl Browser {
     }
 
     fn turn_to(&mut self, context: &mut Context, page: usize) {
+        if let Some(painted) = self
+            .loaded
+            .as_mut()
+            .and_then(|loaded| loaded.painted.as_mut())
+        {
+            painted.page = page.min(painted.view.pages().saturating_sub(1));
+            return;
+        }
         self.make_pages(context, page);
         if self.pager.is_none() {
             self.keep_paging(context);
@@ -846,6 +864,23 @@ impl Browser {
     /// Links on the page being read, in reading order: those drawn in the
     /// text and those in headings, quotations and tables, which are not.
     fn page_links(&self) -> Vec<usize> {
+        if let Some(loaded) = &self.loaded {
+            if let Some(painted) = &loaded.painted {
+                return painted
+                    .view
+                    .screen_links(painted.page)
+                    .into_iter()
+                    .filter_map(|index| {
+                        let target = loaded.url.join(&painted.view.links()[index]).ok()?;
+                        loaded
+                            .document
+                            .links
+                            .iter()
+                            .position(|link| link.target == target)
+                    })
+                    .collect();
+            }
+        }
         let mut links: Vec<usize> = Vec::new();
         for link in self.current_pieces().iter().flat_map(Piece::all_links) {
             if !links.contains(&link) {
@@ -1022,7 +1057,60 @@ impl Browser {
         }
     }
 
+    fn page_mode_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action == action_id("page-view") {
+            if self
+                .loaded
+                .as_ref()
+                .is_some_and(|loaded| loaded.full.is_some())
+            {
+                self.toggle_reader(context);
+            }
+            if let Some(loaded) = self.loaded.as_mut() {
+                // Forms need the native controls until the protocol supports painted hit regions.
+                let forms = !forms::forms(&loaded.document.blocks).is_empty();
+                loaded.painted = (!forms)
+                    .then(|| {
+                        loaded.page_source.as_deref().and_then(|bytes| {
+                            page_mode::PageMode::build(bytes, &loaded.title, &context.metrics())
+                        })
+                    })
+                    .flatten();
+                loaded.paint_refused = loaded.painted.is_none();
+            }
+        } else if action == action_id("native-reader") {
+            if let Some(loaded) = self.loaded.as_mut() {
+                loaded.painted = None;
+            }
+            context.drop_picture(page_mode::HANDLE);
+        } else {
+            return false;
+        }
+        self.view = View::Page;
+        true
+    }
+
     fn show(&self, context: &mut Context) {
+        if matches!(self.view, View::Page) && !self.address.is_open() {
+            if let Some(loaded) = &self.loaded {
+                if let Some(painted) = &loaded.painted {
+                    if !painted.publish(context, self.pictures.colour()) {
+                        context.set_screen(
+                            page_screen_with_metrics(
+                                &loaded.title,
+                                self.current_pieces(),
+                                loaded.page,
+                                None,
+                                Some(false),
+                                &context.metrics(),
+                            )
+                            .build(),
+                        );
+                        return;
+                    }
+                }
+            }
+        }
         context.set_screen(self.screen(&context.metrics()).build());
     }
 
@@ -1032,6 +1120,19 @@ impl Browser {
         let metrics = context.metrics();
         let colour = self.pictures.colour();
         self.css.validate(&metrics, colour);
+        if let Some(loaded) = self.loaded.as_mut() {
+            if loaded
+                .painted
+                .as_ref()
+                .is_some_and(|painted| painted.metrics != metrics)
+            {
+                loaded.painted = loaded
+                    .page_source
+                    .as_deref()
+                    .and_then(|bytes| page_mode::PageMode::build(bytes, &loaded.title, &metrics));
+                loaded.paint_refused = loaded.painted.is_none();
+            }
+        }
     }
 
     fn form_entry_screen(&self) -> ScreenBuilder {
@@ -1146,10 +1247,25 @@ impl Browser {
             .loaded
             .as_ref()
             .is_some_and(|loaded| self.library.contains(&loaded.url.without_fragment()));
+        let heading = if self
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| loaded.paint_refused)
+        {
+            "Reader kept: page paint was incomplete"
+        } else {
+            "Navigate"
+        };
         ScreenBuilder::new("browser-navigate")
-            .top_bar("Navigate")
+            .top_bar(heading)
             .top_bar_action("return", "Done")
             .rows([
+                (
+                    "page-view",
+                    "Page view",
+                    "Paint this page, or keep Reader if unsupported",
+                    Glyph::Note,
+                ),
                 ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
                 ("links", "Links", "Links on this page", Glyph::Bookmark),
                 (
@@ -1364,8 +1480,17 @@ impl Browser {
                     pages.len(),
                 )
             }
+            (View::Page, Some(loaded)) if loaded.painted.is_some() => loaded
+                .painted
+                .as_ref()
+                .expect("painted")
+                .screen(&loaded.title),
             (_, Some(loaded)) => page_screen_with_metrics(
-                &loaded.title,
+                &if loaded.paint_refused {
+                    format!("Reader: {}", loaded.title)
+                } else {
+                    loaded.title.clone()
+                },
                 self.current_pieces(),
                 loaded.page,
                 // The count in the bar is only honest once every page exists.
@@ -1437,7 +1562,12 @@ impl KoboApp for Browser {
             return;
         }
         if action == action_id("next-page") || action == action_id("previous-page") {
-            if let Some(page) = self.loaded.as_ref().map(|loaded| loaded.page) {
+            if let Some(page) = self.loaded.as_ref().map(|loaded| {
+                loaded
+                    .painted
+                    .as_ref()
+                    .map_or(loaded.page, |painted| painted.page)
+            }) {
                 let to = if action == action_id("next-page") {
                     page.saturating_add(1)
                 } else {
@@ -1479,7 +1609,13 @@ impl KoboApp for Browser {
         } else if action == action_id("links") {
             self.view = View::Links(0);
         } else if action == action_id("sections") {
+            if let Some(loaded) = self.loaded.as_mut() {
+                loaded.painted = None;
+            }
+            context.drop_picture(page_mode::HANDLE);
             self.view = View::Sections(0);
+        } else if self.page_mode_action(context, action) {
+            // The view switch owns its cursor and retains the native reader.
         } else if action == action_id("reader") {
             self.toggle_reader(context);
         } else if action == action_id("links-next") || action == action_id("links-previous") {

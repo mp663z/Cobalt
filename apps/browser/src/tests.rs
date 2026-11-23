@@ -1481,3 +1481,159 @@ fn links_are_reachable_through_navigate_on_every_profile_and_text_size() {
         }
     }
 }
+
+#[test]
+fn painted_page_journey_keeps_native_reader_and_scoped_links() {
+    for colour in [false, true] {
+        let mut runner = runner(TextScale::Default);
+        runner.app_mut().pictures.set_colour(colour);
+        let mut context = runner.context();
+        let url = Url::parse("https://journey.invalid/start").expect("url");
+        let mut html = String::from("<title>Reading on paper</title><body><h1>Reading on paper</h1><p><a href='/next'>Open the next article</a></p>");
+        for _ in 0..40 {
+            html.push_str("<p>Pages keep their place. Clear text belongs on the screen, with enough room to read comfortably.</p>");
+        }
+        html.push_str("<p><a href='/last'>A later link</a></p></body>");
+        runner
+            .app_mut()
+            .show_document(&mut context, &url, html.as_bytes());
+        let commands = runner.action(action_id("page-view"));
+        assert!(
+            runner.app().loaded.as_ref().unwrap().painted.is_some(),
+            "Page view refused"
+        );
+        assert!(commands.iter().any(|command| matches!(command, kobo_sdk::Command::PutPicture { handle, format, .. }
+            if *handle == page_mode::HANDLE && *format == if colour { kobo_sdk::PictureFormat::Rgb } else { kobo_sdk::PictureFormat::Grey })));
+        assert_eq!(runner.app().page_links().len(), 1);
+        assert!(
+            runner
+                .app()
+                .loaded
+                .as_ref()
+                .unwrap()
+                .painted
+                .as_ref()
+                .unwrap()
+                .view
+                .pages()
+                > 1
+        );
+        let first = runner.app().page_links()[0];
+        save_painted_journey_frame(
+            &runner,
+            &commands,
+            if colour { "colour-first" } else { "bw-first" },
+        );
+        runner.action(action_id("next-page"));
+        assert_eq!(
+            runner
+                .app()
+                .loaded
+                .as_ref()
+                .unwrap()
+                .painted
+                .as_ref()
+                .unwrap()
+                .page,
+            1
+        );
+        runner.action(action_id("previous-page"));
+        runner.action(action_id("links"));
+        runner.action(action_id(&link_action(first)));
+        assert_eq!(
+            runner.app().pending.as_ref().unwrap().url.to_string(),
+            "https://journey.invalid/next"
+        );
+        runner.action(action_id("cancel-load"));
+        runner.action(action_id("native-reader"));
+        assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    }
+}
+
+fn save_painted_journey_frame(
+    runner: &AppRunner<Browser>,
+    commands: &[kobo_sdk::Command],
+    name: &str,
+) {
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_none() {
+        return;
+    }
+    struct Picture {
+        width: u32,
+        height: u32,
+        grey: Vec<u8>,
+        colour: Option<Vec<u8>>,
+    }
+    impl kobo_ui::Pictures for Picture {
+        fn get(&self, handle: kobo_sdk::PictureHandle) -> Option<kobo_ui::PicturePixels<'_>> {
+            (handle == page_mode::HANDLE).then_some(kobo_ui::PicturePixels {
+                width: self.width,
+                height: self.height,
+                grey: &self.grey,
+                colour: self.colour.as_deref(),
+            })
+        }
+    }
+    let (width, height, format, pixels) = commands
+        .iter()
+        .find_map(|command| match command {
+            kobo_sdk::Command::PutPicture {
+                handle,
+                width,
+                height,
+                format,
+                pixels,
+            } if *handle == page_mode::HANDLE => Some((*width, *height, *format, pixels)),
+            _ => None,
+        })
+        .expect("published picture");
+    let picture = Picture {
+        width,
+        height,
+        grey: if format == kobo_sdk::PictureFormat::Grey {
+            pixels.clone()
+        } else {
+            pixels.chunks_exact(3).map(|p| p[0]).collect()
+        },
+        colour: (format == kobo_sdk::PictureFormat::Rgb).then(|| pixels.clone()),
+    };
+    let metrics = kobo_ui::CLARA_BW_METRICS;
+    let screen = runner.app().screen(&metrics).build();
+    let room =
+        kobo_web_layout::picture_box(&screen, &metrics, page_mode::HANDLE).expect("picture room");
+    assert_eq!(room, (width, height), "raster must not be resized by UI");
+    let mut surface = kobo_ui::Surface::new(metrics.width as usize, metrics.height as usize);
+    kobo_ui::render_all(
+        &screen,
+        &metrics,
+        &Chrome::measuring(true),
+        &picture,
+        &mut surface,
+        None,
+    );
+    use std::io::Write as _;
+    let mut file = std::fs::File::create(format!("/tmp/page-journey-{name}.ppm")).unwrap();
+    write!(file, "P6\n{} {}\n255\n", metrics.width, metrics.height).unwrap();
+    for index in 0..surface.pixels.len() {
+        file.write_all(&surface.rgb_at(index).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn painted_forms_keep_native_controls_and_census_refusal_is_visible() {
+    let mut runner = form_runner(TextScale::Default);
+    runner.action(action_id("page-view"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    assert!(loaded.painted.is_none());
+    assert!(loaded.paint_refused);
+    runner.action(action_id("form-0"));
+    assert_eq!(runner.app().view, View::Form(0, 0));
+
+    let mut context = runner.context();
+    runner.app_mut().show_document(&mut context, &Url::parse("https://journey.invalid/refuse").unwrap(),
+        b"<title>Fallback</title><div style='visibility:hidden'><p>hidden</p><p>hidden</p><p>hidden</p></div><p>Visible reader content.</p>");
+    runner.app_mut().view = View::Page;
+    runner.action(action_id("page-view"));
+    assert!(runner.app().loaded.as_ref().unwrap().paint_refused);
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+}

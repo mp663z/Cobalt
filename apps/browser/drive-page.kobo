@@ -1,0 +1,30 @@
+wait-for Sample pages
+tap-id navigate
+tap-id page-view
+wait-for-id native-reader
+shot index-page
+tap-id navigate
+tap-id links
+expect links on this page
+shot scoped-links
+tap-id link-0
+wait-for Notes on reading from paper screens
+tap-id back
+wait-for Sample pages
+tap-id link-0
+wait-for Notes on reading from paper screens
+tap-id navigate
+tap-id page-view
+wait-for-id native-reader
+expect 1/
+shot article-page-1
+tap-at 1000,700
+wait 300
+expect 2/
+shot article-page-2
+tap-at 40,700
+wait 300
+expect 1/
+tap-id native-reader
+expect Notes on reading from paper screens
+shot reader-return
