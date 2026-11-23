@@ -1273,6 +1273,11 @@ pub struct PrefilterStats {
     /// on top of the page. The declaration is demoted to
     /// `position:static`, keeping the content in flow instead.
     pub offcanvas_static: usize,
+    /// Rules matching the classic screen-reader-only pattern
+    /// (position:absolute, 1px box, overflow:hidden). The engine does
+    /// not clip overflow, so the text paints as a sliver column; folded
+    /// to display:none, which matches the sighted rendering.
+    pub visually_hidden_folded: usize,
 }
 
 /// Document key census for the prefilter: tag names (lowercased), class
@@ -1401,11 +1406,12 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
                 }
                 let payload = &input[j + 1..k];
                 if let Some(css) = b64_decode(payload) {
-                    let (filtered, kept, dropped, off) = prefilter_css(&css, &census);
+                    let (filtered, kept, dropped, off, vh) = prefilter_css(&css, &census);
                     stats.rules_kept += kept;
                     stats.rules_dropped += dropped;
                     stats.offcanvas_static += off;
-                    if dropped > 0 || off > 0 {
+                    stats.visually_hidden_folded += vh;
+                    if dropped > 0 || off > 0 || vh > 0 {
                         stats.sheets_touched += 1;
                         out.extend_from_slice(&input[i..j + 1]);
                         out.extend_from_slice(&b64_encode(&filtered));
@@ -1424,9 +1430,9 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
 /// Filter one stylesheet: drop provably unmatchable plain rules, recurse
 /// into @media/@supports/@layer, copy everything else verbatim
 /// (comments, @keyframes, @font-face, strings all preserved).
-fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize) {
+fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, usize) {
     let mut out = Vec::with_capacity(css.len());
-    let (mut kept, mut dropped, mut offcanvas) = (0usize, 0usize, 0usize);
+    let (mut kept, mut dropped, mut offcanvas, mut vishidden) = (0usize, 0usize, 0usize, 0usize);
     let mut i = 0usize;
     while i < css.len() {
         // comments and strings pass through
@@ -1537,10 +1543,11 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize) 
             .iter()
             .any(|p| head_trim.starts_with(p));
         if head_trim.starts_with(b"@") && recurse {
-            let (inner, k2, d2, o2) = prefilter_css(block, census);
+            let (inner, k2, d2, o2, v2) = prefilter_css(block, census);
             kept += k2;
             dropped += d2;
             offcanvas += o2;
+            vishidden += v2;
             out.extend_from_slice(prelude);
             out.push(b'{');
             out.extend_from_slice(&inner);
@@ -1557,13 +1564,35 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize) 
                 out.extend_from_slice(block);
                 out.extend_from_slice(b";position:static}");
                 offcanvas += 1;
+            } else if has_visually_hidden_pattern(block) {
+                out.extend_from_slice(prelude);
+                out.push(b'{');
+                out.extend_from_slice(block);
+                out.extend_from_slice(b";display:none}");
+                vishidden += 1;
             } else {
                 out.extend_from_slice(&css[i..e]);
             }
         }
         i = e;
     }
-    (out, kept, dropped, offcanvas)
+    (out, kept, dropped, offcanvas, vishidden)
+}
+
+/// True for the classic screen-reader-only rule: an absolutely
+/// positioned 1px box with overflow:hidden. Without overflow clipping
+/// the text paints as a one-character-wide column.
+fn has_visually_hidden_pattern(block: &[u8]) -> bool {
+    let lower: Vec<u8> = block
+        .iter()
+        .map(|b| b.to_ascii_lowercase())
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    let has = |needle: &[u8]| lower.windows(needle.len()).any(|w| w == needle);
+    has(b"position:absolute")
+        && has(b"width:1px")
+        && has(b"height:1px")
+        && has(b"overflow:hidden")
 }
 
 /// True when a rule both positions itself (fixed or absolute) and

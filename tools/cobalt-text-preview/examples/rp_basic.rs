@@ -52,7 +52,7 @@ fn main() {
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
     let ((bytes, pf), images, hoisted, table_rows, form_chrome) = kobo_web_document::basic_page::normalize_for_basic_full(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
-    if pf.rules_dropped > 0 || pf.offcanvas_static > 0 { eprintln!("prefilter: sheets_touched={} rules_kept={} rules_dropped={} offcanvas_static={}", pf.sheets_touched, pf.rules_kept, pf.rules_dropped, pf.offcanvas_static); }
+    if pf.rules_dropped > 0 || pf.offcanvas_static > 0 || pf.visually_hidden_folded > 0 { eprintln!("prefilter: sheets_touched={} rules_kept={} rules_dropped={} offcanvas_static={} visually_hidden={}", pf.sheets_touched, pf.rules_kept, pf.rules_dropped, pf.offcanvas_static, pf.visually_hidden_folded); }
     if !images.is_empty() {
         eprintln!("images: {} data-URI markers reserved ({} picture-hoisted, {} table-rows-flexed, {} form-chrome)", images.len(), hoisted, table_rows, form_chrome);
         std::fs::write(format!("/tmp/basic-{page}.imguris"), images.join(&b'\n')).unwrap();
