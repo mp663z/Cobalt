@@ -62,3 +62,29 @@ table handling by design, which is right for EPUB and wrong for the open web.
 | Redirects | 5 (runtime) |
 
 Past a limit the page is still shown, with a warning saying what was left out.
+
+## Page text fallback and shaping, November 23, 2026
+
+The Page view font session adds the existing locked rustybuzz 0.20.1 dependency
+and two renamed OFL font subsets. No new package version was resolved.
+
+| Asset | Bytes |
+| --- | ---: |
+| Kobo Page Cyrillic, Noto Sans derived | 94,208 |
+| Kobo Page Devanagari, Noto Sans Devanagari derived | 201,852 |
+| Total embedded fallback bytes | 296,060 |
+
+Both retain OpenType layout tables. A broad Japanese kana/CJK subset measured
+13,377,744 bytes, so it is not bundled: that exceeds the entire +5 MiB binary
+budget. Japanese coverage requires a caller-provided face through `add_fallback`.
+
+A stripped x86_64 release preview measured 2,976,296 bytes with shaping and both
+fallbacks, versus 1,940,008 bytes for the scalar preview on b40f4ccc, a 1,036,288
+byte increase. This comparison includes intervening text-engine changes and is
+not an isolated shaper cost. It is not an armv7 binary result. Device binary size
+and peak RSS remain unverified; this does not establish compliance with either
+the +5 MiB binary or +32 MiB RSS budget.
+
+Shaping input is capped at 65,536 bytes per run. A shaped cluster mask is capped
+at 262,144 bytes and cumulative shaped masks at 4 MiB per run. Font fallbacks
+remain capped at eight. These are safety caps, not a measured device budget.

@@ -1672,6 +1672,7 @@ version = "0.3.25"
 dependencies = [
  "fontdue",
  "kobo-ui",
+ "rustybuzz",
  "unicode-linebreak",
  "unicode-segmentation",
 ]

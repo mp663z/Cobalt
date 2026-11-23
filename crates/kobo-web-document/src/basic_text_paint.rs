@@ -59,8 +59,31 @@ pub(crate) fn paint(
 ) -> Result<(Vec<Command>, i64, usize), &'static str> {
     let refs: Vec<_> = runs.iter().map(|r| (r.0.as_str(), r.1)).collect();
     let size_of = |leaf: usize| runs[leaf].3.clamp(1, 256);
+    let shaped: Vec<_> = runs
+        .iter()
+        .map(|r| font.page_shape(&r.0, r.3.clamp(1, 256), r.1, r.4))
+        .collect();
+    let mut measure_offsets = vec![0_usize; runs.len()];
     let glyph_width = |ch: char, leaf: usize| {
         let size = size_of(leaf);
+        let offset = &mut measure_offsets[leaf];
+        let next = runs[leaf].0[*offset..]
+            .char_indices()
+            .find(|(_, c)| *c == ch);
+        let byte = next.map_or(*offset, |(i, _)| *offset + i);
+        *offset = byte.saturating_add(ch.len_utf8()).min(runs[leaf].0.len());
+        if let Some(clusters) = &shaped[leaf] {
+            if let Some(cluster) = clusters
+                .get(clusters.partition_point(|c| c.end <= byte))
+                .filter(|c| c.start <= byte && c.end > byte)
+            {
+                return Some(if cluster.start == byte {
+                    cluster.advance
+                } else {
+                    0
+                });
+            }
+        }
         if font.has_glyph(ch, runs[leaf].1) == Some(false) {
             return Some((size / 2).max(3));
         }
@@ -108,6 +131,7 @@ pub(crate) fn paint(
     }
     let mut commands = Vec::new();
     let mut missing = 0;
+    let mut paint_offsets = vec![0_usize; runs.len()];
     let mut from = 0;
     while from < lines.glyphs.len() {
         let first = lines.glyphs[from];
@@ -130,6 +154,37 @@ pub(crate) fn paint(
         let bitmaps: Vec<_> = glyphs
             .iter()
             .map(|g| {
+                let offset = &mut paint_offsets[g.leaf];
+                let next = runs[g.leaf].0[*offset..]
+                    .char_indices()
+                    .find(|(_, c)| *c == g.character);
+                let byte = next.map_or(*offset, |(i, _)| *offset + i);
+                *offset = byte
+                    .saturating_add(g.character.len_utf8())
+                    .min(runs[g.leaf].0.len());
+                if let Some(clusters) = &shaped[g.leaf] {
+                    if let Some(cluster) = clusters
+                        .get(clusters.partition_point(|c| c.end <= byte))
+                        .filter(|c| c.start <= byte && c.end > byte)
+                    {
+                        if cluster.start == byte {
+                            return GlyphBitmap {
+                                left: cluster.bitmap.left,
+                                top: cluster.bitmap.top,
+                                width: cluster.bitmap.width,
+                                height: cluster.bitmap.height,
+                                coverage: cluster.bitmap.coverage.clone(),
+                            };
+                        }
+                        return GlyphBitmap {
+                            left: 0,
+                            top: 0,
+                            width: 0,
+                            height: 0,
+                            coverage: Vec::new(),
+                        };
+                    }
+                }
                 if font.has_glyph(g.character, g.bold) != Some(false) {
                     if let Some(bitmap) =
                         font.page_raster(g.character, size, g.bold, runs[g.leaf].4)

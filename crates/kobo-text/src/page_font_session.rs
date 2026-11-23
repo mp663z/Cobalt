@@ -1,8 +1,8 @@
 //! Best-effort fonts for styled Page view, separate from exact paint sessions.
 //!
 //! Coverage is checked before drawing. Missing characters produce a visible box,
-//! never a terminal session error. This is scalar rasterization, not shaping:
-//! complex-script joining, bidi and ligatures are not implemented here.
+//! never a terminal session error. Optional OpenType cluster shaping handles
+//! left-to-right scripts. Bidi paragraph layout remains unsupported.
 
 use fontdue::{Font, FontSettings};
 
@@ -20,6 +20,14 @@ pub struct PageGlyph {
     pub missing: bool,
 }
 
+/// One shaped input cluster. `start` and `end` are UTF-8 byte boundaries.
+#[derive(Clone, Debug)]
+pub struct PageCluster {
+    pub start: usize,
+    pub end: usize,
+    pub glyph: PageGlyph,
+}
+
 /// Regular and bold faces, optional true italic cuts, and coverage fallbacks.
 /// No glyph cache is retained, so a long page cannot grow session memory.
 pub struct PageFontSession {
@@ -28,15 +36,23 @@ pub struct PageFontSession {
     italic: Option<Font>,
     bold_italic: Option<Font>,
     fallback: Vec<Font>,
+    regular_bytes: Vec<u8>,
+    bold_bytes: Vec<u8>,
+    italic_bytes: Option<Vec<u8>>,
+    bold_italic_bytes: Option<Vec<u8>>,
+    fallback_bytes: Vec<Vec<u8>>,
 }
 
 impl PageFontSession {
-    /// Load the bundled licensed faces. Complex scripts need an added face.
+    /// Load bundled Latin, Cyrillic and Devanagari faces. CJK needs an added face.
     ///
     /// # Errors
     /// Returns the font parser's error if bundled bytes are damaged.
     pub fn bundled() -> Result<Self, &'static str> {
-        Self::from_bytes(crate::TEXT_FONT, crate::DISPLAY_FONT)
+        let mut session = Self::from_bytes(crate::TEXT_FONT, crate::DISPLAY_FONT)?;
+        session.add_fallback(include_bytes!("../fonts/NotoSans-Cyrillic.ttf"))?;
+        session.add_fallback(include_bytes!("../fonts/NotoSansDevanagari.ttf"))?;
+        Ok(session)
     }
 
     /// Load caller-provided regular and bold cuts.
@@ -50,6 +66,11 @@ impl PageFontSession {
             italic: None,
             bold_italic: None,
             fallback: Vec::new(),
+            regular_bytes: regular.to_vec(),
+            bold_bytes: bold.to_vec(),
+            italic_bytes: None,
+            bold_italic_bytes: None,
+            fallback_bytes: Vec::new(),
         })
     }
 
@@ -58,8 +79,12 @@ impl PageFontSession {
     /// # Errors
     /// Returns the font parser's error. The session is unchanged on failure.
     pub fn set_italic(&mut self, italic: &[u8], bold_italic: &[u8]) -> Result<(), &'static str> {
+        let italic_bytes = italic;
+        let bold_italic_bytes = bold_italic;
         let italic = Font::from_bytes(italic, FontSettings::default())?;
         let bold_italic = Font::from_bytes(bold_italic, FontSettings::default())?;
+        self.italic_bytes = Some(italic_bytes.to_vec());
+        self.bold_italic_bytes = Some(bold_italic_bytes.to_vec());
         self.italic = Some(italic);
         self.bold_italic = Some(bold_italic);
         Ok(())
@@ -75,6 +100,7 @@ impl PageFontSession {
         }
         self.fallback
             .push(Font::from_bytes(bytes, FontSettings::default())?);
+        self.fallback_bytes.push(bytes.to_vec());
         Ok(())
     }
 
@@ -157,6 +183,147 @@ impl PageFontSession {
         ))
     }
 
+    /// Shape text in whitespace-delimited font spans, keeping input cluster boundaries.
+    /// Indic substitutions and positioning use the selected face's OpenType tables.
+    /// RTL spans currently return `None` rather than reverse logical text incorrectly.
+    #[must_use]
+    #[allow(clippy::too_many_lines)] // One bounded cluster raster transaction.
+    pub fn shape(&self, text: &str, px: u32, bold: bool, italic: bool) -> Option<Vec<PageCluster>> {
+        if !(1..=MAX_SIZE).contains(&px) || text.len() > 65_536 {
+            return None;
+        }
+        let primary = self.primary(bold, italic);
+        let primary_bytes = match (bold, italic) {
+            (true, true) => self
+                .bold_italic_bytes
+                .as_deref()
+                .unwrap_or(&self.bold_bytes),
+            (false, true) => self.italic_bytes.as_deref().unwrap_or(&self.regular_bytes),
+            (true, false) => &self.bold_bytes,
+            (false, false) => &self.regular_bytes,
+        };
+        let mut output = Vec::new();
+        let mut mask_bytes = 0_usize;
+        let mut base = 0;
+        for word in text.split_inclusive(char::is_whitespace) {
+            let covers = |font: &Font| {
+                word.chars()
+                    .all(|ch| ch.is_whitespace() || font.lookup_glyph_index(ch) != 0)
+            };
+            let selected = if covers(primary) {
+                Some((primary, primary_bytes))
+            } else {
+                self.fallback
+                    .iter()
+                    .zip(&self.fallback_bytes)
+                    .find(|(font, _)| covers(font))
+                    .map(|(font, bytes)| (font, bytes.as_slice()))
+            };
+            let Some((font, bytes)) = selected else {
+                for (offset, ch) in word.char_indices() {
+                    output.push(PageCluster {
+                        start: base + offset,
+                        end: base + offset + ch.len_utf8(),
+                        glyph: self.raster(ch, px, bold, italic)?,
+                    });
+                }
+                base += word.len();
+                continue;
+            };
+            let face = rustybuzz::Face::from_slice(bytes, 0)?;
+            let scale = px as f32 / face.units_per_em() as f32;
+            let mut buffer = rustybuzz::UnicodeBuffer::new();
+            buffer.push_str(word);
+            buffer.guess_segment_properties();
+            if buffer.direction() == rustybuzz::Direction::RightToLeft {
+                return None;
+            }
+            let shaped = rustybuzz::shape(&face, &[], buffer);
+            let infos = shaped.glyph_infos();
+            let positions = shaped.glyph_positions();
+            let mut index = 0;
+            while index < infos.len() {
+                let start = usize::try_from(infos[index].cluster).ok()?;
+                let mut end_index = index + 1;
+                while end_index < infos.len() && infos[end_index].cluster == infos[index].cluster {
+                    end_index += 1;
+                }
+                let end = if end_index < infos.len() {
+                    usize::try_from(infos[end_index].cluster).ok()?
+                } else {
+                    word.len()
+                };
+                if end <= start || !word.is_char_boundary(start) || !word.is_char_boundary(end) {
+                    return None;
+                }
+                let mut ink = Vec::new();
+                let mut pen = 0_f32;
+                let mut left = 0_i32;
+                let mut right = 0_i32;
+                let mut top = 0_i32;
+                let mut bottom = 0_i32;
+                for j in index..end_index {
+                    let glyph_id = u16::try_from(infos[j].glyph_id).ok()?;
+                    let m = font.metrics_indexed(glyph_id, px as f32);
+                    if m.width > 512 || m.height > 512 {
+                        return None;
+                    }
+                    let (_, coverage) = font.rasterize_indexed(glyph_id, px as f32);
+                    let x = (pen + positions[j].x_offset as f32 * scale).round() as i32 + m.xmin;
+                    let y = -(positions[j].y_offset as f32 * scale).round() as i32
+                        - m.ymin
+                        - i32::try_from(m.height).ok()?;
+                    left = left.min(x);
+                    right = right.max(x + i32::try_from(m.width).ok()?);
+                    top = top.min(y);
+                    bottom = bottom.max(y + i32::try_from(m.height).ok()?);
+                    ink.push((x, y, m.width, m.height, coverage));
+                    pen += positions[j].x_advance as f32 * scale;
+                }
+                let width = u32::try_from(right - left).ok()?;
+                let height = u32::try_from(bottom - top).ok()?;
+                let count = usize::try_from(width).ok()?.checked_mul(height as usize)?;
+                mask_bytes = mask_bytes.checked_add(count)?;
+                if count > 262_144 || mask_bytes > 4_194_304 {
+                    return None;
+                }
+                let mut coverage = vec![0_u8; count];
+                for (x, y, w, h, mask) in ink {
+                    for row in 0..h {
+                        for col in 0..w {
+                            let dst = usize::try_from(y - top)
+                                .ok()?
+                                .checked_add(row)?
+                                .checked_mul(width as usize)?
+                                .checked_add(usize::try_from(x - left).ok()?)?
+                                .checked_add(col)?;
+                            coverage[dst] = coverage[dst].max(mask[row * w + col]);
+                        }
+                    }
+                }
+                #[allow(clippy::cast_sign_loss)]
+                // Negative advances refuse below; rounded nonnegative px.
+                let advance = pen.round().max(0.0) as u32;
+                output.push(PageCluster {
+                    start: base + start,
+                    end: base + end,
+                    glyph: PageGlyph {
+                        left,
+                        top,
+                        width,
+                        height,
+                        advance,
+                        coverage,
+                        missing: false,
+                    },
+                });
+                index = end_index;
+            }
+            base += word.len();
+        }
+        Some(output)
+    }
+
     /// Draw a real glyph or a hollow missing-glyph box. No sticky failures.
     #[must_use]
     pub fn raster(&self, ch: char, px: u32, bold: bool, italic: bool) -> Option<PageGlyph> {
@@ -231,6 +398,41 @@ mod tests {
             session.raster('A', 24, true, false).unwrap().coverage
         );
         assert!(!session.has_italic(false));
+    }
+
+    #[test]
+    fn indic_shaping_clusters_cover_the_input_without_byte_splits() {
+        let session = PageFontSession::bundled().unwrap();
+        let text = "हिन्दी पाठ";
+        let shaped = session.shape(text, 24, false, false).unwrap();
+        assert!(!shaped.is_empty());
+        assert_eq!(shaped.first().unwrap().start, 0);
+        assert_eq!(shaped.last().unwrap().end, text.len());
+        for pair in shaped.windows(2) {
+            assert_eq!(pair[0].end, pair[1].start);
+        }
+        for c in &shaped {
+            assert!(text.is_char_boundary(c.start));
+            assert!(text.is_char_boundary(c.end));
+            assert!(!c.glyph.missing);
+        }
+        assert!(
+            shaped.len() < text.chars().count(),
+            "Indic syllables form clusters"
+        );
+        assert!(session.shape(text, 0, false, false).is_none());
+        assert!(session
+            .shape(&"x".repeat(65_537), 24, false, false)
+            .is_none());
+    }
+
+    #[test]
+    fn bundled_fallbacks_cover_russian_and_devanagari_but_not_japanese() {
+        let session = PageFontSession::bundled().unwrap();
+        assert!("Русский हिन्दी"
+            .chars()
+            .all(|ch| session.has_glyph(ch, false, false)));
+        assert!(!session.has_glyph('日', false, false));
     }
 
     #[test]

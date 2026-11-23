@@ -146,7 +146,11 @@ pub fn place(
         }
         // Hard splitting is reserved for a segment wider than an empty line.
         for &g in segment {
-            if segment_width > width && x > 0 && x.saturating_add(g.advance) > width {
+            if segment_width > width
+                && g.advance > 0
+                && x > 0
+                && x.saturating_add(g.advance) > width
+            {
                 new_line(&mut x, &mut line)?;
             }
             let mut g = g;

@@ -11,6 +11,32 @@ use kobo_web_document::{
 use std::io::Write;
 struct Face(PageFontSession);
 impl FontProvider for Face {
+    fn page_shape(
+        &self,
+        text: &str,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<Vec<kobo_web_document::css_text_page::PageCluster>> {
+        Some(
+            self.0
+                .shape(text, size, bold, italic)?
+                .into_iter()
+                .map(|c| kobo_web_document::css_text_page::PageCluster {
+                    start: c.start,
+                    end: c.end,
+                    advance: c.glyph.advance,
+                    bitmap: GlyphBitmap {
+                        left: c.glyph.left,
+                        top: c.glyph.top,
+                        width: c.glyph.width,
+                        height: c.glyph.height,
+                        coverage: c.glyph.coverage,
+                    },
+                })
+                .collect(),
+        )
+    }
     fn has_glyph(&self, c: char, b: bool) -> Option<bool> {
         Some(self.0.has_glyph(c, b, false))
     }
@@ -101,4 +127,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("height={height} stats={stats:?}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn bundled_hindi_shaper_reorders_and_clusters_vowel_marks() {
+        let face = Face(PageFontSession::bundled().unwrap());
+        let text = "हिन्दी";
+        let clusters = face.page_shape(text, 24, false, false).unwrap();
+        assert_eq!(clusters.first().unwrap().start, 0);
+        assert_eq!(clusters.last().unwrap().end, text.len());
+        assert!(clusters.len() < text.chars().count());
+        assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
+    }
+
+    #[test]
+    fn shaped_hindi_block_keeps_following_text_and_has_no_skips() {
+        let html = "<!doctype html><p>हिन्दी पाठ</p><p>Русский текст</p><p>Latin after</p>";
+        let styled = kobo_web_document::parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let (_, stats, height) = paint_basic_page(
+            &BoxTree::from_style(&styled),
+            300,
+            500,
+            &Face(PageFontSession::bundled().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(stats.text_blocks_painted, 3);
+        assert!(stats.skips.is_empty());
+        assert!(height > 0);
+    }
 }

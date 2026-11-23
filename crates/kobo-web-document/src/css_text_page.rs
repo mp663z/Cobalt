@@ -20,6 +20,14 @@ pub struct NormalLineMetrics {
     pub baseline: i32,
 }
 
+/// A shaped cluster over a source run, rastered in baseline-relative coordinates.
+pub struct PageCluster {
+    pub start: usize,
+    pub end: usize,
+    pub advance: u32,
+    pub bitmap: GlyphBitmap,
+}
+
 /// Every method takes the glyph's face: `bold` false is the regular face,
 /// true the bold face used for weight-700 runs. A provider without a bold
 /// face returns `None` for bold, which refuses the page; it must never
@@ -60,6 +68,11 @@ pub trait FontProvider {
     /// Explicit face catalog with per-family coverage (FL51 increment 2 seam). `None` (default) preserves today's
     /// single explicit-face behavior exactly; nothing consumes this yet.
     fn face_catalog(&self) -> Option<&dyn crate::font_family::FaceCoverage> {
+        None
+    }
+    /// Optional OpenType clusters for Page view. Offsets are UTF-8 byte boundaries.
+    /// An absent shaper keeps scalar layout; exact painters never consult this hook.
+    fn page_shape(&self, _text: &str, _size: u32, _bold: bool, _italic: bool) -> Option<Vec<PageCluster>> {
         None
     }
     /// Page-view style hook. Exact paint paths continue to use `advance`.
