@@ -315,7 +315,7 @@ fn foreground_currentcolor_reaches_glyph_pixels() {
 }
 
 #[test]
-fn terminal_sentence_punctuation_wraps_but_internal_punctuation_refuses() {
+fn terminal_sentence_punctuation_wraps_and_internal_punctuation_stays_attached() {
     let boxes =
         tree("<html style='height:100px'><body><p style='color:#123456'>Hi, ab.</p></body></html>");
     let list = paint_direct_text_blocks(&boxes, 100, 100, &TestFace).unwrap();
@@ -332,8 +332,14 @@ fn terminal_sentence_punctuation_wraps_but_internal_punctuation_refuses() {
         })
         .collect();
     assert_eq!(glyph_y, [4, 4, 4, 14, 14, 14]);
-    let unsupported = tree("<html><body><p style='width:10px'>Hi, a.b</p></body></html>");
-    assert!(paint_direct_text_blocks(&unsupported, 100, 100, &TestFace).is_err());
+    // Post bug-1: internal punctuation stays attached to its word, so
+    // "Hi, a.b" wraps at the space instead of refusing the block.
+    let attached = tree("<html><body><p style='width:10px'>Hi, a.b</p></body></html>");
+    assert!(paint_direct_text_blocks(&attached, 100, 100, &TestFace).is_ok());
+    // A word wider than the line on its own still fails closed.
+    let unbreakable =
+        tree("<html><body><p style='width:10px'>supercalifragilisticexpialidocious</p></body></html>");
+    assert!(paint_direct_text_blocks(&unbreakable, 100, 100, &TestFace).is_err());
 }
 
 #[test]

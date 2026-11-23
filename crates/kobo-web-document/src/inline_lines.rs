@@ -137,18 +137,6 @@ fn place_sourced_runs_normal<'a>(
     if !word.is_empty() {
         words.push((word, pending_space.take()));
     }
-    // One measured space per word boundary, flagged with its own face.
-    let mut spaces: Vec<Option<(u32, bool, usize)>> = vec![None; words.len()];
-    for index in 1..words.len() {
-        let (flag, leaf) = words[index].1.ok_or(LineError::InvalidMetrics)?;
-        spaces[index] = Some((
-            advance(' ', flag)
-                .filter(|&n| n > 0)
-                .ok_or(LineError::InvalidMetrics)?,
-            flag,
-            leaf,
-        ));
-    }
     // Split words at the modelled break opportunities: after '-' and '/'.
     // Pieces of one source word join with a zero-width break (no space
     // glyph, no advance); everything else about placement is unchanged.
