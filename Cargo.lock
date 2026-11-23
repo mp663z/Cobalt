@@ -1935,6 +1935,7 @@ version = "0.1.0"
 dependencies = [
  "html5ever 0.39.0",
  "unicode-bidi",
+ "unicode-bidi-mirroring",
 ]
 
 [[package]]

@@ -255,6 +255,8 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         node.style.font_style != crate::computed_style::FontStyle::Normal,
                         underline,
                         node.source,
+                        node.parent.map_or(node.style.unicode_bidi, |p| self.tree.boxes[p].style.unicode_bidi),
+                        node.style.direction,
                     ));
                 }
                 BoxKind::Inline => {
@@ -291,7 +293,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize, _, _, _) in &runs {
+        for (text, bold, _, rsize, _, _, _, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char

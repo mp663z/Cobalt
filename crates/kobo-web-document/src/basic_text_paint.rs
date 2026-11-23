@@ -6,7 +6,17 @@ use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::GlyphBitmap;
 
 /// Source text, weight, colour and CSS size.
-pub(crate) type Run = (String, bool, u32, u32, bool, bool, Option<usize>);
+pub(crate) type Run = (
+    String,
+    bool,
+    u32,
+    u32,
+    bool,
+    bool,
+    Option<usize>,
+    crate::computed_style::UnicodeBidi,
+    Direction,
+);
 
 pub(crate) struct Style {
     pub size: u32,
@@ -176,7 +186,12 @@ pub(crate) fn paint(
     };
     let mut lines = crate::basic_text::place(&refs, width, style.pre, glyph_width)
         .map_err(|_| "text-layout-bounded")?;
-    crate::basic_bidi::reorder(&mut lines, &refs, style.direction);
+    let mirrored = crate::basic_bidi::reorder_styled(
+        &mut lines,
+        &refs,
+        style.direction,
+        &runs.iter().map(|r| (r.7, r.8)).collect::<Vec<_>>(),
+    );
     if lines.glyphs.is_empty() {
         return Ok((Vec::new(), 0, 0));
     }
@@ -230,9 +245,17 @@ pub(crate) fn paint(
         };
         let bitmaps: Vec<_> = glyphs
             .iter()
-            .map(|g| {
+            .enumerate()
+            .map(|(local_index, g)| {
                 let byte =
                     next_occurrence(&runs[g.leaf].0, &mut paint_offsets[g.leaf], g.character);
+                if mirrored[from + local_index] {
+                    if let Some(ch) = unicode_bidi_mirroring::get_mirrored(g.character) {
+                        if let Some(bitmap) = font.page_raster(ch, size, g.bold, runs[g.leaf].4) {
+                            return bitmap;
+                        }
+                    }
+                }
                 if let Some(clusters) = &shaped[g.leaf] {
                     if let Some(cluster) = clusters
                         .get(clusters.partition_point(|c| c.end <= byte))

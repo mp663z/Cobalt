@@ -44,6 +44,7 @@ pub enum Property {
     MarginTop,
     MarginBottom,
     Direction,
+    UnicodeBidi,
     TextAlign,
     /// CANDIDATE (ext entry only): `list-style-type: none`; inherited. Every other value is refused by the parser.
     ListStyleType,
@@ -352,6 +353,7 @@ pub enum Value {
     /// CANDIDATE (ext only): `min-height:<n>rem`, same contract as `MaxWidthRem`.
     MinHeightRem(u32),
     Direction(Direction),
+    UnicodeBidi(UnicodeBidi),
     TextAlign(TextAlign),
     /// `true` only for an explicit `list-style-type: none`; `false` is the unmodelled default marker.
     ListStyleNone(bool),
@@ -472,6 +474,10 @@ pub enum Direction {
     Rtl,
 }
 
+/// CSS inline bidi control. Not inherited.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UnicodeBidi { Normal, Embed, Override, Isolate, IsolateOverride, Plaintext }
+
 /// Direction-relative initial value is preserved for inheritance/initial.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextAlign {
@@ -565,6 +571,7 @@ pub struct Computed {
     pub margin_top: Margin,
     pub margin_bottom: Margin,
     pub direction: Direction,
+    pub unicode_bidi: UnicodeBidi,
     pub text_align: TextAlign,
     /// Inherited. `true` only for an explicit `list-style-type: none` (no marker); `false` keeps the
     /// default marker, which no painter models, so a list-item box stays a refused ListItem.
@@ -636,6 +643,7 @@ impl Computed {
         margin_top: Margin::Px(0),
         margin_bottom: Margin::Px(0),
         direction: Direction::Ltr,
+        unicode_bidi: UnicodeBidi::Normal,
         text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
@@ -740,6 +748,7 @@ impl Computed {
             margin_top: initial.margin_top,
             margin_bottom: initial.margin_bottom,
             direction: parent.unwrap_or(initial).direction,
+            unicode_bidi: UnicodeBidi::Normal,
             text_align: parent.unwrap_or(initial).text_align,
             list_style_none: parent.unwrap_or(initial).list_style_none,
             white_space_nowrap: parent.unwrap_or(initial).white_space_nowrap,
@@ -796,6 +805,7 @@ impl Computed {
             Property::MarginTop,
             Property::MarginBottom,
             Property::Direction,
+            Property::UnicodeBidi,
             Property::TextAlign,
             Property::ListStyleType,
             Property::Visibility,
@@ -859,7 +869,8 @@ impl Computed {
                 Property::MarginRight => Value::Margin(initial.margin_right),
                 Property::MarginTop => Value::Margin(initial.margin_top),
                 Property::MarginBottom => Value::Margin(initial.margin_bottom),
-                Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
+                Property::UnicodeBidi => Value::UnicodeBidi(parent.unwrap_or(initial).unicode_bidi),
+        Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
                 Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
                 Property::ListStyleType => Value::ListStyleNone(parent.unwrap_or(initial).list_style_none),
                 Property::Visibility => Value::Visibility(parent.unwrap_or(initial).positioned.hidden),
@@ -971,6 +982,7 @@ impl Computed {
                 Value::TextDecoration(d) if property == Property::TextDecoration => {
                     computed.text_decoration = d;
                 }
+                Value::UnicodeBidi(mode) if property == Property::UnicodeBidi => { computed.unicode_bidi = mode; }
                 Value::Direction(direction) if property == Property::Direction => {
                     computed.direction = direction;
                 }
@@ -1175,6 +1187,7 @@ fn resolve(
         Property::MarginRight => Value::Margin(initial.margin_right),
         Property::MarginTop => Value::Margin(initial.margin_top),
         Property::MarginBottom => Value::Margin(initial.margin_bottom),
+        Property::UnicodeBidi => Value::UnicodeBidi(initial.unicode_bidi),
         Property::Direction => Value::Direction(initial.direction),
         Property::TextAlign => Value::TextAlign(initial.text_align),
         Property::ListStyleType => Value::ListStyleNone(initial.list_style_none),
@@ -1227,6 +1240,7 @@ fn resolve(
         Property::MarginRight => Value::Margin(parent.unwrap_or(initial).margin_right),
         Property::MarginTop => Value::Margin(parent.unwrap_or(initial).margin_top),
         Property::MarginBottom => Value::Margin(parent.unwrap_or(initial).margin_bottom),
+        Property::UnicodeBidi => Value::UnicodeBidi(parent.unwrap_or(initial).unicode_bidi),
         Property::Direction => Value::Direction(parent.unwrap_or(initial).direction),
         Property::TextAlign => Value::TextAlign(parent.unwrap_or(initial).text_align),
         Property::ListStyleType => Value::ListStyleNone(parent.unwrap_or(initial).list_style_none),
@@ -1374,6 +1388,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+        unicode_bidi: UnicodeBidi::Normal,
             text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
@@ -1424,6 +1439,7 @@ mod tests {
                 margin_top: Margin::Px(0),
                 margin_bottom: Margin::Px(0),
                 direction: Direction::Ltr,
+        unicode_bidi: UnicodeBidi::Normal,
                 text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
@@ -1581,6 +1597,7 @@ mod tests {
             margin_top: Margin::Px(0),
             margin_bottom: Margin::Px(0),
             direction: Direction::Ltr,
+        unicode_bidi: UnicodeBidi::Normal,
             text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
@@ -1640,6 +1657,7 @@ mod tests {
                     margin_top: Margin::Px(0),
                     margin_bottom: Margin::Px(0),
                     direction: Direction::Ltr,
+        unicode_bidi: UnicodeBidi::Normal,
                     text_align: TextAlign::Initial,
         list_style_none: false,
         white_space_nowrap: false,
