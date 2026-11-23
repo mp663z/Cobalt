@@ -561,16 +561,101 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut bg_insert_at = list.len();
         let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
-        match node_kind {
-            BoxKind::Flex => {
-                // v1 approximation: flex containers lay out as plain block
-                // stacks (row direction collapses to vertical).
+        let mut flex_row = false;
+        if matches!(node_kind, BoxKind::InlineBlock) {
+            self.stats.approx("inline-block-as-block");
+        }
+        // Flex-row slot widths, computed up front so a container whose
+        // columns would come out too narrow to set text in falls back to
+        // the v1 vertical stack instead of refusing every line.
+        let mut flex_slots: Option<(Vec<i64>, i64)> = None;
+        if matches!(node_kind, BoxKind::Flex) {
+            let kids = &self.tree.boxes[index].children;
+            let row_eligible = !kids.is_empty()
+                && !self.deep_pure_inline(kids)
+                && kids.iter().all(|&c| {
+                    let ck = self.tree.boxes[c].kind;
+                    !(matches!(ck, BoxKind::Text)
+                        || (matches!(ck, BoxKind::Inline)
+                            && self.pure_inline_children(&self.tree.boxes[c].children)))
+                });
+            // Children with no text, no image marker, no background and no
+            // border paint nothing; giving them a column squeezes the
+            // visible siblings, so they are skipped (counted).
+            let visible = |c: usize| -> bool {
+                let cs = self.tree.boxes[c].style;
+                if cs.used_background_color().is_some() || cs.decor.has_painted_border() {
+                    return true;
+                }
+                let mut stack = vec![c];
+                while let Some(n) = stack.pop() {
+                    let b = &self.tree.boxes[n];
+                    if matches!(b.kind, BoxKind::Text) {
+                        return true;
+                    }
+                    stack.extend_from_slice(&b.children);
+                }
+                false
+            };
+            if row_eligible {
+                let pad_or_zero = |v: u32| -> i64 {
+                    if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                        0
+                    } else {
+                        i64::from(v)
+                    }
+                };
+                let avail = (i64::from(width)
+                    - pad_or_zero(style.padding_left)
+                    - pad_or_zero(style.padding_right))
+                .max(0);
+                let mut slots: Vec<i64> = Vec::with_capacity(kids.len());
+                let mut fixed_total = 0i64;
+                let mut flex_count = 0i64;
+                for &c in kids {
+                    if !visible(c) {
+                        slots.push(i64::MIN);
+                        continue;
+                    }
+                    let cs = self.tree.boxes[c].style;
+                    let ml = self.margin_px(cs.margin_left, width);
+                    let mr = self.margin_px(cs.margin_right, width);
+                    match self.widths.widths.get(c).copied().flatten() {
+                        Some(w) => {
+                            let v = i64::from(w.content) + ml + mr;
+                            slots.push(v);
+                            fixed_total += v;
+                        }
+                        None => {
+                            slots.push(-1);
+                            flex_count += 1;
+                        }
+                    }
+                }
+                if slots.iter().any(|&v| v == i64::MIN) {
+                    self.stats.approx("flex-row-empty-child-skipped");
+                }
+                let share = if flex_count > 0 {
+                    ((avail - fixed_total) / flex_count).max(0)
+                } else {
+                    0
+                };
+                let min_cw = slots
+                    .iter()
+                    .filter(|&&v| v != i64::MIN)
+                    .map(|&v| if v >= 0 { v } else { share })
+                    .fold(i64::MAX, i64::min);
+                if min_cw >= 64 && min_cw != i64::MAX {
+                    flex_row = true;
+                    flex_slots = Some((slots, share));
+                    self.stats.approx("flex-row-basic");
+                } else {
+                    self.stats.approx("flex-row-refused-narrow");
+                    self.stats.approx("flex-as-block");
+                }
+            } else {
                 self.stats.approx("flex-as-block");
             }
-            BoxKind::InlineBlock => {
-                self.stats.approx("inline-block-as-block");
-            }
-            _ => {}
         }
         let (mut content_x, mut top) = (content_x, top);
         match style.positioned.position {
@@ -619,6 +704,23 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 Ok(h) => content_height = h,
                 Err(reason) => self.stats.skip(reason),
             }
+        } else if flex_row {
+            let (slots, share) = flex_slots.take().unwrap();
+            let kids = &self.tree.boxes[index].children;
+            let mut x = content_x + pad_left;
+            let mut row_h = 0i64;
+            for (k, &c) in kids.iter().enumerate().filter(|(k, _)| slots[*k] != i64::MIN) {
+                let cs = self.tree.boxes[c].style;
+                let ml = self.margin_px(cs.margin_left, width);
+                let mr = self.margin_px(cs.margin_right, width);
+                let slot = if slots[k] >= 0 { slots[k] } else { share };
+                let cw = (slot - ml - mr).max(0) as u32;
+                x += ml;
+                let h = self.layout_block(c, x, content_top, cw, list);
+                row_h = row_h.max(h);
+                x += i64::from(cw) + mr;
+            }
+            content_height = row_h;
         } else {
             let mut cursor = content_top;
             let mut prev_mb = 0i64;
@@ -789,7 +891,7 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
 /// render made from normalized input.
-fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize) {
+fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize) {
     const NAMES: [&[u8]; 10] = [
         b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
     ];
@@ -801,6 +903,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
     // (a block child of the anchor paints). Counted as pictures_hoisted.
     let mut picture_open: Vec<usize> = Vec::new();
     let mut pictures_hoisted = 0usize;
+    let mut table_rows_flexed = 0usize;
     let mut i = 0usize;
     while i < input.len() {
         if input[i] == b'<' && i + 1 < input.len() && input[i + 1] != b'!' {
@@ -972,6 +1075,19 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                     out.extend_from_slice(v);
                     out.extend_from_slice(b"\"");
                 }
+                // Table rows become flex rows: the basic painter lays
+                // flex containers with all-block children out
+                // left-to-right (equal split of what definite px widths
+                // leave). Rows carrying their own style attribute keep
+                // it and stay block stacks.
+                if is_table_tag
+                    && input[i + 1] != b'/'
+                    && lower == b"tr"
+                    && extract_attr(tag, b"style").is_none()
+                {
+                    out.extend_from_slice(b" style=\"display:flex\"");
+                    table_rows_flexed += 1;
+                }
                 i = tag_end;
                 continue;
             }
@@ -988,7 +1104,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
         out.push(input[i]);
         i += 1;
     }
-    (out, images, pictures_hoisted)
+    (out, images, pictures_hoisted, table_rows_flexed)
 }
 
 /// Full basic-mode intake normalization: table/presentational rewrite,
@@ -1009,11 +1125,11 @@ pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
 /// Full intake: normalized html, prefilter counts, and the data-URI image
 /// payloads (in document order) that the marker-div lane reserves space
 /// for. The harness pairs these with sentinel rectangles in the raster.
-pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize) {
-    let (out, images, pictures_hoisted) = normalize_tables_and_presentational(input);
+pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize) {
+    let (out, images, pictures_hoisted, table_rows_flexed) = normalize_tables_and_presentational(input);
     let (folded, _, _) = normalize_css_in_style_tags(&out);
     let (filtered, pf) = prefilter_data_sheets_for_basic(&folded);
-    ((filtered, pf), images, pictures_hoisted)
+    ((filtered, pf), images, pictures_hoisted, table_rows_flexed)
 }
 
 /// Sentinel background colour for image marker div number `idx`

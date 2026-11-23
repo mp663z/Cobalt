@@ -51,10 +51,10 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
-    let ((bytes, pf), images, hoisted) = kobo_web_document::basic_page::normalize_for_basic_full(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
+    let ((bytes, pf), images, hoisted, table_rows) = kobo_web_document::basic_page::normalize_for_basic_full(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
     if pf.rules_dropped > 0 { eprintln!("prefilter: sheets_touched={} rules_kept={} rules_dropped={}", pf.sheets_touched, pf.rules_kept, pf.rules_dropped); }
     if !images.is_empty() {
-        eprintln!("images: {} data-URI markers reserved ({} picture-hoisted)", images.len(), hoisted);
+        eprintln!("images: {} data-URI markers reserved ({} picture-hoisted, {} table-rows-flexed)", images.len(), hoisted, table_rows);
         std::fs::write(format!("/tmp/basic-{page}.imguris"), images.join(&b'\n')).unwrap();
     } else {
         let _ = std::fs::remove_file(format!("/tmp/basic-{page}.imguris"));
