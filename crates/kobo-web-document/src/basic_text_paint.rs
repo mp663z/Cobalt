@@ -14,8 +14,7 @@ pub(crate) type Run = (
     bool,
     bool,
     Option<usize>,
-    crate::computed_style::UnicodeBidi,
-    Direction,
+    Vec<crate::basic_bidi::Scope>,
 );
 
 pub(crate) struct Style {
@@ -108,6 +107,7 @@ pub(crate) fn paint(
             && runs[group_end].1 == runs[group_start].1
             && runs[group_end].3 == runs[group_start].3
             && runs[group_end].4 == runs[group_start].4
+            && runs[group_end].7 == runs[group_start].7
         {
             group_end += 1;
         }
@@ -186,12 +186,8 @@ pub(crate) fn paint(
     };
     let mut lines = crate::basic_text::place(&refs, width, style.pre, glyph_width)
         .map_err(|_| "text-layout-bounded")?;
-    let mirrored = crate::basic_bidi::reorder_styled(
-        &mut lines,
-        &refs,
-        style.direction,
-        &runs.iter().map(|r| (r.7, r.8)).collect::<Vec<_>>(),
-    );
+    let scopes: Vec<_> = runs.iter().map(|r| r.7.as_slice()).collect();
+    let mirrored = crate::basic_bidi::reorder_scoped(&mut lines, &refs, style.direction, &scopes);
     if lines.glyphs.is_empty() {
         return Ok((Vec::new(), 0, 0));
     }

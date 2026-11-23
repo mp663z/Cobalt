@@ -241,12 +241,16 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let run_size = self.font_size(index);
                     let mut underline = node.style.text_decoration
                         == crate::computed_style::TextDecoration::Underline;
+                    let mut scopes=Vec::new();
                     let mut parent = node.parent;
                     while let Some(p) = parent {
+                        let style=self.tree.boxes[p].style;
+                        if style.unicode_bidi != crate::computed_style::UnicodeBidi::Normal { scopes.push(crate::basic_bidi::Scope { id:p, mode:style.unicode_bidi, direction:style.direction }); }
                         underline |= self.tree.boxes[p].style.text_decoration
                             == crate::computed_style::TextDecoration::Underline;
                         parent = self.tree.boxes[p].parent;
                     }
+                    scopes.reverse();
                     runs.push((
                         text,
                         node.style.font_weight >= 600,
@@ -255,8 +259,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         node.style.font_style != crate::computed_style::FontStyle::Normal,
                         underline,
                         node.source,
-                        node.parent.map_or(node.style.unicode_bidi, |p| self.tree.boxes[p].style.unicode_bidi),
-                        node.style.direction,
+                        scopes,
                     ));
                 }
                 BoxKind::Inline => {
@@ -293,7 +296,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize, _, _, _, _, _) in &runs {
+        for (text, bold, _, rsize, _, _, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char

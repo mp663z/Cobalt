@@ -3,52 +3,102 @@ use crate::computed_style::{Direction, UnicodeBidi};
 use crate::inline_lines::Lines;
 use unicode_bidi::{BidiInfo, Level};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Scope {
+    pub id: usize,
+    pub mode: UnicodeBidi,
+    pub direction: Direction,
+}
+
 #[cfg(test)]
 pub(crate) fn reorder(lines: &mut Lines, runs: &[(&str, bool)], direction: Direction) {
     let modes = vec![(UnicodeBidi::Normal, direction); runs.len()];
     let _ = reorder_styled(lines, runs, direction, &modes);
 }
 
-pub(crate) fn reorder_styled(
+#[cfg(test)]
+fn reorder_styled(
     lines: &mut Lines,
     runs: &[(&str, bool)],
     direction: Direction,
     modes: &[(UnicodeBidi, Direction)],
 ) -> Vec<bool> {
+    let scopes: Vec<Vec<Scope>> = modes
+        .iter()
+        .enumerate()
+        .map(|(id, (mode, dir))| {
+            if *mode == UnicodeBidi::Normal {
+                Vec::new()
+            } else {
+                vec![Scope {
+                    id,
+                    mode: *mode,
+                    direction: *dir,
+                }]
+            }
+        })
+        .collect();
+    reorder_scoped(
+        lines,
+        runs,
+        direction,
+        &scopes.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+    )
+}
+
+fn controls(scope: Scope) -> (&'static str, &'static str) {
+    let rtl = scope.direction == Direction::Rtl;
+    match scope.mode {
+        UnicodeBidi::Normal | UnicodeBidi::Plaintext => ("", ""),
+        UnicodeBidi::Embed => (if rtl { "\u{202b}" } else { "\u{202a}" }, "\u{202c}"),
+        UnicodeBidi::Override => (if rtl { "\u{202e}" } else { "\u{202d}" }, "\u{202c}"),
+        UnicodeBidi::Isolate => (if rtl { "\u{2067}" } else { "\u{2066}" }, "\u{2069}"),
+        UnicodeBidi::IsolateOverride => (
+            if rtl {
+                "\u{2067}\u{202e}"
+            } else {
+                "\u{2066}\u{202d}"
+            },
+            "\u{202c}\u{2069}",
+        ),
+    }
+}
+
+pub(crate) fn reorder_scoped(
+    lines: &mut Lines,
+    runs: &[(&str, bool)],
+    direction: Direction,
+    scopes: &[&[Scope]],
+) -> Vec<bool> {
     let mut mirrored = vec![false; lines.glyphs.len()];
     let mut text = String::new();
     let mut bases = Vec::with_capacity(runs.len());
+    let mut active: &[Scope] = &[];
     for (i, run) in runs.iter().enumerate() {
-        let (mode, dir) = modes
-            .get(i)
-            .copied()
-            .unwrap_or((UnicodeBidi::Normal, direction));
-        let rtl = dir == Direction::Rtl;
-        let (open, close) = match mode {
-            UnicodeBidi::Normal | UnicodeBidi::Plaintext => ("", ""),
-            UnicodeBidi::Embed => (if rtl { "\u{202b}" } else { "\u{202a}" }, "\u{202c}"),
-            UnicodeBidi::Override => (if rtl { "\u{202e}" } else { "\u{202d}" }, "\u{202c}"),
-            UnicodeBidi::Isolate => (if rtl { "\u{2067}" } else { "\u{2066}" }, "\u{2069}"),
-            UnicodeBidi::IsolateOverride => (
-                if rtl {
-                    "\u{2067}\u{202e}"
-                } else {
-                    "\u{2066}\u{202d}"
-                },
-                "\u{202c}\u{2069}",
-            ),
-        };
-        text.push_str(open);
+        let next = scopes.get(i).copied().unwrap_or(&[]);
+        let common = active.iter().zip(next).take_while(|(a, b)| a == b).count();
+        for scope in active[common..].iter().rev() {
+            text.push_str(controls(*scope).1);
+        }
+        for scope in &next[common..] {
+            text.push_str(controls(*scope).0);
+        }
         bases.push(text.len());
         text.push_str(run.0);
-        text.push_str(close);
+        active = next;
+    }
+    for scope in active.iter().rev() {
+        text.push_str(controls(*scope).1);
     }
     let base = if direction == Direction::Rtl {
         Level::rtl()
     } else {
         Level::ltr()
     };
-    let auto = modes.iter().any(|(m, _)| *m == UnicodeBidi::Plaintext);
+    let auto = scopes
+        .iter()
+        .flat_map(|s| s.iter())
+        .any(|s| s.mode == UnicodeBidi::Plaintext);
     let info = BidiInfo::new(&text, if auto { None } else { Some(base) });
     if !info.levels.iter().any(Level::is_rtl) {
         return mirrored;
@@ -204,6 +254,57 @@ mod tests {
                 assert!(flag);
             }
         }
+    }
+
+    #[test]
+    fn ancestor_override_stays_open_across_style_leaves() {
+        let runs = [("abc ", false), ("def", true)];
+        let scope = Scope {
+            id: 42,
+            mode: UnicodeBidi::Override,
+            direction: Direction::Rtl,
+        };
+        let mut lines = crate::basic_text::place(&runs, 100, false, |_, _| Some(1)).unwrap();
+        reorder_scoped(&mut lines, &runs, Direction::Ltr, &[&[scope], &[scope]]);
+        let mut glyphs = lines.glyphs;
+        glyphs.sort_by_key(|g| g.x);
+        assert_eq!(
+            glyphs.iter().map(|g| g.character).collect::<String>(),
+            "fed cba"
+        );
+    }
+    #[test]
+    fn nested_isolate_closes_before_surrounding_text() {
+        let runs = [
+            ("A ", false),
+            ("אב ", false),
+            ("abc", false),
+            (" גד", false),
+            (" Z", false),
+        ];
+        let outer = Scope {
+            id: 1,
+            mode: UnicodeBidi::Isolate,
+            direction: Direction::Rtl,
+        };
+        let inner = Scope {
+            id: 2,
+            mode: UnicodeBidi::Override,
+            direction: Direction::Rtl,
+        };
+        let mut lines = crate::basic_text::place(&runs, 100, false, |_, _| Some(1)).unwrap();
+        reorder_scoped(
+            &mut lines,
+            &runs,
+            Direction::Ltr,
+            &[&[], &[outer], &[outer, inner], &[outer], &[]],
+        );
+        let mut glyphs = lines.glyphs;
+        glyphs.sort_by_key(|g| g.x);
+        assert_eq!(
+            glyphs.iter().map(|g| g.character).collect::<String>(),
+            "A דג cba בא Z"
+        );
     }
 
     #[test]
