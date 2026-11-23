@@ -369,7 +369,17 @@ impl<F: FontProvider> Painter<'_, F> {
         for (row_number, row) in grid.iter().enumerate() {
             let row_entry = commands.len();
             let mut cell_x = grid_x + 2;
-            let mut height = 0_i64;
+            // CSS 2.2 17.5.3: an authored row height is a minimum,
+            // alongside cell heights and the space needed by their content.
+            // Percentage row heights remain undefined here and do not impose
+            // a pixel minimum. Anonymous rows have no authored height.
+            let mut height =
+                rows[row_number]
+                    .0
+                    .map_or(0, |row| match self.tree.boxes[row].style.height {
+                        Length::Px(value) => i64::from(value),
+                        _ => 0,
+                    });
             let mut painted_cells = Vec::new();
             let mut column = 0;
             for &cell in row {

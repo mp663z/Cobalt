@@ -447,3 +447,57 @@ fn caption_paints_before_native_grid_without_forcing_a_stack() {
     assert_eq!(cells[0].y, cells[1].y);
     assert!(cells[0].y >= caption_bottom);
 }
+
+#[test]
+fn row_height_is_a_minimum_shared_by_cells_and_following_rows() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}tr{height:80px}td{padding:4px;background:#123456}</style><table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 4);
+    assert_eq!(cells[0].height, 80);
+    assert_eq!(cells[0].height, cells[1].height);
+    assert_eq!(cells[2].y, cells[0].y + 82);
+    assert_eq!(cells[2].height, 80);
+}
+
+#[test]
+fn cell_content_can_grow_beyond_a_declared_short_row_height() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}tr{height:10px}td{height:60px;padding:4px;background:#123456}</style><table><tr><td>A</td><td>Long content wraps across many lines in this narrow table</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 120, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].height, cells[1].height);
+    assert!(cells[0].height > 60);
+}
