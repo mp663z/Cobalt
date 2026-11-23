@@ -1278,6 +1278,11 @@ pub struct PrefilterStats {
     /// not clip overflow, so the text paints as a sliver column; folded
     /// to display:none, which matches the sighted rendering.
     pub visually_hidden_folded: usize,
+    /// @media blocks whose width conditions evaluate false at the
+    /// basic viewport width and were dropped whole. Unconditionally
+    /// applying them was the source of mobile-chrome-over-desktop
+    /// overlap defects.
+    pub media_blocks_dropped: usize,
 }
 
 /// Document key census for the prefilter: tag names (lowercased), class
@@ -1406,12 +1411,13 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
                 }
                 let payload = &input[j + 1..k];
                 if let Some(css) = b64_decode(payload) {
-                    let (filtered, kept, dropped, off, vh) = prefilter_css(&css, &census);
+                    let (filtered, kept, dropped, off, vh, md) = prefilter_css(&css, &census);
                     stats.rules_kept += kept;
                     stats.rules_dropped += dropped;
                     stats.offcanvas_static += off;
                     stats.visually_hidden_folded += vh;
-                    if dropped > 0 || off > 0 || vh > 0 {
+                    stats.media_blocks_dropped += md;
+                    if dropped > 0 || off > 0 || vh > 0 || md > 0 {
                         stats.sheets_touched += 1;
                         out.extend_from_slice(&input[i..j + 1]);
                         out.extend_from_slice(&b64_encode(&filtered));
@@ -1430,9 +1436,10 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
 /// Filter one stylesheet: drop provably unmatchable plain rules, recurse
 /// into @media/@supports/@layer, copy everything else verbatim
 /// (comments, @keyframes, @font-face, strings all preserved).
-fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, usize) {
+fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, usize, usize) {
     let mut out = Vec::with_capacity(css.len());
-    let (mut kept, mut dropped, mut offcanvas, mut vishidden) = (0usize, 0usize, 0usize, 0usize);
+    let (mut kept, mut dropped, mut offcanvas, mut vishidden, mut media_dropped) =
+        (0usize, 0usize, 0usize, 0usize, 0usize);
     let mut i = 0usize;
     while i < css.len() {
         // comments and strings pass through
@@ -1542,12 +1549,37 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, 
         let recurse = [b"@media".as_slice(), b"@supports".as_slice(), b"@layer".as_slice()]
             .iter()
             .any(|p| head_trim.starts_with(p));
-        if head_trim.starts_with(b"@") && recurse {
-            let (inner, k2, d2, o2, v2) = prefilter_css(block, census);
+        if head_trim.starts_with(b"@media") {
+            match eval_media_query_list(prelude) {
+                Some(false) => {
+                    // The width conditions can never hold at the basic
+                    // viewport: drop the whole block instead of letting
+                    // its rules apply unconditionally.
+                    media_dropped += 1;
+                }
+                Some(true) | None => {
+                    // Holds at the viewport, or not evaluable (unknown
+                    // features, `not`, range syntax): keep the block and
+                    // recurse so inner rules still get filtered.
+                    let (inner, k2, d2, o2, v2, m2) = prefilter_css(block, census);
+                    kept += k2;
+                    dropped += d2;
+                    offcanvas += o2;
+                    vishidden += v2;
+                    media_dropped += m2;
+                    out.extend_from_slice(prelude);
+                    out.push(b'{');
+                    out.extend_from_slice(&inner);
+                    out.push(b'}');
+                }
+            }
+        } else if head_trim.starts_with(b"@") && recurse {
+            let (inner, k2, d2, o2, v2, m2) = prefilter_css(block, census);
             kept += k2;
             dropped += d2;
             offcanvas += o2;
             vishidden += v2;
+            media_dropped += m2;
             out.extend_from_slice(prelude);
             out.push(b'{');
             out.extend_from_slice(&inner);
@@ -1576,7 +1608,132 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, 
         }
         i = e;
     }
-    (out, kept, dropped, offcanvas, vishidden)
+    (out, kept, dropped, offcanvas, vishidden, media_dropped)
+}
+
+/// Viewport width the basic lane lays out at; @media width
+/// conditions are evaluated against it.
+pub const BASIC_VIEWPORT_WIDTH_PX: u32 = 800;
+
+/// Evaluate a `@media` prelude against the basic viewport. Returns
+/// Some(verdict) only when every query in the list is decidable from
+/// width alone; any unknown feature, `not`, or range syntax yields
+/// None and the caller keeps the block (fail-closed).
+fn eval_media_query_list(prelude: &[u8]) -> Option<bool> {
+    let lower: Vec<u8> = prelude.iter().map(|b| b.to_ascii_lowercase()).collect();
+    let text = String::from_utf8_lossy(&lower);
+    let rest = text.trim_start().strip_prefix("@media")?.trim();
+    let mut saw_query = false;
+    // split on top-level commas
+    let (mut start, mut parens) = (0usize, 0i32);
+    let bytes = rest.as_bytes();
+    let mut verdict = false;
+    for idx in 0..=bytes.len() {
+        let at_end = idx == bytes.len();
+        if !at_end {
+            match bytes[idx] {
+                b'(' => parens += 1,
+                b')' => parens -= 1,
+                _ => {}
+            }
+        }
+        if at_end || (bytes[idx] == b',' && parens == 0) {
+            let q = rest[start..idx].trim();
+            if !q.is_empty() {
+                saw_query = true;
+                match eval_single_media_query(q) {
+                    Some(true) => verdict = true,
+                    Some(false) => {}
+                    None => return None,
+                }
+            }
+            start = idx + 1;
+        }
+    }
+    if saw_query {
+        Some(verdict)
+    } else {
+        None
+    }
+}
+
+fn eval_single_media_query(q: &str) -> Option<bool> {
+    let mut t = q.trim();
+    if t.starts_with("not ") || t.starts_with("not(") {
+        return None;
+    }
+    if let Some(r) = t.strip_prefix("only ") {
+        t = r.trim();
+    }
+    // optional media type followed by `and`, or bare conditions
+    if !t.starts_with('(') {
+        let split = t.find(|c: char| c.is_ascii_whitespace() || c == '(');
+        let (ty, rest) = match split {
+            Some(p) => (t[..p].trim(), t[p..].trim()),
+            None => (t, ""),
+        };
+        match ty {
+            "print" | "speech" => return Some(false),
+            "screen" | "all" | "" => {}
+            _ => return None,
+        }
+        t = rest;
+        if !t.is_empty() {
+            t = t.strip_prefix("and")?.trim();
+        }
+    }
+    let mut saw_cond = false;
+    while !t.is_empty() {
+        if !t.starts_with('(') {
+            return None;
+        }
+        let close = t.find(')')?;
+        let inner = t[1..close].trim();
+        saw_cond = true;
+        match eval_width_condition(inner) {
+            Some(true) => {}
+            Some(false) => return Some(false),
+            None => return None,
+        }
+        t = t[close + 1..].trim();
+        if !t.is_empty() {
+            t = t.strip_prefix("and")?.trim();
+        }
+    }
+    let _ = saw_cond;
+    Some(true)
+}
+
+/// `(min-width: X)` / `(max-width: X)` / `(width: X)` against the basic
+/// viewport. Values in px, or em/rem at 16px. Anything else is
+/// undecidable.
+fn eval_width_condition(inner: &str) -> Option<bool> {
+    let (name, value) = inner.split_once(':')?;
+    let px = parse_media_length_px(value.trim())?;
+    let vp = BASIC_VIEWPORT_WIDTH_PX;
+    match name.trim() {
+        "min-width" => Some(vp >= px),
+        "max-width" => Some(vp <= px),
+        "width" => Some(vp == px),
+        _ => None,
+    }
+}
+
+fn parse_media_length_px(v: &str) -> Option<u32> {
+    let (num, mult) = if let Some(n) = v.strip_suffix("px") {
+        (n, 1.0f64)
+    } else if let Some(n) = v.strip_suffix("rem") {
+        (n, 16.0f64)
+    } else if let Some(n) = v.strip_suffix("em") {
+        (n, 16.0f64)
+    } else {
+        return None;
+    };
+    let f: f64 = num.trim().parse().ok()?;
+    if f < 0.0 {
+        return None;
+    }
+    Some(f.mul_add(mult, 0.0).round() as u32)
 }
 
 /// True for the classic screen-reader-only rule: an absolutely
@@ -2356,4 +2513,44 @@ pub fn paint_basic_page(
         cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list, (0, 0));
     }
     Ok((list, painter.stats, cursor))
+}
+
+#[cfg(test)]
+mod media_eval_tests {
+    use super::*;
+
+    fn eval(p: &str) -> Option<bool> {
+        eval_media_query_list(p.as_bytes())
+    }
+
+    #[test]
+    fn media_width_verdicts_at_basic_viewport() {
+        assert_eq!(eval("@media only screen and (max-width: 700px)"), Some(false));
+        assert_eq!(eval("@media only screen and (max-width: 900px)"), Some(true));
+        assert_eq!(eval("@media screen and (min-width: 45em)"), Some(true)); // 720px
+        assert_eq!(eval("@media screen and (min-width: 60em)"), Some(false));
+        assert_eq!(eval("@media (min-width: 700px) and (max-width: 900px)"), Some(true));
+        assert_eq!(eval("@media print"), Some(false));
+        assert_eq!(eval("@media print, (max-width: 900px)"), Some(true));
+        assert_eq!(eval("@media screen"), Some(true));
+        // undecidable cases keep the block
+        assert_eq!(eval("@media (hover: hover)"), None);
+        assert_eq!(eval("@media not screen and (max-width: 700px)"), None);
+        assert_eq!(eval("@media (400px <= width <= 900px)"), None);
+        assert_eq!(eval("@media screen and (orientation: landscape)"), None);
+        assert_eq!(eval("@media (prefers-color-scheme: dark)"), None);
+    }
+
+    #[test]
+    fn media_prefilter_drops_false_blocks_and_keeps_true_ones() {
+        let census = census_of(b"<div class=\"a b\"></div>");
+        let css = b"@media only screen and (max-width: 700px) { .a { color: red; } }\n@media (max-width: 900px) { .b { color: blue; } }\n@media (hover: hover) { .a { color: green; } }";
+        let (out, kept, _dropped, _off, _vh, media_dropped) = prefilter_css(css, &census);
+        let text = String::from_utf8(out).unwrap();
+        assert!(!text.contains("color: red"), "false block must go: {text}");
+        assert!(text.contains("color: blue"), "true block stays: {text}");
+        assert!(text.contains("color: green"), "undecidable block stays: {text}");
+        assert_eq!(media_dropped, 1);
+        assert!(kept >= 2);
+    }
 }
