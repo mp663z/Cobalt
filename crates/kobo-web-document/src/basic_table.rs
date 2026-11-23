@@ -155,7 +155,7 @@ impl<F: FontProvider> Painter<'_, F> {
         top: i64,
         available: u32,
         commands: &mut Vec<Command>,
-        origin: (i64, i64),
+        _origin: (i64, i64),
     ) -> Result<i64, &'static str> {
         let style = self.tree.boxes[table].style;
         if style.direction != Direction::Ltr
@@ -180,6 +180,7 @@ impl<F: FontProvider> Painter<'_, F> {
         let mut grid = Vec::new();
         let mut cells = Vec::new();
         let mut columns = None;
+        let mut total_cells = 0_usize;
         for (row, children) in &rows {
             if row.is_some_and(|index| self.tree.boxes[index].style.decor.has_painted_border()) {
                 return Err("table-row-border");
@@ -195,17 +196,18 @@ impl<F: FontProvider> Painter<'_, F> {
                 if node.kind != BoxKind::TableCell {
                     return Err("table-row-child");
                 }
-                if node.style.decor.has_painted_border()
-                    || [
-                        node.style.padding_top,
-                        node.style.padding_right,
-                        node.style.padding_bottom,
-                        node.style.padding_left,
-                    ]
-                    .iter()
-                    .any(|v| *v != 0)
+                if node.style.decor.has_painted_border() {
+                    return Err("table-cell-border-not-wired");
+                }
+                if [
+                    node.style.padding_top,
+                    node.style.padding_right,
+                    node.style.padding_bottom,
+                    node.style.padding_left,
+                ]
+                .contains(&crate::computed_style::PADDING_UNREPRESENTABLE)
                 {
-                    return Err("table-cell-edges-not-wired");
+                    return Err("table-cell-padding");
                 }
                 if node.table_span != (1, 1) {
                     return Err("table-span-not-wired");
@@ -218,7 +220,8 @@ impl<F: FontProvider> Painter<'_, F> {
                     return Err("table-cell-style");
                 }
                 row_cells.push(cell);
-                if cells.len() + row_cells.len() > 4096 {
+                total_cells += 1;
+                if total_cells > 4096 {
                     return Err("table-cell-bound");
                 }
             }
@@ -280,10 +283,54 @@ impl<F: FontProvider> Painter<'_, F> {
         for (row_number, row) in grid.iter().enumerate() {
             let row_entry = commands.len();
             let mut cell_x = x + 2;
-            let mut height = 0;
+            let mut height = 0_i64;
+            let mut painted_cells = Vec::new();
             for (&cell, &width) in row.iter().zip(&columns.widths) {
-                height = height.max(self.layout_block(cell, cell_x, y, width, commands, origin));
+                let node = &self.tree.boxes[cell];
+                let cs = node.style;
+                let inner_width = width
+                    .checked_sub(cs.padding_left)
+                    .and_then(|value| value.checked_sub(cs.padding_right))
+                    .ok_or("table-cell-padding")?;
+                let mut ink = Vec::new();
+                let text_height = if node.children.is_empty() {
+                    0
+                } else {
+                    self.paint_text_block(
+                        cell,
+                        &node.children,
+                        cell_x + i64::from(cs.padding_left),
+                        y + i64::from(cs.padding_top),
+                        inner_width,
+                        &mut ink,
+                    )?
+                };
+                let natural =
+                    text_height + i64::from(cs.padding_top) + i64::from(cs.padding_bottom);
+                let declared = match cs.height {
+                    Length::Px(value) => i64::from(value),
+                    _ => 0,
+                };
+                height = height.max(natural.max(declared));
+                painted_cells.push((cell, cell_x, width, ink));
                 cell_x += i64::from(width) + 2;
+            }
+            for (cell, cell_x, width, ink) in painted_cells {
+                if let Some(color) = self.tree.boxes[cell].style.used_background_color() {
+                    table_fill(
+                        commands,
+                        commands.len(),
+                        cell_x,
+                        y,
+                        width,
+                        height,
+                        color,
+                        self.tree.boxes[cell].source,
+                    )?;
+                    self.stats.fills += 1;
+                }
+                commands.extend(ink);
+                self.stats.blocks_painted += 1;
             }
             if let Some((row, color)) = rows[row_number].0.and_then(|row| {
                 self.tree.boxes[row]

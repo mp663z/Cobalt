@@ -132,3 +132,43 @@ fn direct_cells_receive_an_anonymous_row() {
     assert_eq!(stats.text_blocks_painted, 2);
     assert!(!commands.is_empty());
 }
+
+#[test]
+fn cell_backgrounds_fill_the_shared_row_height_and_padding_is_reserved() {
+    use kobo_web_document::computed_style::Display;
+    let html = br#"<!doctype html><style>body{margin:0}td{padding:4px;background:#123456}</style><table><tr><td>A</td><td>A much longer cell that wraps</td></tr></table>"#;
+    let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        html,
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+    );
+    for node in &mut style.nodes {
+        node.style.display = match node.tag.as_str() {
+            "table" => Display::Table,
+            "tbody" => Display::TableRowGroup,
+            "tr" => Display::TableRow,
+            "td" => Display::TableCell,
+            _ => node.style.display,
+        };
+    }
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 110, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].y, cells[1].y);
+    assert_eq!(cells[0].height, cells[1].height);
+    assert!(cells[0].height > 28, "second cell must wrap");
+}
