@@ -352,3 +352,34 @@ fn short_rows_leave_empty_slots_without_stacking_or_shifting_columns() {
     assert!(cells[3].x > cells[2].x);
     assert_eq!(stats.text_blocks_painted, 6);
 }
+
+#[test]
+fn stacked_table_fallback_backgrounds_stay_inside_outer_border() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:180px;border:3px solid #456789}td{padding:4px;border:2px solid #666666;background:#123456}</style><table><tr><td colspan=2>A</td></tr><tr><td>B</td><td>C</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
+    let fills: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill { rect, color, .. } => Some((rect, color)),
+            _ => None,
+        })
+        .collect();
+    let outer = fills
+        .iter()
+        .find(|(_, c)| **c == Rgb(0x45, 0x67, 0x89))
+        .unwrap()
+        .0;
+    assert_eq!(outer.width, 180);
+    for (rect, color) in fills {
+        if *color == Rgb(0x12, 0x34, 0x56) {
+            assert!(rect.x >= outer.x + 3);
+            assert!(rect.x + i32::try_from(rect.width).unwrap() <= outer.x + 177);
+        }
+    }
+    assert_eq!(stats.text_blocks_painted, 3);
+}

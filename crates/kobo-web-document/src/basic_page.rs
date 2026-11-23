@@ -79,6 +79,7 @@ struct Painter<'a, F: FontProvider> {
     widths: WidthPass,
     stats: PartialStats,
     visits: usize,
+    table_stack_depth: usize,
     viewport_w: i64,
 }
 
@@ -464,7 +465,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     self.stats = before;
                     self.stats.approx("table-stacked-fallback");
                     self.stats.approx(reason);
-                    self.layout_block_contents(index, content_x, top, width, list, abs_origin)
+                    self.table_stack_depth += 1;
+                    let height =
+                        self.layout_block_contents(index, content_x, top, width, list, abs_origin);
+                    self.table_stack_depth -= 1;
+                    height
                 }
             };
         }
@@ -848,31 +853,52 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let containing = width;
                 let mt = self.margin_px(cstyle.margin_top, containing);
                 let mb = self.margin_px(cstyle.margin_bottom, containing);
-                let (ml, cw, _mr) = match self.widths.widths.get(child).copied().flatten() {
-                    Some(w) => {
-                        // Engine width pass already resolved geometry;
-                        // honor its margins (auto splits included). Its
-                        // content width is content-box; the painter wants
-                        // the border box.
-                        let b = cstyle.decor.used_border();
-                        let edge_or_zero = |v: u32| -> u32 {
-                            if v == crate::computed_style::PADDING_UNREPRESENTABLE {
-                                0
-                            } else {
-                                v
-                            }
-                        };
-                        (
-                            w.margin_left,
-                            w.content
-                                + edge_or_zero(cstyle.padding_left)
-                                + edge_or_zero(cstyle.padding_right)
-                                + b[3]
-                                + b[1],
-                            w.margin_right,
-                        )
+                let (ml, cw, _mr) = if self.table_stack_depth > 0 {
+                    // The fallback is an intentional block stack. Folded box
+                    // edges are already included, and descendants use its
+                    // actual inner width rather than the pre-grid width pass.
+                    let ml = self.margin_px(cstyle.margin_left, child_width);
+                    let mr = self.margin_px(cstyle.margin_right, child_width);
+                    let cw = match cstyle.width {
+                        Length::Px(value) => value,
+                        _ => u32::try_from((i64::from(child_width) - ml - mr).max(0))
+                            .unwrap_or(0),
+                    };
+                    (ml, cw, mr)
+                } else if ckind == BoxKind::Table {
+                    match cstyle.width {
+                        Length::Px(value) => {
+                            (self.margin_px(cstyle.margin_left, child_width), value, 0)
+                        }
+                        _ => self.block_child_hgeom(child, child_width),
                     }
-                    None => self.block_child_hgeom(child, child_width),
+                } else {
+                    match self.widths.widths.get(child).copied().flatten() {
+                        Some(w) => {
+                            // Engine width pass already resolved geometry;
+                            // honor its margins (auto splits included). Its
+                            // content width is content-box; the painter wants
+                            // the border box.
+                            let b = cstyle.decor.used_border();
+                            let edge_or_zero = |v: u32| -> u32 {
+                                if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                                    0
+                                } else {
+                                    v
+                                }
+                            };
+                            (
+                                w.margin_left,
+                                w.content
+                                    + edge_or_zero(cstyle.padding_left)
+                                    + edge_or_zero(cstyle.padding_right)
+                                    + b[3]
+                                    + b[1],
+                                w.margin_right,
+                            )
+                        }
+                        None => self.block_child_hgeom(child, child_width),
+                    }
                 };
                 // Adjacent vertical margins collapse to the larger one.
                 if prev_mb != 0 && mt != 0 {
@@ -898,7 +924,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         // emitted. The root's background is the canvas fill (already first).
         if Some(index) != self.tree.roots.first().copied() {
             if let Some(color) = style.used_background_color() {
-                let bw = pad_left + i64::from(width) + pad_right;
+                let bw = if self.table_stack_depth > 0 {
+                    i64::from(width)
+                } else {
+                    pad_left + i64::from(width) + pad_right
+                };
                 let bh = pad_top + content_height + pad_bot;
                 if bw > 0 && bh > 0 {
                     if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
@@ -935,7 +965,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         {
             let used = style.decor.used_border();
             if used.iter().any(|w| *w > 0) {
-                let pb_w = pad_left + i64::from(width) + pad_right;
+                let pb_w = if self.table_stack_depth > 0 {
+                    i64::from(width)
+                } else {
+                    pad_left + i64::from(width) + pad_right
+                };
                 let pb_h = pad_top + content_height + pad_bot;
                 let (bt, br, bb, bl) = (used[0], used[1], used[2], used[3]);
                 let color_for = |side: usize| -> Option<u32> {
@@ -965,8 +999,13 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         u32::try_from(w),
                         u32::try_from(h),
                     ) {
+                        let insert_at = if self.table_stack_depth > 0 {
+                            list.len()
+                        } else {
+                            bg_insert_at
+                        };
                         list.insert(
-                            bg_insert_at,
+                            insert_at,
                             Command::Fill {
                                 rect: Rect {
                                     x,
@@ -987,10 +1026,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     }
                 };
                 let (bt, br, bb, bl) = (i64::from(bt), i64::from(br), i64::from(bb), i64::from(bl));
-                emit(content_x - bl, top - bt, pb_w + bl + br, bt, 0);
-                emit(content_x + pb_w, top, br, pb_h, 1);
-                emit(content_x - bl, top + pb_h, pb_w + bl + br, bb, 2);
-                emit(content_x - bl, top, bl, pb_h, 3);
+                if self.table_stack_depth > 0 {
+                    emit(content_x, top, pb_w, bt, 0);
+                    emit(content_x + pb_w - br, top, br, pb_h, 1);
+                    emit(content_x, top + pb_h - bb, pb_w, bb, 2);
+                    emit(content_x, top, bl, pb_h, 3);
+                } else {
+                    emit(content_x - bl, top - bt, pb_w + bl + br, bt, 0);
+                    emit(content_x + pb_w, top, br, pb_h, 1);
+                    emit(content_x - bl, top + pb_h, pb_w + bl + br, bb, 2);
+                    emit(content_x - bl, top, bl, pb_h, 3);
+                }
             }
         }
         if hidden {
@@ -2368,6 +2414,7 @@ pub fn paint_basic_page_families<F: FontProvider>(
         widths,
         stats: PartialStats::default(),
         visits: 0,
+        table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
     };
     painter.stats.intake_truncated = tree.truncated;
@@ -2423,6 +2470,7 @@ pub fn paint_basic_page(
         widths,
         stats: PartialStats::default(),
         visits: 0,
+        table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
     };
     painter.stats.intake_truncated = tree.truncated;
