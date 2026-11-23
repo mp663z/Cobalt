@@ -410,3 +410,40 @@ fn colspan_cell_covers_shared_columns_and_internal_gap() {
     assert_eq!(cells[0].width, cells[1].width + 2 + cells[2].width);
     assert_eq!(stats.text_blocks_painted, 3);
 }
+
+#[test]
+fn caption_paints_before_native_grid_without_forcing_a_stack() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}td{padding:4px;background:#123456}</style><table><caption>Table caption</caption><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    assert_eq!(stats.text_blocks_painted, 3);
+    let caption_bottom = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::GlyphRun { bounds, .. } => {
+                Some(bounds.y + i32::try_from(bounds.height).unwrap())
+            }
+            _ => None,
+        })
+        .next()
+        .unwrap();
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].y, cells[1].y);
+    assert!(cells[0].y >= caption_bottom);
+}

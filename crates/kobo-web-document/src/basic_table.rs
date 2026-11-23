@@ -109,6 +109,7 @@ impl<F: FontProvider> Painter<'_, F> {
             }
             let node = &self.tree.boxes[index];
             match node.kind {
+                BoxKind::TableCaption if node.parent == Some(table) => {}
                 BoxKind::TableCell => anonymous.push(index),
                 BoxKind::TableRow => {
                     if !anonymous.is_empty() {
@@ -251,6 +252,13 @@ impl<F: FontProvider> Painter<'_, F> {
             grid.push(row_cells);
         }
         let Some(count) = columns.filter(|count| *count > 0) else {
+            if self.tree.boxes[table]
+                .children
+                .iter()
+                .any(|index| self.tree.boxes[*index].kind == BoxKind::TableCaption)
+            {
+                return Err("table-caption-without-grid");
+            }
             return Ok(0);
         };
         for row in &grid {
@@ -304,6 +312,58 @@ impl<F: FontProvider> Painter<'_, F> {
             self.stats.approx("table-min-content-overflow");
         }
         self.stats.approx("table-cell-top-align");
+        let outer_width = columns
+            .width
+            .checked_add(width_edges)
+            .ok_or("table-width")?;
+        let mut caption_height = 0;
+        let captions: Vec<_> = self.tree.boxes[table]
+            .children
+            .iter()
+            .copied()
+            .filter(|index| self.tree.boxes[*index].kind == BoxKind::TableCaption)
+            .collect();
+        if captions.len() > 1 {
+            return Err("table-multiple-captions");
+        }
+        for caption in captions {
+            self.stats.approx("table-caption-top");
+            let node = &self.tree.boxes[caption];
+            let cs = node.style;
+            if cs.decor.has_painted_border()
+                || [
+                    cs.padding_top,
+                    cs.padding_right,
+                    cs.padding_bottom,
+                    cs.padding_left,
+                ]
+                .iter()
+                .any(|v| *v != 0)
+                || cs.positioned.position != Position::Static
+                || cs.positioned.hidden
+                || !self.deep_pure_inline(&node.children)
+            {
+                return Err("table-caption-style");
+            }
+            let entry = commands.len();
+            caption_height +=
+                self.paint_text_block(caption, &node.children, x, top, outer_width, commands)?;
+            if let Some(color) = cs.used_background_color() {
+                table_fill(
+                    commands,
+                    entry,
+                    x,
+                    top,
+                    outer_width,
+                    caption_height,
+                    color,
+                    node.source,
+                )?;
+                self.stats.fills += 1;
+            }
+            self.stats.blocks_painted += 1;
+        }
+        let top = top + caption_height;
         let entry = commands.len();
         let mut y = top + i64::from(border[0]) + 2;
         for (row_number, row) in grid.iter().enumerate() {
@@ -406,7 +466,7 @@ impl<F: FontProvider> Painter<'_, F> {
         }
         self.table_box_border(table, x, top, outer_width, y - top, commands)?;
         self.stats.blocks_painted += 1;
-        Ok(y - top)
+        Ok(y - top + caption_height)
     }
 
     #[allow(clippy::too_many_arguments)]
