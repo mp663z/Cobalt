@@ -558,7 +558,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         // Commands emitted for this subtree start here; the box's own
         // background is INSERTED at this position once its height is known,
         // so it paints behind all descendants (correct stacking order).
-        let bg_insert_at = list.len();
+        let mut bg_insert_at = list.len();
         let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
         match node_kind {
@@ -707,6 +707,60 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         self.stats.fills += 1;
                     }
                 }
+            }
+        }
+        // Borders (BASIC lane): four thin fills straddling the padding
+        // box, painted outward since this lane does not reserve border
+        // space in layout (approximation, counted per side). Dashed and
+        // dotted paint solid, counted. Block-level boxes only.
+        {
+            let used = style.decor.used_border();
+            if used.iter().any(|w| *w > 0) {
+                let pb_w = pad_left + i64::from(width) + pad_right;
+                let pb_h = pad_top + content_height + pad_bot;
+                let (bt, br, bb, bl) = (used[0], used[1], used[2], used[3]);
+                let color_for = |side: usize| -> Option<u32> {
+                    match style.decor.border_color[side] {
+                        crate::computed_style::BorderColor::Transparent => None,
+                        crate::computed_style::BorderColor::CurrentColor => Some(style.color),
+                        crate::computed_style::BorderColor::Opaque(v) => Some(v),
+                    }
+                };
+                if style.decor.border_style.iter().any(|bs| {
+                    matches!(bs, crate::computed_style::BorderStyle::Dashed
+                        | crate::computed_style::BorderStyle::Dotted)
+                }) {
+                    self.stats.approx("border-style-solid-approx");
+                }
+                let mut emit = |x: i64, y: i64, w: i64, h: i64, side: usize| {
+                    if w <= 0 || h <= 0 {
+                        return;
+                    }
+                    let Some(col) = color_for(side) else { return };
+                    if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
+                        i32::try_from(x),
+                        i32::try_from(y),
+                        u32::try_from(w.min(512)),
+                        u32::try_from(h),
+                    ) {
+                        list.insert(
+                            bg_insert_at,
+                            Command::Fill {
+                                rect: Rect { x, y, width: w, height: h },
+                                color: rgb(col),
+                                source: Source { node: self.tree.boxes[index].source, action: None },
+                            },
+                        );
+                        bg_insert_at += 1;
+                        self.stats.fills += 1;
+                        self.stats.approx("border-side");
+                    }
+                };
+                let (bt, br, bb, bl) = (i64::from(bt), i64::from(br), i64::from(bb), i64::from(bl));
+                emit(content_x - bl, top - bt, pb_w + bl + br, bt, 0);
+                emit(content_x + pb_w, top, br, pb_h, 1);
+                emit(content_x - bl, top + pb_h, pb_w + bl + br, bb, 2);
+                emit(content_x - bl, top, bl, pb_h, 3);
             }
         }
         self.stats.blocks_painted += 1;
