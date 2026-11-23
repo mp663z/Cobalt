@@ -158,3 +158,22 @@ The same locked ARM release build produced a 5,117,932-byte browser, 7,568
 bytes more than the pre-chrome binary above. Relative to the same hello
 baseline, the delta is 3,868,544 bytes, leaving 1,374,336 bytes under the
 +5 MiB binary limit. Device RSS and runtime behavior remain unmeasured.
+
+### Native tables and compact browser chrome, November 23, 2026
+
+Measured source: `4edd877177befe3fae44e724349cadf84cba3533`.
+The same pinned local ARM cross-build was repeated after native HTML table
+intake/grid/fallback and compact vector browser controls were integrated.
+All protocol endpoints were rebuilt together. The compiler uses the wrapper
+above; the archive wrapper invokes `zig ar`.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,156,900 | +3,907,520 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,086,884 | |
+
+The stripped browser is 1,335,360 bytes below the +5 MiB binary allowance.
+`file` identifies it as a stripped, static ARM EABI5 ELF. This measures
+linked size only, not runtime memory, first paint, input latency or physical
+reader behavior. Device RSS and speed remain unmeasured.
