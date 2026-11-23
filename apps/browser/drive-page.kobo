@@ -10,11 +10,13 @@ tap-id links
 expect links on this page
 shot scoped-links
 tap-id link-0
-wait-for Notes on reading from paper screens
+wait-for Notes on reading from paper
 tap-id back
 wait-for Sample pages
+tap-id navigate
+tap-id native-reader
 tap-id link-0
-wait-for Notes on reading from paper screens
+wait-for Notes on reading from paper
 tap-id navigate
 tap-id page-view
 wait-for-id browser-close

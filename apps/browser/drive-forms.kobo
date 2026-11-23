@@ -1,6 +1,8 @@
 wait-for Search the web
 tap-id samples
 wait-for Sample pages
+tap-id navigate
+tap-id native-reader
 tap-id link-5
 wait-for Sample form
 tap-id form-0
