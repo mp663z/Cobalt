@@ -10,6 +10,64 @@ use crate::table_layout::{automatic_columns, CellIntrinsic};
 type TableRow = (Option<usize>, Vec<usize>);
 
 impl<F: FontProvider> Painter<'_, F> {
+    /// Remove only single-child, layout-neutral block wrapper chains. Never
+    /// merge sibling blocks or discard their margins, edges or alignment.
+    fn table_inline_children(&self, cell: usize) -> Result<Vec<usize>, &'static str> {
+        use crate::computed_style::{Float, Margin};
+        let base = self.tree.boxes[cell].style;
+        let mut children = self.tree.boxes[cell].children.clone();
+        for _ in 0..64 {
+            if children.is_empty() || self.deep_pure_inline(&children) {
+                return Ok(children);
+            }
+            if children.len() != 1 {
+                return Err("table-cell-content");
+            }
+            let node = &self.tree.boxes[children[0]];
+            let cs = node.style;
+            if !matches!(node.kind, BoxKind::Block | BoxKind::AnonymousBlock)
+                || cs.width != Length::Auto
+                || cs.height != Length::Auto
+                || cs.min_width != Length::Auto
+                || cs.max_width != Length::Auto
+                || cs.min_height != Length::Auto
+                || cs.margin_top != Margin::Px(0)
+                || cs.margin_bottom != Margin::Px(0)
+                || cs.margin_left != Margin::Px(0)
+                || cs.margin_right != Margin::Px(0)
+                || [
+                    cs.padding_top,
+                    cs.padding_right,
+                    cs.padding_bottom,
+                    cs.padding_left,
+                ] != [0; 4]
+                || cs.decor.has_painted_border()
+                || cs.used_background_color().is_some()
+                || cs.positioned.position != Position::Static
+                || cs.positioned.hidden
+                || cs.positioned.float != Float::None
+                || cs.overflow_hidden
+                || cs.box_shadow.is_some()
+                || cs.paints_outline()
+                || cs.direction != base.direction
+                || cs.unicode_bidi != base.unicode_bidi
+                || cs.font_family != base.font_family
+                || cs.font_family_list != base.font_family_list
+                || cs.font_size != base.font_size
+                || cs.line_height_number != base.line_height_number
+                || cs.line_height_precise != base.line_height_precise
+                || cs.line_height != base.line_height
+                || cs.text_align != base.text_align
+                || cs.white_space_pre
+                || cs.white_space_nowrap
+            {
+                return Err("table-cell-content");
+            }
+            children = node.children.clone();
+        }
+        Err("table-cell-wrapper-bound")
+    }
+
     /// Min/max-content measurement with the Page view font hooks. Adjacent
     /// compatible style runs are shaped together, preserving word context.
     fn table_intrinsic(&mut self, cell: usize) -> Result<(u32, u32), &'static str> {
@@ -17,10 +75,11 @@ impl<F: FontProvider> Painter<'_, F> {
         if node.children.is_empty() {
             return Ok((0, 0));
         }
-        if !self.deep_pure_inline(&node.children) {
-            return Err("table-cell-content");
+        let children = self.table_inline_children(cell)?;
+        if children.is_empty() {
+            return Ok((0, 0));
         }
-        let (runs, _) = self.collect_runs_of(&node.children, node.style.color)?;
+        let (runs, _) = self.collect_runs_of(&children, node.style.color)?;
         let face = self.face_for(cell);
         let mut min = 0_u32;
         let mut max = 0_u32;
@@ -400,12 +459,13 @@ impl<F: FontProvider> Painter<'_, F> {
                     .and_then(|value| value.checked_sub(cs.padding_right))
                     .ok_or("table-cell-padding")?;
                 let mut ink = Vec::new();
-                let text_height = if node.children.is_empty() {
+                let children = self.table_inline_children(cell)?;
+                let text_height = if children.is_empty() {
                     0
                 } else {
                     self.paint_text_block(
                         cell,
-                        &node.children,
+                        &children,
                         cell_x + i64::from(cs.padding_left),
                         y + i64::from(cs.padding_top),
                         inner_width,

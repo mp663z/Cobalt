@@ -558,3 +558,62 @@ fn row_group_borders_still_use_counted_readable_fallback() {
     assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
     assert_eq!(stats.text_blocks_painted, 2);
 }
+
+#[test]
+fn undecorated_block_wrappers_in_cells_keep_native_columns() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}td{padding:4px;background:#123456}</style><table><tr><td><div><div>Wrapped text</div></div></td><td>Peer</td></tr><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 4);
+    assert_eq!(cells[0].x, cells[2].x);
+    assert_eq!(cells[1].x, cells[3].x);
+    assert_eq!(stats.text_blocks_painted, 4);
+}
+
+#[test]
+fn non_neutral_cell_wrappers_still_fall_back_without_losing_text() {
+    for declaration in [
+        "padding:2px",
+        "margin:2px",
+        "background:#eeeeee",
+        "width:100px",
+        "font-family:monospace",
+        "line-height:30px",
+        "font-size:24px",
+        "outline:2px solid black",
+    ] {
+        let html = format!("<!doctype html><table><tr><td><div style='{declaration}'>Wrapped text</div></td><td>Peer</td></tr></table>");
+        let style = kobo_web_document::parse_basic_style_tree(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            None,
+        );
+        let (_, stats, _) =
+            paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+        assert_eq!(
+            stats.approximations.get("table-stacked-fallback"),
+            Some(&1),
+            "{declaration}"
+        );
+        assert_eq!(stats.text_blocks_painted, 2, "{declaration}");
+    }
+}

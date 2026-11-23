@@ -946,6 +946,20 @@ mod tests {
     }
 
     #[test]
+    fn native_cell_wrapper_keeps_link_geometry_without_stacking() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let html = br#"<!doctype html><table><tr><td><div><a href="/wrapped">Wrapped link</a></div></td><td>Peer</td></tr></table>"#;
+        let view = PageView::paint(html, 536, 724, 2, &face, &face, &face).expect("paint");
+        assert_eq!(view.links(), &["/wrapped".to_string()]);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        assert!(!view
+            .stats
+            .approximations
+            .contains_key("table-stacked-fallback"));
+        assert_eq!(view.screen_links(0), vec![0]);
+    }
+
+    #[test]
     fn native_caption_and_colspan_keep_links_without_stacking() {
         let face = PageFontAdapter::bundled().expect("bundled faces");
         let html = br#"<!doctype html><table><caption><a href="/caption">Caption link</a></caption><tr><td colspan=2><a href="/span">Spanning link</a></td></tr><tr><td>First</td><td>Second</td></tr></table>"#;
