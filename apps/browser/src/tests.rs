@@ -204,6 +204,19 @@ fn follow_a_link_turn_pages_and_come_back() {
 fn a_fragment_link_opens_on_the_page_holding_its_section() {
     let mut runner = runner(TextScale::ExtraLarge);
     let jump = link_to(&runner, "Jump straight");
+    while !runner.app().page_links().contains(&1)
+        && runner.app().loaded.as_ref().unwrap().page + 1
+            < runner
+                .app()
+                .loaded
+                .as_ref()
+                .unwrap()
+                .paginator
+                .pages()
+                .len()
+    {
+        runner.page_turn(true);
+    }
     runner.action(jump);
     let loaded = runner.app().loaded.as_ref().unwrap();
     let page = &loaded.paginator.pages()[loaded.page];
@@ -512,6 +525,19 @@ fn the_links_list_for_a_page_of_many_links_fits_and_offers_this_page() {
         };
         let mut runner = runner(scale);
         let many = link_to(&runner, "many links");
+        while !runner.app().page_links().contains(&2)
+            && runner.app().loaded.as_ref().unwrap().page + 1
+                < runner
+                    .app()
+                    .loaded
+                    .as_ref()
+                    .unwrap()
+                    .paginator
+                    .pages()
+                    .len()
+        {
+            runner.page_turn(true);
+        }
         runner.action(many);
         runner.action(action_id("links"));
         let loaded = runner.app().loaded.as_ref().unwrap();
@@ -1807,4 +1833,67 @@ fn inline_address_keyboard_preserves_page_and_suppresses_page_actions() {
             );
         }
     }
+}
+
+#[test]
+fn bottom_toolbar_menu_home_and_url_keys_work() {
+    let mut store = Store::default();
+    let mut runner = runner_with(&mut store);
+    for action in [
+        "browser-more",
+        "add-favourite",
+        "browser-more",
+        "add-favourite",
+        "browser-more",
+        "set-home",
+    ] {
+        let commands = runner.action(action_id(action));
+        store.pump(&mut runner, commands);
+    }
+    assert_eq!(runner.app().library.bookmarks.len(), 1);
+    assert_eq!(
+        runner.app().home_page.as_ref().unwrap().to_string(),
+        SAMPLES
+    );
+    runner.action(action_id("home"));
+    runner.action(action_id("go-home"));
+    assert_eq!(runner.app().view, View::Page);
+    runner.action(action_id("edit-address"));
+    for action in ["url-slash", "url-dot", "url-com", "url-colon"] {
+        runner.action(action_id(action));
+    }
+    assert_eq!(runner.app().address.text(), format!("{SAMPLES}/..com:"));
+    runner.action(action_id("kb.cancel"));
+    runner.action(action_id("zoom-more"));
+    assert_eq!(runner.app().zoom, 125);
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+    runner.action(action_id("zoom-less"));
+    assert_eq!(runner.app().zoom, 100);
+    runner.action(action_id("reload"));
+    assert_eq!(
+        runner.app().loaded.as_ref().unwrap().url.to_string(),
+        SAMPLES
+    );
+    let again = runner_with(&mut store);
+    assert_eq!(again.app().home_page.as_ref().unwrap().to_string(), SAMPLES);
+}
+
+#[test]
+fn inline_keyboard_splits_a_long_first_paragraph_instead_of_hiding_it() {
+    let mut runner = runner(TextScale::Default);
+    let body = format!(
+        "<title>Long first paragraph</title><p>{}",
+        "A long paragraph keeps the page visible while typing. ".repeat(100)
+    );
+    open_web_page(&mut runner, &body);
+    runner.action(action_id("edit-address"));
+    let preview = runner.app().keyboard_pieces(&runner.context().metrics());
+    assert!(!preview.is_empty());
+    assert!(
+        matches!(preview.first(), Some(Piece::Prose(runs)) if runs.iter().map(|r| r.text.len()).sum::<usize>() > 100)
+    );
+    assert!(kobo_web_layout::fits(
+        &runner.app().screen(&runner.context().metrics()).build(),
+        &runner.context().metrics()
+    ));
 }

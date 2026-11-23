@@ -250,8 +250,8 @@ pub fn page_screen_with_address(
         .page_turns("previous-page", "next-page")
         .action_bar([
             ("back", "Back"),
-            ("address", "Go to"),
             ("forward", "Forward"),
+            ("reload", "Reload"),
         ]);
     if let Some(of) = of {
         builder = builder.page_position(

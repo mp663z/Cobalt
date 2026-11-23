@@ -19,3 +19,24 @@ expect samples.browse.invalid/q
 tap-id kb.cancel
 wait-for-id native-reader
 shot page-keyboard-dismissed
+tap-id zoom-more
+expect 125%
+shot page-zoomed
+tap-id browser-more
+expect Set Page as Home
+shot browser-menu
+tap-id set-home
+tap-id browser-more
+tap-id add-favourite
+tap-id browser-more
+tap-id edit-address
+tap-id url-slash
+tap-id url-dot
+tap-id url-com
+tap-id url-colon
+expect /..com:
+shot url-keyboard
+tap-id kb.cancel
+tap-id reload
+expect Sample pages
+shot page-reloaded

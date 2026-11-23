@@ -27,6 +27,7 @@ mod arrival_prep;
 mod arrival_prep_tests;
 #[cfg(test)]
 mod arrival_timing;
+mod browser_chrome;
 mod bundled_pair_adapter;
 mod css_stage;
 mod forms;
@@ -131,6 +132,9 @@ struct Browser {
     history: History,
     library: Library,
     library_loaded: bool,
+    browser_menu: bool,
+    home_page: Option<Url>,
+    zoom: u16,
     loaded: Option<Loaded>,
     view: View,
     /// The address field. Its inline keyboard leaves the page visible.
@@ -183,6 +187,9 @@ impl Default for Browser {
             history: History::new(),
             library: Library::default(),
             library_loaded: false,
+            browser_menu: false,
+            home_page: None,
+            zoom: 100,
             loaded: None,
             view: View::Page,
             address: TextEntry::new().opened_by("address"),
@@ -421,6 +428,15 @@ impl Browser {
     fn stored(&mut self, context: &mut Context, from: Option<&str>, result: &StoreResult) {
         self.validate_css(context);
         if let StoreResult::Loaded { key, value } = result {
+            if key == "browser-home" {
+                if self.home_page.is_none() {
+                    self.home_page = value
+                        .as_deref()
+                        .and_then(|v| std::str::from_utf8(v).ok())
+                        .and_then(|v| Url::parse(v).ok());
+                }
+                return;
+            }
             if key == "browser-library" && !self.library_loaded {
                 let mut library = value.as_deref().map(Library::decode).unwrap_or_default();
                 // The sample can arrive before the startup store load. Keep
@@ -656,11 +672,24 @@ impl Browser {
         };
         let title = loaded.title.clone();
         let mut fits = |pieces: &[Piece]| {
+            let builder = page_screen_with_address(
+                &title,
+                pieces,
+                998,
+                Some(999),
+                Some(false),
+                &metrics,
+                Some(&loaded.url.to_string()),
+            );
             kobo_web_layout::page_fits_with_address(
                 &title,
                 pieces,
                 &metrics,
                 Some(&loaded.url.to_string()),
+            ) && browser_chrome::fits(
+                browser_chrome::toolbar(builder, self.zoom, false),
+                &metrics,
+                false,
             )
         };
         while loaded.paginator.pages().len() <= page.saturating_add(1)
@@ -1089,7 +1118,12 @@ impl Browser {
                 loaded.painted = (!forms)
                     .then(|| {
                         loaded.page_source.as_deref().and_then(|bytes| {
-                            page_mode::PageMode::build(bytes, &loaded.title, &context.metrics())
+                            page_mode::PageMode::build_zoom(
+                                bytes,
+                                &loaded.title,
+                                &context.metrics(),
+                                self.zoom,
+                            )
                         })
                     })
                     .flatten();
@@ -1217,8 +1251,81 @@ impl Browser {
             )
     }
 
+    fn browser_toolbar_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        if action == action_id("browser-more") {
+            self.browser_menu = !self.browser_menu;
+        } else if self.browser_menu && action == action_id("back") {
+            self.browser_menu = false;
+        } else if action == action_id("go-home") {
+            self.browser_menu = false;
+            if let Some(url) = self.home_page.clone() {
+                self.open(context, &url);
+            } else {
+                self.view = View::Start;
+                self.show(context);
+            }
+            return true;
+        } else if action == action_id("set-home") {
+            if let Some(loaded) = &self.loaded {
+                self.home_page = Some(loaded.url.clone());
+                context
+                    .store()
+                    .save("browser-home", loaded.url.to_string().into_bytes());
+            }
+            self.browser_menu = false;
+        } else if action == action_id("add-favourite") {
+            if let Some(loaded) = &self.loaded {
+                let url = loaded.url.without_fragment();
+                if !self.library.contains(&url) {
+                    self.library.toggle(url, &loaded.title);
+                    self.save_library(context);
+                }
+            }
+            self.browser_menu = false;
+        } else if action == action_id("reload") {
+            if let Some(url) = self.loaded.as_ref().map(|loaded| loaded.url.clone()) {
+                // Stop referencing the old raster before retiring its cache entry.
+                if let Some(loaded) = self.loaded.as_mut() {
+                    loaded.painted = None;
+                }
+                self.show(context);
+                self.load(context, &url);
+            }
+            return true;
+        } else if action == action_id("zoom-less") || action == action_id("zoom-more") {
+            self.zoom = if action == action_id("zoom-less") {
+                self.zoom.saturating_sub(25).max(75)
+            } else {
+                (self.zoom + 25).min(200)
+            };
+            if let Some(loaded) = self.loaded.as_mut() {
+                loaded.painted = loaded
+                    .page_source
+                    .as_deref()
+                    .filter(|_| forms::forms(&loaded.document.blocks).is_empty())
+                    .and_then(|bytes| {
+                        page_mode::PageMode::build_zoom(
+                            bytes,
+                            &loaded.title,
+                            &context.metrics(),
+                            self.zoom,
+                        )
+                    });
+                loaded.paint_refused = loaded.painted.is_none();
+            }
+        } else {
+            if action == action_id("bookmarks") {
+                self.browser_menu = false;
+            }
+            return false;
+        }
+        self.show(context);
+        true
+    }
+
     fn handle_address(&mut self, context: &mut Context, action: ActionId) -> bool {
         if action == action_id("edit-address") && !self.address.is_open() {
+            self.browser_menu = false;
             let value = if matches!(self.view, View::Start) {
                 String::new()
             } else if let View::Loading(url) = &self.view {
@@ -1231,6 +1338,27 @@ impl Browser {
             self.address.open_with(value);
             self.show(context);
             return true;
+        }
+        if action == action_id("address") {
+            self.browser_menu = false;
+        }
+        if self.address.is_open() {
+            for (name, value) in [
+                ("url-slash", "/"),
+                ("url-dot", "."),
+                ("url-com", ".com"),
+                ("url-colon", ":"),
+            ] {
+                if action == action_id(name) {
+                    let mut text = self.address.text().to_owned();
+                    if text.len() + value.len() <= kobo_sdk::keyboard::MAX_TEXT {
+                        text.push_str(value);
+                    }
+                    self.address.open_with(text);
+                    self.show(context);
+                    return true;
+                }
+            }
         }
         match self.address.handle(action) {
             Some(Typing::Submitted(typed)) => {
@@ -1468,41 +1596,61 @@ impl Browser {
                     .filter(|_| !matches!(self.view, View::Start))
                     .map_or("Browse", |loaded| loaded.title.as_str()),
             );
-            builder
-                .top_bar_action("kb.cancel", "Close keyboard")
-                .keyboard(self.address.keyboard(), "Go")
+            browser_chrome::address_keys(
+                browser_chrome::toolbar(builder, self.zoom, true).top_bar_glyph(
+                    "kb.cancel",
+                    "Close keyboard",
+                    Glyph::Close,
+                ),
+            )
+            .keyboard(self.address.keyboard(), "Go")
+        } else if matches!(self.view, View::Page) {
+            let builder = browser_chrome::toolbar(builder, self.zoom, false);
+            if self.browser_menu {
+                builder.popover("browser-more", |menu| {
+                    menu.button("edit-address", "Keyboard")
+                        .button("go-home", "Go Home")
+                        .button("bookmarks", "Favourites")
+                        .button("add-favourite", "Add to Favourites")
+                        .button("set-home", "Set Page as Home")
+                })
+            } else {
+                builder
+            }
         } else {
             builder
         }
     }
 
-    fn keyboard_pieces(&self, metrics: &DisplayMetrics) -> &[Piece] {
+    fn keyboard_pieces(&self, metrics: &DisplayMetrics) -> Vec<Piece> {
         let pieces = self.current_pieces();
         if !self.address.is_open() {
-            return pieces;
+            return pieces.to_vec();
         }
         let Some(loaded) = &self.loaded else {
-            return &[];
+            return Vec::new();
         };
-        let mut count = pieces.len();
-        while count > 0 {
-            let candidate = page_screen_with_address(
+        let mut paginator = Paginator::new(pieces.to_vec(), Vec::new());
+        paginator.next_page(&mut |candidate| {
+            let builder = page_screen_with_address(
                 &loaded.title,
-                &pieces[..count],
+                candidate,
                 0,
                 None,
                 None,
                 metrics,
                 Some(self.address.text()),
             )
-            .keyboard(self.address.keyboard(), "Go")
-            .build();
-            if kobo_web_layout::fits(&candidate, metrics) {
-                break;
-            }
-            count -= 1;
-        }
-        &pieces[..count]
+            .top_bar("Browse")
+            .top_bar_glyph("kb.cancel", "Close keyboard", Glyph::Close);
+            browser_chrome::fits(
+                browser_chrome::address_keys(browser_chrome::toolbar(builder, self.zoom, true))
+                    .keyboard(self.address.keyboard(), "Go"),
+                metrics,
+                true,
+            )
+        });
+        paginator.pages().first().cloned().unwrap_or_default()
     }
 
     fn displayed_address(&self) -> String {
@@ -1533,7 +1681,15 @@ impl Browser {
             (View::Start, _) => Self::start_screen(),
             (View::Loading(url), _) => ScreenBuilder::new("browser-loading")
                 .top_bar(url.host())
-                .field("edit-address", url.to_string(), "Search or enter address")
+                .field(
+                    "edit-address",
+                    if self.address.is_open() {
+                        self.address.text().to_owned()
+                    } else {
+                        url.to_string()
+                    },
+                    "Search or enter address",
+                )
                 .activity("Loading the page", None)
                 .secondary(self.clock.waited_words())
                 .secondary(url.to_string())
@@ -1616,7 +1772,7 @@ impl Browser {
                 } else {
                     loaded.title.clone()
                 },
-                self.keyboard_pieces(metrics),
+                &self.keyboard_pieces(metrics),
                 loaded.page,
                 // The count in the bar is only honest once every page exists.
                 loaded
@@ -1658,6 +1814,7 @@ impl KoboApp for Browser {
     fn on_start(&mut self, context: &mut Context) {
         Saved::start(context);
         context.store().load("browser-library");
+        context.store().load("browser-home");
         context.device().read_identity();
         self.view = View::Start;
         self.show(context);
@@ -1682,6 +1839,9 @@ impl KoboApp for Browser {
             return;
         }
         if self.handle_address(context, action) {
+            return;
+        }
+        if self.browser_toolbar_action(context, action) {
             return;
         }
         if self.library_action(context, action) {
