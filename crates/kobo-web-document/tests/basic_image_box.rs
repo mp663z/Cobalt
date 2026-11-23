@@ -131,3 +131,15 @@ fn image_box_paints_the_sentinel_fill_for_the_blit_step() {
         }
     )));
 }
+
+
+#[test]
+fn extreme_image_attributes_are_bounded_without_overflow() {
+    for (width, height, expected) in [(801_u32, u32::MAX, 4096_u32), (u32::MAX, u32::MAX, 800)] {
+        let t = tree(&format!(
+            "<img src='{PNG_2X4}' width='{width}' height='{height}'>"
+        ));
+        let img = t.boxes.iter().find(|b| b.kind == BoxKind::Image).unwrap();
+        assert_eq!(img.style.padding_top, expected);
+    }
+}

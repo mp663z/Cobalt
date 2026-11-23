@@ -2917,7 +2917,13 @@ impl BoxTree {
                 tree.image_count += 1;
                 let (r, g, b) = crate::basic_page::image_sentinel(idx);
                 let width = 800u32;
-                let sh = if iw > width { ih * width / iw } else { ih }.min(4096);
+                // Attribute/header dimensions are untrusted u32 values. Widen
+                // before multiplying, then clamp before narrowing for layout.
+                let sh = if iw > width {
+                    (u64::from(ih) * u64::from(width) / u64::from(iw)).min(4096) as u32
+                } else {
+                    ih.min(4096)
+                };
                 let style = &mut tree.boxes[index].style;
                 style.display = Display::Block;
                 style.padding_top = sh;

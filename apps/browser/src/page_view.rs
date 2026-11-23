@@ -1111,6 +1111,26 @@ mod tests {
     }
 
     #[test]
+    fn native_image_large_attributes_do_not_panic_or_wrap_geometry() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let png = kobo_image::encode_png_rgb(1, 1, &[220, 20, 40]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        for (width, height) in [(801, u32::MAX), (u32::MAX, u32::MAX)] {
+            let html =
+                format!("<!doctype html><img src='{uri}' width='{width}' height='{height}'>");
+            let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+            assert!(view.content_height <= 4200);
+            assert_eq!(
+                view.images
+                    .values()
+                    .filter(|(_, image)| image.is_some())
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
     fn native_jpeg_variants_decode_and_malformed_payload_falls_back() {
         let face = PageFontAdapter::bundled().unwrap();
         for bytes in [
