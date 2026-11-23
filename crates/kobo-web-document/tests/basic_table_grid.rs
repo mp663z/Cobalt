@@ -501,3 +501,60 @@ fn cell_content_can_grow_beyond_a_declared_short_row_height() {
     assert_eq!(cells[0].height, cells[1].height);
     assert!(cells[0].height > 60);
 }
+
+#[test]
+fn row_group_background_spans_rows_and_internal_spacing_below_row_colors() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}tbody{background:#123456}tr{height:40px}.override{background:#456789}</style><table><tbody><tr><td>A</td><td>B</td></tr><tr class=override><td>C</td><td>D</td></tr></tbody><tbody><tr><td>E</td><td>F</td></tr></tbody></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let groups: Vec<_> = commands
+        .iter()
+        .enumerate()
+        .filter_map(|(index, command)| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some((index, rect)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].1.height, 82);
+    assert_eq!(groups[1].1.y, groups[0].1.y + 84);
+    assert_eq!(groups[1].1.height, 40);
+    assert_eq!(groups[0].1.width, 216);
+    let (row_index, row) = commands
+        .iter()
+        .enumerate()
+        .find_map(|(i, c)| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x45, 0x67, 0x89),
+                ..
+            } => Some((i, rect)),
+            _ => None,
+        })
+        .unwrap();
+    assert!(groups[0].0 < row_index);
+    assert_eq!(row.y, groups[0].1.y + 42);
+    assert_eq!(stats.text_blocks_painted, 6);
+}
+
+#[test]
+fn row_group_borders_still_use_counted_readable_fallback() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>tbody{border:2px solid #123456}</style><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (_, stats, _) = paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert_eq!(stats.approximations.get("table-group-decoration"), Some(&1));
+    assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
+    assert_eq!(stats.text_blocks_painted, 2);
+}

@@ -121,8 +121,9 @@ impl<F: FontProvider> Painter<'_, F> {
                     if !anonymous.is_empty() {
                         rows.push((None, std::mem::take(&mut anonymous)));
                     }
-                    if node.style.used_background_color().is_some()
-                        || node.style.decor.has_painted_border()
+                    if node.style.decor.has_painted_border()
+                        || (node.style.used_background_color().is_some()
+                            && node.parent != Some(table))
                     {
                         return Err("table-group-decoration");
                     }
@@ -366,6 +367,7 @@ impl<F: FontProvider> Painter<'_, F> {
         let top = top + caption_height;
         let entry = commands.len();
         let mut y = top + i64::from(border[0]) + 2;
+        let mut group_extents: Vec<(usize, i64, i64)> = Vec::new();
         for (row_number, row) in grid.iter().enumerate() {
             let row_entry = commands.len();
             let mut cell_x = grid_x + 2;
@@ -455,7 +457,38 @@ impl<F: FontProvider> Painter<'_, F> {
                     self.tree.boxes[row].source,
                 )?;
             }
+            // Row-group backgrounds are a layer below row and cell paint.
+            // Include internal row spacing, excluding the gap to the next
+            // group. Anonymous rows use their first cell's parent.
+            let group = rows[row_number]
+                .0
+                .or_else(|| row.first().copied())
+                .and_then(|index| self.tree.boxes[index].parent)
+                .filter(|index| self.tree.boxes[*index].kind == BoxKind::TableRowGroup);
+            if let Some(group) = group {
+                if let Some((_, _, bottom)) = group_extents.last_mut().filter(|v| v.0 == group) {
+                    *bottom = y + height;
+                } else {
+                    group_extents.push((group, y, y + height));
+                }
+            }
             y += height + 2;
+        }
+        for (group, group_top, group_bottom) in group_extents.into_iter().rev() {
+            let node = &self.tree.boxes[group];
+            if let Some(color) = node.style.used_background_color() {
+                table_fill(
+                    commands,
+                    entry,
+                    grid_x + 2,
+                    group_top,
+                    columns.width,
+                    group_bottom - group_top,
+                    color,
+                    node.source,
+                )?;
+                self.stats.fills += 1;
+            }
         }
         y += i64::from(border[2]);
         let outer_width = columns
