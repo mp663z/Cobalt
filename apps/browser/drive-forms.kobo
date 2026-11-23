@@ -1,0 +1,21 @@
+wait-for Search the web
+tap-id samples
+wait-for Sample pages
+tap-id link-5
+wait-for Sample form
+tap-id form-0
+wait-for Search words
+shot form-submitter-choices
+tap-id submit-field-5
+wait-for A page of many links
+shot form-submitter-result
+tap-id back
+wait-for Sample form
+tap-id form-1
+wait-for note
+tap-id submit-field-1
+wait-for Review submission
+expect cannot send POST
+shot form-post-review
+tap-id cancel-post
+wait-for note

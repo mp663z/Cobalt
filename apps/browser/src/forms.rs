@@ -91,7 +91,8 @@ fn field_title(field: &Field) -> Option<(String, String)> {
             label.clone(),
             if *checked { "On" } else { "Off" }.to_owned(),
         )),
-        Field::Hidden { .. } | Field::Submit { .. } => None,
+        Field::Submit { value, .. } => Some((value.clone(), "Submit this form".to_owned())),
+        Field::Hidden { .. } => None,
     }
 }
 
@@ -107,9 +108,21 @@ fn screen(form: &Form, entries: &[usize], page: usize, of: usize, last: bool) ->
         );
     builder = builder.rows(entries.iter().filter_map(|&index| {
         let (title, detail) = field_title(form.fields.get(index)?)?;
-        Some((format!("field-{index}"), title, detail, Glyph::Terminal))
+        let action = if matches!(form.fields[index], Field::Submit { .. }) {
+            format!("submit-field-{index}")
+        } else {
+            format!("field-{index}")
+        };
+        Some((action, title, detail, Glyph::Terminal))
     }));
     if !last {
+        return builder;
+    }
+    if form
+        .fields
+        .iter()
+        .any(|field| matches!(field, Field::Submit { .. }))
+    {
         return builder;
     }
     match (form.urlencoded, form.method) {

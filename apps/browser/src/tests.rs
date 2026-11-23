@@ -1991,3 +1991,37 @@ fn native_keyboard_measurement_includes_visible_page_footer() {
         assert!(!runner.app().keyboard_pieces(&metrics).is_empty());
     }
 }
+
+#[test]
+fn explicit_get_submitter_uses_only_the_chosen_button_value() {
+    let mut runner = runner(TextScale::Default);
+    open_web_page(&mut runner,"<!doctype html><title>Choose submitter</title><form action='https://forms.invalid/search'><input name=q value=ink><input type=submit name=mode value=title><input type=submit name=mode value=author></form>");
+    runner.action(action_id("form-0"));
+    runner.action(action_id("submit-field-2"));
+    assert!(
+        matches!(&runner.app().view,View::Loading(url) if url.to_string().ends_with("/search?q=ink&mode=author"))
+    );
+}
+
+#[test]
+fn offscreen_submitter_cannot_submit_and_post_choice_still_never_sends() {
+    let mut runner = runner(TextScale::Default);
+    let mut html =
+        "<!doctype html><title>Many controls</title><form action='https://forms.invalid/search'>"
+            .to_owned();
+    for n in 0..30 {
+        html.push_str(&format!("<input name='field{n}' value=ink>"));
+    }
+    html.push_str("<input type=submit name=go value=last></form>");
+    open_web_page(&mut runner, &html);
+    runner.action(action_id("form-0"));
+    runner.action(action_id("submit-field-30"));
+    assert_eq!(runner.app().view, View::Form(0, 0));
+    open_web_page(&mut runner,"<!doctype html><title>POST choices</title><form method=post><input name=q><input type=submit name=go value=one><input type=submit name=go value=two></form>");
+    runner.action(action_id("form-0"));
+    runner.action(action_id("submit-field-2"));
+    assert_eq!(runner.app().view, View::PostConfirm(0));
+    assert!(runner.app().pending.is_none());
+}
+
+

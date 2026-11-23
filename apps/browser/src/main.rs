@@ -1063,22 +1063,27 @@ impl Browser {
     }
 
     fn submit_form(&mut self, context: &mut Context, action: ActionId) -> bool {
-        let View::Form(index, _) = self.view else {
+        let View::Form(index, page) = self.view else {
             return false;
         };
-        if action != action_id("submit-form") {
-            return false;
-        }
         let Some(loaded) = self.loaded.as_ref() else {
             return false;
         };
         let form = forms::forms(&loaded.document.blocks).get(index).copied();
+        let selected = form.and_then(|form| {
+            let pages = forms::form_pages(loaded,index,&context.metrics());
+            pages.get(page.min(pages.len().saturating_sub(1)))?.iter().copied().find(|&field| {
+                matches!(form.fields.get(field),Some(Field::Submit{..}))
+                    && action == action_id(&format!("submit-field-{field}"))
+            })
+        });
+        if action != action_id("submit-form") && selected.is_none() { return false; }
         if form.is_some_and(|f| f.method == kobo_web_document::Method::Post && f.urlencoded) {
             self.view = View::PostConfirm(index);
             self.show(context);
             return true;
         }
-        let to = form.and_then(|form| forms::get_url(form, forms::default_submit(form)));
+        let to = form.and_then(|form| forms::get_url(form, selected.or_else(|| forms::default_submit(form))));
         if let Some(to) = to {
             self.open(context, &to);
         } else {
