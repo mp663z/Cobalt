@@ -248,6 +248,11 @@ impl Browser {
         match go {
             Go::Load(url) => self.load(context, &url),
             Go::Fragment(fragment) => {
+                // Fragment offsets belong to the native paginator, not painted screens.
+                if let Some(loaded) = self.loaded.as_mut() {
+                    loaded.painted = None;
+                }
+                context.drop_picture(page_mode::HANDLE);
                 let page = fragment
                     .and_then(|fragment| self.fragment_page(context, &fragment))
                     .unwrap_or(0);
@@ -1515,6 +1520,7 @@ impl Browser {
         let loaded = self.loaded.as_ref()?;
         let candidates: Vec<usize> = match self.view {
             View::Links(_) => self.page_links(),
+            View::Page if loaded.painted.is_some() => self.page_links(),
             _ => self
                 .current_pieces()
                 .iter()

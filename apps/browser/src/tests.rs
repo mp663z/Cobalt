@@ -1637,3 +1637,37 @@ fn painted_forms_keep_native_controls_and_census_refusal_is_visible() {
     assert!(runner.app().loaded.as_ref().unwrap().paint_refused);
     assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
 }
+
+#[test]
+fn painted_fragment_link_uses_native_anchor_offsets() {
+    let mut runner = runner(TextScale::Default);
+    runner.action(action_id("page-view"));
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    assert!(loaded.painted.is_some());
+    let index = loaded
+        .document
+        .links
+        .iter()
+        .position(|link| {
+            link.target.path().ends_with("article.html") && link.target.fragment().is_none()
+        })
+        .unwrap();
+    // First navigate to the article, then enter its painted mode.
+    runner.action(action_id(&link_action(index)));
+    runner.action(action_id("page-view"));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+    let target = runner
+        .app()
+        .loaded
+        .as_ref()
+        .unwrap()
+        .url
+        .join("#refresh")
+        .unwrap();
+    let mut context = runner.context();
+    runner.app_mut().open(&mut context, &target);
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    let loaded = runner.app().loaded.as_ref().unwrap();
+    assert!(loaded.paginator.page_of("refresh").is_some());
+    assert_eq!(Some(loaded.page), loaded.paginator.page_of("refresh"));
+}
