@@ -86,6 +86,9 @@ pub struct StyledNode {
     pub parent: Option<usize>,
     pub children: Vec<usize>,
     pub tag: String,
+    /// The link target of an `a` element, as written. Page view hit testing
+    /// resolves it against the document address; nothing else reads it.
+    pub href: Option<String>,
     /// Text content for a retained #text node.
     pub text: Option<String>,
     pub style: Computed,
@@ -399,6 +402,7 @@ impl StyleTree {
                     parent,
                     children: Vec::new(),
                     tag: if is_before { "::before" } else { "::after" }.to_owned(),
+                    href: None,
                     text: None,
                     style,
                 });
@@ -423,6 +427,7 @@ impl StyleTree {
                     parent,
                     children: Vec::new(),
                     tag: "#text".to_owned(),
+                    href: None,
                     text: Some(text.clone()),
                     style: inherited,
                 });
@@ -1219,6 +1224,14 @@ impl StyleTree {
                 parent,
                 children: Vec::new(),
                 tag: name.local.to_string(),
+                href: if name.local.as_ref() == "a" {
+                    attrs
+                        .iter()
+                        .find(|(attr, _)| attr.as_ref() == "href")
+                        .map(|(_, value)| value.clone())
+                } else {
+                    None
+                },
                 text: None,
                 style,
             });
