@@ -154,6 +154,7 @@ impl FontProvider for PageFontAdapter {
 pub(crate) struct PageView {
     commands: Vec<Command>,
     stats: PartialStats,
+    images: std::collections::BTreeMap<usize, (Rgb, Option<kobo_image::Picture>)>,
     /// Link targets in first-paint order; `TapMap` actions index this.
     links: Vec<String>,
     /// Tap targets resolved at paint time: `(rect, link index)`.
@@ -203,13 +204,15 @@ impl PageView {
         let (_, _, measured) = paint_basic_page_families(&boxes, css_width, 1, serif, sans, mono)?;
         let content_height =
             u32::try_from(measured.clamp(1, MAX_CONTENT_HEIGHT_CSS)).map_err(|_| "viewport")?;
-        let (mut commands, stats, _) =
+        let (mut commands, mut stats, _) =
             paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
+        let images = crate::page_images::prepare(&boxes, &mut stats);
         let cuts = paginate(&commands, content_height, page_height_css);
         let (links, targets) = link_targets(&tree, &mut commands);
         Ok(Self {
             commands,
             stats,
+            images,
             links,
             targets,
             content_height,
@@ -295,10 +298,20 @@ impl PageView {
         }];
         for command in &self.commands {
             match command {
-                Command::Fill { rect, color, .. } => {
+                Command::Fill { rect, color, source } => {
+                    let image_rect = *rect;
                     let Some(rect) = shift(rect, top, bottom) else {
                         continue;
                     };
+                    if let Some((marker,image)) = source.node.and_then(|node| self.images.get(&node)) {
+                        if color == marker {
+                            fill_rect(&mut buffer,width,height,&rect,self.scale,Rgb(255,255,255),&clips);
+                            if let Some(image) = image {
+                                paint_image(&mut buffer, width, height, &image_rect, top, self.scale, image, &clips);
+                            }
+                            continue;
+                        }
+                    }
                     fill_rect(
                         &mut buffer,
                         width,
@@ -313,8 +326,15 @@ impl PageView {
                     bounds,
                     coverage,
                     color,
+                    source,
                     ..
                 } => {
+                    // The image node's text is its alt fallback. Keep it for
+                    // refusals, but do not draw it over a decoded picture.
+                    if source.node.and_then(|node| self.images.get(&node))
+                        .is_some_and(|(_,image)| image.is_some()) {
+                        continue;
+                    }
                     let Some(bounds) = shift(bounds, top, bottom) else {
                         continue;
                     };
@@ -589,6 +609,48 @@ fn fill_rect(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn paint_image(
+    buffer: &mut [u8],
+    width: u32,
+    height: u32,
+    rect: &Rect,
+    top: u32,
+    scale: u32,
+    image: &kobo_image::Picture,
+    clips: &[Rect],
+) {
+    let Some((left, ct, right, cb)) = clip_bounds(clips, scale, width, height) else {
+        return;
+    };
+    let s = i64::from(scale);
+    let ox = i64::from(rect.x) * s;
+    let oy = (i64::from(rect.y) - i64::from(top)) * s;
+    let available_w = rect.width.min(image.width());
+    let available_h = rect.height;
+    let (fit_w, fit_h) =
+        kobo_image::fitted_size((image.width(), image.height()), available_w, available_h);
+    let rw = i64::from(fit_w) * s;
+    let rh = i64::from(fit_h) * s;
+    if rw == 0 || rh == 0 {
+        return;
+    }
+    let Some(rgb) = image.colour() else {
+        return;
+    };
+    for y in oy.max(ct)..(oy + rh).min(cb) {
+        for x in ox.max(left)..(ox + rw).min(right) {
+            let sx = usize::try_from((x - ox) * i64::from(image.width()) / rw).unwrap_or(0);
+            let sy = usize::try_from((y - oy) * i64::from(image.height()) / rh).unwrap_or(0);
+            let source = (sy * image.width() as usize + sx) * 3;
+            let dest = (usize::try_from(y).unwrap_or(0) * width as usize
+                + usize::try_from(x).unwrap_or(0))
+                * 3;
+            buffer[dest..dest + 3].copy_from_slice(&rgb[source..source + 3]);
+        }
+    }
+}
+
 /// Reconstructs CSS coverage masks with bilinear filtering, not repeated square
 /// pixels. Native-resolution masks remain a separate typography improvement.
 #[allow(clippy::too_many_arguments)]
@@ -778,6 +840,7 @@ mod tests {
         let view = PageView {
             commands,
             stats: PartialStats::default(),
+            images: Default::default(),
             links: vec![],
             targets: vec![],
             content_height: 200,
@@ -796,6 +859,7 @@ mod tests {
         let view = PageView {
             commands: vec![fill(5, 5, 10, 10, None)],
             stats: PartialStats::default(),
+            images: Default::default(),
             links: Vec::new(),
             targets: Vec::new(),
             content_height: 100,
@@ -821,6 +885,7 @@ mod tests {
         let view = PageView {
             commands: vec![fill(0, 60, 20, 10, None)],
             stats: PartialStats::default(),
+            images: Default::default(),
             links: Vec::new(),
             targets: Vec::new(),
             content_height: 100,
@@ -843,6 +908,7 @@ mod tests {
         let grey = PageView {
             commands: vec![fill(0, 0, 4, 4, None)],
             stats: PartialStats::default(),
+            images: Default::default(),
             links: Vec::new(),
             targets: Vec::new(),
             content_height: 10,
@@ -943,6 +1009,125 @@ mod tests {
         );
         assert_eq!(view.stats.text_blocks_painted, 5);
         assert_eq!(view.screen_links(0).len(), 2);
+    }
+
+    #[test]
+    fn native_png_data_image_paints_real_rgb_not_marker_black() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let png = kobo_image::encode_png_rgb(2, 1, &[220, 20, 40, 20, 100, 220]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        let html = format!("<!doctype html><style>body{{margin:0}}</style><a href='/image'><img src='{uri}' width='2' height='1' alt='ALT'></a>");
+        let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+        let rgb = view.raster_page_rgb(0);
+        assert!(rgb.chunks_exact(3).any(|p| p == [220, 20, 40]));
+        assert!(rgb.chunks_exact(3).any(|p| p == [20, 100, 220]));
+        assert_eq!(view.screen_links(0), vec![0]);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+    }
+
+    #[test]
+    fn unsupported_native_image_is_counted_without_black_marker() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let html = br#"<!doctype html><style>body{margin:0}</style><img src='data:image/svg+xml;base64,PHN2Zy8+' width=20 height=20>"#;
+        let view = PageView::paint(html, 100, 80, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.stats.skips.get("native-image-unavailable"), Some(&1));
+        assert!(view
+            .raster_page_rgb(0)
+            .chunks_exact(3)
+            .all(|p| p == [255, 255, 255]));
+    }
+
+    #[test]
+    fn native_image_raster_handles_pagination_clips_and_sampling() {
+        let image = kobo_image::Picture::from_rgb(
+            2,
+            2,
+            vec![220, 20, 40, 20, 100, 220, 40, 180, 60, 240, 200, 20],
+        )
+        .unwrap();
+        let rect = Rect {
+            x: 0,
+            y: 49,
+            width: 2,
+            height: 2,
+        };
+        let mut buffer = vec![255; 4 * 4 * 3];
+        super::paint_image(
+            &mut buffer,
+            4,
+            4,
+            &rect,
+            50,
+            2,
+            &image,
+            &[Rect {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2,
+            }],
+        );
+        assert_eq!(&buffer[..3], &[40, 180, 60]);
+        assert_eq!(&buffer[6..9], &[240, 200, 20]);
+        assert!(buffer[24..].iter().all(|p| *p == 255));
+    }
+
+    #[test]
+    fn native_image_preview_when_requested() {
+        let Ok(path) = std::env::var("COBALT_IMAGE_PREVIEW_OUT") else {
+            return;
+        };
+        let face = PageFontAdapter::bundled().unwrap();
+        let mut rgb = Vec::new();
+        for y in 0..80 {
+            for x in 0..240 {
+                rgb.extend_from_slice(if x < 80 {
+                    &[220, 20, 40]
+                } else if x < 160 {
+                    &[20, 100, 220]
+                } else if y < 40 {
+                    &[40, 180, 60]
+                } else {
+                    &[240, 200, 20]
+                });
+            }
+        }
+        let png = kobo_image::encode_png_rgb(240, 80, &rgb).unwrap();
+        let html=format!("<!doctype html><style>body{{margin:10px;font-size:18px}}</style><h2>Native data image</h2><a href='/image'><img src='data:image/png;base64,{}' width=240 height=80></a><p>Text after the decoded image.</p>",test_base64(&png));
+        let view = PageView::paint(html.as_bytes(), 400, 300, 2, &face, &face, &face).unwrap();
+        std::fs::write(
+            path,
+            kobo_image::encode_png_rgb(800, 600, &view.raster_page_rgb(0)).unwrap(),
+        )
+        .unwrap();
+        eprintln!(
+            "image-preview skips={:?} approximations={:?}",
+            view.stats.skips, view.stats.approximations
+        );
+    }
+
+    fn test_base64(bytes: &[u8]) -> String {
+        const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let n = (u32::from(chunk[0]) << 16)
+                | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+                | u32::from(*chunk.get(2).unwrap_or(&0));
+            for shift in [18, 12] {
+                out.push(char::from(A[((n >> shift) & 63) as usize]));
+            }
+            out.push(if chunk.len() > 1 {
+                char::from(A[((n >> 6) & 63) as usize])
+            } else {
+                '='
+            });
+            out.push(if chunk.len() > 2 {
+                char::from(A[(n & 63) as usize])
+            } else {
+                '='
+            });
+        }
+        out
     }
 
     #[test]

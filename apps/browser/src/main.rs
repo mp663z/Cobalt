@@ -35,6 +35,7 @@ mod native_font_adapter;
 mod page_mode;
 #[allow(dead_code)] // Page view compiles ahead of the view switch that installs it.
 mod page_view;
+mod page_images;
 mod pictures;
 #[cfg(test)]
 mod s0_native;
