@@ -649,6 +649,26 @@ impl Browser {
             _ => restore,
         };
         self.turn_to(context, page);
+        // Colour panels should not silently discard authored text/image RGB.
+        // Keep native forms, fragment/history positions and saved-copy notices
+        // until those semantics have a matching painted presentation.
+        if self.pictures.colour()
+            && restore == 0
+            && url.fragment().is_none()
+            && self
+                .loaded
+                .as_ref()
+                .is_some_and(|loaded| loaded.note.is_none())
+        {
+            if let Some(loaded) = self.loaded.as_mut() {
+                if forms::forms(&loaded.document.blocks).is_empty() {
+                    loaded.painted = loaded.page_source.as_deref().and_then(|source| {
+                        page_mode::PageMode::build(source, &loaded.title, &metrics)
+                    });
+                    loaded.paint_refused = loaded.painted.is_none();
+                }
+            }
+        }
         if let Some(loaded) = &self.loaded {
             let title = loaded
                 .document
@@ -1071,19 +1091,27 @@ impl Browser {
         };
         let form = forms::forms(&loaded.document.blocks).get(index).copied();
         let selected = form.and_then(|form| {
-            let pages = forms::form_pages(loaded,index,&context.metrics());
-            pages.get(page.min(pages.len().saturating_sub(1)))?.iter().copied().find(|&field| {
-                matches!(form.fields.get(field),Some(Field::Submit{..}))
-                    && action == action_id(&format!("submit-field-{field}"))
-            })
+            let pages = forms::form_pages(loaded, index, &context.metrics());
+            pages
+                .get(page.min(pages.len().saturating_sub(1)))?
+                .iter()
+                .copied()
+                .find(|&field| {
+                    matches!(form.fields.get(field), Some(Field::Submit { .. }))
+                        && action == action_id(&format!("submit-field-{field}"))
+                })
         });
-        if action != action_id("submit-form") && selected.is_none() { return false; }
+        if action != action_id("submit-form") && selected.is_none() {
+            return false;
+        }
         if form.is_some_and(|f| f.method == kobo_web_document::Method::Post && f.urlencoded) {
             self.view = View::PostConfirm(index);
             self.show(context);
             return true;
         }
-        let to = form.and_then(|form| forms::get_url(form, selected.or_else(|| forms::default_submit(form))));
+        let to = form.and_then(|form| {
+            forms::get_url(form, selected.or_else(|| forms::default_submit(form)))
+        });
         if let Some(to) = to {
             self.open(context, &to);
         } else {

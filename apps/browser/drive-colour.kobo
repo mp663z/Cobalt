@@ -1,0 +1,14 @@
+wait-for Search the web
+tap-id samples
+wait-for Sample pages
+tap-id navigate
+tap-id native-reader
+tap-id link-4
+wait-for Native image sample
+wait-for-id browser-close
+expect 1/
+shot-colour colour-text-link-images
+tap-id navigate
+tap-id native-reader
+wait-for Native image sample
+shot-colour semantic-reader-fallback

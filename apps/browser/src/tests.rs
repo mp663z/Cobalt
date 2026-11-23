@@ -1992,6 +1992,7 @@ fn native_keyboard_measurement_includes_visible_page_footer() {
     }
 }
 
+
 #[test]
 fn explicit_get_submitter_uses_only_the_chosen_button_value() {
     let mut runner = runner(TextScale::Default);
@@ -2025,3 +2026,23 @@ fn offscreen_submitter_cannot_submit_and_post_choice_still_never_sends() {
 }
 
 
+#[test]
+fn colour_arrivals_default_to_rgb_page_but_bw_and_forms_keep_reader() {
+    for colour in [false, true] {
+        let mut runner = runner(TextScale::Default);
+        runner.app_mut().pictures.set_colour(colour);
+        let commands = open_web_page(&mut runner,"<!doctype html><title>RGB arrival</title><p style='color:red'>Red prose</p><p><a href='/target' style='color:blue'>Blue link</a></p>");
+        if colour {
+            assert!(commands.iter().any(|command|matches!(command,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Rgb,pixels,..} if pixels.chunks_exact(3).any(|p|u16::from(p[0])>u16::from(p[1])+20 && u16::from(p[0])>u16::from(p[2])+20))));
+        }
+        assert_eq!(
+            runner.app().loaded.as_ref().unwrap().painted.is_some(),
+            colour
+        );
+        open_web_page(
+            &mut runner,
+            "<!doctype html><title>Form arrival</title><form><input name=q></form>",
+        );
+        assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    }
+}
