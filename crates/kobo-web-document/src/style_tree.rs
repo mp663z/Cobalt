@@ -77,6 +77,17 @@ const INLINE_SPECIFICITY: (u16, u16, u16) = (u16::MAX, u16::MAX, u16::MAX);
 const MAX_VAR_MAP_BYTES_TOTAL: usize = 16 * 1024 * 1024;
 const MAX_SUBSTITUTED_BYTES_PER_ELEMENT: usize = 64 * 1024;
 
+/// Replaced-content facts captured from an `img` element's attributes.
+/// `src_data_uri` keeps only `data:image/` sources; every other source is
+/// out of scope for the offline basic engine.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImageFacts {
+    pub src_data_uri: Option<String>,
+    pub alt: Option<String>,
+    pub attr_width: Option<u32>,
+    pub attr_height: Option<u32>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StyledNode {
     /// Original retained non-replaced phrase with no event/editing attributes.
@@ -89,6 +100,8 @@ pub struct StyledNode {
     /// The link target of an `a` element, as written. Page view hit testing
     /// resolves it against the document address; nothing else reads it.
     pub href: Option<String>,
+    /// Replaced-content facts for an `img` element; `None` on every other node.
+    pub image: Option<ImageFacts>,
     /// Text content for a retained #text node.
     pub text: Option<String>,
     pub style: Computed,
@@ -403,6 +416,7 @@ impl StyleTree {
                     children: Vec::new(),
                     tag: if is_before { "::before" } else { "::after" }.to_owned(),
                     href: None,
+                    image: None,
                     text: None,
                     style,
                 });
@@ -428,6 +442,7 @@ impl StyleTree {
                     children: Vec::new(),
                     tag: "#text".to_owned(),
                     href: None,
+                    image: None,
                     text: Some(text.clone()),
                     style: inherited,
                 });
@@ -1229,6 +1244,23 @@ impl StyleTree {
                         .iter()
                         .find(|(attr, _)| attr.as_ref() == "href")
                         .map(|(_, value)| value.clone())
+                } else {
+                    None
+                },
+                image: if name.local.as_ref() == "img" {
+                    let attr = |key: &str| {
+                        attrs
+                            .iter()
+                            .find(|(attr, _)| attr.as_ref() == key)
+                            .map(|(_, value)| value.clone())
+                    };
+                    let dim = |key: &str| attr(key).and_then(|v| v.parse::<u32>().ok());
+                    Some(ImageFacts {
+                        src_data_uri: attr("src").filter(|s| s.starts_with("data:image/")),
+                        alt: attr("alt"),
+                        attr_width: dim("width"),
+                        attr_height: dim("height"),
+                    })
                 } else {
                     None
                 },
