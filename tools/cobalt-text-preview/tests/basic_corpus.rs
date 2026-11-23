@@ -14,7 +14,7 @@ fn frozen_pages_keep_their_reviewed_census_and_height() {
     directories.sort_by_key(std::fs::DirEntry::file_name);
     assert_eq!(
         directories.len(),
-        10,
+        13,
         "add a baseline for every corpus page"
     );
     for directory in directories {
@@ -101,4 +101,34 @@ fn measured_canvas_background_covers_later_strips() {
     page.write_rgba(&mut rgba).unwrap();
     let offset = (600 * 800 + 790) * 4;
     assert_eq!(&rgba[offset..offset + 4], &[0x11, 0x22, 0x33, 255]);
+}
+
+#[test]
+fn language_fixtures_keep_text_and_report_missing_coverage() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let faces = Faces::load(&root.join("../../crates/kobo-text/fonts")).unwrap();
+    for language in ["hindi", "russian", "japanese"] {
+        let html = std::fs::read(root.join("corpus").join(language).join("page.html")).unwrap();
+        let page = prepare(&html, &[], 800, &faces).unwrap();
+        assert!(
+            page.stats.skips.is_empty(),
+            "{language}: {:?}",
+            page.stats.skips
+        );
+        assert_eq!(page.stats.text_blocks_painted, 3, "{language}");
+        let missing = page
+            .stats
+            .approximations
+            .get("missing-glyph-placeholder")
+            .copied()
+            .unwrap_or(0);
+        if language == "japanese" {
+            assert!(
+                missing > 0,
+                "no CJK face is bundled, so missing coverage must stay visible"
+            );
+        } else {
+            assert_eq!(missing, 0, "{language} has bundled coverage");
+        }
+    }
 }

@@ -16,7 +16,7 @@ The command writes RGBA, sorted census text, and temporary image URI sidecars.
 The final PNG is white-composited and includes any temporary image pastes.
 Do not present the raw sentinel raster as the final image.
 
-Render and check all ten frozen pages with one command (Python Pillow required):
+Render and check all thirteen frozen pages with one command (Python Pillow required):
 
 ```sh
 python3 tools/cobalt-text-preview/render_corpus.py --out /tmp/cobalt-corpus
@@ -171,3 +171,8 @@ height is their sum and baseline is rounded ascent plus half the rounded gap
 (floored). Local same-face Chrome controls validate height and baseline,
 not glyph coverage or cross-platform font behavior. No family-to-face binding
 is supplied by this constructor. Explicit generic-family paint remains refused.
+
+The partial-page harness now connects the PageFontSession OpenType cluster hook
+and loads the bundled Noto Cyrillic/Devanagari fallback subsets. Hindi and Russian
+fixtures have coverage; Japanese is explicitly a visible-placeholder fixture.
+No CJK font is bundled. See corpus/SOURCES.md for the per-line font metric contract.

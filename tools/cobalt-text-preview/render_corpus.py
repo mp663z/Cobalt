@@ -25,7 +25,7 @@ def main():
         if actual != (directory / 'expected.census').read_text():
             raise RuntimeError(f'{item["name"]}: census changed; inspect output and review the diff')
         subprocess.run([sys.executable, str(ROOT / 'blit_images.py'), '--rgba', str(prefix.with_suffix('.rgba')), '--images', str(prefix.with_suffix('.imguris')), '--output', str(prefix.with_suffix('.png'))], check=True)
-    print('All 10 pages match their census baselines. PNG files:', args.out)
+    print('All 13 pages match their census baselines. PNG files:', args.out)
 
 if __name__ == '__main__':
     main()

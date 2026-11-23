@@ -4,7 +4,7 @@ use kobo_web_document::basic_page::{
     normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
-use kobo_web_document::css_text_page::FontProvider;
+use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageCluster};
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
@@ -28,6 +28,20 @@ impl Faces {
         let mut regular_session = PageFontSession::from_bytes(&regular, &bold)?;
         // The bundled mono face covers additional scripts, including Cyrillic.
         // Missing glyphs in every face remain visible boxes, never dropped text.
+        regular_session.add_fallback(&std::fs::read(directory.join("NotoSans-Cyrillic.ttf"))?)?;
+        regular_session.add_fallback(&std::fs::read(directory.join("NotoSansDevanagari.ttf"))?)?;
+        for (name, bold, italic) in [
+            ("KoboPage-cyrillic-bold.ttf", true, false),
+            ("KoboPage-cyrillic-italic.ttf", false, true),
+            ("KoboPage-cyrillic-bolditalic.ttf", true, true),
+            ("KoboPage-devanagari-bold.ttf", true, false),
+        ] {
+            regular_session.add_styled_fallback(
+                &std::fs::read(directory.join(name))?,
+                bold,
+                italic,
+            )?;
+        }
         regular_session.add_fallback(&mono)?;
         Ok(Self {
             regular: PageFace(regular_session),
@@ -189,6 +203,50 @@ impl Page {
 /// Best-effort Page view adapter. This is intentionally not an exact-paint provider.
 struct PageFace(PageFontSession);
 impl FontProvider for PageFace {
+    fn page_character_metrics(
+        &self,
+        ch: char,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<NormalLineMetrics> {
+        let (height, baseline) = self.0.character_line_metrics(ch, size, bold, italic)?;
+        Some(NormalLineMetrics { height, baseline })
+    }
+    fn page_shape(
+        &self,
+        text: &str,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<Vec<PageCluster>> {
+        // Cluster bitmaps carry no coverage flag. Uncovered runs stay on the
+        // scalar path so placeholder use remains visible in the census.
+        if text
+            .chars()
+            .any(|ch| !ch.is_whitespace() && !self.0.has_glyph(ch, bold, italic))
+        {
+            return None;
+        }
+        Some(
+            self.0
+                .shape(text, size, bold, italic)?
+                .into_iter()
+                .map(|cluster| PageCluster {
+                    start: cluster.start,
+                    end: cluster.end,
+                    advance: cluster.glyph.advance,
+                    bitmap: GlyphBitmap {
+                        left: cluster.glyph.left,
+                        top: cluster.glyph.top,
+                        width: cluster.glyph.width,
+                        height: cluster.glyph.height,
+                        coverage: cluster.glyph.coverage,
+                    },
+                })
+                .collect(),
+        )
+    }
     fn has_glyph(&self, ch: char, bold: bool) -> Option<bool> {
         Some(self.0.has_glyph(ch, bold, false))
     }

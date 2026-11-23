@@ -1,0 +1,4 @@
+width=800 height=185 height_clamped=false blocks=5 text_blocks=3 glyph_runs=3 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"margin-collapse-adjacent": 2}
+images=0
