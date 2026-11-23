@@ -1,14 +1,14 @@
 //! Portable host-only entry to the partial page painter.
 use kobo_text::page_font_session::PageFontSession;
 use kobo_web_document::basic_page::{
-    PartialStats, normalize_for_basic_full, paint_basic_page_families,
+    normalize_for_basic_full, paint_basic_page_families, PartialStats,
 };
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageCluster};
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
-    HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget, parse_style_tree_with_state,
+    parse_style_tree_with_state, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
 };
 use std::path::Path;
 
@@ -234,14 +234,6 @@ impl FontProvider for PageFace {
         bold: bool,
         italic: bool,
     ) -> Option<Vec<PageCluster>> {
-        // Cluster bitmaps carry no coverage flag. Uncovered runs stay on the
-        // scalar path so placeholder use remains visible in the census.
-        if text
-            .chars()
-            .any(|ch| !ch.is_whitespace() && !self.0.has_glyph(ch, bold, italic))
-        {
-            return None;
-        }
         Some(
             self.0
                 .shape(text, size, bold, italic)?
