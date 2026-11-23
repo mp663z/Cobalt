@@ -20,9 +20,7 @@ use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageClus
 use kobo_web_document::display_list::{Command, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::style_tree::StyleTree;
-use kobo_web_document::{
-    parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget,
-};
+use kobo_web_document::{parse_basic_style_tree, Limits, MediaContext, SupplyBudget};
 
 /// Device pixels per CSS pixel for the first profiles (Clara BW: 536 CSS px
 /// across a 1072 px panel).
@@ -198,13 +196,7 @@ impl PageView {
             ..Limits::DEFAULT
         };
         let media = MediaContext::new(css_width).ok_or("viewport")?;
-        let tree = parse_style_tree_with_inline_sheets_and_selectors(
-            &bytes,
-            &[],
-            &limits,
-            Some(media),
-            budget,
-        );
+        let tree = parse_basic_style_tree(&bytes, &[], &limits, Some(media), budget, None);
         let boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
         // covers it, the same two passes the research harness runs.
@@ -925,6 +917,21 @@ mod tests {
         assert!(view.commands.iter().any(|command| matches!(command,
             Command::GlyphRun { source, .. } if source.action == Some(1))));
         assert!((1..view.pages()).any(|page| view.screen_links(page).contains(&1)));
+    }
+
+    #[test]
+    fn native_table_links_survive_grid_and_spanning_fallback() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let html = br#"<!doctype html><table><tr><td><a href="/grid">Grid link</a></td><td>Second</td></tr></table><table><caption>Caption retained</caption><tr><td colspan=2><a href="/stack">Stack link</a></td></tr></table><p>After</p>"#;
+        let view = PageView::paint(html, 536, 724, 2, &face, &face, &face).expect("paint");
+        assert_eq!(view.links(), &["/grid".to_string(), "/stack".to_string()]);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        assert_eq!(
+            view.stats.approximations.get("table-stacked-fallback"),
+            Some(&1)
+        );
+        assert_eq!(view.stats.text_blocks_painted, 5);
+        assert_eq!(view.screen_links(0).len(), 2);
     }
 
     #[test]

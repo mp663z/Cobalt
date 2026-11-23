@@ -453,20 +453,36 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         // Commands emitted for this subtree start here; the box's own
         // background is INSERTED at this position once its height is known,
         // so it paints behind all descendants (correct stacking order).
-        let mut bg_insert_at = list.len();
-        let entry_len = list.len();
         let node_kind = self.tree.boxes[index].kind;
         if node_kind == BoxKind::Table {
             let entry = list.len();
+            let before = self.stats.clone();
             return match self.layout_table(index, content_x, top, width, list, abs_origin) {
                 Ok(height) => height,
                 Err(reason) => {
                     list.truncate(entry);
-                    self.stats.skip(reason);
-                    0
+                    self.stats = before;
+                    self.stats.approx("table-stacked-fallback");
+                    self.stats.approx(reason);
+                    self.layout_block_contents(index, content_x, top, width, list, abs_origin)
                 }
             };
         }
+        self.layout_block_contents(index, content_x, top, width, list, abs_origin)
+    }
+
+    fn layout_block_contents(
+        &mut self,
+        index: usize,
+        content_x: i64,
+        top: i64,
+        width: u32,
+        list: &mut Vec<Command>,
+        abs_origin: (i64, i64),
+    ) -> i64 {
+        let mut bg_insert_at = list.len();
+        let entry_len = list.len();
+        let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
         // visibility:hidden (FL38 ext, inherited): layout runs and flow
         // space is kept, but the subtree emits no paint commands.
@@ -1001,30 +1017,12 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     }
 }
 
-/// BASIC-mode intake normalization: rewrite table-structure tags
-/// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
-/// `colgroup`, `col`) to `div` so their content flows as blocks, and
-/// presentational `bgcolor` attributes to an inline style background. The engine has no
-/// table display; without this the content
-/// vanishes. Cells stack vertically (no column geometry) - an
-/// approximation that MUST be disclosed with any render made from
-/// normalized input. `<img>` is NO LONGER rewritten here: img elements
-/// reach the box tree as BoxKind::Image (see box_tree).
+/// BASIC intake retains HTML tables for Page-view grid layout. Unsupported
+/// grids use the counted stacked fallback; presentational bgcolor and form
+/// control rewriting remain intake approximations.
 fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) {
-    const NAMES: [&[u8]; 10] = [
-        b"table",
-        b"thead",
-        b"tbody",
-        b"tfoot",
-        b"tr",
-        b"td",
-        b"th",
-        b"caption",
-        b"colgroup",
-        b"col",
-    ];
     let mut out = Vec::with_capacity(input.len());
-    let mut table_rows_flexed = 0usize;
+    let table_rows_flexed = 0usize;
     let mut form_chrome = 0usize;
     let mut i = 0usize;
     while i < input.len() {
@@ -1151,7 +1149,6 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) 
                 && matches!(lower.as_slice(), b"form" | b"fieldset" | b"legend")
                 && !name.is_empty();
             let is_button = bounded && lower == b"button" && !name.is_empty();
-            let is_table_tag = bounded && !name.is_empty() && NAMES.contains(&lower.as_slice());
             // Presentational bgcolor -> style="background-color:..." (only
             // #hex and plain color names, and only when the tag has no
             // style attribute already).
@@ -1161,9 +1158,9 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) 
                         .all(|b| b.is_ascii_alphanumeric() || *b == b'#' || *b == b'%')
                     && extract_attr(tag, b"style").is_none()
             });
-            if is_table_tag || is_form_tag || is_button || bg.is_some() {
+            if is_form_tag || is_button || bg.is_some() {
                 out.extend_from_slice(&input[i..name_start]);
-                if is_table_tag || is_form_tag {
+                if is_form_tag {
                     out.extend_from_slice(b"div");
                 } else if is_button {
                     out.extend_from_slice(b"span");
@@ -1175,19 +1172,6 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) 
                     out.extend_from_slice(b" style=\"background-color:");
                     out.extend_from_slice(v);
                     out.extend_from_slice(b"\"");
-                }
-                // Table rows become flex rows: the basic painter lays
-                // flex containers with all-block children out
-                // left-to-right (equal split of what definite px widths
-                // leave). Rows carrying their own style attribute keep
-                // it and stay block stacks.
-                if is_table_tag
-                    && input[i + 1] != b'/'
-                    && lower == b"tr"
-                    && extract_attr(tag, b"style").is_none()
-                {
-                    out.extend_from_slice(b" style=\"display:flex\"");
-                    table_rows_flexed += 1;
                 }
                 i = tag_end;
                 continue;
@@ -1202,7 +1186,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, usize, usize) 
     (out, table_rows_flexed, form_chrome)
 }
 
-/// Full basic-mode intake normalization: table/presentational rewrite,
+/// Full basic-mode intake normalization: presentational/form rewrite,
 /// then the data-sheet rule prefilter. Both are BASIC-mode intake
 /// approximations. CSS is NO LONGER byte-folded here: `:link`/`:visited`
 /// are handled by the state-aware parse entry (`:link` matches an
@@ -1219,8 +1203,8 @@ pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
     normalize_for_basic_full(input).0
 }
 
-/// Full intake: normalized html, prefilter counts, and the table-row and
-/// form-chrome rewrite counters. Image payloads travel with the box tree
+/// Full intake: normalized html, prefilter counts, the reserved legacy
+/// table-row counter (now zero), and the form-chrome rewrite counter. Image payloads travel with the box tree
 /// now (`BoxTree::images_in_order`); the harness pairs them with the
 /// sentinel rectangles in the raster.
 pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), usize, usize) {

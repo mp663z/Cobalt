@@ -8,7 +8,7 @@ use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageClus
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::{
-    parse_style_tree_with_state, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
+    parse_basic_style_tree, HistoryState, Limits, MediaContext, SnapshotState, SupplyBudget,
 };
 use std::path::Path;
 
@@ -101,8 +101,14 @@ pub fn prepare(
         focus: None,
         target: None,
     };
-    let style =
-        parse_style_tree_with_state(&bytes, &sheets, &limits, Some(media), budget, &snapshot);
+    let style = parse_basic_style_tree(
+        &bytes,
+        &sheets,
+        &limits,
+        Some(media),
+        budget,
+        Some(&snapshot),
+    );
     let tree = BoxTree::from_style(&style);
     // Image payloads come from the box tree now that img is a real box
     // kind; the sentinel rectangles in the raster pair with these.

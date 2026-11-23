@@ -25,7 +25,7 @@ impl FontProvider for Face {
     fn raster(&self, c: char, s: u32, _: bool) -> Option<GlyphBitmap> {
         c.is_ascii().then(|| GlyphBitmap {
             left: 0,
-            top: -(s as i32),
+            top: -i32::try_from(s).unwrap(),
             width: s / 2,
             height: s,
             coverage: vec![255; (s * s / 2) as usize],
@@ -35,7 +35,7 @@ impl FontProvider for Face {
 
 #[test]
 fn columns_align_across_rows() {
-    let html = br#"<!doctype html><style>body{margin:0}.grid{display:table;width:200px}.row{display:table-row}.cell{display:table-cell;background:#123456}</style><table class=grid><tr class=row><td class=cell>A</td><td class=cell>BBBB</td></tr><tr class=row><td class=cell>AAAAAA</td><td class=cell>B</td></tr></table>"#;
+    let html = br"<!doctype html><style>body{margin:0}.grid{display:table;width:200px}.row{display:table-row}.cell{display:table-cell;background:#123456}</style><table class=grid><tr class=row><td class=cell>A</td><td class=cell>BBBB</td></tr><tr class=row><td class=cell>AAAAAA</td><td class=cell>B</td></tr></table>";
     let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         html,
         &[],
@@ -77,8 +77,8 @@ fn columns_align_across_rows() {
 }
 
 #[test]
-fn unsupported_cell_span_is_counted_without_partial_ink() {
-    let html=br#"<!doctype html><style>table{display:table}tbody{display:table-row-group}tr{display:table-row}td{display:table-cell;background:#123456}</style><table><tr><td colspan=2>A</td></tr></table>"#;
+fn unsupported_cell_span_uses_counted_content_preserving_fallback() {
+    let html=br"<!doctype html><style>table{display:table}tbody{display:table-row-group}tr{display:table-row}td{display:table-cell;background:#123456}</style><table><tr><td colspan=2>A</td></tr></table>";
     let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         html,
         &[],
@@ -98,8 +98,11 @@ fn unsupported_cell_span_is_counted_without_partial_ink() {
     }
     let (commands, stats, _) =
         paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
-    assert_eq!(stats.skips.get("table-span-not-wired"), Some(&1));
-    assert!(!commands.iter().any(|command| matches!(
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert_eq!(stats.approximations.get("table-span-not-wired"), Some(&1));
+    assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
+    assert_eq!(stats.text_blocks_painted, 1);
+    assert!(commands.iter().any(|command| matches!(
         command,
         Command::Fill {
             color: Rgb(0x12, 0x34, 0x56),
@@ -111,7 +114,7 @@ fn unsupported_cell_span_is_counted_without_partial_ink() {
 #[test]
 fn direct_cells_receive_an_anonymous_row() {
     use kobo_web_document::computed_style::Display;
-    let html = br#"<!doctype html><grid><cell>A</cell> <cell>B</cell></grid>"#;
+    let html = br"<!doctype html><grid><cell>A</cell> <cell>B</cell></grid>";
     let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         html,
         &[],
@@ -136,7 +139,7 @@ fn direct_cells_receive_an_anonymous_row() {
 #[test]
 fn cell_backgrounds_fill_the_shared_row_height_and_padding_is_reserved() {
     use kobo_web_document::computed_style::Display;
-    let html = br#"<!doctype html><style>body{margin:0}td{padding:4px;background:#123456}</style><table><tr><td>A</td><td>A much longer cell that wraps</td></tr></table>"#;
+    let html = br"<!doctype html><style>body{margin:0}td{padding:4px;background:#123456}</style><table><tr><td>A</td><td>A much longer cell that wraps</td></tr></table>";
     let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         html,
         &[],
@@ -171,4 +174,94 @@ fn cell_backgrounds_fill_the_shared_row_height_and_padding_is_reserved() {
     assert_eq!(cells[0].y, cells[1].y);
     assert_eq!(cells[0].height, cells[1].height);
     assert!(cells[0].height > 28, "second cell must wrap");
+}
+
+#[test]
+fn page_intake_retains_native_tables_and_stacks_unsupported_spans() {
+    use kobo_web_document::basic_page::normalize_for_basic_full;
+    let ((bytes, _), _, _) = normalize_for_basic_full(
+        br"<!doctype html><table><tr><td colspan=2>A</td></tr></table><p>After</p>",
+    );
+    assert!(String::from_utf8_lossy(&bytes).contains("<table>"));
+    let style = kobo_web_document::parse_basic_style_tree(
+        &bytes,
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+        None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
+    assert_eq!(stats.text_blocks_painted, 2);
+    assert!(!commands.is_empty());
+}
+
+#[test]
+fn native_page_table_has_shared_columns_without_model_overrides() {
+    let ((bytes, _), _, _) = kobo_web_document::basic_page::normalize_for_basic_full(
+        br"<!doctype html><style>body{margin:0}table{width:200px}td{padding:3px;background:#123456}</style><table><tr><td>A</td><td>BBBBB</td></tr><tr><td>AAAAAA</td><td>B</td></tr></table><p>After</p>",
+    );
+    let style = kobo_web_document::parse_basic_style_tree(
+        &bytes,
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+        None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let fills: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills.len(), 4);
+    assert_eq!(fills[0].x, fills[2].x);
+    assert_eq!(fills[1].x, fills[3].x);
+    assert_eq!(fills[0].width, fills[2].width);
+    assert_eq!(stats.text_blocks_painted, 5);
+}
+
+#[test]
+fn page_table_ua_defaults_do_not_override_authored_display_none() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br#"<!doctype html><table style="display:none"><tr><td>Hidden</td></tr></table><p>After</p>"#,
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let boxes = BoxTree::from_style(&style);
+    assert!(!boxes
+        .boxes
+        .iter()
+        .any(|node| node.text.as_deref() == Some("Hidden")));
+    let (_, stats, _) = paint_basic_page(&boxes, 300, 500, &Face).unwrap();
+    assert_eq!(stats.text_blocks_painted, 1);
+}
+
+#[test]
+fn nested_block_cell_falls_back_without_losing_text() {
+    let html = br"<!doctype html><table><caption>Caption</caption><tr><td><p>Block cell</p></td><td>Peer</td></tr></table><p>After</p>";
+    let style = kobo_web_document::parse_basic_style_tree(
+        html,
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+        None,
+    );
+    let (_, stats, _) = paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
+    assert_eq!(stats.text_blocks_painted, 4);
 }

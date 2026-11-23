@@ -431,6 +431,7 @@ pub fn parse_style_tree(
         false,
         false,
         None,
+        false,
     )
 }
 
@@ -455,6 +456,7 @@ pub fn parse_style_tree_with_media(
         false,
         false,
         None,
+        false,
     )
 }
 
@@ -471,7 +473,7 @@ pub fn parse_style_tree_with_supply(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, false, false, false, false, None,
+        bytes, sheets, limits, media, budget, false, false, false, false, None, false,
     )
 }
 
@@ -490,7 +492,7 @@ pub fn parse_style_tree_with_inline_sheets(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, true, false, false, false, None,
+        bytes, sheets, limits, media, budget, true, false, false, false, None, false,
     )
 }
 
@@ -525,7 +527,7 @@ pub fn parse_style_tree_with_inline_sheets_and_selectors(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, true, true, false, false, None,
+        bytes, sheets, limits, media, budget, true, true, false, false, None, false,
     )
 }
 
@@ -575,6 +577,7 @@ pub fn parse_style_tree_with_state(
         false,
         false,
         Some(snapshot),
+        false,
     )
 }
 
@@ -599,6 +602,7 @@ pub fn parse_style_tree_with_text_decoration(
         true,
         false,
         None,
+        false,
     )
 }
 
@@ -615,7 +619,7 @@ pub fn parse_style_tree_with_supply_and_text_decoration(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, false, false, true, false, None,
+        bytes, sheets, limits, media, budget, false, false, true, false, None, false,
     )
 }
 
@@ -637,7 +641,7 @@ pub fn parse_style_tree_with_pinned_font_family(
     budget: SupplyBudget,
 ) -> style_tree::StyleTree {
     parse_style_tree_in(
-        bytes, sheets, limits, media, budget, false, false, false, true, None,
+        bytes, sheets, limits, media, budget, false, false, false, true, None, false,
     )
 }
 
@@ -695,6 +699,23 @@ fn inline_href_caps(budget: &SupplyBudget) -> Option<(usize, usize)> {
     Some((per, per.checked_mul(budget.max_linked_sheets)?))
 }
 
+/// Page-view-only parse: HTML table roles use their UA defaults. Author
+/// block/none/inline overrides still win in the cascade. Other parse entries
+/// retain their existing exact-painter contract.
+#[must_use]
+pub fn parse_basic_style_tree(
+    bytes: &[u8],
+    sheets: &[Vec<u8>],
+    limits: &Limits,
+    media: Option<MediaContext>,
+    budget: SupplyBudget,
+    snapshot: Option<&SnapshotState>,
+) -> style_tree::StyleTree {
+    parse_style_tree_in(
+        bytes, sheets, limits, media, budget, true, true, false, false, snapshot, true,
+    )
+}
+
 fn parse_style_tree_in(
     bytes: &[u8],
     sheets: &[Vec<u8>],
@@ -706,6 +727,7 @@ fn parse_style_tree_in(
     text_deco: bool,
     family_bind: bool,
     snapshot: Option<&SnapshotState>,
+    page_tables: bool,
 ) -> style_tree::StyleTree {
     let input = &bytes[..bytes.len().min(limits.max_input_bytes)];
     let mut warnings = Vec::new();
@@ -782,6 +804,7 @@ fn parse_style_tree_in(
         text_deco,
         family_bind,
         snapshot,
+        page_tables,
     );
     // Exact host-supply handshake, only on the fully parsed and fully claimed
     // path: the input was not cut short (a truncated DOM is a partial link
@@ -905,6 +928,7 @@ mod pinned_family_generated {
             false,
             true,
             None,
+            false,
         );
         if s.unsupported {
             return (true, None, 0);
@@ -973,6 +997,7 @@ mod pinned_family_generated {
             false,
             false,
             None,
+            false,
         );
         println!(
             "content x, no family, family_bind=false: unsupported={}",
@@ -994,6 +1019,7 @@ mod pinned_family_generated {
             false,
             false,
             None,
+            false,
         );
         let ordinary = crate::css_text_page::paint_direct_text_blocks(
             &BoxTree::from_style(&s),

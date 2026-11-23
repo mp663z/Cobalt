@@ -280,6 +280,7 @@ impl StyleTree {
             false,
             false,
             None,
+            false,
         )
     }
 
@@ -293,6 +294,7 @@ impl StyleTree {
         text_deco: bool,
         family_bind: bool,
         snapshot: Option<&crate::css::SnapshotState>,
+        page_tables: bool,
     ) -> Self {
         let mut tree = Self::default();
         tree.ext = ext_selectors;
@@ -769,13 +771,18 @@ impl StyleTree {
             // private-evidence ua2). Over-refusal by design; the default entry is unchanged. This checks
             // that the property is authored with a non-revert value, not that the author value is supported (unsupported values refuse on
             // their own). Elements not listed are NOT audited here.
+            let table_display = page_tables
+                .then(|| basic_table_display(&name.local))
+                .flatten();
             declarations.push(Declaration {
                 property: Property::Display,
-                value: Value::Display(if ext_selectors {
-                    ua_display_ext(&name.local)
-                } else {
-                    ua_display(&name.local)
-                }),
+                value: Value::Display(table_display.unwrap_or_else(|| {
+                    if ext_selectors {
+                        ua_display_ext(&name.local)
+                    } else {
+                        ua_display(&name.local)
+                    }
+                })),
                 origin: Origin::UserAgent,
                 important: false,
                 specificity: (0, 0, 0),
@@ -1463,6 +1470,18 @@ fn ua_display_ext(tag: &str) -> Display {
         "dl" | "dt" | "dd" => Display::Block,
         _ => ua_display(tag),
     }
+}
+
+fn basic_table_display(tag: &str) -> Option<Display> {
+    Some(match tag {
+        "table" => Display::Table,
+        "thead" | "tbody" | "tfoot" => Display::TableRowGroup,
+        "tr" => Display::TableRow,
+        "td" | "th" => Display::TableCell,
+        "caption" => Display::TableCaption,
+        "col" | "colgroup" => Display::TableColumn,
+        _ => return None,
+    })
 }
 
 fn ua_display(tag: &str) -> Display {
