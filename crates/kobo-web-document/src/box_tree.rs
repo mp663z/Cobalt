@@ -20,10 +20,9 @@ pub enum BoxKind {
     Flex,
     Text,
     AnonymousBlock,
-    /// Replaced `img` content. Carries [`crate::style_tree::ImageFacts`];
-    /// geometry and paint land with the Phase 1 image slice. No current
-    /// intake path produces it (the basic normalizer still rewrites
-    /// `<img>`), so it is inert; the layout passes refuse it if reached.
+    /// Replaced `img` content with ImageFacts and block marker geometry.
+    /// The basic painter reserves image space; the offline harness replaces
+    /// its sentinel fill with decoded pixels. Not native image decoding.
     Image,
 }
 

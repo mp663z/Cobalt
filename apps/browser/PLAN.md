@@ -272,3 +272,27 @@ implied by recording this proposal.
 
 - [ ] Fuzz targets (cargo-fuzz, outside the workspace): parse_html, parse_content_type, resolve_url, decode_image, document_to_ir, paginate_document, cache_metadata
 - [ ] CI lanes: PR-fast (fmt, clippy, unit, corpus, IR snapshots, invariants, small WPT), PR-simulator (drive journeys, fixture server, failure scenarios), nightly (large corpus, fuzz smoke, all profiles, size and memory reports)
+
+
+## Active implementation checkpoint, November 23, 2026
+
+The user wants a basic lightweight real browser, at least as good as the stock
+Kobo browser. This is not an exact-parity gate or a reader-only compromise.
+The historical sections above retain their original status and proposals.
+
+- Engine: data-URI images now survive intake as image boxes; native decoding
+  in painted Page view is still incomplete. Table tags are still rewritten;
+  replacing that with real table boxes and shared intrinsic column sizing is
+  the active rendering slice. Column sizing kernel first, then DOM/box roles,
+  row/cell geometry, spans, backgrounds/borders and visual fixtures. A kernel
+  commit alone is not a visible table improvement or table support.
+- Chrome: local search-first launch and persistent URL field are implemented.
+  The user rejected the full-screen typing flow after comparing it to his
+  stock-browser photo. Lane C's highest priority is now inline typing with
+  page context kept visible, persistent back/forward/reload controls, zoom
+  minus/plus/slider and overflow home/favourites actions, plus title/close.
+  Form-control box work follows that UX correction. Each chrome checkpoint
+  needs real simulator screenshots compared honestly with the photo.
+- Provider stays unchanged until the pending user choice is answered.
+- Measurements: current ARM binary size is in BUDGETS.md; device RSS, speed
+  and hardware interaction remain unverified. Upstream app port is incomplete.

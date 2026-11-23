@@ -49,6 +49,7 @@ pub mod style_diagnostics;
 mod style_syntax;
 pub mod style_tree;
 pub mod stylesheet_bytes;
+pub mod table_layout;
 #[cfg(test)]
 mod tree_tests;
 pub mod url;
