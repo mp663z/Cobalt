@@ -72,7 +72,8 @@ pub(super) fn fit_geometry(
     >,
 ) -> bool {
     let mut changed = false;
-    for node in &mut tree.boxes {
+    for index in 0..tree.boxes.len() {
+        let node = &tree.boxes[index];
         if node.kind != kobo_web_document::box_tree::BoxKind::Image {
             continue;
         }
@@ -90,6 +91,15 @@ pub(super) fn fit_geometry(
             } if origin.node == Some(source) && color == marker => Some(rect.width),
             _ => None,
         });
+        // Zero-area fills are omitted by the painter. A directly containing
+        // normal block with an explicit zero content width still tells us
+        // enough to collapse the successful image without touching fallback.
+        let width = width.or_else(|| {
+            let parent = node.parent.and_then(|p| tree.boxes.get(p))?;
+            (parent.kind == kobo_web_document::box_tree::BoxKind::Block
+                && parent.style.width == kobo_web_document::computed_style::Length::Px(0))
+            .then_some(0)
+        });
         let Some(width) = width else {
             continue;
         };
@@ -99,6 +109,7 @@ pub(super) fn fit_geometry(
             4096,
         );
         if node.style.padding_top != height || !node.children.is_empty() {
+            let node = &mut tree.boxes[index];
             node.style.padding_top = height;
             // Successful decode replaces alt content in layout as well as paint.
             // The detached text box remains inert in the arena; failed images

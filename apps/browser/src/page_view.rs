@@ -1161,6 +1161,40 @@ mod tests {
     }
 
     #[test]
+    fn decoded_image_fit_tracks_nested_edges_and_exif_orientation() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let bytes = include_bytes!("../tests/images/rotated-exif.jpg");
+        let image = kobo_image::decode_colour(bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (240, 320));
+        let uri = format!("data:image/jpeg;base64,{}", test_base64(bytes));
+        let html = format!("<!doctype html><style>body{{margin:0}}.outer{{width:100px;padding:10px;border:2px solid black}}.inner{{width:60px}}</style><div class='outer'><div class='inner'><img src='{uri}' alt='ALT'></div></div>");
+        let view = PageView::paint(html.as_bytes(), 200, 100, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.content_height, 104);
+        assert_eq!(view.pages(), 2);
+        assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+        let rgb = view.raster_page_rgb(0);
+        assert_eq!(
+            &rgb[(12 * 200 + 12) * 3..][..3],
+            &image.colour().unwrap()[..3]
+        );
+        if let Ok(path) = std::env::var("COBALT_NESTED_IMAGE_PREVIEW_OUT") {
+            std::fs::write(path, kobo_image::encode_png_rgb(200,100,&rgb).unwrap()).unwrap();
+        }
+
+    }
+
+    #[test]
+    fn decoded_image_in_zero_width_container_has_no_reserved_height() {
+        let face = PageFontAdapter::bundled().unwrap();
+        let png = kobo_image::encode_png_rgb(40, 40, &vec![160; 40 * 40 * 3]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        let html = format!("<!doctype html><style>body{{margin:0}}div{{width:0}}</style><div><img src='{uri}' alt='ALT'></div>");
+        let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.content_height, 1);
+        assert!(view.raster_page_rgb(0).iter().all(|p| *p == 255));
+    }
+
+    #[test]
     fn native_image_large_attributes_do_not_panic_or_wrap_geometry() {
         let face = PageFontAdapter::bundled().unwrap();
         let png = kobo_image::encode_png_rgb(1, 1, &[220, 20, 40]).unwrap();
