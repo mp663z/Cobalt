@@ -2046,3 +2046,37 @@ fn colour_arrivals_default_to_rgb_page_but_bw_and_forms_keep_reader() {
         assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
     }
 }
+
+
+#[test]
+fn late_colour_identity_republishes_an_already_visible_rgb_page() {
+    let mut runner = runner(TextScale::Default);
+    open_web_page(
+        &mut runner,
+        "<!doctype html><title>Late colour</title><p style='color:red'>Red prose</p>",
+    );
+    runner.action(action_id("page-view"));
+    let mut context = runner.context();
+    let identity = kobo_sdk::DeviceIdentity {
+        profile_id: "SIMULATOR:clara-colour-393".into(),
+        model: "Simulated Colour".into(),
+        firmware: String::new(),
+        kernel: String::new(),
+        runtime_version: String::new(),
+        panel_width: 1072,
+        panel_height: 1448,
+        ..kobo_sdk::DeviceIdentity::default()
+    };
+    runner.app_mut().on_device_result(
+        &mut context,
+        kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(identity),
+    );
+    assert!(context.take_commands().iter().any(|command| matches!(
+        command,
+        kobo_sdk::Command::PutPicture {
+            format: kobo_sdk::PictureFormat::Rgb,
+            ..
+        }
+    )));
+}

@@ -2105,14 +2105,26 @@ impl KoboApp for Browser {
         request: kobo_sdk::DeviceRequest,
         result: kobo_sdk::DeviceResult,
     ) {
+        let mut colour_changed = false;
         if request == kobo_sdk::DeviceRequest::ReadIdentity {
             if let kobo_sdk::DeviceResult::Identity(identity) = result {
+                colour_changed = self.pictures.colour() != identity.colour_panel();
                 self.pictures.set_colour(identity.colour_panel());
             }
         }
         // A panel identity answer is exactly the moment a frame measured
         // for another panel must be retired.
         self.validate_css(context);
+        // An already-visible Page raster may have been published before the
+        // identity answer. Republish it in the confirmed panel format now.
+        if colour_changed
+            && self
+                .loaded
+                .as_ref()
+                .is_some_and(|loaded| loaded.painted.is_some())
+        {
+            self.show(context);
+        }
     }
 
     fn on_load(&mut self, context: &mut Context, key: &str, result: StoreResult) {
