@@ -873,6 +873,42 @@ impl Browser {
 
     /// Asks for the pictures on the screen being read. The sample pages are
     /// built in and have none to fetch.
+    /// Rebuild native text colour without changing edited controls or the
+    /// semantic place. A changed semantic parse is refused, never guessed.
+    fn refresh_native_colour(&mut self, context: &mut Context) {
+        let Some(loaded)=self.loaded.as_ref() else {return};
+        if loaded.painted.is_some(){return;}
+        let Some(source)=loaded.page_source.as_deref() else {return};
+        let colour=self.pictures.colour();
+        let mut document=if colour {
+            kobo_web_document::parse_coloured_document(source,&loaded.url,&Limits::DEFAULT)
+        } else {kobo_web_document::parse_document(source,&loaded.url,&Limits::DEFAULT)};
+        let original=loaded.full.as_ref().unwrap_or(&loaded.document);
+        if document.visible_text()!=original.visible_text() || document.links!=original.links
+            || document.images()!=original.images() {return;}
+        let old_forms:Vec<_>=forms::forms(&original.blocks).into_iter().cloned().collect();
+        let new_forms=forms::forms(&document.blocks);
+        if old_forms.len()!=new_forms.len() || old_forms.iter().zip(&new_forms)
+            .any(|(old,new)|old.action!=new.action||old.method!=new.method||old.fields.len()!=new.fields.len()) {return;}
+        for (index,form) in old_forms.into_iter().enumerate() {
+            let Some(target)=forms::form_mut(&mut document.blocks,index) else {return};
+            *target=form;
+        }
+        let reader=loaded.full.is_some();
+        let (document,full)=if reader {
+            let Some(view)=document.reader_view() else {return};
+            (view,Some(document))
+        } else {(document,None)};
+        let place=loaded.paginator.place_of(loaded.page).unwrap_or(0);
+        let (paginator,lead)=paginator_for(&document,if reader {None}else{loaded.note.as_deref()});
+        if let Some(task)=self.pager.take(){context.cancel(task);}
+        let loaded=self.loaded.as_mut().unwrap();
+        loaded.document=document;loaded.full=full;loaded.paginator=paginator;
+        loaded.lead=lead;loaded.page=0;
+        let page=self.place_page(context,place).unwrap_or(0);
+        self.turn_to(context,page);
+    }
+
     fn fetch_pictures(&mut self, context: &mut Context) {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
@@ -2123,6 +2159,7 @@ impl KoboApp for Browser {
             for key in self.pictures.clear(context) {
                 self.saved.stop_reading(&key);
             }
+            self.refresh_native_colour(context);
             // An already-visible Page raster also needs publication in the
             // confirmed format. Native Reader keeps its position and controls.
             self.fetch_pictures(context);

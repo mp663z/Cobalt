@@ -537,8 +537,26 @@ in book reader/flashcards missing optional fields from the preceding RGB API
 addition. Both now explicitly default colours to None; workspace check passes.
 The earlier browser-only checks did not establish whole-workspace build health.
 
-Browser 213/0/2 ignored; UI289/0/2 ignored; reader82/0; flashcards library suite
+Browser 213/0/2 ignored; UI289/0/2 ignored; reader82/0; flashcards binary suite14/0
 passes. Clippy completed with existing warnings. Locked static stripped ARM:
 5,199,220 bytes, delta3,949,840, headroom1,293,040 under +5 MiB. First broad
 reader build hit disk exhaustion; disposable caches cleared, affected library
 suite and workspace check rerun green. Not claiming full workspace tests.
+
+
+### Late identity native text refresh, November 24, 2026
+
+On confirmed panel-format changes, native text is reparsed from retained source
+with the appropriate colour entry. The refresh verifies visible text, links,
+images and form structure before replacing the native document, copies current
+edited form values, preserves reader-view state and saved-copy notice, and
+restores semantic piece position. It never forces Page mode. Missing retained
+source or a semantic mismatch leaves the existing document untouched. Old image
+states retire before the rebuild, so no old-format task is leaked by refresh.
+
+Browser215/0/2 ignored, including saved notice/fragment-position/reader-view and
+edited-form tests plus image race rechecks. Disabling refresh fails the RGB
+regression. Actual full native frame inspected, 2,829 non-grey pixels. Clippy
+completed with existing warnings. Locked static stripped ARM EABI5:5,205,148
+bytes, delta3,955,768 over hello, 1,287,112 bytes headroom under +5 MiB. Native
+headings/quotes/tables/preformatted/control labels remain partial plain paths.

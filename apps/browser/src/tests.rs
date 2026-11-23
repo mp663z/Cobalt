@@ -2290,3 +2290,59 @@ fn native_multicolour_link_keeps_each_underline_colour_and_one_action() {
         for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
     }
 }
+
+#[test]
+fn late_native_text_colour_preserves_edited_form_and_semantic_place() {
+    let mut runner=form_runner(TextScale::Default);
+    let mut context=runner.context();
+    runner.app_mut().show_document(&mut context,&Url::parse("https://example.com/form").unwrap(),
+        b"<!doctype html><p style='color:red'>Native late colour.</p><form action='/search'><input name=q value=original></form>");
+    let form=forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap();
+    if let Field::Text{value,..}=&mut form.fields[0]{*value="edited".into();}
+    let mut context=runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(kobo_sdk::DeviceIdentity{
+            profile_id:"SIMULATOR:clara-colour-393".into(),..Default::default()
+        }));
+    assert!(runner.app().current_pieces().iter().any(|p|matches!(p,Piece::Prose(runs) if runs.iter().any(|r|r.foreground==Some([255,0,0])))));
+    let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
+    assert!(matches!(&form.fields[0],Field::Text{value,..} if value=="edited"));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    let metrics=kobo_ui::CLARA_BW_METRICS;
+    let screen=runner.app().screen(&metrics).build();
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([255,0,0])));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some() {
+        use std::io::Write;
+        let mut file=std::fs::File::create("/tmp/late-native-colour-text.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}
+
+#[test]
+fn late_native_colour_keeps_saved_notice_fragment_place_and_reader_view() {
+    for reader in [false,true] {
+        let mut runner=runner(TextScale::ExtraLarge);
+        let mut html=String::from("<!doctype html><nav><p>Menu</p></nav><main>");
+        for _ in 0..35 {html.push_str("<p style='color:red'>Long native prose keeps its position across panel identity changes.</p>");}
+        html.push_str("<p id=end style='color:blue'>End section.</p></main>");
+        let mut context=runner.context();
+        runner.app_mut().show_document_noted(&mut context,&Url::parse("https://example.com/article#end").unwrap(),
+            html.as_bytes(),Some("Saved copy: test notice.".into()));
+        if reader {runner.action(action_id("reader"));}
+        runner.action(action_id("next-page"));
+        let before=runner.app().current_pieces().iter().filter_map(|p|match p {Piece::Prose(r)=>Some(r.iter().map(|r|r.text.as_str()).collect::<String>()),_=>None}).collect::<Vec<_>>();
+        let full=runner.app().loaded.as_ref().unwrap().full.is_some();
+        let mut context=runner.context();
+        runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+            kobo_sdk::DeviceResult::Identity(kobo_sdk::DeviceIdentity{profile_id:"SIMULATOR:clara-colour-393".into(),..Default::default()}));
+        let loaded=runner.app().loaded.as_ref().unwrap();
+        assert_eq!(loaded.note.as_deref(),Some("Saved copy: test notice."));
+        assert_eq!(loaded.full.is_some(),full);
+        let after=runner.app().current_pieces().iter().filter_map(|p|match p {Piece::Prose(r)=>Some(r.iter().map(|r|r.text.as_str()).collect::<String>()),_=>None}).collect::<Vec<_>>();
+        assert_eq!(before,after);
+        assert!(runner.app().current_pieces().iter().any(|p|matches!(p,Piece::Prose(runs) if runs.iter().any(|r|r.foreground.is_some()))));
+    }
+}
