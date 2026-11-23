@@ -222,6 +222,7 @@ struct Painter<'a, F: FontProvider> {
     widths: WidthPass,
     stats: PartialStats,
     visits: usize,
+    viewport_w: i64,
 }
 
 impl<'a, F: FontProvider> Painter<'a, F> {
@@ -579,6 +580,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         top: i64,
         width: u32,
         list: &mut Vec<Command>,
+        abs_origin: (i64, i64),
     ) -> i64 {
         self.visits += 1;
         if self.visits > MAX_VISITS {
@@ -589,8 +591,15 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         // background is INSERTED at this position once its height is known,
         // so it paints behind all descendants (correct stacking order).
         let mut bg_insert_at = list.len();
+        let entry_len = list.len();
         let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
+        // visibility:hidden (FL38 ext, inherited): layout runs and flow
+        // space is kept, but the subtree emits no paint commands.
+        let hidden = style.positioned.hidden;
+        if hidden {
+            self.stats.skip("visibility-hidden");
+        }
         let mut flex_row = false;
         if matches!(node_kind, BoxKind::InlineBlock) {
             self.stats.approx("inline-block-as-block");
@@ -688,6 +697,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             }
         }
         let (mut content_x, mut top) = (content_x, top);
+        let mut out_of_flow = false;
         match style.positioned.position {
             crate::computed_style::Position::Static => {}
             crate::computed_style::Position::Relative | crate::computed_style::Position::Sticky => {
@@ -708,8 +718,36 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 top += dy;
             }
             crate::computed_style::Position::Absolute | crate::computed_style::Position::Fixed => {
-                self.stats.skip("positioned");
-                return 0;
+                // BASIC lane: paint positioned boxes instead of skipping.
+                // They take no flow space (the caller adds the returned
+                // height, which is forced to zero below). Absolute boxes
+                // resolve offsets against the nearest positioned
+                // ancestor's origin (threaded as abs_origin); fixed boxes
+                // resolve against the page top at scroll 0
+                // (fixed-as-absolute). Offsets that resolve to all zero
+                // land on the containing origin, not the true static
+                // position (abs-auto-to-origin). Width is the containing
+                // width, not shrink-to-fit (abs-width-containing).
+                let t = self.margin_px(style.positioned.offsets[0], width);
+                let r = self.margin_px(style.positioned.offsets[1], width);
+                let b = self.margin_px(style.positioned.offsets[2], width);
+                let l = self.margin_px(style.positioned.offsets[3], width);
+                if matches!(style.positioned.position, crate::computed_style::Position::Fixed) {
+                    self.stats.approx("fixed-as-absolute");
+                    content_x = l - r;
+                    top = t - b;
+                } else {
+                    content_x = abs_origin.0 + l - r;
+                    top = abs_origin.1 + t - b;
+                }
+                if t == 0 && r == 0 && b == 0 && l == 0 {
+                    self.stats.approx("abs-auto-to-origin");
+                }
+                self.stats.approx("positioned-basic");
+                out_of_flow = true;
+                if hidden {
+                    return 0;
+                }
             }
         }
         let pad = |v: u32, stats: &mut PartialStats| -> i64 {
@@ -725,6 +763,16 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let pad_left = pad(style.padding_left, &mut self.stats);
         let pad_right = pad(style.padding_right, &mut self.stats);
         let content_top = top + pad_top;
+        // Origin this box hands to absolutely-positioned descendants:
+        // itself when positioned, else the inherited one.
+        let child_abs_origin = if matches!(
+            style.positioned.position,
+            crate::computed_style::Position::Static
+        ) {
+            abs_origin
+        } else {
+            (content_x, top)
+        };
         let node = &self.tree.boxes[index];
         let pure_inline = self.deep_pure_inline(&self.tree.boxes[index].children);
         let mut content_height: i64 = 0;
@@ -746,7 +794,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let slot = if slots[k] >= 0 { slots[k] } else { share };
                 let cw = (slot - ml - mr).max(0) as u32;
                 x += ml;
-                let h = self.layout_block(c, x, content_top, cw, list);
+                let h = self.layout_block(c, x, content_top, cw, list, child_abs_origin);
                 row_h = row_h.max(h);
                 x += i64::from(cw) + mr;
             }
@@ -801,7 +849,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 }
                 cursor += if prev_mb == 0 { mt } else { prev_mb.max(mt) };
                 let child_x = content_x + pad_left + ml;
-                let h = self.layout_block(child, child_x, cursor, cw, list);
+                let h = self.layout_block(child, child_x, cursor, cw, list, child_abs_origin);
                 cursor += h;
                 prev_mb = mb;
             }
@@ -895,7 +943,22 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 emit(content_x - bl, top, bl, pb_h, 3);
             }
         }
+        if hidden {
+            list.truncate(entry_len);
+        } else if out_of_flow {
+            // Fully off-canvas positioned boxes emit nothing (slide-out
+            // panels parked just outside the viewport otherwise smear
+            // clipped slivers along the edge).
+            let pb_w = pad_left + i64::from(width) + pad_right;
+            if content_x + pb_w <= 0 || content_x >= self.viewport_w {
+                list.truncate(entry_len);
+                self.stats.skip("positioned-offscreen");
+            }
+        }
         self.stats.blocks_painted += 1;
+        if out_of_flow {
+            return 0;
+        }
         let total = content_height + pad_top + pad_bot;
         if total > 100_000 {
             eprintln!("HUGE block index={index} kind={node_kind:?} total={total} content={content_height} pad_t={pad_top} pad_b={pad_bot} height_style={:?}", style.height);
@@ -2069,6 +2132,7 @@ pub fn paint_basic_page_families<F: FontProvider>(
         widths,
         stats: PartialStats::default(),
         visits: 0,
+        viewport_w: i64::from(viewport_width),
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
@@ -2085,7 +2149,7 @@ pub fn paint_basic_page_families<F: FontProvider>(
             source: Source { node: tree.boxes[root].source, action: None },
         });
     }
-    let content_h = painter.layout_block(root, 0, 0, viewport_width, &mut list);
+    let content_h = painter.layout_block(root, 0, 0, viewport_width, &mut list, (0, 0));
     let h = if content_h > 0 { content_h } else { i64::from(viewport_height) };
     Ok((list, painter.stats, h))
 }
@@ -2111,6 +2175,7 @@ pub fn paint_basic_page(
         widths,
         stats: PartialStats::default(),
         visits: 0,
+        viewport_w: i64::from(viewport_width),
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
@@ -2137,7 +2202,7 @@ pub fn paint_basic_page(
         _ => vec![],
     };
     for top_index in start {
-        cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list);
+        cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list, (0, 0));
     }
     Ok((list, painter.stats, cursor))
 }
