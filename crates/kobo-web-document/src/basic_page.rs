@@ -1270,8 +1270,8 @@ pub struct PrefilterStats {
     /// Positioned rules carrying a fully off-canvas transform (e.g.
     /// `transform: translateX(calc(-100% - 10px))` on a fixed drawer):
     /// the engine has no transform support, so the element would paint
-    /// on top of the page. The declaration is demoted to
-    /// `position:static`, keeping the content in flow instead.
+    /// on top of the page. Folded to display:none, matching the
+    /// JS-unrevealed static state.
     pub offcanvas_static: usize,
     /// Rules matching the classic screen-reader-only pattern
     /// (position:absolute, 1px box, overflow:hidden). The engine does
@@ -1591,10 +1591,14 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize, 
         } else {
             kept += 1;
             if has_offcanvas_transform(block) {
+                // JS-revealed drawers are hidden in the page's static
+                // initial state at any viewport width, so display:none
+                // matches the sighted rendering (in-flow demotion
+                // dumped the docs drawer over the page top).
                 out.extend_from_slice(prelude);
                 out.push(b'{');
                 out.extend_from_slice(block);
-                out.extend_from_slice(b";position:static}");
+                out.extend_from_slice(b";display:none}");
                 offcanvas += 1;
             } else if has_visually_hidden_pattern(block) {
                 out.extend_from_slice(prelude);
