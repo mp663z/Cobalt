@@ -177,3 +177,22 @@ The stripped browser is 1,335,360 bytes below the +5 MiB binary allowance.
 `file` identifies it as a stripped, static ARM EABI5 ELF. This measures
 linked size only, not runtime memory, first paint, input latency or physical
 reader behavior. Device RSS and speed remain unmeasured.
+
+### Caption, colspan, editing and row-height checkpoint, November 23, 2026
+
+Measured source: `0982a69171a3b9e243ef3a078392814fe1594ff4`.
+Repeated the same pinned local locked ARM release build of browser, hello
+and daemon after caption/colspan, cell/outer border, row minimum height,
+caret editing and bilinear zoom changes.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,167,204 | +3,917,824 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,087,012 | |
+
+The browser grew 10,304 bytes from the previous measured checkpoint and
+remains 1,325,056 bytes below the +5 MiB allowance. All three files were
+inspected as stripped, statically linked ARM EABI5 executables. This is a
+linked-size check, not a hardware run. Device RSS, paint time, input latency
+and smoothness remain unverified.
