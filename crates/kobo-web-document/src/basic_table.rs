@@ -551,7 +551,19 @@ impl<F: FontProvider> Painter<'_, F> {
                     }
                     _ => 0,
                 };
-                height = height.max(natural.max(declared));
+                let minimum = if let Length::Px(value) = cs.min_height {
+                    // Like pixel min-width, a disclosed basic extension:
+                    // CSS 2.2 does not define min-height on table cells.
+                    self.stats.approx("table-cell-min-height");
+                    if cs.box_sizing == crate::computed_style::BoxSizing::BorderBox {
+                        i64::from(value)
+                    } else {
+                        i64::from(value) + i64::from(cs.padding_top) + i64::from(cs.padding_bottom)
+                    }
+                } else {
+                    0
+                };
+                height = height.max(natural.max(declared).max(minimum));
                 painted_cells.push((cell, cell_x, width, ink));
                 cell_x += i64::from(width) + 2;
             }
