@@ -1110,6 +1110,63 @@ mod tests {
         );
     }
 
+    #[test]
+    fn native_jpeg_variants_decode_and_malformed_payload_falls_back() {
+        let face = PageFontAdapter::bundled().unwrap();
+        for bytes in [
+            include_bytes!("../tests/images/baseline.jpg").as_slice(),
+            include_bytes!("../tests/images/progressive.jpg").as_slice(),
+            include_bytes!("../tests/images/cmyk.jpg").as_slice(),
+            include_bytes!("../tests/images/grey.jpg").as_slice(),
+            include_bytes!("../tests/images/rotated-exif.jpg").as_slice(),
+        ] {
+            let uri = format!("data:image/jpeg;base64,{}", test_base64(bytes));
+            let html = format!("<!doctype html><img src='{uri}' width=80 height=60 alt='JPEG'>");
+            let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+            assert_eq!(
+                view.images
+                    .values()
+                    .filter(|(_, image)| image.is_some())
+                    .count(),
+                1
+            );
+            assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
+            assert!(view
+                .raster_page_rgb(0)
+                .chunks_exact(3)
+                .any(|p| p != [255, 255, 255]));
+        }
+        let html = br#"<!doctype html><img src='data:image/jpeg;base64,AQID' width=20 height=20 alt='Fallback'>"#;
+        let view = PageView::paint(html, 100, 80, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.stats.skips.get("native-image-unavailable"), Some(&1));
+        assert!(view.images.values().all(|(_, image)| image.is_none()));
+        assert!(view.stats.text_blocks_painted > 0);
+    }
+
+    #[test]
+    fn native_image_budget_is_aggregate_and_refuses_large_headers() {
+        let face = PageFontAdapter::bundled().unwrap();
+        for (w, h, count, good, bad) in [(800, 800, 2, 1, 1), (1025, 1024, 1, 0, 1)] {
+            let pixels = vec![160; w * h * 3];
+            let png = kobo_image::encode_png_rgb(w as u32, h as u32, &pixels).unwrap();
+            let uri = format!("data:image/png;base64,{}", test_base64(&png));
+            let image = format!("<img src='{uri}' width=20 height=20>");
+            let html = format!(
+                "<!doctype html><style>body{{margin:0}}</style>{}",
+                image.repeat(count)
+            );
+            let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+            assert_eq!(
+                view.images
+                    .values()
+                    .filter(|(_, image)| image.is_some())
+                    .count(),
+                good
+            );
+            assert_eq!(view.stats.skips.get("native-image-unavailable"), Some(&bad));
+        }
+    }
+
     fn test_base64(bytes: &[u8]) -> String {
         const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         let mut out = String::new();
