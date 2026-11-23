@@ -135,6 +135,15 @@ pub enum Block {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Inline {
     Text(String),
+    /// Opt-in authored colour from the same DOM's computed style. Unstyled
+    /// parse entries never construct this variant. Browser-generated labels
+    /// retain toolkit defaults, not an inferred author source.
+    ColouredText {
+        text: String,
+        foreground: [u8; 3],
+        background: Option<[u8; 3]>,
+        code: bool,
+    },
     Emphasis(Vec<Inline>),
     Strong(Vec<Inline>),
     Code(String),
@@ -340,17 +349,24 @@ impl Document {
 /// Parses a page fetched from `url`.
 #[must_use]
 pub fn parse_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
-    parse_with_styles(bytes, url, limits, false)
+    parse_with_styles(bytes, url, limits, false, false)
 }
 
 /// Parse inline author stylesheets for the bounded CSS visibility subset.
 /// The unstyled entry point remains stable for reader and corpus expectations.
 #[must_use]
 pub fn parse_styled_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
-    parse_with_styles(bytes, url, limits, true)
+    parse_with_styles(bytes, url, limits, true, false)
 }
 
-fn parse_with_styles(bytes: &[u8], url: &Url, limits: &Limits, styled: bool) -> Document {
+/// Semantic native text with same-DOM authored RGB. Forms and anchors retain
+/// their existing semantic model. Linked stylesheets are not fetched here.
+#[must_use]
+pub fn parse_coloured_document(bytes: &[u8], url: &Url, limits: &Limits) -> Document {
+    parse_with_styles(bytes,url,limits,true,true)
+}
+
+fn parse_with_styles(bytes: &[u8], url: &Url, limits: &Limits, styled: bool, coloured: bool) -> Document {
     let mut warnings = Vec::new();
     let input = if bytes.len() > limits.max_input_bytes {
         warnings.push(Warning::InputTruncated);
@@ -406,7 +422,11 @@ fn parse_with_styles(bytes: &[u8], url: &Url, limits: &Limits, styled: bool) -> 
     } else {
         css::Styles::default()
     };
-    let mut document = convert::convert(&nodes, url, limits, warnings, author_styles);
+    let mut document = if coloured {
+        convert::convert_coloured(&nodes, url, limits, warnings, author_styles)
+    } else {
+        convert::convert(&nodes, url, limits, warnings, author_styles)
+    };
     document.parse_errors = parse_errors;
     document.source_facts = Some(facts);
     document

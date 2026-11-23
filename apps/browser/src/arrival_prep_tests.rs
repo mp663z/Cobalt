@@ -705,6 +705,7 @@ fn the_retained_source_never_outlives_admission_or_navigation() {
         true,
         ObservationInput::Markup { len: FIXTURE.len() },
         false,
+        false,
     );
     let drops = std::rc::Rc::clone(&runner.app().frame_drops);
     let weak = {
@@ -764,6 +765,7 @@ fn real_preparation_is_a_preparation_but_production_installs_null() {
         &url,
         stage.is_enabled(),
         ObservationInput::Markup { len: FIXTURE.len() },
+        false,
         false,
     );
     let _doc = stage.admit_parsed(parsed, &SYNTHETIC_METRICS, false);

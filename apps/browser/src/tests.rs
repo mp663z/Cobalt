@@ -2233,3 +2233,30 @@ fn native_rgb_spans_render_with_installed_typefaces() {
         for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
     }
 }
+
+#[test]
+fn colour_native_form_page_keeps_authored_prose_rgb_and_controls() {
+    let mut runner=runner(TextScale::Default);
+    runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><style>p{color:#c9253f}em{color:#2070c0}</style><p>Native <em>colour</em> form page.</p><form action='/search'><input name=q value=ink></form>");
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    let pieces=runner.app().current_pieces();
+    assert!(pieces.iter().any(|p|matches!(p,Piece::Prose(runs) if runs.iter().any(|r|r.foreground==Some([201,37,63])))));
+    assert!(pieces.iter().any(|p|matches!(p,Piece::Form{..})));
+    let metrics=kobo_ui::CLARA_BW_METRICS;
+    let screen=runner.app().screen(&metrics).build();
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([201,37,63])));
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([32,112,192])));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some() {
+        use std::io::Write;
+        let mut file=std::fs::File::create("/tmp/native-colour-form.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+    runner.action(action_id("form-0"));
+    assert_eq!(runner.app().view,View::Form(0,0));
+    runner.action(action_id("submit-form"));
+    assert_eq!(runner.app().pending.as_ref().unwrap().url.to_string(),"https://example.com/search?q=ink");
+}

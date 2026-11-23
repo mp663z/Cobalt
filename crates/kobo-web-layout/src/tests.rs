@@ -580,6 +580,7 @@ fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() 
                     strong: false,
                     emphasis: false,
                     link: None,
+                    ..Run::default()
                 }]),
                 Piece::Table {
                     rows,

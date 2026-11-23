@@ -417,3 +417,19 @@ sources to these spans. Next increment is actual semantic provenance integration
 not another renderer helper. Inline link hit targets remain intact; authored
 link underline colour still needs the end-to-end link span treatment. New apps
 must ship with the matching runtime, not silently target an old decoder.
+
+
+### First native semantic colour integration
+
+Colour arrivals now opt into coloured semantic text leaves produced from the
+same DOM style walk. Leaf source identity is consumed directly before collapse,
+not reconstructed by matching strings. Native prose keeps RGB through run
+splits/pagination into versioned text spans. Form pages remain semantic and
+GET controls work in the RGB regression. Unstyled/BW parser behavior remains.
+
+Remaining native paths: headings/quotes/tables/preformatted/control labels,
+neutral link-target underline, late identity text reparse, and unsupported CSS
+colour fidelity. A coloured paragraph is useful support, not all-fonts support.
+SourceText remains a tested normalization primitive, not a claim that every
+nested conversion already routes through it. Ordinary code keeps the existing
+native face; the coloured leaf preserves its code semantic flag for later work.

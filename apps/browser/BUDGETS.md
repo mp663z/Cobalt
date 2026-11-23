@@ -500,3 +500,26 @@ inspected. ARM 5,194,412 bytes, delta 3,945,032 over hello, 1,297,848 bytes
 headroom under +5 MiB; stripped static EABI5 inspected. New runtime is required
 for protocol-16 applications. No protocol downgrade claim for new apps on old
 runtimes. No new crates, unsafe code or allocator changes.
+
+
+### First semantic native prose RGB, November 24, 2026
+
+Opt-in semantic coloured text leaves now use styles from the same parsed DOM,
+not word matching. Native runs carry foreground/background through splitting
+and pagination to version-16 RGB rich-text spans. Colour profiles select this
+parse; BW keeps the original unstyled parse. Native form/anchor models remain.
+Nested emphasis/link/code and duplicate text colours are covered, including
+adjacent colour changes, space collapse and ancestor background inheritance.
+A native form-page raster was inspected (3,849 non-grey pixels), with red prose
+and blue emphasized text; opening and serializing the GET form still passes.
+Disabling the same-DOM colour mapping makes that regression fail. Fresh Colour
+forms simulator journey passes. This remains partial: native headings, quotes,
+tables, preformatted blocks and control labels use older plain-string paths;
+link target decoration can still add a neutral underline. Unsupported CSS only
+gets supported computed colours, not complete authored fidelity. Late Colour
+identity does not yet reparse existing native text. No all-fonts claim.
+
+Browser 212/0/2 ignored; engine 1,409/0/18 ignored over 148 groups; layout25/0.
+Clippy completed with existing warnings. Locked stripped static ARM EABI5:
+5,198,868 bytes, +3,949,488 over hello, 1,293,392 bytes under +5 MiB.
+No new crate, unsafe or allocator change. Protocol-16 matching runtime required.

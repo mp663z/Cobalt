@@ -61,6 +61,8 @@ pub fn link_of(action: &str) -> Option<usize> {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Run {
     pub text: String,
+    pub foreground: Option<[u8;3]>,
+    pub background: Option<[u8;3]>,
     pub strong: bool,
     pub emphasis: bool,
     /// Index into [`Document::links`].
@@ -475,13 +477,16 @@ fn prose(builder: ScreenBuilder, runs: &[Run]) -> ScreenBuilder {
         if start == end {
             continue;
         }
-        if run.strong || run.emphasis {
+        if run.strong || run.emphasis || run.foreground.is_some() || run.background.is_some() {
             spans.push(RichTextSpan {
                 start,
                 end,
                 presentation: TextPresentation {
+                    foreground:run.foreground,
+                    background:run.background,
                     strong: run.strong,
                     emphasis: run.emphasis,
+                    underline:run.link.is_some() && run.foreground.is_some(),
                     ..TextPresentation::default()
                 },
             });
@@ -813,9 +818,15 @@ fn inline_runs(content: &[Inline], style: Style, out: &mut Vec<Run>) {
         match inline {
             Inline::Text(text) | Inline::Code(text) => out.push(Run {
                 text: drawable(text),
+                foreground: None,
+                background: None,
                 strong: style.strong,
                 emphasis: style.emphasis,
                 link: style.link,
+            }),
+            Inline::ColouredText{text,foreground,background,..} => out.push(Run {
+                text:drawable(text),foreground:Some(*foreground),background:*background,
+                strong:style.strong,emphasis:style.emphasis,link:style.link,
             }),
             Inline::Emphasis(inner) => inline_runs(
                 inner,
@@ -868,7 +879,9 @@ fn tidy(runs: Vec<Run>) -> Vec<Run> {
             Some(last)
                 if last.strong == run.strong
                     && last.emphasis == run.emphasis
-                    && last.link == run.link =>
+                    && last.link == run.link
+                    && last.foreground == run.foreground
+                    && last.background == run.background =>
             {
                 last.text.push_str(&run.text);
             }

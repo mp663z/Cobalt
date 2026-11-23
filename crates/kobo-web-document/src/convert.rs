@@ -55,6 +55,7 @@ const CONTAINERS: &[&str] = &[
 
 struct Converter<'a> {
     nodes: &'a [Node],
+    colours: Option<Vec<Option<([u8;3],Option<[u8;3]>)>>>,
     styles: Styles,
     base: Url,
     limits: &'a Limits,
@@ -116,8 +117,35 @@ pub fn convert(
     warnings: Vec<Warning>,
     styles: Styles,
 ) -> crate::Document {
+    convert_with_colours(nodes,url,limits,warnings,styles,None)
+}
+
+pub(crate) fn convert_coloured(nodes:&[Node],url:&Url,limits:&Limits,warnings:Vec<Warning>,styles:Styles)->crate::Document {
+    let (tree,sources)=crate::style_tree::StyleTree::from_dom_with_sources(nodes,&[],None);
+    let mut colours=vec![None;nodes.len()];
+    // Retain safely computed colour from the supported CSS subset even when
+    // unrelated paint/layout properties are unsupported. A truncated walk has
+    // no complete mapping and falls back to uncoloured semantic text.
+    if !tree.truncated {
+        let rgb=|n:u32|[(n>>16) as u8,(n>>8) as u8,n as u8];
+        let mut backgrounds=Vec::with_capacity(tree.nodes.len());
+        for (styled,source) in tree.nodes.iter().zip(sources) {
+            let background=styled.style.background_color.map(rgb)
+                .or_else(||styled.parent.and_then(|p|backgrounds.get(p).copied().flatten()));
+            backgrounds.push(background);
+            if let Some(handle)=source {
+                colours[handle]=Some((rgb(styled.style.color),background));
+            }
+        }
+    }
+    convert_with_colours(nodes,url,limits,warnings,styles,Some(colours))
+}
+
+fn convert_with_colours(nodes:&[Node],url:&Url,limits:&Limits,warnings:Vec<Warning>,styles:Styles,
+    colours:Option<Vec<Option<([u8;3],Option<[u8;3]>)>>>)->crate::Document {
     let mut converter = Converter {
         nodes,
+        colours,
         styles,
         base: url.clone(),
         limits,
@@ -203,6 +231,19 @@ fn reader_blocks(marks: &[Mark], blocks: &[Block], skip_target: Option<&str>) ->
 }
 
 impl Converter<'_> {
+    fn push_source_text(&self,inlines:&mut Vec<Inline>,text:&str,handle:Handle) {
+        let Some(Some((foreground,background)))=self.colours.as_ref().and_then(|colours|colours.get(handle)) else {
+            push_text(inlines,text); return;
+        };
+        let mut text=collapse_keep_edges(text);
+        if text.is_empty(){return;}
+        if let Some(Inline::ColouredText{text:previous,foreground:fg,background:bg,code:false})=inlines.last_mut() {
+            if previous.ends_with(' ')&&text.starts_with(' ') {text.remove(0);}
+            if fg==foreground&&bg==background {previous.push_str(&text);return;}
+        }
+        if !text.is_empty(){inlines.push(Inline::ColouredText{text,foreground:*foreground,background:*background,code:false});}
+    }
+
     fn tag(&self, handle: Handle) -> Option<&str> {
         match &self.nodes[handle].data {
             Data::Element { name, .. } if name.ns == ns!(html) => Some(&name.local),
@@ -449,7 +490,7 @@ impl Converter<'_> {
         gather: &mut Gather,
     ) {
         if let Data::Text(text) = &self.nodes[handle].data {
-            push_text(&mut gather.inlines, text);
+            self.push_source_text(&mut gather.inlines,text,handle);
             return;
         }
         let Some(tag) = self.tag(handle) else { return };
@@ -623,7 +664,7 @@ impl Converter<'_> {
         for index in 0..self.nodes[handle].children.len() {
             let child = self.nodes[handle].children[index];
             match &self.nodes[child].data {
-                Data::Text(text) => push_text(&mut gather.inlines, text),
+                Data::Text(text) => self.push_source_text(&mut gather.inlines,text,child),
                 Data::Element { .. } => self.inline(child, depth + 1, gather),
                 _ => {}
             }
@@ -669,6 +710,10 @@ impl Converter<'_> {
                 // the links are kept and the words stay code.
                 let inner = self.nested(handle, depth, gather);
                 gather.inlines.extend(as_code(inner));
+            }
+            "code" | "kbd" | "samp" | "tt" if self.colours.is_some() => {
+                let inner=self.nested(handle,depth,gather);
+                gather.inlines.extend(as_code(trim_inlines(inner)));
             }
             "code" | "kbd" | "samp" | "tt" => {
                 let text = collapse_keep_edges(&self.text_of(handle));
@@ -1199,13 +1244,13 @@ fn trim_inlines(mut inlines: Vec<Inline>) -> Vec<Inline> {
     while matches!(inlines.last(), Some(Inline::LineBreak)) {
         inlines.pop();
     }
-    if let Some(Inline::Text(text)) = inlines.first_mut() {
+    if let Some(Inline::Text(text) | Inline::ColouredText{text,..}) = inlines.first_mut() {
         *text = text.trim_start().to_owned();
     }
-    if let Some(Inline::Text(text)) = inlines.last_mut() {
+    if let Some(Inline::Text(text) | Inline::ColouredText{text,..}) = inlines.last_mut() {
         *text = text.trim_end().to_owned();
     }
-    inlines.retain(|inline| !matches!(inline, Inline::Text(text) if text.is_empty()));
+    inlines.retain(|inline| !matches!(inline, Inline::Text(text) | Inline::ColouredText{text,..} if text.is_empty()));
     inlines
 }
 
@@ -1213,7 +1258,7 @@ fn trim_inlines(mut inlines: Vec<Inline>) -> Vec<Inline> {
 pub fn flatten(inlines: &[Inline], out: &mut String) {
     for inline in inlines {
         match inline {
-            Inline::Text(text) | Inline::Code(text) => out.push_str(text),
+            Inline::Text(text) | Inline::Code(text) | Inline::ColouredText{text,..} => out.push_str(text),
             Inline::Emphasis(inner) | Inline::Strong(inner) | Inline::Inert(inner) => {
                 flatten(inner, out);
             }
@@ -1271,6 +1316,7 @@ fn as_code(inlines: Vec<Inline>) -> Vec<Inline> {
         .map(|inline| match inline {
             Inline::Text(text) if text.trim().is_empty() => Inline::Text(text),
             Inline::Text(text) => Inline::Code(text),
+            Inline::ColouredText{text,foreground,background,..}=>Inline::ColouredText{text,foreground,background,code:true},
             Inline::Link { index, label } => Inline::Link {
                 index,
                 label: as_code(label),

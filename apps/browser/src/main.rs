@@ -545,7 +545,7 @@ impl Browser {
         // The arrival's parse. Enabled stage only: it owns a copy (<= the input ceiling) that the parse and
         // preparation both read. Disabled keeps the exact existing call and allocates nothing.
         #[cfg(not(test))]
-        let parsed = css_stage::ParsedArrival::parse(bytes, url, self.css.is_enabled());
+        let parsed = css_stage::ParsedArrival::parse(bytes, url, self.css.is_enabled(), self.pictures.colour());
         #[cfg(test)]
         let mut parsed = {
             let input = self
@@ -558,6 +558,7 @@ impl Browser {
                 self.css.is_enabled(),
                 input,
                 self.loaded.is_some(),
+                self.pictures.colour(),
             )
         };
         #[cfg(test)]

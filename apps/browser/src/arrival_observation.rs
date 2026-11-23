@@ -110,8 +110,14 @@ pub(crate) fn observe(
     input: ObservationInput,
     old_loaded_present: bool,
 ) -> (Document, ArrivalObservation) {
+    observe_with_colour(bytes,url,limits,input,old_loaded_present,false)
+}
+
+pub(crate) fn observe_with_colour(bytes:&[u8],url:&Url,limits:&Limits,input:ObservationInput,
+    old_loaded_present:bool,coloured:bool)->(Document,ArrivalObservation) {
     let semantic_start = Instant::now();
-    let document = kobo_web_document::parse_document(bytes, url, limits);
+    let document = if coloured {kobo_web_document::parse_coloured_document(bytes,url,limits)}
+        else {kobo_web_document::parse_document(bytes, url, limits)};
     let semantic_parse = semantic_start.elapsed();
     let style_start = Instant::now();
     let tree = kobo_web_document::parse_style_tree(bytes, &[], limits);

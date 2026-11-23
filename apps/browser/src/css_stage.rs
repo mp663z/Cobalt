@@ -303,13 +303,14 @@ pub(crate) struct ParsedArrival {
 
 impl ParsedArrival {
     #[cfg(not(test))]
-    pub(crate) fn parse(bytes: &[u8], url: &kobo_web_document::Url, enabled: bool) -> Self {
+    pub(crate) fn parse(bytes: &[u8], url: &kobo_web_document::Url, enabled: bool, coloured: bool) -> Self {
         let limits = kobo_web_document::Limits::DEFAULT;
         let source = enabled
             .then(|| ArrivalSource::capture(bytes, limits.max_input_bytes))
             .flatten();
         let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
-        let document = kobo_web_document::parse_document(parse_bytes, url, &limits);
+        let document = if coloured { kobo_web_document::parse_coloured_document(parse_bytes,url,&limits) }
+            else { kobo_web_document::parse_document(parse_bytes, url, &limits) };
         let consumed = source
             .as_ref()
             .map(|s| (s.as_slice().as_ptr() as usize, s.as_slice().len()));
@@ -329,18 +330,20 @@ impl ParsedArrival {
         enabled: bool,
         input: crate::arrival_observation::ObservationInput,
         old_loaded_present: bool,
+        coloured: bool,
     ) -> Self {
         let limits = kobo_web_document::Limits::DEFAULT;
         let source = enabled
             .then(|| ArrivalSource::capture(bytes, limits.max_input_bytes))
             .flatten();
         let parse_bytes: &[u8] = source.as_ref().map_or(bytes, |s| s.as_slice());
-        let (document, observation) = crate::arrival_observation::observe(
+        let (document, observation) = crate::arrival_observation::observe_with_colour(
             parse_bytes,
             url,
             &limits,
             input,
             old_loaded_present,
+            coloured,
         );
         let consumed = source.as_ref().map(|_| observation.consumed);
         Self {
