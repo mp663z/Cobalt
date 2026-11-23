@@ -124,6 +124,7 @@ pub(crate) fn paint(
                         start: c.start.saturating_sub(base),
                         end: c.end.min(end) - base,
                         advance: if origin { c.advance } else { 0 },
+                        missing: origin && c.missing,
                         bitmap: if origin {
                             GlyphBitmap {
                                 left: c.bitmap.left,
@@ -238,6 +239,7 @@ pub(crate) fn paint(
                         .filter(|c| c.start <= byte && c.end > byte)
                     {
                         if cluster.start == byte {
+                            missing += usize::from(cluster.missing);
                             return GlyphBitmap {
                                 left: cluster.bitmap.left,
                                 top: cluster.bitmap.top,

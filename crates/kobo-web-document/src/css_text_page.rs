@@ -26,6 +26,8 @@ pub struct PageCluster {
     pub end: usize,
     pub advance: u32,
     pub bitmap: GlyphBitmap,
+    /// True when this mask is a missing-glyph placeholder.
+    pub missing: bool,
 }
 
 /// Every method takes the glyph's face: `bold` false is the regular face,

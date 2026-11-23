@@ -36,6 +36,7 @@ impl FontProvider for Face {
                     start: c.start,
                     end: c.end,
                     advance: c.glyph.advance,
+                    missing: c.glyph.missing,
                     bitmap: GlyphBitmap {
                         left: c.glyph.left,
                         top: c.glyph.top,
@@ -234,6 +235,25 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn shaped_missing_cjk_glyphs_increment_the_census() {
+        let html = "<!doctype html><p>日本語</p>";
+        let styled = kobo_web_document::parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+        let (_, stats, _) = paint_basic_page(
+            &BoxTree::from_style(&styled),
+            300,
+            200,
+            &Face(PageFontSession::bundled().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(
+            stats.approximations.get("missing-glyph-placeholder"),
+            Some(&3)
+        );
+        assert_eq!(stats.text_blocks_painted, 1);
+        assert!(stats.skips.is_empty());
     }
 
     #[test]
