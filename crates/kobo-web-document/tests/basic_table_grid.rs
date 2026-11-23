@@ -322,3 +322,33 @@ fn native_outer_table_border_surrounds_grid_without_stacking() {
     assert!(edges[1].height > 60);
     assert_eq!(stats.text_blocks_painted, 4);
 }
+
+#[test]
+fn short_rows_leave_empty_slots_without_stacking_or_shifting_columns() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}td{padding:4px;background:#123456}</style><table><tr><td>Short row</td></tr><tr><td>A</td><td>B</td><td>C</td></tr><tr><td>D</td><td>E</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 6);
+    assert_eq!(cells[0].x, cells[1].x);
+    assert_eq!(cells[1].x, cells[4].x);
+    assert_eq!(cells[2].x, cells[5].x);
+    assert_eq!(cells[1].width, cells[4].width);
+    assert!(cells[3].x > cells[2].x);
+    assert_eq!(stats.text_blocks_painted, 6);
+}

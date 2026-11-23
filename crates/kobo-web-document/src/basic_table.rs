@@ -144,7 +144,7 @@ impl<F: FontProvider> Painter<'_, F> {
         Ok(rows)
     }
 
-    /// Paints only a rectangular, non-spanning grid. Every row shares one
+    /// Paints a non-spanning grid, including empty trailing row slots. Every row shares one
     /// resolved set of intrinsic columns. Table/cell author selectors survive
     /// because the parser sees actual table elements rather than rewritten divs.
     #[allow(clippy::too_many_lines)] // Validate a bounded grid before emitting any cell ink.
@@ -240,13 +240,12 @@ impl<F: FontProvider> Painter<'_, F> {
                 }
             }
             let count = row_cells.len();
-            if count == 0 || columns.is_some_and(|old| old != count) {
-                return Err("table-ragged-grid");
-            }
-            columns = Some(count);
+            // CSS tables may have fewer cells in one row. Missing trailing
+            // slots stay empty; later rows can still establish more columns.
+            columns = Some(columns.unwrap_or(0).max(count));
             grid.push(row_cells);
         }
-        let Some(count) = columns else {
+        let Some(count) = columns.filter(|count| *count > 0) else {
             return Ok(0);
         };
         for row in &grid {
