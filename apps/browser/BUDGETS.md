@@ -214,3 +214,22 @@ The browser grew 4,144 bytes since the prior checkpoint and leaves 1,320,912
 bytes under the +5 MiB allowance. All three outputs were inspected as
 stripped, static ARM EABI5 executables. No physical reader was used; device
 RSS, paint time, input latency and smoothness remain unverified.
+
+### Table cell box sizing and outer padding, November 23, 2026
+
+Measured source: `9119d5dc6ec032c686cffea488234e246168e3f7`.
+Repeated the same pinned locked ARM release build after cell content-width
+and content-height edge accounting and outer table padding support.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,171,028 | +3,921,648 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,087,012 | |
+
+The browser is 320 bytes smaller than the previous measured source and leaves
+1,321,232 bytes under the +5 MiB allowance. All outputs inspected as static,
+stripped ARM EABI5. All host endpoints were rebuilt together; fresh BW Page
+link/pagination/Reader and Colour inline-editing/keyboard/menu/reload journeys
+passed, with actual screenshots inspected. These are simulator and linked-size
+checks, not physical-reader RSS, latency or panel-quality measurements.
