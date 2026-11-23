@@ -418,7 +418,11 @@ impl<F: FontProvider> Painter<'_, F> {
             self.stats.approx("table-caption-top");
             let node = &self.tree.boxes[caption];
             let cs = node.style;
-            if cs.decor.has_painted_border()
+            if cs
+                .decor
+                .border_style
+                .iter()
+                .any(|style| !matches!(style, BorderStyle::None | BorderStyle::Solid))
                 || [
                     cs.padding_top,
                     cs.padding_right,
@@ -426,7 +430,9 @@ impl<F: FontProvider> Painter<'_, F> {
                     cs.padding_left,
                 ]
                 .iter()
-                .any(|v| *v != 0)
+                .any(|v| *v == crate::computed_style::PADDING_UNREPRESENTABLE)
+                || cs.width != Length::Auto
+                || cs.height != Length::Auto
                 || cs.positioned.position != Position::Static
                 || cs.positioned.hidden
                 || !self.deep_pure_inline(&node.children)
@@ -434,8 +440,19 @@ impl<F: FontProvider> Painter<'_, F> {
                 return Err("table-caption-style");
             }
             let entry = commands.len();
-            caption_height +=
-                self.paint_text_block(caption, &node.children, x, top, outer_width, commands)?;
+            let inner_width = outer_width
+                .checked_sub(cs.padding_left)
+                .and_then(|width| width.checked_sub(cs.padding_right))
+                .ok_or("table-caption-padding")?;
+            caption_height = self.paint_text_block(
+                caption,
+                &node.children,
+                x + i64::from(cs.padding_left),
+                top + i64::from(cs.padding_top),
+                inner_width,
+                commands,
+            )? + i64::from(cs.padding_top)
+                + i64::from(cs.padding_bottom);
             if let Some(color) = cs.used_background_color() {
                 table_fill(
                     commands,
@@ -449,6 +466,7 @@ impl<F: FontProvider> Painter<'_, F> {
                 )?;
                 self.stats.fills += 1;
             }
+            self.table_box_border(caption, x, top, outer_width, caption_height, commands)?;
             self.stats.blocks_painted += 1;
         }
         let top = top + caption_height;

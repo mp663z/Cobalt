@@ -665,3 +665,79 @@ fn non_collapsible_or_visible_text_beside_cell_block_still_falls_back() {
         );
     }
 }
+
+#[test]
+fn padded_solid_caption_keeps_grid_and_its_own_border_box_above_table() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}caption{padding:6px;border:2px solid #456789;background:#dddddd}td{padding:4px;background:#123456}</style><table><caption>Caption text</caption><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let caption = commands
+        .iter()
+        .find_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0xdd, 0xdd, 0xdd),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(caption.width, 220);
+    assert_eq!(caption.height, 36);
+    let edges: Vec<_> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x45, 0x67, 0x89),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(edges.len(), 4);
+    assert_eq!(edges[0].y, caption.y);
+    assert_eq!(edges[0].width, 220);
+    assert_eq!(edges[1].height, 36);
+    let cell = commands
+        .iter()
+        .find_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(cell.y, caption.y + 38);
+    assert_eq!(stats.text_blocks_painted, 3);
+}
+
+#[test]
+fn unsupported_caption_edges_keep_counted_fallback() {
+    for declaration in ["border:2px dashed black", "width:100px", "height:100px"] {
+        let html = format!("<!doctype html><table><caption style='{declaration}'>Caption</caption><tr><td>A</td><td>B</td></tr></table>");
+        let style = kobo_web_document::parse_basic_style_tree(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            None,
+        );
+        let (_, stats, _) =
+            paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+        assert_eq!(
+            stats.approximations.get("table-stacked-fallback"),
+            Some(&1),
+            "{declaration}"
+        );
+        assert_eq!(stats.text_blocks_painted, 3, "{declaration}");
+    }
+}
