@@ -1267,6 +1267,12 @@ pub struct PrefilterStats {
     pub sheets_touched: usize,
     pub rules_kept: usize,
     pub rules_dropped: usize,
+    /// Positioned rules carrying a fully off-canvas transform (e.g.
+    /// `transform: translateX(calc(-100% - 10px))` on a fixed drawer):
+    /// the engine has no transform support, so the element would paint
+    /// on top of the page. The declaration is demoted to
+    /// `position:static`, keeping the content in flow instead.
+    pub offcanvas_static: usize,
 }
 
 /// Document key census for the prefilter: tag names (lowercased), class
@@ -1395,10 +1401,11 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
                 }
                 let payload = &input[j + 1..k];
                 if let Some(css) = b64_decode(payload) {
-                    let (filtered, kept, dropped) = prefilter_css(&css, &census);
+                    let (filtered, kept, dropped, off) = prefilter_css(&css, &census);
                     stats.rules_kept += kept;
                     stats.rules_dropped += dropped;
-                    if dropped > 0 {
+                    stats.offcanvas_static += off;
+                    if dropped > 0 || off > 0 {
                         stats.sheets_touched += 1;
                         out.extend_from_slice(&input[i..j + 1]);
                         out.extend_from_slice(&b64_encode(&filtered));
@@ -1417,9 +1424,9 @@ pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats
 /// Filter one stylesheet: drop provably unmatchable plain rules, recurse
 /// into @media/@supports/@layer, copy everything else verbatim
 /// (comments, @keyframes, @font-face, strings all preserved).
-fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize) {
+fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize, usize) {
     let mut out = Vec::with_capacity(css.len());
-    let (mut kept, mut dropped) = (0usize, 0usize);
+    let (mut kept, mut dropped, mut offcanvas) = (0usize, 0usize, 0usize);
     let mut i = 0usize;
     while i < css.len() {
         // comments and strings pass through
@@ -1530,9 +1537,10 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize) {
             .iter()
             .any(|p| head_trim.starts_with(p));
         if head_trim.starts_with(b"@") && recurse {
-            let (inner, k2, d2) = prefilter_css(block, census);
+            let (inner, k2, d2, o2) = prefilter_css(block, census);
             kept += k2;
             dropped += d2;
+            offcanvas += o2;
             out.extend_from_slice(prelude);
             out.push(b'{');
             out.extend_from_slice(&inner);
@@ -1543,11 +1551,58 @@ fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize) {
             dropped += 1;
         } else {
             kept += 1;
-            out.extend_from_slice(&css[i..e]);
+            if has_offcanvas_transform(block) {
+                out.extend_from_slice(prelude);
+                out.push(b'{');
+                out.extend_from_slice(block);
+                out.extend_from_slice(b";position:static}");
+                offcanvas += 1;
+            } else {
+                out.extend_from_slice(&css[i..e]);
+            }
         }
         i = e;
     }
-    (out, kept, dropped)
+    (out, kept, dropped, offcanvas)
+}
+
+/// True when a rule both positions itself (fixed or absolute) and
+/// transforms itself fully off-canvas on one axis: a translate whose
+/// first percentage argument is -100% or beyond. These are JS-revealed
+/// drawers/menus; with no transform support the element would paint
+/// over the page, so the caller demotes it to static flow.
+fn has_offcanvas_transform(block: &[u8]) -> bool {
+    let lower: Vec<u8> = block
+        .iter()
+        .map(|b| b.to_ascii_lowercase())
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    let positioned = lower
+        .windows(b"position:fixed".len())
+        .any(|w| w == b"position:fixed".as_slice())
+        || lower
+            .windows(b"position:absolute".len())
+            .any(|w| w == b"position:absolute".as_slice());
+    if !positioned {
+        return false;
+    }
+    const PATTERNS: &[&[u8]] = &[
+        b"translatex(calc(-100%",
+        b"translatex(-100%",
+        b"translate(calc(-100%",
+        b"translate(-100%",
+        b"translatey(calc(-100%",
+        b"translatey(-100%",
+        b"translate3d(calc(-100%",
+        b"translate3d(-100%",
+        b"translatex(calc(100%",
+        b"translatex(100%",
+        b"translate3d(calc(100%",
+        b"translate3d(100%",
+    ];
+    PATTERNS
+        .iter()
+        .any(|p| lower.windows(p.len()).any(|w| w == *p))
 }
 
 /// True when every comma-part of the selector list has a rightmost key
