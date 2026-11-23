@@ -78,7 +78,9 @@ pub const PICTURE_BLEED_VERSION: u8 = 15;
 
 pub const AUTO_HIDDEN_TOP_BAR_VERSION: u8 = 15;
 
-pub const VERSION: u8 = 15;
+/// Optional RGB rich-text spans use node tag 35. Tag 28 stays byte-identical.
+pub const COLOUR_RICH_TEXT_VERSION: u8 = 16;
+pub const VERSION: u8 = 16;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1988,7 +1990,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4246,9 +4248,18 @@ fn encoded_node_len(
             if spans.len() > kobo_ui::MAX_RICH_TEXT_SPANS {
                 return Err(ProtocolError::TooManyNodes);
             }
+            let coloured = spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            if coloured && version < COLOUR_RICH_TEXT_VERSION {
+                return Err(ProtocolError::UnsupportedVersion(version));
+            }
             let mut length = 5;
             add_encoded_len(&mut length, encoded_string_len(text)?)?;
             add_encoded_len(&mut length, 2 + spans.len() * 9 + 9 + 1 + 1)?;
+            if coloured {
+                for span in spans {
+                    add_encoded_len(&mut length, 1 + 3 * usize::from(span.presentation.foreground.is_some()) + 3 * usize::from(span.presentation.background.is_some()))?;
+                }
+            }
             for _ in links.iter().take(kobo_ui::MAX_TEXT_LINKS) {
                 add_encoded_len(&mut length, 12)?;
             }
@@ -4637,7 +4648,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5115,7 +5126,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5377,6 +5388,8 @@ fn text_presentation_from_byte(value: u8) -> Result<kobo_ui::TextPresentation, P
         return Err(ProtocolError::InvalidValue("rich text style"));
     }
     Ok(kobo_ui::TextPresentation {
+        foreground: None,
+        background: None,
         strong: value & 1 != 0,
         emphasis: value & 2 != 0,
         underline: value & 4 != 0,
@@ -5432,7 +5445,11 @@ fn encode_node(
             if spans.len() > kobo_ui::MAX_RICH_TEXT_SPANS {
                 return Err(ProtocolError::TooManyNodes);
             }
-            output.push(28);
+            let coloured = spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            if coloured && version < COLOUR_RICH_TEXT_VERSION {
+                return Err(ProtocolError::UnsupportedVersion(version));
+            }
+            output.push(if coloured {35} else {28});
             push_u32(output, id.0);
             push_string(output, text)?;
             push_u16(
@@ -5456,6 +5473,12 @@ fn encode_node(
                     u32::try_from(span.end).map_err(|_| ProtocolError::FrameTooLarge)?,
                 );
                 output.push(text_presentation_byte(span.presentation));
+                if coloured {
+                    let style = span.presentation;
+                    output.push(u8::from(style.foreground.is_some()) | (u8::from(style.background.is_some()) << 1));
+                    if let Some(rgb) = style.foreground {output.extend_from_slice(&rgb);}
+                    if let Some(rgb) = style.background {output.extend_from_slice(&rgb);}
+                }
             }
             output.push(match presentation.alignment {
                 kobo_ui::ParagraphAlignment::Start => 0,
@@ -6548,7 +6571,8 @@ fn decode_node(
             }
             Ok(Node::Text { id, text, links })
         }
-        28 => {
+        tag @ (28 | 35) if tag == 28 || version >= COLOUR_RICH_TEXT_VERSION => {
+            let coloured = tag == 35;
             let text = reader.string()?;
             let span_count = usize::from(reader.u16()?);
             if span_count > kobo_ui::MAX_RICH_TEXT_SPANS {
@@ -6558,7 +6582,13 @@ fn decode_node(
             for _ in 0..span_count {
                 let start = reader.u32()? as usize;
                 let end = reader.u32()? as usize;
-                let style = text_presentation_from_byte(reader.u8()?)?;
+                let mut style = text_presentation_from_byte(reader.u8()?)?;
+                if coloured {
+                    let flags = reader.u8()?;
+                    if flags & !3 != 0 {return Err(ProtocolError::InvalidValue("rich text colour flags"));}
+                    if flags & 1 != 0 { style.foreground = Some([reader.u8()?,reader.u8()?,reader.u8()?]); }
+                    if flags & 2 != 0 { style.background = Some([reader.u8()?,reader.u8()?,reader.u8()?]); }
+                }
                 if start >= end
                     || end > text.len()
                     || !text.is_char_boundary(start)
@@ -10980,5 +11010,83 @@ mod update_task_tests {
         }
         assert!(!work.is_sendable());
         assert!(encoded_task_len(&work).is_err());
+    }
+}
+
+#[cfg(test)]
+mod colour_rich_text_tests {
+    use super::*;
+    fn frame(coloured: bool, version: u8) -> Frame {
+        Frame { version, request_id: 1, message: Message::SetScreen(Screen::new(1, vec![Node::RichText {
+            id: NodeId(1), text: "é link".into(),
+            spans: vec![kobo_ui::RichTextSpan { start: 0, end: 7,
+                presentation: kobo_ui::TextPresentation {
+                    foreground: coloured.then_some([201, 37, 63]),
+                    background: coloured.then_some([12, 45, 78]),
+                    strong: true, emphasis: true, ..Default::default()
+                }}],
+            links: vec![kobo_ui::TextLink {action:ActionId(100),start:3,end:7}],
+            presentation: Default::default(), selection:None, formulae:Vec::new(),
+        }])) }
+    }
+    #[test]
+    fn rgb_spans_round_trip_and_refuse_old_versions_without_changing_plain_bytes() {
+        let current=frame(true,VERSION);
+        let bytes=encode(&current).unwrap();
+        assert_eq!(decode(&bytes).unwrap(),current);
+        for version in LEGACY_VERSION..COLOUR_RICH_TEXT_VERSION {
+            assert!(matches!(encode(&frame(true,version)),Err(ProtocolError::UnsupportedVersion(v)) if v==version));
+            let mut older=bytes.clone(); older[4]=version;
+            assert!(decode(&older).is_err());
+            let plain=encode(&frame(false,version)).unwrap();
+            let newest=encode(&frame(false,VERSION)).unwrap();
+            assert_eq!(&plain[HEADER_LEN..],&newest[HEADER_LEN..]);
+            let mut expected=frame(false,version);
+            if let Message::SetScreen(screen)=&mut expected.message {screen.legacy_typography=version==LEGACY_VERSION;}
+            assert_eq!(decode(&plain).unwrap(),expected);
+        }
+    }
+    #[test]
+    fn colour_tag_has_separate_flags_and_rejects_bad_ranges_and_truncation() {
+        let bytes=encode(&frame(true,VERSION)).unwrap();
+        for n in 1..=6 {assert!(decode(&bytes[..bytes.len()-n]).is_err());}
+        let Message::SetScreen(screen)=frame(true,VERSION).message else {unreachable!()};
+        let mut node_bytes=Vec::new();
+        encode_node(&mut node_bytes,&screen.nodes[0],0,&mut 0,VERSION).unwrap();
+        assert_eq!(node_bytes[0],35);
+        // tag + id + string length + UTF-8 text + span count + two offsets + style
+        let flag=1+4+2+"é link".len()+2+8+1;
+        assert_eq!(node_bytes[flag],3);
+        node_bytes[flag]=4;
+        assert!(decode_node(&mut Reader::new(&node_bytes),0,&mut 0,VERSION).is_err());
+        let mut plain=Vec::new();
+        let Message::SetScreen(screen)=frame(false,VERSION).message else {unreachable!()};
+        encode_node(&mut plain,&screen.nodes[0],0,&mut 0,VERSION).unwrap();
+        assert_eq!(plain[0],28);
+
+        let mut bad=frame(true,VERSION);
+        if let Message::SetScreen(screen)=&mut bad.message {
+            if let Node::RichText{spans,..}=&mut screen.nodes[0] {spans[0].start=1;}
+        }
+        assert!(encode(&bad).is_err());
+    }
+}
+
+#[cfg(test)]
+mod rgb_flag_variants_tests {
+    use super::*;
+    #[test]
+    fn foreground_background_and_style_only_spans_share_a_versioned_colour_node() {
+        for (foreground,background) in [(None,None),(Some([1,2,3]),None),(None,Some([4,5,6])),(Some([1,2,3]),Some([4,5,6]))] {
+            let node=Node::RichText {
+                id:NodeId(1),text:"abc".into(),
+                spans:vec![kobo_ui::RichTextSpan{start:0,end:1,presentation:kobo_ui::TextPresentation {
+                    foreground,background,..Default::default()
+                }}, kobo_ui::RichTextSpan{start:1,end:3,presentation:kobo_ui::TextPresentation::default()}],
+                links:Vec::new(),presentation:Default::default(),selection:None,formulae:Vec::new(),
+            };
+            let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();
+            assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+        }
     }
 }

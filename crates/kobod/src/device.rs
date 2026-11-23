@@ -5509,6 +5509,12 @@ mod tests {
     }
 
     #[test]
+    fn a_protocol_15_app_keeps_receiving_protocol_15() {
+        runtime_keeps_protocol_on_send_and_reply(kobo_protocol::PICTURE_BLEED_VERSION);
+        runtime_keeps_protocol_on_tap_and_hold(kobo_protocol::PICTURE_BLEED_VERSION);
+    }
+
+    #[test]
     fn an_application_built_today_keeps_receiving_the_current_protocol() {
         runtime_keeps_protocol_on_send_and_reply(kobo_protocol::VERSION);
         runtime_keeps_protocol_on_tap_and_hold(kobo_protocol::VERSION);

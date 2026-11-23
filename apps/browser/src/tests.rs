@@ -2210,3 +2210,26 @@ fn colour_identity_switch_prefers_existing_rgb_shelf_over_grey() {
     assert!(changed.iter().any(|c|matches!(c,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Rgb,..})));
     assert_eq!(runner.app().pictures.state(0),Some(pictures::State::Shown));
 }
+
+#[test]
+fn native_rgb_spans_render_with_installed_typefaces() {
+    let _runner=runner(TextScale::Default);
+    let screen=kobo_ui::Screen::new(81,vec![kobo_ui::Node::RichText {
+        id:kobo_ui::NodeId(1),text:"Native colour text".into(),
+        spans:vec![kobo_ui::RichTextSpan{start:0,end:18,presentation:kobo_ui::TextPresentation {
+            foreground:Some([201,37,63]),background:Some([225,240,250]),
+            strong:true,emphasis:true,underline:true,..Default::default()
+        }}],links:Vec::new(),presentation:Default::default(),selection:None,formulae:Vec::new(),
+    }]);
+    let metrics=kobo_ui::CLARA_BW_METRICS;
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([201,37,63])));
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([225,240,250])));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some() {
+        use std::io::Write;
+        let mut file=std::fs::File::create("/tmp/native-rgb-fonts.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}

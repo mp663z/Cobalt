@@ -4266,6 +4266,10 @@ pub const MAX_RICH_TEXT_SPANS: usize = 256;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct TextPresentation {
+    /// Authored RGB ink, only carried by the versioned colour rich-text tag.
+    pub foreground: Option<[u8; 3]>,
+    /// Authored RGB wash behind this run, distinct from reader annotation.
+    pub background: Option<[u8; 3]>,
     pub strong: bool,
     pub emphasis: bool,
     pub underline: bool,
@@ -15038,7 +15042,9 @@ fn render_all_with_selected_font(
             ),
             LayoutKind::RichText(presentation) => {
                 if let Some(text) = node.text_lines.first() {
-                    if presentation.highlighted {
+                    if let Some(background) = presentation.background {
+                        fill_rgb_clipped(surface,node.rect,background,clip);
+                    } else if presentation.highlighted {
                         fill_clipped(surface, node.rect, tone::SURFACE, clip);
                     }
                     draw_rich_text(
@@ -16604,9 +16610,9 @@ fn draw_rich_text(
                 };
                 let x = pixel_x.saturating_add(skew);
                 if coverage > 0 && clip.contains(x, pixel_y) {
-                    surface.blend(x, pixel_y, tone, coverage);
+                    blend_text_ink(surface,x,pixel_y,tone,presentation.foreground,coverage);
                     if presentation.strong && clip.contains(x + 1, pixel_y) {
-                        surface.blend(x + 1, pixel_y, tone, coverage);
+                        blend_text_ink(surface,x+1,pixel_y,tone,presentation.foreground,coverage);
                     }
                 }
             },
@@ -16614,13 +16620,13 @@ fn draw_rich_text(
     })
     .is_none()
     {
-        draw_fallback_text(surface, text, rect.x, y, FontSize::Body, tone, clip);
+        draw_fallback_ink(surface, text, rect.x, y, FontSize::Body, tone, presentation.foreground, clip);
         if presentation.strong {
-            draw_fallback_text(surface, text, rect.x + 1, y, FontSize::Body, tone, clip);
+            draw_fallback_ink(surface, text, rect.x + 1, y, FontSize::Body, tone, presentation.foreground, clip);
         }
     }
     if presentation.underline {
-        fill_clipped(
+        fill_text_ink(
             surface,
             Rect {
                 x: rect.x,
@@ -16629,6 +16635,7 @@ fn draw_rich_text(
                 height: 1,
             },
             tone,
+            presentation.foreground,
             clip,
         );
     }
@@ -16639,13 +16646,38 @@ fn draw_rich_text(
 /// This is uppercase-only and coarse on purpose: it exists so that a host test
 /// or a bare simulator still produces a deterministic image, not because it is
 /// fit to put in front of a reader.
-fn draw_fallback_text(
+fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+    draw_fallback_ink(surface,text,x,y,size,tone,None,clip);
+}
+
+fn blend_text_ink(surface:&mut Surface,x:i32,y:i32,tone:u8,colour:Option<[u8;3]>,coverage:u8) {
+    if let Some(rgb)=colour {surface.blend_colour(x,y,rgb,coverage);} else {surface.blend(x,y,tone,coverage);}
+}
+
+fn fill_rgb_clipped(surface:&mut Surface,rect:Rect,rgb:[u8;3],clip:Rect) {
+    fill_text_ink(surface,rect,0,Some(rgb),clip);
+}
+
+fn fill_text_ink(surface:&mut Surface,rect:Rect,tone:u8,colour:Option<[u8;3]>,clip:Rect) {
+    let Some(rect)=rect.intersection(clip) else {return};
+    if let Some(rgb)=colour {
+        for y in rect.y..rect.y.saturating_add(rect.height) {
+            for x in rect.x..rect.x.saturating_add(rect.width) {
+                surface.blend_colour(x,y,rgb,255);
+            }
+        }
+    } else {surface.fill_rect(rect,tone);}
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_fallback_ink(
     surface: &mut Surface,
     text: &str,
     mut x: i32,
     y: i32,
     size: FontSize,
     tone: u8,
+    colour: Option<[u8;3]>,
     clip: Rect,
 ) {
     let scale = size.scale();
@@ -16663,7 +16695,7 @@ fn draw_fallback_text(
                         height: scale,
                     };
                     if let Some(pixel) = pixel.intersection(clip) {
-                        surface.fill_rect(pixel, tone);
+                        fill_text_ink(surface,pixel,tone,colour,clip);
                     }
                 }
             }
@@ -24570,3 +24602,39 @@ mod figure_tests {
 #[cfg(test)]
 #[path = "colour_orientation_tests.rs"]
 mod colour_orientation_tests;
+
+#[cfg(test)]
+mod authored_rgb_text_tests {
+    use super::*;
+    #[test]
+    fn rich_text_rgb_covers_glyphs_background_and_underline_without_moving_layout() {
+        let draw=|coloured:bool| {
+            let screen=Screen::new(9,vec![Node::RichText {
+                id:NodeId(1),text:"Colour".into(),
+                spans:vec![RichTextSpan{start:0,end:6,presentation:TextPresentation {
+                    foreground:coloured.then_some([208,112,16]),
+                    background:coloured.then_some([210,240,250]),
+                    strong:true,emphasis:true,underline:true,..Default::default()
+                }}],links:Vec::new(),presentation:Default::default(),selection:None,formulae:Vec::new(),
+            }]);
+            let metrics=CLARA_BW_METRICS;
+            let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+            let mut surface=Surface::new(metrics.width as usize,metrics.height as usize);
+            render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+            (layout,surface)
+        };
+        let (layout,colour)=draw(true);
+        let (plain_layout,plain)=draw(false);
+        assert_eq!(layout.nodes.iter().map(|n|n.rect).collect::<Vec<_>>(),plain_layout.nodes.iter().map(|n|n.rect).collect::<Vec<_>>());
+        assert!(!plain.has_colour());
+        assert!(colour.has_colour());
+        assert!((0..colour.pixels.len()).any(|i|colour.rgb_at(i)==Some([208,112,16])));
+        assert!((0..colour.pixels.len()).any(|i|colour.rgb_at(i)==Some([210,240,250])));
+        if let Ok(path)=std::env::var("COBALT_NATIVE_RGB_UI_OUT") {
+            use std::io::Write;
+            let mut file=std::fs::File::create(path).unwrap();
+            write!(file,"P6\n{} {}\n255\n",CLARA_BW_METRICS.width,CLARA_BW_METRICS.height).unwrap();
+            for i in 0..colour.pixels.len(){file.write_all(&colour.rgb_at(i).unwrap()).unwrap();}
+        }
+    }
+}

@@ -478,3 +478,25 @@ mutation that fails. Engine: 1,406 passed, 0 failed, 18 ignored, 147 groups.
 Browser: 210 passed, 0 failed, 2 ignored. Clippy completed with existing warnings.
 Locked stripped static ARM remains 5,192,500 bytes. No new visual behavior,
 protocol, crates, unsafe code or allocator changes.
+
+
+### Versioned native RGB rich-text surface, November 24, 2026
+
+Optional authored foreground/background fields in native text presentation.
+Protocol 16 adds colour rich-text node tag 35; uncoloured tag 28 remains
+byte-identical. Versions 11-15 remain accepted. Colour encoding on an older
+version is refused, not silently downgraded. Mixed colour/style-only spans,
+foreground/background flags, invalid UTF-8 ranges, truncation and old-version
+refusal are tested. Native RGB glyph coverage, background and underline keep
+layout geometry unchanged. Both bitmap fallback and installed typefaces were
+rendered and visually inspected. Installed-font test: 13,175 non-grey pixels.
+Removing colour drawing makes the pixel regression fail. This is toolkit/wire
+support, not yet authored semantic browser text colour. No all-fonts claim.
+
+Browser 211/0/2 ignored; protocol 111/0; UI 289/0/2 ignored; SDK 166/0/2 ignored;
+simulator 108/0; runtime 156/0; frame host 7/0. Clippy completed with existing
+warnings. Rebuilt CLI/simulator Colour image journey passes, actual RGB capture
+inspected. ARM 5,194,412 bytes, delta 3,945,032 over hello, 1,297,848 bytes
+headroom under +5 MiB; stripped static EABI5 inspected. New runtime is required
+for protocol-16 applications. No protocol downgrade claim for new apps on old
+runtimes. No new crates, unsafe code or allocator changes.

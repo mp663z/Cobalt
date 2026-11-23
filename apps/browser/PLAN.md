@@ -404,3 +404,16 @@ This buffer is not yet installed in Gather/Inline: nested inline, code and
 link conversion still need end-to-end provenance. No native RGB span or wire
 support has been claimed. Integration must carry ranges with transformations,
 not reconstruct them by looking for matching strings after conversion.
+
+
+### Native RGB toolkit/wire increment
+
+Optional RGB foreground/background now draw through native TextPresentation.
+Colour rich text uses protocol 16 node tag 35; ordinary rich text still uses
+unchanged tag 28. Old-version colour encoding refuses, and runtime/simulator
+accept versions 11-15 plus 16. Installed-font and bitmap-fallback pixel checks
+pass without geometry changes. This does not yet map semantic browser text
+sources to these spans. Next increment is actual semantic provenance integration,
+not another renderer helper. Inline link hit targets remain intact; authored
+link underline colour still needs the end-to-end link span treatment. New apps
+must ship with the matching runtime, not silently target an old decoder.
