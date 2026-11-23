@@ -1082,6 +1082,16 @@ impl Converter<'_> {
             if fields.len() >= 64 {
                 break;
             }
+            // A disabled fieldset excludes its controls, except those in
+            // its first direct legend child. Do not visit later legends or
+            // nested fieldsets outside that exception.
+            if self.tag(node) == Some("fieldset") && self.attr(node,"disabled").is_some() {
+                if let Some(legend) = self.nodes[node].children.iter().copied()
+                    .find(|&child| self.tag(child) == Some("legend")) {
+                    stack.push(legend);
+                }
+                continue;
+            }
             if self.attr(node, "disabled").is_some()
                 || (node != handle && self.tag(node) == Some("form"))
             {

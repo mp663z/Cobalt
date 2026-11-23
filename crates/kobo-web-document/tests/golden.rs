@@ -327,3 +327,27 @@ fn disabled_option_groups_do_not_supply_select_choices() {
         matches!(&form.fields[0],Field::Select{options,chosen:Some(0),..} if options.len()==1 && options[0].value=="good")
     );
 }
+
+
+#[test]
+fn disabled_fieldset_keeps_only_controls_inside_its_first_legend() {
+    use kobo_web_document::{Block, Field};
+    let page = parse("<form><fieldset disabled><p>Caption</p><legend><input name=allowed value=yes><input disabled name=still_disabled></legend><input name=blocked><legend><input name=later></legend><fieldset><legend><input name=nested_blocked></legend></fieldset></fieldset><input name=outside value=yes></form>");
+    let form = page
+        .blocks
+        .iter()
+        .find_map(|b| match b {
+            Block::Form(f) => Some(f),
+            _ => None,
+        })
+        .unwrap();
+    let names: Vec<_> = form
+        .fields
+        .iter()
+        .filter_map(|f| match f {
+            Field::Text { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, vec!["allowed", "outside"]);
+}

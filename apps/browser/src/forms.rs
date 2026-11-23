@@ -532,4 +532,15 @@ mod tests {
             "https://fixtures.invalid/form?choice=allowed"
         );
     }
+
+    #[test]
+    fn get_form_serializes_first_legend_exception_but_not_disabled_group() {
+        let url = kobo_web_document::Url::parse("https://fixtures.invalid/form").unwrap();
+        let document = kobo_web_document::parse_document(b"<form><fieldset disabled><legend><input name=allowed value=yes></legend><input name=blocked value=no><legend><input name=later value=no></legend></fieldset><input name=outside value=yes></form>",&url,&kobo_web_document::Limits::DEFAULT);
+        let found = forms(&document.blocks);
+        assert_eq!(
+            body(found[0], None).as_deref(),
+            Some("allowed=yes&outside=yes")
+        );
+    }
 }
