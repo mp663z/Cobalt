@@ -251,3 +251,30 @@ remaining under the +5 MiB allowance. All outputs inspected as stripped,
 static ARM EABI5. A fresh combined SDK/UI/layout/profile/simulator suite also
 passed 652 tests with 4 ignored across 10 test-result groups. This does not
 qualify hardware RSS, latency or panel behavior.
+
+
+### Native PNG/JPEG data images, November 24, 2026
+
+Measured source: `ce37735d69d1f22ef84f5f17d7cff34ccbb8bb45`.
+The same pinned locked ARM release build includes native data-image decoding
+and the linked-image alt-underline correction.
+
+| Binary | Bytes | Over simple app |
+| --- | ---: | ---: |
+| kobo-browser | 5,183,492 | +3,934,112 |
+| kobo-hello | 1,249,380 | baseline |
+| kobod | 5,087,012 | |
+
+This is 12,016 browser bytes above the last documented checkpoint, leaving
+1,308,768 bytes under the +5 MiB allowance. All three outputs inspected as
+stripped, static ARM EABI5. Browser tests pass 190 with 2 ignored. Aggregate
+pixel exhaustion, oversized headers, baseline/progressive/CMYK/greyscale/EXIF
+JPEG decoding, and malformed-payload fallback have app-level coverage. The
+aggregate regression was also checked against a deliberate reset-per-image
+mutation: it fails there and passes after restoration. The existing 4 MiB
+compressed and 1,048,576 decoded-pixel page limits remain unchanged.
+
+These are host tests and a cross-build. No physical-reader RSS, latency or
+panel behavior is established. Image geometry remains a counted marker-based
+approximation; external images and SVG are unavailable. The earlier live
+simulator image/link journey is greyscale, not evidence of colour-panel fidelity.
