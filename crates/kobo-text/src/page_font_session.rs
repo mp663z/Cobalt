@@ -191,16 +191,36 @@ impl PageFontSession {
         }
     }
 
-    /// Natural strut, enlarged to accommodate every installed fallback face.
+    /// Natural strut of the primary face only, independent of installed fallbacks.
     #[must_use]
     pub fn line_metrics(&self, px: u32, bold: bool, italic: bool) -> Option<(u32, i32)> {
+        Self::metrics_for_fonts(px, std::iter::once(self.primary(bold, italic)))
+    }
+
+    /// Strut for a primary face and the fallback actually used by this character.
+    /// The painter takes maxima only over the characters on each laid-out line.
+    #[must_use]
+    pub fn character_line_metrics(
+        &self,
+        ch: char,
+        px: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<(u32, i32)> {
+        Self::metrics_for_fonts(
+            px,
+            std::iter::once(self.primary(bold, italic)).chain(self.face(ch, bold, italic)),
+        )
+    }
+
+    fn metrics_for_fonts<'a>(px: u32, fonts: impl Iterator<Item = &'a Font>) -> Option<(u32, i32)> {
         if !(1..=MAX_SIZE).contains(&px) {
             return None;
         }
         let mut ascent = 0.0_f32;
         let mut descent = 0.0_f32;
         let mut gap = 0.0_f32;
-        for font in std::iter::once(self.primary(bold, italic)).chain(self.fallback.iter()) {
+        for font in fonts {
             let metrics = font.horizontal_line_metrics(px as f32)?;
             ascent = ascent.max(metrics.ascent);
             descent = descent.max(-metrics.descent);
@@ -495,6 +515,28 @@ mod tests {
         let regular = session.shape("हिन्दी", 24, false, false).unwrap();
         let bold = session.shape("हिन्दी", 24, true, false).unwrap();
         assert_ne!(regular[0].glyph.coverage, bold[0].glyph.coverage);
+    }
+
+    #[test]
+    fn unused_fallback_never_inflates_latin_line_metrics() {
+        let plain = PageFontSession::from_bytes(crate::TEXT_FONT, crate::DISPLAY_FONT).unwrap();
+        let bundled = PageFontSession::bundled().unwrap();
+        assert_eq!(
+            plain.line_metrics(24, false, false),
+            bundled.line_metrics(24, false, false)
+        );
+        assert_eq!(
+            plain.character_line_metrics('A', 24, false, false),
+            bundled.character_line_metrics('A', 24, false, false)
+        );
+        let latin = bundled
+            .character_line_metrics('A', 24, false, false)
+            .unwrap();
+        let indic = bundled
+            .character_line_metrics('ह', 24, false, false)
+            .unwrap();
+        assert!(indic.0 >= latin.0);
+        assert_ne!(indic, latin, "used Devanagari may enlarge only its line");
     }
 
     #[test]

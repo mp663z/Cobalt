@@ -124,14 +124,8 @@ pub(crate) fn paint(
     for g in &lines.glyphs {
         let size = size_of(g.leaf);
         let (height, baseline) = font
-            .normal_line_metrics(size, g.bold)
+            .page_character_metrics(g.character, size, g.bold, runs[g.leaf].4)
             .map(|m| (m.height, m.baseline))
-            .or_else(|| {
-                Some((
-                    font.line_height(size, g.bold)?,
-                    font.baseline_offset(size, g.bold)?,
-                ))
-            })
             .unwrap_or((size + 4, i32::try_from(size).unwrap_or(16)));
         let baseline = u32::try_from(baseline).unwrap_or(size).min(height);
         let strut = &mut struts[g.line as usize];

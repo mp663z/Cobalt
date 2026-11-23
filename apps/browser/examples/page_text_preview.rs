@@ -11,6 +11,16 @@ use kobo_web_document::{
 use std::io::Write;
 struct Face(PageFontSession);
 impl FontProvider for Face {
+    fn page_character_metrics(
+        &self,
+        ch: char,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<kobo_web_document::css_text_page::NormalLineMetrics> {
+        let (height, baseline) = self.0.character_line_metrics(ch, size, bold, italic)?;
+        Some(kobo_web_document::css_text_page::NormalLineMetrics { height, baseline })
+    }
     fn page_shape(
         &self,
         text: &str,
@@ -141,6 +151,40 @@ mod tests {
         assert_eq!(clusters.last().unwrap().end, text.len());
         assert!(clusters.len() < text.chars().count());
         assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
+    }
+
+    #[test]
+    fn latin_lines_ignore_unused_fallback_and_mixed_line_grows_once() {
+        fn heights(face: &Face, html: &str) -> Vec<i32> {
+            let styled =
+                kobo_web_document::parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
+            let (commands, _, _) =
+                paint_basic_page(&BoxTree::from_style(&styled), 700, 500, face).unwrap();
+            commands
+                .into_iter()
+                .filter_map(|c| {
+                    if let Command::GlyphRun { bounds, .. } = c {
+                        Some(bounds.y)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+        let plain = Face(
+            PageFontSession::from_bytes(kobo_text::TEXT_FONT, kobo_text::DISPLAY_FONT).unwrap(),
+        );
+        let bundled = Face(PageFontSession::bundled().unwrap());
+        let latin="<!doctype html><style>p{margin:0;font-size:24px}</style><p>Latin first</p><p>Latin second</p><p>Latin third</p>";
+        assert_eq!(heights(&plain, latin), heights(&bundled, latin));
+        let mixed="<!doctype html><style>p{margin:0;font-size:24px}</style><p>Latin first</p><p>हिन्दी</p><p>Latin third</p><p>Latin fourth</p>";
+        let ys = heights(&bundled, mixed);
+        let base = heights(&bundled, latin);
+        assert_eq!(
+            ys[3] - ys[2],
+            base[2] - base[1],
+            "only the used-script line changes the strut"
+        );
     }
 
     #[test]

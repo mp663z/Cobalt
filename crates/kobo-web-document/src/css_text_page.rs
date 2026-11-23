@@ -70,6 +70,10 @@ pub trait FontProvider {
     fn face_catalog(&self) -> Option<&dyn crate::font_family::FaceCoverage> {
         None
     }
+    /// Page-view strut for this character's actually selected face.
+    fn page_character_metrics(&self, _character: char, size: u32, bold: bool, _italic: bool) -> Option<NormalLineMetrics> {
+        self.normal_line_metrics(size,bold).or_else(|| Some(NormalLineMetrics { height:self.line_height(size,bold)?, baseline:self.baseline_offset(size,bold)? }))
+    }
     /// Optional OpenType clusters for Page view. Offsets are UTF-8 byte boundaries.
     /// An absent shaper keeps scalar layout; exact painters never consult this hook.
     fn page_shape(&self, _text: &str, _size: u32, _bold: bool, _italic: bool) -> Option<Vec<PageCluster>> {
