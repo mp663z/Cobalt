@@ -709,8 +709,9 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 
 /// BASIC-mode intake normalization: rewrite table-structure tags
 /// (`table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`, `caption`,
-/// `colgroup`, `col`) to `div` so their content flows as blocks, and
-/// `<img>` tags to their `alt` text (empty when no alt). The engine has no
+/// `colgroup`, `col`) to `div` so their content flows as blocks,
+/// `<img>` tags to their `alt` text (empty when no alt), and
+/// presentational `bgcolor` attributes to an inline style background. The engine has no
 /// table display and no replaced content; without this the content
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
@@ -722,26 +723,28 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(input.len());
     let mut i = 0usize;
     while i < input.len() {
-        if input[i] == b'<' {
-            // <img ...> -> escaped alt text (or nothing when no alt).
-            if input.len() - i >= 4
-                && input[i + 1..].starts_with(b"img")
-                && matches!(input.get(i + 3), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
-            {
-                let mut j = i + 4;
-                let mut quote: Option<u8> = None;
-                while j < input.len() {
-                    match (quote, input[j]) {
-                        (None, b'"') => quote = Some(b'"'),
-                        (None, b'\'') => quote = Some(b'\''),
-                        (Some(q), c) if c == q => quote = None,
-                        (None, b'>') => break,
-                        _ => {}
-                    }
-                    j += 1;
+        if input[i] == b'<' && i + 1 < input.len() && input[i + 1] != b'!' {
+            // Find the tag end (quote-aware).
+            let mut j = i + 1;
+            let mut quote: Option<u8> = None;
+            while j < input.len() {
+                match (quote, input[j]) {
+                    (None, b'"') => quote = Some(b'"'),
+                    (None, b'\'') => quote = Some(b'\''),
+                    (Some(q), c) if c == q => quote = None,
+                    (None, b'>') => break,
+                    _ => {}
                 }
-                let tag = &input[i..j.min(input.len())];
-                if let Some(alt) = extract_alt(tag) {
+                j += 1;
+            }
+            let tag_end = j.min(input.len());
+            let tag = &input[i..tag_end];
+            // <img ...> -> escaped alt text (or nothing when no alt).
+            if tag.len() >= 4
+                && tag[1..].starts_with(b"img")
+                && matches!(tag.get(3), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
+            {
+                if let Some(alt) = extract_attr(tag, b"alt") {
                     for &b in alt {
                         match b {
                             b'&' => out.extend_from_slice(b"&amp;"),
@@ -751,34 +754,50 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
                         }
                     }
                 }
-                i = j;
+                i = tag_end;
                 continue;
             }
-            // table-structure tags -> div.
-            let mut j = i + 1;
-            if j < input.len() && input[j] == b'/' {
-                j += 1;
+            // Tag name span (after optional '/').
+            let mut k = i + 1;
+            if k < tag_end && input[k] == b'/' {
+                k += 1;
             }
-            let start = j;
-            while j < input.len() && input[j].is_ascii_alphabetic() {
-                j += 1;
+            let name_start = k;
+            while k < tag_end && input[k].is_ascii_alphabetic() {
+                k += 1;
             }
-            let name = &input[start..j];
-            let bounded = j >= input.len()
-                || matches!(input[j], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
-            let mut replaced = false;
-            if bounded && !name.is_empty() {
-                let lower: Vec<u8> = name.iter().map(|b| b.to_ascii_lowercase()).collect();
-                if NAMES.contains(&lower.as_slice()) {
-                    out.extend_from_slice(&input[i..start]);
+            let name = &input[name_start..k];
+            let bounded = k >= tag_end
+                || matches!(input[k], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/');
+            let lower: Vec<u8> = name.iter().map(|b| b.to_ascii_lowercase()).collect();
+            let is_table_tag = bounded && !name.is_empty() && NAMES.contains(&lower.as_slice());
+            // Presentational bgcolor -> style="background-color:..." (only
+            // #hex and plain color names, and only when the tag has no
+            // style attribute already).
+            let bg = extract_attr(tag, b"bgcolor").filter(|v| {
+                !v.is_empty()
+                    && v.iter().all(|b| b.is_ascii_alphanumeric() || *b == b'#' || *b == b'%')
+                    && extract_attr(tag, b"style").is_none()
+            });
+            if is_table_tag || bg.is_some() {
+                out.extend_from_slice(&input[i..name_start]);
+                if is_table_tag {
                     out.extend_from_slice(b"div");
-                    replaced = true;
+                } else {
+                    out.extend_from_slice(name);
                 }
-            }
-            if replaced {
-                i = j;
+                out.extend_from_slice(&input[k..tag_end]);
+                if let Some(v) = bg {
+                    out.extend_from_slice(b" style=\"background-color:");
+                    out.extend_from_slice(v);
+                    out.extend_from_slice(b"\"");
+                }
+                i = tag_end;
                 continue;
             }
+            out.extend_from_slice(tag);
+            i = tag_end;
+            continue;
         }
         out.push(input[i]);
         i += 1;
@@ -786,20 +805,24 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Raw value of the first `alt` attribute in a tag, if present and non-empty.
-fn extract_alt(tag: &[u8]) -> Option<&[u8]> {
+/// Raw value of the first occurrence of an attribute in a tag's bytes,
+/// if present and non-empty. Case-sensitive on the lowercase attribute
+/// name; callers lowercase the tag first if they need insensitivity.
+fn extract_attr<'a>(tag: &'a [u8], attr: &[u8]) -> Option<&'a [u8]> {
+    let n = attr.len();
     let mut i = 0usize;
-    while i + 4 < tag.len() {
-        if (tag[i] == b' ' || tag[i] == b'\t' || tag[i] == b'\n')
-            && tag[i + 1..].starts_with(b"alt")
-            && tag.get(i + 4) == Some(&b'=')
+    while i + n + 1 < tag.len() {
+        if matches!(tag[i], b' ' | b'\t' | b'\n' | b'\r')
+            && tag[i + 1..].starts_with(attr)
+            && tag.get(i + 1 + n) == Some(&b'=')
         {
-            let mut j = i + 5;
+            let mut j = i + 2 + n;
             if j >= tag.len() {
                 return None;
             }
             let q = tag[j];
             if q != b'"' && q != b'\'' {
+                i += 1;
                 continue;
             }
             j += 1;
