@@ -1137,8 +1137,7 @@ impl HeightPass {
                         } else {
                             declared
                         }
-                    })
-                }
+                    }),
                 BoxKind::AnonymousBlock => None,
                 BoxKind::InlineBlock | BoxKind::Inline | BoxKind::Text => {
                     if node.kind == BoxKind::InlineBlock {
