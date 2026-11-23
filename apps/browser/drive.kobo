@@ -43,8 +43,8 @@ clean
 shot browser-links-page-2
 tap-id return
 tap-id back
-tap-id address
-expect An address, or words
+tap-id edit-address
+expect browse.invalid/|
 clean
 shot browser-address
 tap-id kb.cancel

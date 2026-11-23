@@ -1670,11 +1670,15 @@ impl Browser {
             let builder = page_screen_with_address(
                 &loaded.title,
                 candidate,
-                0,
-                None,
-                None,
+                loaded.page,
+                loaded.paginator.done().then(|| loaded.paginator.pages().len()),
+                if loaded.full.is_some() {
+                    Some(true)
+                } else {
+                    loaded.document.has_reader_view().then_some(false)
+                },
                 metrics,
-                Some(self.address.text()),
+                Some(&self.displayed_address()),
             )
             .top_bar("Browse")
             .top_bar_glyph("kb.cancel", "Close keyboard", Glyph::Close);

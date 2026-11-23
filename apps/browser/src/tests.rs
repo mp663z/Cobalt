@@ -1978,3 +1978,16 @@ fn address_cursor_inserts_and_deletes_in_the_middle_without_navigating() {
     runner.action(action_id("kb.cancel"));
     assert!(!runner.app().address.is_open());
 }
+
+
+#[test]
+fn native_keyboard_measurement_includes_visible_page_footer() {
+    for scale in [TextScale::Default,TextScale::Large,TextScale::ExtraLarge] {
+        let mut runner = runner(scale);
+        runner.action(action_id("edit-address"));
+        let metrics = runner.context().metrics();
+        let screen = runner.app().screen(&metrics).build();
+        assert!(kobo_web_layout::fits(&screen,&metrics),"{scale:?}");
+        assert!(!runner.app().keyboard_pieces(&metrics).is_empty());
+    }
+}
