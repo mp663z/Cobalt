@@ -54,7 +54,7 @@ fn main() {
     let mut sheets: Vec<Vec<u8>> = Vec::new();
     for i in 0..64 {
         match std::fs::read(format!("{sheet_dir}/sheet-{i}.css")) {
-            Ok(s) => { let (f, n) = kobo_web_document::basic_page::fold_state_pseudos_css(&s); if n > 0 { eprintln!("sheet-{i}: state-pseudo-folds={n}"); } sheets.push(f) },
+            Ok(s) => { let (f, np, npt) = kobo_web_document::basic_page::normalize_css_for_basic(&s); if np + npt > 0 { eprintln!("sheet-{i}: state-pseudo-folds={np} pt-folds={npt}"); } sheets.push(f) },
             Err(_) => break,
         }
     }

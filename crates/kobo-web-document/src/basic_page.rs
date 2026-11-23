@@ -260,12 +260,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// color; the caller maps glyphs back to runs to paint link colors.
     /// Collect runs from a pure-inline child list (Text | Inline only).
     /// `block_color` is the fallback color of the owning block.
-    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<(String, bool, u32)>, bool), &'static str> {
+    /// Runs as (text, bold, color, font_size). A text box's own size,
+    /// falling back to its ancestors; 0 is impossible after the fallback.
+    fn collect_runs_of(&mut self, children: &[usize], block_color: u32) -> Result<(Vec<(String, bool, u32, u32)>, bool), &'static str> {
         if children.is_empty() {
             return Err("empty");
         }
         let mut mixed_color = false;
-        let mut runs: Vec<(String, bool, u32)> = Vec::new();
+        let mut runs: Vec<(String, bool, u32, u32)> = Vec::new();
         let mut stack: Vec<usize> = children.iter().rev().copied().collect();
         let mut visited = 0usize;
         while let Some(index) = stack.pop() {
@@ -280,7 +282,8 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             match node.kind {
                 BoxKind::Text => {
                     let text = node.text.clone().ok_or("no-text")?;
-                    runs.push((text, node.style.font_weight == 700, node.style.color));
+                    let run_size = self.font_size(index);
+                    runs.push((text, node.style.font_weight == 700, node.style.color, run_size));
                 }
                 BoxKind::Inline => {
                     for &c in node.children.iter().rev() {
@@ -339,6 +342,22 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             self.stats.approx("font-size-fallback");
         }
         let (mut runs, mixed_color) = self.collect_runs_of(children, self.tree.boxes[index].style.color)?;
+        // Per-run font sizes: when every run resolves to one size that
+        // differs from the block's, the block is a same-size inline group
+        // (e.g. a 7pt subtext span inside a 10pt cell) — paint at the run
+        // size. Mixed sizes stay at the block size (baseline sharing is
+        // not modelled); both are counted.
+        {
+            let mut sizes = runs.iter().map(|r| r.3);
+            if let Some(first_size) = sizes.next() {
+                if sizes.all(|s| s == first_size) && first_size != size {
+                    size = first_size;
+                    self.stats.approx("run-size-uniform-override");
+                } else if runs.iter().any(|r| r.3 != size) {
+                    self.stats.approx("mixed-font-size-flattened");
+                }
+            }
+        }
         // Unordered-list marker approximation: a literal bullet glyph
         // prefixed to the item's first run (list-style-type is not read).
         if self.tree.boxes[index].kind == BoxKind::ListItem {
@@ -352,7 +371,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         let mut folded_any = false;
         let mut folded_runs: Vec<String> = Vec::with_capacity(runs.len());
-        for (text, _, _) in &runs {
+        for (text, _, _, _) in &runs {
             let f = fold_ascii(text).ok_or("non-ascii-text")?;
             if f != *text {
                 folded_any = true;
@@ -365,7 +384,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let run_refs: Vec<(&str, bool)> = folded_runs
             .iter()
             .zip(runs.iter())
-            .map(|(t, (_, b, _))| (t.as_str(), *b))
+            .map(|(t, (_, b, _, _))| (t.as_str(), *b))
             .collect();
         let lines: Lines = match place_runs_normal(&run_refs, width, |ch, bold| {
             self.font.advance(ch, size, bold)
@@ -380,7 +399,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let glyph_colors: Vec<u32> = if mixed_color {
             self.stats.approx("link-color-by-char-map");
             let mut stream: Vec<(char, u32)> = Vec::new();
-            for ((f, (_, _, c))) in folded_runs.iter().zip(runs.iter()) {
+            for ((f, (_, _, c, _))) in folded_runs.iter().zip(runs.iter()) {
                 for ch in f.chars() {
                     stream.push((ch, *c));
                 }
@@ -806,16 +825,21 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
     // matcher cannot match `a:link` / `a:visited`, so author colors keyed
     // on them would lose to the UA link color. A static render has no
     // link state; folding both to the bare element keeps author intent.
-    // BASIC-mode approximation; the fold count is reported by the caller.
-    let (folded, _) = fold_state_pseudos_in_style_tags(&out);
+    // Also folds `pt` lengths to whole `px` (1pt = 4/3px, rounded): the
+    // engine parses only px/%/rem/em and drops pt declarations, losing
+    // author font sizes. Both are BASIC-mode intake approximations.
+    let (folded, _, _) = normalize_css_in_style_tags(&out);
     folded
 }
 
-/// Fold `:link` and `:visited` away inside <style>…</style> regions.
-/// Returns the rewritten bytes and the fold count.
-pub fn fold_state_pseudos_in_style_tags(input: &[u8]) -> (Vec<u8>, usize) {
+/// Intake CSS normalization inside <style>…</style> regions: folds
+/// `:link`/`:visited` away (state-free matcher) and rewrites `pt` lengths
+/// to whole `px` (1pt = 4/3px, rounded to nearest). Returns the rewritten
+/// bytes and (state-pseudo folds, pt folds).
+pub fn normalize_css_in_style_tags(input: &[u8]) -> (Vec<u8>, usize, usize) {
     let mut out = Vec::with_capacity(input.len());
-    let mut folds = 0usize;
+    let mut pseudo_folds = 0usize;
+    let mut pt_folds = 0usize;
     let mut i = 0usize;
     let mut in_style = false;
     while i < input.len() {
@@ -824,43 +848,78 @@ pub fn fold_state_pseudos_in_style_tags(input: &[u8]) -> (Vec<u8>, usize) {
         } else if in_style && input[i] == b'<' && input[i + 1..].starts_with(b"/style") {
             in_style = false;
         }
-        if in_style && input[i] == b':' && input[i + 1..].starts_with(b"link") {
-            folds += 1;
-            i += 5;
-            continue;
-        }
-        if in_style && input[i] == b':' && input[i + 1..].starts_with(b"visited") {
-            folds += 1;
-            i += 8;
-            continue;
+        if in_style {
+            if input[i] == b':' && input[i + 1..].starts_with(b"link") {
+                pseudo_folds += 1;
+                i += 5;
+                continue;
+            }
+            if input[i] == b':' && input[i + 1..].starts_with(b"visited") {
+                pseudo_folds += 1;
+                i += 8;
+                continue;
+            }
+            if let Some((px, len)) = pt_length(&input[i..]) {
+                out.extend_from_slice(px.as_bytes());
+                pt_folds += 1;
+                i += len;
+                continue;
+            }
         }
         out.push(input[i]);
         i += 1;
     }
-    (out, folds)
+    (out, pseudo_folds, pt_folds)
 }
 
-/// Fold `:link` and `:visited` away in a whole stylesheet (for linked
-/// sheets supplied by the host). Same static-render approximation.
-pub fn fold_state_pseudos_css(input: &[u8]) -> (Vec<u8>, usize) {
+/// Same intake CSS normalization for a whole host-supplied stylesheet.
+pub fn normalize_css_for_basic(input: &[u8]) -> (Vec<u8>, usize, usize) {
     let mut out = Vec::with_capacity(input.len());
-    let mut folds = 0usize;
+    let mut pseudo_folds = 0usize;
+    let mut pt_folds = 0usize;
     let mut i = 0usize;
     while i < input.len() {
         if input[i] == b':' && input[i + 1..].starts_with(b"link") {
-            folds += 1;
+            pseudo_folds += 1;
             i += 5;
             continue;
         }
         if input[i] == b':' && input[i + 1..].starts_with(b"visited") {
-            folds += 1;
+            pseudo_folds += 1;
             i += 8;
+            continue;
+        }
+        if let Some((px, len)) = pt_length(&input[i..]) {
+            out.extend_from_slice(px.as_bytes());
+            pt_folds += 1;
+            i += len;
             continue;
         }
         out.push(input[i]);
         i += 1;
     }
-    (out, folds)
+    (out, pseudo_folds, pt_folds)
+}
+
+/// At a digit run immediately followed by `pt` (not `ptx` etc.), returns
+/// the whole-pixel `px` string (1pt = 4/3px, rounded) and the byte length
+/// consumed. Decimal points are left alone (a fractional pt folds only
+/// its integer part, which would be wrong — refuse instead).
+fn pt_length(input: &[u8]) -> Option<(String, usize)> {
+    let mut n = 0usize;
+    while n < input.len() && input[n].is_ascii_digit() {
+        n += 1;
+    }
+    if n == 0 || !input[n..].starts_with(b"pt") {
+        return None;
+    }
+    let next = input.get(n + 2);
+    if next.is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'.') {
+        return None;
+    }
+    let value: u64 = std::str::from_utf8(&input[..n]).ok()?.parse().ok()?;
+    let px = (value * 4 + 1) / 3;
+    Some((format!("{px}px"), n + 2))
 }
 
 /// Raw value of the first occurrence of an attribute in a tag's bytes,
