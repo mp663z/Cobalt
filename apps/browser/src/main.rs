@@ -527,6 +527,9 @@ impl Browser {
         bytes: &[u8],
         note: Option<String>,
     ) {
+        // Each arriving native document starts at actual size. Painted zoom is
+        // an explicit page operation, never a label carried onto native prose.
+        self.zoom = 100;
         for key in self.pictures.clear(context) {
             self.saved.stop_reading(&key);
         }
@@ -1312,6 +1315,9 @@ impl Browser {
                         )
                     });
                 loaded.paint_refused = loaded.painted.is_none();
+                if loaded.painted.is_none() {
+                    self.zoom = 100;
+                }
             }
         } else {
             if action == action_id("bookmarks") {

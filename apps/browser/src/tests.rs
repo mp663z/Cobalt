@@ -1869,7 +1869,13 @@ fn bottom_toolbar_menu_home_and_url_keys_work() {
     assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
     runner.action(action_id("zoom-less"));
     assert_eq!(runner.app().zoom, 100);
+    runner.action(action_id("zoom-more"));
     runner.action(action_id("reload"));
+    assert_eq!(
+        runner.app().zoom,
+        100,
+        "native reload must not retain a painted zoom label"
+    );
     assert_eq!(
         runner.app().loaded.as_ref().unwrap().url.to_string(),
         SAMPLES
