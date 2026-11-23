@@ -330,3 +330,23 @@ Browser suite: 197 passed, 0 failed, 2 ignored. Clippy completed with existing
 warnings. Locked ARM release browser: 5,189,612 bytes, +3,940,232 over hello,
 leaving 1,302,648 bytes below +5 MiB; stripped static ARM EABI5 inspected.
 The image support scope and physical-device measurement caveats are unchanged.
+
+
+### Native keyboard footer measurement, November 24, 2026
+
+Measured source: `800a2defc140630fc9f946951f58ceadbdb1846c`. Native inline URL-edit measurement now
+includes the same page footer, reader action and caret address as display.
+The older native drive, updated to the current edit-address action, exposed
+a renderer text-fit refusal; its measurement omitted the footer and admitted
+one extra prose piece. The regression fails before and passes after at
+Default, Large and ExtraLarge text sizes.
+
+Full browser: 198 passed, 0 failed, 2 ignored. Clippy completed with existing
+warnings. Native navigation/fragment/link-pagination/address-edit drive now
+passes on both Clara BW and Colour; keyboard screenshots were inspected.
+Page/link/page-turn/Reader and start/edit/zoom/menu/reload journeys also passed
+on both profiles before this native-only fix. These are simulator checks,
+not physical-panel qualification.
+
+Locked ARM release browser: 5,189,532 bytes, +3,940,152 over hello, leaving
+1,302,728 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
