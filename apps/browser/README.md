@@ -49,7 +49,11 @@ Links are listed under Navigate > Links for the painted screen only. The
 current SDK reports named actions, not coordinates inside pictures, so a
 painted link cannot yet be tapped directly. Form documents stay in the
 native reader, where controls work. Truncated or substantially skipped
-paint also keeps Reader. Page view is opt-in and is not a parity claim.
+paint also keeps Reader. Supported fresh pages on confirmed Colour panels
+open in Page view to preserve authored RGB. BW keeps its Reader-first default.
+Forms, saved-copy notices and restored/fragment positions retain native Reader
+for now; it does not preserve arbitrary authored CSS colours. This is not a
+claim that all CSS, fonts or image formats are supported.
 External images, SVG, external stylesheets, painted form controls, saved
 painted-page positions, and device memory measurements remain follow-up work.
 Data-image preparation caps each page at 4 MiB compressed bytes and 1,048,576
@@ -77,3 +81,10 @@ measurement paths reserve the address field before pagination or raster,
 so it cannot hide the last line. The keyboard edits the field inline, with caret movement and number/symbol
 layouts. No animation, script, or refresh timer was added. `drive-start.kobo` exercises
 the start field, samples, Page view's address field, and its editor.
+
+
+`drive-colour.kobo` captures authored heading/text/link colours and PNG images
+with `shot-colour` on a Colour profile. Ordinary `shot` is greyscale even on
+that profile. Colour captures are ideal RGB, not calibrated panel appearance.
+`drive-forms.kobo` covers explicit GET submit-button choices and POST's
+review-only refusal. Only the visible chosen GET button contributes its value.

@@ -382,3 +382,24 @@ Browser: 200 passed, 0 failed, 2 ignored. Clippy completed with existing
 warnings. Locked ARM browser: 5,190,372 bytes, +3,940,992 over hello,
 leaving 1,301,888 bytes under +5 MiB; stripped static ARM EABI5 inspected.
 This is semantic form coverage, not a new visual or hardware qualification.
+
+
+### Colour presentation and GET submitters, November 24, 2026
+
+Measured production: `aee2ff4b5` plus the preceding explicit-submitter change
+`13737bb7c`. Supported fresh Colour arrivals default to RGB Page view, while
+BW retains Reader-first behavior. Forms, saved-copy notices and restored or
+fragment positions retain native semantic Reader; arbitrary authored CSS
+colours are unavailable there. Existing RGB text/link/image publication was
+working; earlier ordinary simulator shots used the greyscale capture route.
+The new colour journey uses shot-colour. Inspected ideal RGB screenshot has
+157,121 non-grey pixels, including red heading, blue text, green link and
+four-colour PNG. The equivalent BW image has zero non-grey pixels.
+
+Explicit visible native GET submitters now serialize only the selected button
+value. Offscreen actions are refused; POST remains review-only, never sent.
+Fail-before/pass-after regression, offscreen/POST coverage and the local
+form drive pass. Full browser: 204 passed, 0 failed, 2 ignored. Clippy completed
+with existing warnings. Locked ARM browser: 5,192,076 bytes, +3,942,696 over
+hello, leaving 1,300,184 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
+No hardware colour calibration, RSS or latency is established.
