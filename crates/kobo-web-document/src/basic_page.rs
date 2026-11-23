@@ -22,7 +22,7 @@
 //! display lists (e.g. per strip) for rasterization. `output_truncated` is
 //! set only when the visit cap stops the walk.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::box_tree::{BoxKind, BoxTree, WidthPass};
 use crate::computed_style::{Length, Margin};
@@ -735,7 +735,7 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
 /// render made from normalized input.
-pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
+fn normalize_tables_and_presentational(input: &[u8]) -> Vec<u8> {
     const NAMES: [&[u8]; 10] = [
         b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
     ];
@@ -821,15 +821,548 @@ pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
         out.push(input[i]);
         i += 1;
     }
-    // State-pseudo fold inside <style> regions: the engine's state-free
-    // matcher cannot match `a:link` / `a:visited`, so author colors keyed
-    // on them would lose to the UA link color. A static render has no
-    // link state; folding both to the bare element keeps author intent.
-    // Also folds `pt` lengths to whole `px` (1pt = 4/3px, rounded): the
-    // engine parses only px/%/rem/em and drops pt declarations, losing
-    // author font sizes. Both are BASIC-mode intake approximations.
+    out
+}
+
+/// Full basic-mode intake normalization: table/presentational rewrite,
+/// then CSS folds inside <style> regions (`:link`/`:visited` fold for the
+/// state-free matcher; `pt` to whole `px`, 1pt = 4/3px rounded, since the
+/// engine parses only px/%/rem/em), then the data-sheet rule prefilter.
+/// All are BASIC-mode intake approximations.
+pub fn normalize_for_basic(input: &[u8]) -> Vec<u8> {
+    normalize_for_basic_stats(input).0
+}
+
+/// [`normalize_for_basic`] with the prefilter counts exposed for the
+/// harness census line.
+pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
+    let out = normalize_tables_and_presentational(input);
     let (folded, _, _) = normalize_css_in_style_tags(&out);
-    folded
+    prefilter_data_sheets_for_basic(&folded)
+}
+
+/// Counts from [`prefilter_data_sheets_for_basic`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PrefilterStats {
+    pub sheets_touched: usize,
+    pub rules_kept: usize,
+    pub rules_dropped: usize,
+}
+
+/// Document key census for the prefilter: tag names (lowercased), class
+/// tokens and ids exactly as written. The scan only ever ADDS keys
+/// (script/style text included), so a census error biases toward keeping
+/// a rule, never toward a wrong drop.
+struct Census {
+    tags: BTreeSet<Vec<u8>>,
+    classes: BTreeSet<Vec<u8>>,
+    ids: BTreeSet<Vec<u8>>,
+}
+
+fn census_of(html: &[u8]) -> Census {
+    let mut c = Census { tags: BTreeSet::new(), classes: BTreeSet::new(), ids: BTreeSet::new() };
+    let mut i = 0usize;
+    while i < html.len() {
+        if html[i] == b'<' && i + 1 < html.len() {
+            if html[i + 1..].starts_with(b"!--") {
+                // comment: skip to -->
+                let mut j = i + 4;
+                while j + 2 < html.len() && !html[j..].starts_with(b"-->") {
+                    j += 1;
+                }
+                i = (j + 3).min(html.len());
+                continue;
+            }
+            if html[i + 1].is_ascii_alphabetic() {
+                let mut j = i + 1;
+                while j < html.len() && html[j].is_ascii_alphanumeric() {
+                    j += 1;
+                }
+                let tag: Vec<u8> = html[i + 1..j].iter().map(|b| b.to_ascii_lowercase()).collect();
+                if !tag.is_empty() {
+                    c.tags.insert(tag);
+                }
+                // attributes until '>' quote-aware
+                let mut k = j;
+                let mut quote: Option<u8> = None;
+                while k < html.len() {
+                    match (quote, html[k]) {
+                        (None, b'"') => quote = Some(b'"'),
+                        (None, b'\'') => quote = Some(b'\''),
+                        (Some(q), ch) if ch == q => quote = None,
+                        (None, b'>') => break,
+                        _ => {}
+                    }
+                    k += 1;
+                }
+                let span = &html[j..k.min(html.len())];
+                collect_attr_tokens(span, b"class", &mut c.classes);
+                collect_attr_tokens(span, b"id", &mut c.ids);
+                i = k;
+            }
+        }
+        i += 1;
+    }
+    c
+}
+
+/// Collect quoted attribute values (class splits on whitespace, id whole).
+fn collect_attr_tokens(span: &[u8], attr: &[u8], set: &mut BTreeSet<Vec<u8>>) {
+    let n = attr.len();
+    let mut i = 0usize;
+    while i + n + 2 < span.len() {
+        let boundary = i == 0 || matches!(span[i - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/');
+        if boundary
+            && span[i..].starts_with(attr)
+            && span[i + n] == b'='
+            && matches!(span[i + n + 1], b'"' | b'\'')
+        {
+            let q = span[i + n + 1];
+            let mut j = i + n + 2;
+            while j < span.len() && span[j] != q {
+                j += 1;
+            }
+            let value = &span[i + n + 2..j];
+            if attr == b"class" {
+                for tok in value.split(|b| b.is_ascii_whitespace()) {
+                    if !tok.is_empty() {
+                        set.insert(tok.to_vec());
+                    }
+                }
+            } else if !value.is_empty() {
+                set.insert(value.to_vec());
+            }
+            i = j;
+        }
+        i += 1;
+    }
+}
+
+/// Prefilter `data:text/css;base64,` sheets embedded in the document:
+/// decode, drop every rule whose comma-list selectors ALL carry a
+/// rightmost key (tag/class/id) provably absent from the document census,
+/// re-encode and splice back. Conservative: any selector part whose key
+/// cannot be extracted cleanly keeps the whole rule. Cuts the pinned
+/// match-work budget's rule list without touching the engine.
+/// BASIC-mode intake approximation; drops are counted.
+pub fn prefilter_data_sheets_for_basic(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
+    let census = census_of(input);
+    let mut out = Vec::with_capacity(input.len());
+    let mut stats = PrefilterStats::default();
+    let mut i = 0usize;
+    const MARK: &[u8] = b"data:text/css";
+    while i < input.len() {
+        if input[i] == b'd'
+            && input[i..].len() >= MARK.len()
+            && input[i..i + MARK.len()].eq_ignore_ascii_case(MARK)
+        {
+            // header until ',' (bounded: no quote allowed inside)
+            let mut j = i + MARK.len();
+            while j < input.len() && input[j] != b',' && input[j] != b'"' && input[j] != b'\'' {
+                j += 1;
+            }
+            if j < input.len()
+                && input[j] == b','
+                && input[i + MARK.len()..j]
+                    .windows(6)
+                    .any(|w| w.eq_ignore_ascii_case(b"base64"))
+            {
+                let mut k = j + 1;
+                while k < input.len()
+                    && matches!(input[k], b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/' | b'=')
+                {
+                    k += 1;
+                }
+                let payload = &input[j + 1..k];
+                if let Some(css) = b64_decode(payload) {
+                    let (filtered, kept, dropped) = prefilter_css(&css, &census);
+                    stats.rules_kept += kept;
+                    stats.rules_dropped += dropped;
+                    if dropped > 0 {
+                        stats.sheets_touched += 1;
+                        out.extend_from_slice(&input[i..j + 1]);
+                        out.extend_from_slice(&b64_encode(&filtered));
+                        i = k;
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push(input[i]);
+        i += 1;
+    }
+    (out, stats)
+}
+
+/// Filter one stylesheet: drop provably unmatchable plain rules, recurse
+/// into @media/@supports/@layer, copy everything else verbatim
+/// (comments, @keyframes, @font-face, strings all preserved).
+fn prefilter_css(css: &[u8], census: &Census) -> (Vec<u8>, usize, usize) {
+    let mut out = Vec::with_capacity(css.len());
+    let (mut kept, mut dropped) = (0usize, 0usize);
+    let mut i = 0usize;
+    while i < css.len() {
+        // comments and strings pass through
+        if css[i..].starts_with(b"/*") {
+            let mut j = i + 2;
+            while j + 1 < css.len() && !css[j..].starts_with(b"*/") {
+                j += 1;
+            }
+            let end = (j + 2).min(css.len());
+            out.extend_from_slice(&css[i..end]);
+            i = end;
+            continue;
+        }
+        if css[i] == b'"' || css[i] == b'\'' {
+            let q = css[i];
+            let mut j = i + 1;
+            while j < css.len() && css[j] != q && css[j] != b'\n' {
+                if css[j] == b'\\' {
+                    j += 1;
+                }
+                j += 1;
+            }
+            let end = (j + 1).min(css.len());
+            out.extend_from_slice(&css[i..end]);
+            i = end;
+            continue;
+        }
+        // read a prelude to the next top-level '{' (tracking strings/comments/parens)
+        let mut j = i;
+        let mut parens = 0i32;
+        let mut found = false;
+        while j < css.len() {
+            if css[j..].starts_with(b"/*") {
+                let mut m = j + 2;
+                while m + 1 < css.len() && !css[m..].starts_with(b"*/") {
+                    m += 1;
+                }
+                j = (m + 2).min(css.len());
+                continue;
+            }
+            match css[j] {
+                b'"' | b'\'' => {
+                    let q = css[j];
+                    j += 1;
+                    while j < css.len() && css[j] != q && css[j] != b'\n' {
+                        if css[j] == b'\\' {
+                            j += 1;
+                        }
+                        j += 1;
+                    }
+                }
+                b'(' => parens += 1,
+                b')' => parens -= 1,
+                b'{' if parens == 0 => {
+                    found = true;
+                    break;
+                }
+                b'}' if parens == 0 => {
+                    // stray close: copy through it
+                    j += 1;
+                    break;
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        if !found {
+            out.extend_from_slice(&css[i..]);
+            break;
+        }
+        let prelude = &css[i..j];
+        // find the block end (matching '}')
+        let mut depth = 1i32;
+        let mut e = j + 1;
+        while e < css.len() && depth > 0 {
+            if css[e..].starts_with(b"/*") {
+                let mut m = e + 2;
+                while m + 1 < css.len() && !css[m..].starts_with(b"*/") {
+                    m += 1;
+                }
+                e = (m + 2).min(css.len());
+                continue;
+            }
+            match css[e] {
+                b'"' | b'\'' => {
+                    let q = css[e];
+                    e += 1;
+                    while e < css.len() && css[e] != q && css[e] != b'\n' {
+                        if css[e] == b'\\' {
+                            e += 1;
+                        }
+                        e += 1;
+                    }
+                }
+                b'{' => depth += 1,
+                b'}' => depth -= 1,
+                _ => {}
+            }
+            e += 1;
+        }
+        let block = &css[j + 1..e.saturating_sub(1).max(j + 1)];
+        let head: Vec<u8> = prelude
+            .iter()
+            .map(|b| b.to_ascii_lowercase())
+            .collect();
+        let head_trim: Vec<u8> = head.iter().copied().filter(|b| !b.is_ascii_whitespace()).collect();
+        let recurse = [b"@media".as_slice(), b"@supports".as_slice(), b"@layer".as_slice()]
+            .iter()
+            .any(|p| head_trim.starts_with(p));
+        if head_trim.starts_with(b"@") && recurse {
+            let (inner, k2, d2) = prefilter_css(block, census);
+            kept += k2;
+            dropped += d2;
+            out.extend_from_slice(prelude);
+            out.push(b'{');
+            out.extend_from_slice(&inner);
+            out.push(b'}');
+        } else if head_trim.starts_with(b"@") {
+            out.extend_from_slice(&css[i..e]);
+        } else if rule_droppable(prelude, census) {
+            dropped += 1;
+        } else {
+            kept += 1;
+            out.extend_from_slice(&css[i..e]);
+        }
+        i = e;
+    }
+    (out, kept, dropped)
+}
+
+/// True when every comma-part of the selector list has a rightmost key
+/// provably absent from the census. Any doubt keeps the rule.
+fn rule_droppable(prelude: &[u8], census: &Census) -> bool {
+    // split on top-level commas (outside [] and ())
+    let mut parts: Vec<&[u8]> = Vec::new();
+    let mut start = 0usize;
+    let (mut br, mut pa) = (0i32, 0i32);
+    for (idx, &b) in prelude.iter().enumerate() {
+        match b {
+            b'[' => br += 1,
+            b']' => br -= 1,
+            b'(' => pa += 1,
+            b')' => pa -= 1,
+            b',' if br == 0 && pa == 0 => {
+                parts.push(&prelude[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&prelude[start..]);
+    if parts.iter().any(|p| p.iter().all(|b| b.is_ascii_whitespace())) {
+        return false; // an empty part: malformed, keep
+    }
+    parts.iter().all(|p| match rightmost_key(p) {
+        Some(Key::Tag(t)) => !census.tags.contains(&t),
+        Some(Key::Class(c)) => !census.classes.contains(&c),
+        Some(Key::Id(i)) => !census.ids.contains(&i),
+        None => false,
+    })
+}
+
+enum Key {
+    Tag(Vec<u8>),
+    Class(Vec<u8>),
+    Id(Vec<u8>),
+}
+
+/// Extract a sufficient-condition key from the rightmost compound of one
+/// selector part. None means unknown (keep the rule). Pseudos with parens
+/// (:not/:is/:where/:has), namespaces, escapes and combinators inside the
+/// compound all yield None.
+fn rightmost_key(part: &[u8]) -> Option<Key> {
+    let mut part = part;
+    while let Some((&b, rest)) = part.split_first() {
+        if b.is_ascii_whitespace() { part = rest; } else { break; }
+    }
+    while let Some((&b, rest)) = part.split_last() {
+        if b.is_ascii_whitespace() { part = rest; } else { break; }
+    }
+    if part.is_empty() {
+        return None;
+    }
+    // rightmost compound: after the last top-level combinator
+    let (mut br, mut pa) = (0i32, 0i32);
+    let mut last_break = 0usize;
+    let mut prev: Option<u8> = None;
+    for (idx, &b) in part.iter().enumerate() {
+        match b {
+            b'[' => br += 1,
+            b']' => br -= 1,
+            b'(' => pa += 1,
+            b')' => pa -= 1,
+            b'>' | b'+' | b'~' if br == 0 && pa == 0 => last_break = idx + 1,
+            b' ' | b'\t' | b'\n' | b'\r' if br == 0 && pa == 0 => {
+                if prev.is_some_and(|p| !matches!(p, b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'+' | b'~')) {
+                    last_break = idx;
+                }
+            }
+            _ => {}
+        }
+        prev = Some(b);
+    }
+    let compound = &part[last_break..];
+    // strip attribute selectors and simple pseudos; bail on parens or escapes
+    let mut clean: Vec<u8> = Vec::with_capacity(compound.len());
+    let mut i = 0usize;
+    while i < compound.len() {
+        match compound[i] {
+            b'[' => {
+                let mut d = 1i32;
+                i += 1;
+                while i < compound.len() && d > 0 {
+                    match compound[i] {
+                        b'[' => d += 1,
+                        b']' => d -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            b':' => {
+                i += 1;
+                if i < compound.len() && compound[i] == b':' {
+                    i += 1;
+                }
+                while i < compound.len() && (compound[i].is_ascii_alphanumeric() || compound[i] == b'-') {
+                    i += 1;
+                }
+                if i < compound.len() && compound[i] == b'(' {
+                    // Functional pseudo: its arguments impose their own
+                    // requirements, but the outer compound's own key is
+                    // still a sufficient condition on the element, so skip
+                    // the balanced group rather than bailing out.
+                    let mut d = 1i32;
+                    i += 1;
+                    while i < compound.len() && d > 0 {
+                        match compound[i] {
+                            b'(' => d += 1,
+                            b')' => d -= 1,
+                            b'\\' => return None,
+                            _ => {}
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            b'(' | b'\\' | b'|' => return None,
+            b => {
+                clean.push(b);
+                i += 1;
+            }
+        }
+    }
+    // scan the cleaned compound: leading tag or *, then .class / #id chunks
+    let clean: Vec<u8> = clean
+        .into_iter()
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    if clean.is_empty() {
+        return None;
+    }
+    let mut idx = 0usize;
+    let mut tag: Option<Vec<u8>> = None;
+    if clean[0] != b'.' && clean[0] != b'#' && clean[0] != b'*' {
+        let s = idx;
+        while idx < clean.len() && (clean[idx].is_ascii_alphanumeric() || clean[idx] == b'-') {
+            idx += 1;
+        }
+        tag = Some(clean[s..idx].iter().map(|b| b.to_ascii_lowercase()).collect());
+    } else if clean[0] == b'*' {
+        idx += 1;
+    }
+    let mut class: Option<Vec<u8>> = None;
+    let mut id: Option<Vec<u8>> = None;
+    while idx < clean.len() {
+        let mark = clean[idx];
+        if mark != b'.' && mark != b'#' {
+            return None; // unexpected residue: keep
+        }
+        idx += 1;
+        let s = idx;
+        while idx < clean.len() && (clean[idx].is_ascii_alphanumeric() || matches!(clean[idx], b'-' | b'_')) {
+            idx += 1;
+        }
+        if s == idx {
+            return None;
+        }
+        let v = clean[s..idx].to_vec();
+        if mark == b'.' {
+            class = Some(v);
+        } else {
+            id = Some(v);
+        }
+    }
+    if let Some(i) = id {
+        return Some(Key::Id(i));
+    }
+    if let Some(c) = class {
+        return Some(Key::Class(c));
+    }
+    if let Some(t) = tag {
+        if !t.is_empty() {
+            return Some(Key::Tag(t));
+        }
+    }
+    None
+}
+
+fn b64_decode(input: &[u8]) -> Option<Vec<u8>> {
+    fn sextet(b: u8) -> Option<u8> {
+        match b {
+            b'A'..=b'Z' => Some(b - b'A'),
+            b'a'..=b'z' => Some(b - b'a' + 26),
+            b'0'..=b'9' => Some(b - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let mut out = Vec::with_capacity(input.len() / 4 * 3);
+    let mut chunks = input.chunks(4);
+    for chunk in &mut chunks {
+        if chunk.len() < 4 {
+            if chunk.iter().all(|&b| b == b'=') || chunk.is_empty() {
+                break;
+            }
+            return None;
+        }
+        let pad = chunk.iter().filter(|&&b| b == b'=').count();
+        if pad > 2 || (pad > 0 && !chunk[4 - pad..].iter().all(|&b| b == b'=')) {
+            return None;
+        }
+        let mut acc: u32 = 0;
+        for (pos, &b) in chunk.iter().enumerate() {
+            let v = if b == b'=' { 0 } else { sextet(b)? };
+            acc |= u32::from(v) << (18 - 6 * pos);
+        }
+        out.push((acc >> 16) as u8);
+        if pad < 2 {
+            out.push((acc >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(acc as u8);
+        }
+    }
+    Some(out)
+}
+
+fn b64_encode(input: &[u8]) -> Vec<u8> {
+    const ALPHA: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(*chunk.get(1).unwrap_or(&0));
+        let b2 = u32::from(*chunk.get(2).unwrap_or(&0));
+        let acc = (b0 << 16) | (b1 << 8) | b2;
+        out.push(ALPHA[(acc >> 18) as usize & 63]);
+        out.push(ALPHA[(acc >> 12) as usize & 63]);
+        out.push(if chunk.len() > 1 { ALPHA[(acc >> 6) as usize & 63] } else { b'=' });
+        out.push(if chunk.len() > 2 { ALPHA[acc as usize & 63] } else { b'=' });
+    }
+    out
 }
 
 /// Intake CSS normalization inside <style>…</style> regions: folds

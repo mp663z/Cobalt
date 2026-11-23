@@ -51,7 +51,8 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let page = &a[1];
     let home = std::env::var("HOME").unwrap();
-    let bytes = normalize_for_basic(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
+    let (bytes, pf) = kobo_web_document::basic_page::normalize_for_basic_stats(&std::fs::read(format!("{home}/cb/rr74/rp/{page}.html")).unwrap());
+    if pf.rules_dropped > 0 { eprintln!("prefilter: sheets_touched={} rules_kept={} rules_dropped={}", pf.sheets_touched, pf.rules_kept, pf.rules_dropped); }
     let budget = SupplyBudget { max_linked_sheets: 48, max_sheet_bytes: 2 * 1024 * 1024, max_aggregate_bytes: 16 * 1024 * 1024 };
     let limits = Limits { max_input_bytes: 8 * 1024 * 1024, ..Limits::DEFAULT };
     let media = MediaContext::new(WIDTH).unwrap();
