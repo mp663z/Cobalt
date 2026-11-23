@@ -107,3 +107,28 @@ fn unsupported_cell_span_is_counted_without_partial_ink() {
         }
     )));
 }
+
+#[test]
+fn direct_cells_receive_an_anonymous_row() {
+    use kobo_web_document::computed_style::Display;
+    let html = br#"<!doctype html><grid><cell>A</cell> <cell>B</cell></grid>"#;
+    let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        html,
+        &[],
+        &Limits::DEFAULT,
+        None,
+        SupplyBudget::CANONICAL,
+    );
+    for node in &mut style.nodes {
+        node.style.display = match node.tag.as_str() {
+            "grid" => Display::Table,
+            "cell" => Display::TableCell,
+            _ => node.style.display,
+        };
+    }
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert_eq!(stats.text_blocks_painted, 2);
+    assert!(!commands.is_empty());
+}

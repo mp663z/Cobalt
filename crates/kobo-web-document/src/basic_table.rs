@@ -7,6 +7,8 @@ use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Source};
 use crate::table_layout::{automatic_columns, CellIntrinsic};
 
+type TableRow = (Option<usize>, Vec<usize>);
+
 impl<F: FontProvider> Painter<'_, F> {
     /// Min/max-content measurement with the Page view font hooks. Adjacent
     /// compatible style runs are shaped together, preserving word context.
@@ -88,8 +90,11 @@ impl<F: FontProvider> Painter<'_, F> {
         Ok((min.max(word), max))
     }
 
-    fn table_rows(&self, table: usize) -> Result<Vec<usize>, &'static str> {
+    /// CSS 2.2 section 17.2.1: consecutive cells lacking a row parent
+    /// receive an anonymous row. Whitespace-only inter-cell text is ignored.
+    fn table_rows(&self, table: usize) -> Result<Vec<TableRow>, &'static str> {
         let mut rows = Vec::new();
+        let mut anonymous = Vec::new();
         let mut stack: Vec<_> = self.tree.boxes[table]
             .children
             .iter()
@@ -104,8 +109,17 @@ impl<F: FontProvider> Painter<'_, F> {
             }
             let node = &self.tree.boxes[index];
             match node.kind {
-                BoxKind::TableRow => rows.push(index),
+                BoxKind::TableCell => anonymous.push(index),
+                BoxKind::TableRow => {
+                    if !anonymous.is_empty() {
+                        rows.push((None, std::mem::take(&mut anonymous)));
+                    }
+                    rows.push((Some(index), node.children.clone()));
+                }
                 BoxKind::TableRowGroup => {
+                    if !anonymous.is_empty() {
+                        rows.push((None, std::mem::take(&mut anonymous)));
+                    }
                     if node.style.used_background_color().is_some()
                         || node.style.decor.has_painted_border()
                     {
@@ -120,9 +134,12 @@ impl<F: FontProvider> Painter<'_, F> {
                         .is_some_and(|text| text.trim().is_empty()) => {}
                 _ => return Err("table-structure"),
             }
+            if rows.len() > 512 {
+                return Err("table-row-bound");
+            }
         }
-        if rows.len() > 512 {
-            return Err("table-row-bound");
+        if !anonymous.is_empty() {
+            rows.push((None, anonymous));
         }
         Ok(rows)
     }
@@ -163,13 +180,12 @@ impl<F: FontProvider> Painter<'_, F> {
         let mut grid = Vec::new();
         let mut cells = Vec::new();
         let mut columns = None;
-        for &row in &rows {
-            let row_style = self.tree.boxes[row].style;
-            if row_style.decor.has_painted_border() {
+        for (row, children) in &rows {
+            if row.is_some_and(|index| self.tree.boxes[index].style.decor.has_painted_border()) {
                 return Err("table-row-border");
             }
             let mut row_cells = Vec::new();
-            for &cell in &self.tree.boxes[row].children {
+            for &cell in children {
                 let node = &self.tree.boxes[cell];
                 if node.kind == BoxKind::Text
                     && node.text.as_deref().is_some_and(|s| s.trim().is_empty())
@@ -269,10 +285,12 @@ impl<F: FontProvider> Painter<'_, F> {
                 height = height.max(self.layout_block(cell, cell_x, y, width, commands, origin));
                 cell_x += i64::from(width) + 2;
             }
-            if let Some(color) = self.tree.boxes[rows[row_number]]
-                .style
-                .used_background_color()
-            {
+            if let Some((row, color)) = rows[row_number].0.and_then(|row| {
+                self.tree.boxes[row]
+                    .style
+                    .used_background_color()
+                    .map(|color| (row, color))
+            }) {
                 table_fill(
                     commands,
                     row_entry,
@@ -281,7 +299,7 @@ impl<F: FontProvider> Painter<'_, F> {
                     columns.width,
                     height,
                     color,
-                    self.tree.boxes[rows[row_number]].source,
+                    self.tree.boxes[row].source,
                 )?;
             }
             y += height + 2;
