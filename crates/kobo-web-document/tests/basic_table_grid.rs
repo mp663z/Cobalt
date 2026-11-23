@@ -78,7 +78,7 @@ fn columns_align_across_rows() {
 
 #[test]
 fn unsupported_cell_span_uses_counted_content_preserving_fallback() {
-    let html=br"<!doctype html><style>table{display:table}tbody{display:table-row-group}tr{display:table-row}td{display:table-cell;background:#123456}</style><table><tr><td colspan=2>A</td></tr></table>";
+    let html=br"<!doctype html><style>table{display:table}tbody{display:table-row-group}tr{display:table-row}td{display:table-cell;background:#123456}</style><table><tr><td rowspan=2>A</td></tr></table>";
     let mut style = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
         html,
         &[],
@@ -180,7 +180,7 @@ fn cell_backgrounds_fill_the_shared_row_height_and_padding_is_reserved() {
 fn page_intake_retains_native_tables_and_stacks_unsupported_spans() {
     use kobo_web_document::basic_page::normalize_for_basic_full;
     let ((bytes, _), _, _) = normalize_for_basic_full(
-        br"<!doctype html><table><tr><td colspan=2>A</td></tr></table><p>After</p>",
+        br"<!doctype html><table><tr><td rowspan=2>A</td></tr></table><p>After</p>",
     );
     assert!(String::from_utf8_lossy(&bytes).contains("<table>"));
     let style = kobo_web_document::parse_basic_style_tree(
@@ -356,7 +356,7 @@ fn short_rows_leave_empty_slots_without_stacking_or_shifting_columns() {
 #[test]
 fn stacked_table_fallback_backgrounds_stay_inside_outer_border() {
     let style = kobo_web_document::parse_basic_style_tree(
-        br"<!doctype html><style>body{margin:0}table{width:180px;border:3px solid #456789}td{padding:4px;border:2px solid #666666;background:#123456}</style><table><tr><td colspan=2>A</td></tr><tr><td>B</td><td>C</td></tr></table>",
+        br"<!doctype html><style>body{margin:0}table{width:180px;border:3px solid #456789}td{padding:4px;border:2px solid #666666;background:#123456}</style><table><tr><td rowspan=2>A</td></tr><tr><td>B</td><td>C</td></tr></table>",
         &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
     );
     let (commands, stats, _) =
@@ -381,5 +381,32 @@ fn stacked_table_fallback_backgrounds_stay_inside_outer_border() {
             assert!(rect.x + i32::try_from(rect.width).unwrap() <= outer.x + 177);
         }
     }
+    assert_eq!(stats.text_blocks_painted, 3);
+}
+
+#[test]
+fn colspan_cell_covers_shared_columns_and_internal_gap() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px}td{padding:4px;background:#123456}</style><table><tr><td colspan=2>Spanning heading</td></tr><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 3);
+    assert_eq!(cells[0].x, cells[1].x);
+    assert_eq!(cells[0].width, cells[1].width + 2 + cells[2].width);
     assert_eq!(stats.text_blocks_painted, 3);
 }

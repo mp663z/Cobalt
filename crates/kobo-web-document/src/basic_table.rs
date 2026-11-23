@@ -144,7 +144,7 @@ impl<F: FontProvider> Painter<'_, F> {
         Ok(rows)
     }
 
-    /// Paints a non-spanning grid, including empty trailing row slots. Every row shares one
+    /// Paints a grid with column spans and empty trailing row slots. Every row shares one
     /// resolved set of intrinsic columns. Table/cell author selectors survive
     /// because the parser sees actual table elements rather than rewritten divs.
     #[allow(clippy::too_many_lines)] // Validate a bounded grid before emitting any cell ink.
@@ -223,7 +223,7 @@ impl<F: FontProvider> Painter<'_, F> {
                 {
                     return Err("table-cell-padding");
                 }
-                if node.table_span != (1, 1) {
+                if node.table_span.1 != 1 || !(1..=64).contains(&node.table_span.0) {
                     return Err("table-span-not-wired");
                 }
                 if node.style.positioned.position != Position::Static
@@ -239,7 +239,12 @@ impl<F: FontProvider> Painter<'_, F> {
                     return Err("table-cell-bound");
                 }
             }
-            let count = row_cells.len();
+            let count = row_cells.iter().try_fold(0_usize, |count, &cell| {
+                count
+                    .checked_add(self.tree.boxes[cell].table_span.0 as usize)
+                    .filter(|count| *count <= 64)
+                    .ok_or("table-column-bound")
+            })?;
             // CSS tables may have fewer cells in one row. Missing trailing
             // slots stay empty; later rows can still establish more columns.
             columns = Some(columns.unwrap_or(0).max(count));
@@ -249,7 +254,8 @@ impl<F: FontProvider> Painter<'_, F> {
             return Ok(0);
         };
         for row in &grid {
-            for (column, &cell) in row.iter().enumerate() {
+            let mut column = 0;
+            for &cell in row {
                 let cs = self.tree.boxes[cell].style;
                 let (mut minimum, mut maximum) = self.table_intrinsic(cell)?;
                 let edges = cs
@@ -268,10 +274,11 @@ impl<F: FontProvider> Painter<'_, F> {
                 }
                 cells.push(CellIntrinsic {
                     column,
-                    span: 1,
+                    span: self.tree.boxes[cell].table_span.0 as usize,
                     minimum,
                     maximum,
                 });
+                column += self.tree.boxes[cell].table_span.0 as usize;
             }
         }
         let specified = match style.width {
@@ -304,8 +311,17 @@ impl<F: FontProvider> Painter<'_, F> {
             let mut cell_x = grid_x + 2;
             let mut height = 0_i64;
             let mut painted_cells = Vec::new();
-            for (&cell, &width) in row.iter().zip(&columns.widths) {
+            let mut column = 0;
+            for &cell in row {
                 let node = &self.tree.boxes[cell];
+                let span = node.table_span.0 as usize;
+                let width = columns.widths[column..column + span]
+                    .iter()
+                    .try_fold(2 * (node.table_span.0 - 1), |width, value| {
+                        width.checked_add(*value)
+                    })
+                    .ok_or("table-cell-width")?;
+                column += span;
                 let cs = node.style;
                 let inner_width = width
                     .checked_sub(cs.padding_left)
