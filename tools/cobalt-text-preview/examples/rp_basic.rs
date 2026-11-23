@@ -5,7 +5,7 @@
 //! full-height image. Never a shipping path; the census must travel with
 //! the image.
 use cobalt_text_preview::LocalFace;
-use kobo_web_document::basic_page::{normalize_for_basic, paint_basic_page};
+use kobo_web_document::basic_page::{normalize_for_basic, paint_basic_page_families};
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::{parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget};
@@ -65,14 +65,16 @@ fn main() {
     let st = parse_style_tree_with_inline_sheets_and_selectors(&bytes, &[], &limits, Some(media), budget);
     let bt = BoxTree::from_style(&st);
     let face = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf").unwrap()).unwrap();
+    let face_sans = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf").unwrap()).unwrap();
+    let face_mono = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf").unwrap()).unwrap();
     // Pass 1: measure content height (canvas fill covers 1px; discarded).
-    let (_, _, h1) = paint_basic_page(&bt, WIDTH, 1, &face).unwrap();
+    let (_, _, h1) = paint_basic_page_families(&bt, WIDTH, 1, &face, &face_sans, &face_mono).unwrap();
     if h1 > 100_000 {
         println!("{page}: WARNING raw content height {h1} clamped to 100000");
     }
     let height = u32::try_from(h1.clamp(1, 100_000)).unwrap();
     // Pass 2: paint with the canvas covering the full content height.
-    let (cmds, stats, _) = paint_basic_page(&bt, WIDTH, height, &face).unwrap();
+    let (cmds, stats, _) = paint_basic_page_families(&bt, WIDTH, height, &face, &face_sans, &face_mono).unwrap();
     let mut rgba = vec![255u8; WIDTH as usize * height as usize * 4];
     let mut top = 0i64;
     let mut strip_overflows = 0u32;

@@ -3,7 +3,7 @@
 //! with strip replay. The supply handshake requires sheets.len() == claimed
 //! host sheet links, so the fetch pipeline must deliver every linked sheet.
 use cobalt_text_preview::LocalFace;
-use kobo_web_document::basic_page::paint_basic_page;
+use kobo_web_document::basic_page::paint_basic_page_families;
 use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::display_list::{Command, DisplayList, Rect, Rgb};
 use kobo_web_document::{parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget};
@@ -65,9 +65,11 @@ fn main() {
     let st = parse_style_tree_with_inline_sheets_and_selectors(&bytes, &sheets, &limits, Some(media), budget);
     let bt = BoxTree::from_style(&st);
     let face = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf").unwrap()).unwrap();
-    let (_, _, h1) = paint_basic_page(&bt, WIDTH, 1, &face).unwrap();
+    let face_sans = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf").unwrap()).unwrap();
+    let face_mono = LocalFace::from_bytes(&std::fs::read("/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf").unwrap()).unwrap();
+    let (_, _, h1) = paint_basic_page_families(&bt, WIDTH, 1, &face, &face_sans, &face_mono).unwrap();
     let height = u32::try_from(h1.clamp(1, 100_000)).unwrap();
-    let (cmds, stats, _) = paint_basic_page(&bt, WIDTH, height, &face).unwrap();
+    let (cmds, stats, _) = paint_basic_page_families(&bt, WIDTH, height, &face, &face_sans, &face_mono).unwrap();
     let mut rgba = vec![255u8; WIDTH as usize * height as usize * 4];
     let mut top = 0i64;
     let mut strip_overflows = 0u32;

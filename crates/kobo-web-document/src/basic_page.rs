@@ -217,12 +217,41 @@ fn rgb(color: u32) -> Rgb {
 struct Painter<'a, F: FontProvider> {
     tree: &'a BoxTree,
     font: &'a F,
+    font_sans: Option<&'a F>,
+    font_mono: Option<&'a F>,
     widths: WidthPass,
     stats: PartialStats,
     visits: usize,
 }
 
 impl<'a, F: FontProvider> Painter<'a, F> {
+    /// Family choice for a block's text (BASIC lane): generic families
+    /// map to the supplied sans/mono faces, everything else stays on the
+    /// default serif face. Inline-level family mixing inside one block
+    /// flattens to the block family (disclosed approximation).
+    fn face_for(&mut self, index: usize) -> &'a F {
+        match self.tree.boxes[index].style.font_family {
+            Some(crate::computed_style::GenericFamily::SansSerif) => {
+                if let Some(f) = self.font_sans {
+                    self.stats.approx("font-family-sans");
+                    return f;
+                }
+                self.font
+            }
+            Some(crate::computed_style::GenericFamily::Monospace) => {
+                if let Some(f) = self.font_mono {
+                    self.stats.approx("font-family-mono");
+                    return f;
+                }
+                self.font
+            }
+            _ => self.font,
+        }
+    }
+}
+
+impl<'a, F: FontProvider> Painter<'a, F> {
+    #[allow(clippy::wrong_self_convention)]
     fn font_size(&self, index: usize) -> u32 {
         let mut i = Some(index);
         while let Some(current) = i {
@@ -335,6 +364,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         width: u32,
         list: &mut Vec<Command>,
     ) -> Result<i64, &'static str> {
+        let face = self.face_for(index);
         let node = &self.tree.boxes[index];
         let mut size = node.style.font_size;
         if size == 0 {
@@ -387,10 +417,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .map(|(t, (_, b, _, _))| (t.as_str(), *b))
             .collect();
         let lines: Lines = match place_runs_normal(&run_refs, width, |ch, bold| {
-            self.font.advance(ch, size, bold)
+            face.advance(ch, size, bold)
         }) {
             Ok(l) => l,
-            Err(_) => greedy_wrap(&run_refs, width, |ch, bold| self.font.advance(ch, size, bold), &mut self.stats)
+            Err(_) => greedy_wrap(&run_refs, width, |ch, bold| face.advance(ch, size, bold), &mut self.stats)
                 .ok_or("place-and-greedy-refused")?,
         };
         // Map each glyph back to its run's color by walking the folded char
@@ -430,7 +460,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .font
             .normal_line_metrics(size, false)
             .map(|m| m.height)
-            .or_else(|| self.font.line_height(size, false))
+            .or_else(|| face.line_height(size, false))
             .ok_or("no-line-metrics")?;
         let line_height = node
             .style
@@ -441,7 +471,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .font
             .normal_line_metrics(size, false)
             .map(|m| m.baseline)
-            .or_else(|| self.font.baseline_offset(size, false))
+            .or_else(|| face.baseline_offset(size, false))
             .filter(|&b| b >= 0 && i64::from(b) < i64::from(natural))
             .ok_or("no-baseline")?;
         if lines.count == 0 {
@@ -527,7 +557,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 || (!glyph_colors.is_empty() && glyph_colors[i] != glyph_colors[i - 1]);
             if boundary {
                 let from = run_start.take().unwrap_or(0);
-                if flush(from, i, glyphs, color_of(from), list, &mut self.stats, self.font).is_err() {
+                if flush(from, i, glyphs, color_of(from), list, &mut self.stats, face).is_err() {
                     self.stats.output_truncated = true;
                     return Ok(i64::from(lines.count) * i64::from(line_height));
                 }
@@ -2013,6 +2043,53 @@ fn extract_attr<'a>(tag: &'a [u8], attr: &[u8]) -> Option<&'a [u8]> {
 /// # Errors
 /// Fails only on invalid viewport or an unpaintable root (no boxes); partial
 /// results always return Ok with their census.
+/// BASIC page paint with generic font families: sans-serif and monospace
+/// blocks use the supplied faces, everything else uses `serif`. Inline
+/// family mixing flattens to the block family (counted approximation).
+pub fn paint_basic_page_families<F: FontProvider>(
+    tree: &BoxTree,
+    viewport_width: u32,
+    viewport_height: u32,
+    serif: &F,
+    sans: &F,
+    mono: &F,
+) -> Result<(Vec<Command>, PartialStats, i64), &'static str> {
+    if viewport_width == 0 || viewport_height == 0 {
+        return Err("viewport");
+    }
+    if tree.roots.len() != 1 || tree.roots[0] >= tree.boxes.len() {
+        return Err("root");
+    }
+    let widths = WidthPass::from_boxes(tree, viewport_width);
+    let mut painter = Painter {
+        tree,
+        font: serif,
+        font_sans: Some(sans),
+        font_mono: Some(mono),
+        widths,
+        stats: PartialStats::default(),
+        visits: 0,
+    };
+    painter.stats.intake_truncated = tree.truncated;
+    let mut list: Vec<Command> = Vec::new();
+    let root = tree.roots[0];
+    let body = tree.boxes[root].children.first().copied();
+    let canvas = tree.boxes[root]
+        .style
+        .used_background_color()
+        .or_else(|| body.and_then(|b| tree.boxes[b].style.used_background_color()));
+    if let Some(color) = canvas {
+        list.push(Command::Fill {
+            rect: Rect { x: 0, y: 0, width: viewport_width, height: viewport_height },
+            color: rgb(color),
+            source: Source { node: tree.boxes[root].source, action: None },
+        });
+    }
+    let content_h = painter.layout_block(root, 0, 0, viewport_width, &mut list);
+    let h = if content_h > 0 { content_h } else { i64::from(viewport_height) };
+    Ok((list, painter.stats, h))
+}
+
 pub fn paint_basic_page(
     tree: &BoxTree,
     viewport_width: u32,
@@ -2029,6 +2106,8 @@ pub fn paint_basic_page(
     let mut painter = Painter {
         tree,
         font,
+        font_sans: None,
+        font_mono: None,
         widths,
         stats: PartialStats::default(),
         visits: 0,
