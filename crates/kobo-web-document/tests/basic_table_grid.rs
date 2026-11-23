@@ -836,3 +836,36 @@ fn table_outer_padding_reserves_space_inside_border_without_stacking() {
         outer.y + outer.height as i32
     );
 }
+
+#[test]
+fn declared_cell_content_height_reserves_vertical_edges() {
+    for (sizing, expected) in [("content-box", 84), ("border-box", 60)] {
+        let html = format!("<!doctype html><style>body{{margin:0}}td{{box-sizing:{sizing};height:60px;padding:10px;border:2px solid #456789;background:#123456}}</style><table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>");
+        let style = kobo_web_document::parse_basic_style_tree(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            None,
+        );
+        let (commands, stats, _) =
+            paint_basic_page(&BoxTree::from_style(&style), 400, 500, &Face).unwrap();
+        assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+        assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+        let cells: Vec<_> = commands
+            .iter()
+            .filter_map(|c| match c {
+                Command::Fill {
+                    rect,
+                    color: Rgb(0x12, 0x34, 0x56),
+                    ..
+                } => Some(rect),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cells.len(), 4);
+        assert_eq!(cells[0].height, expected, "{sizing}");
+        assert_eq!(cells[2].y, cells[0].y + expected as i32 + 2, "{sizing}");
+    }
+}

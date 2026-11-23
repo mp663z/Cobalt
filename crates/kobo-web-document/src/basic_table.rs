@@ -528,7 +528,14 @@ impl<F: FontProvider> Painter<'_, F> {
                 let natural =
                     text_height + i64::from(cs.padding_top) + i64::from(cs.padding_bottom);
                 let declared = match cs.height {
-                    Length::Px(value) => i64::from(value),
+                    Length::Px(value) => {
+                        let height = i64::from(value);
+                        if cs.box_sizing == crate::computed_style::BoxSizing::BorderBox {
+                            height
+                        } else {
+                            height + i64::from(cs.padding_top) + i64::from(cs.padding_bottom)
+                        }
+                    }
                     _ => 0,
                 };
                 height = height.max(natural.max(declared));
