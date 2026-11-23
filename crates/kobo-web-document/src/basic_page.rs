@@ -332,6 +332,87 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     /// True when every child is Text or Inline (a pure-inline run group).
     /// Shallow: an Inline child with block descendants is still Inline
     /// here; use `deep_pure_inline` where recursion matters.
+    /// Unwrapped width of a pure-inline subtree's text at its resolved
+    /// font size, or None when it has no measurable text. Used by the
+    /// flex-row approximation to size link columns by content.
+    fn natural_inline_width(&mut self, index: usize) -> Option<i64> {
+        let face = self.face_for(index);
+        let mut size = self.tree.boxes[index].style.font_size;
+        if size == 0 {
+            size = self.font_size(index);
+        }
+        if size == 0 {
+            return None;
+        }
+        let color = self.tree.boxes[index].style.color;
+        let (runs, _) = self
+            .collect_runs_of(&self.tree.boxes[index].children, color)
+            .ok()?;
+        let mut total = 0i64;
+        for (text, bold, _, rsize) in &runs {
+            let sz = if *rsize == 0 { size } else { *rsize };
+            // Estimate only: non-folding text (wiki LRM marks, emoji)
+            // and glyphs without an advance charge half an em per char
+            // instead of failing the whole measurement.
+            match fold_ascii(text) {
+                Some(folded) => {
+                    for ch in folded.chars() {
+                        total += i64::from(face.advance(ch, sz, *bold).unwrap_or(sz / 2));
+                    }
+                }
+                None => {
+                    total += i64::from(text.chars().count() as u32) * i64::from((sz / 2).max(1));
+                }
+            }
+        }
+        if total == 0 {
+            None
+        } else {
+            Some(total + 8)
+        }
+    }
+
+
+    /// Deep single-line advance estimate of in-flow text descendants,
+    /// used to size nested flex children whose structure is not pure
+    /// inline. Absolutely/fixed-positioned subtrees (hover dropdowns)
+    /// take no inline space and are skipped. Non-folding text and
+    /// missing advances charge half an em.
+    fn estimate_text_width(&mut self, index: usize, inherited_size: u32) -> i64 {
+        let (kind, size, text, children) = {
+            let b = &self.tree.boxes[index];
+            if matches!(
+                b.style.positioned.position,
+                crate::computed_style::Position::Absolute | crate::computed_style::Position::Fixed
+            ) {
+                return 0;
+            }
+            let size = if b.style.font_size != 0 {
+                b.style.font_size
+            } else {
+                inherited_size
+            };
+            (b.kind, size, b.text.clone(), b.children.clone())
+        };
+        if matches!(kind, BoxKind::Text) {
+            let Some(text) = text else { return 0 };
+            let size = if size == 0 { 16 } else { size };
+            let face = self.face_for(index);
+            return match fold_ascii(&text) {
+                Some(folded) => folded
+                    .chars()
+                    .map(|ch| i64::from(face.advance(ch, size, false).unwrap_or(size / 2)))
+                    .sum(),
+                None => i64::from(text.chars().count() as u32) * i64::from((size / 2).max(1)),
+            };
+        }
+        let mut total = 0i64;
+        for c in children {
+            total += self.estimate_text_width(c, size);
+        }
+        total
+    }
+
     fn pure_inline_children(&self, children: &[usize]) -> bool {
         !children.is_empty()
             && children
@@ -636,18 +717,58 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 }
                 false
             };
+            let pad_or_zero = |v: u32| -> i64 {
+                if v == crate::computed_style::PADDING_UNREPRESENTABLE {
+                    0
+                } else {
+                    i64::from(v)
+                }
+            };
+            let avail = (i64::from(width)
+                - pad_or_zero(style.padding_left)
+                - pad_or_zero(style.padding_right))
+            .max(0);
+            // A nested flex child whose own items need more than an equal
+            // share requires real row wrapping, which this single-row
+            // approximation cannot do. Stack instead so the nested
+            // container gets the full width for its own row. A nested
+            // flex child that fits its share keeps the row (wiki's
+            // right-aligned tool tabs).
+            let mut refuse_nested = false;
             if row_eligible {
-                let pad_or_zero = |v: u32| -> i64 {
-                    if v == crate::computed_style::PADDING_UNREPRESENTABLE {
-                        0
-                    } else {
-                        i64::from(v)
+                for &c in kids {
+                    if !matches!(self.tree.boxes[c].kind, BoxKind::Flex) {
+                        continue;
                     }
-                };
-                let avail = (i64::from(width)
-                    - pad_or_zero(style.padding_left)
-                    - pad_or_zero(style.padding_right))
-                .max(0);
+                    let sub: Vec<usize> = self.tree.boxes[c].children.clone();
+                    let mut sub_total = 0i64;
+                    let mut measurable = true;
+                    for &k in &sub {
+                        let ks = self.tree.boxes[k].style;
+                        let nw = match self.natural_inline_width(k) {
+                            Some(nw) => nw,
+                            None => {
+                                let est = self.estimate_text_width(k, 0);
+                                // Icon-only kids (hamburger, search): a
+                                // small fixed estimate keeps the row.
+                                if est == 0 { 48 } else { est + 8 }
+                            }
+                        };
+                        sub_total += nw
+                            + pad_or_zero(ks.padding_left)
+                            + pad_or_zero(ks.padding_right)
+                            + self.margin_px(ks.margin_left, width)
+                            + self.margin_px(ks.margin_right, width);
+                    }
+                    if !measurable || sub_total > avail {
+                        refuse_nested = true;
+                    }
+                }
+            }
+            if refuse_nested {
+                self.stats.approx("flex-row-refused-nested-flex");
+            }
+            if row_eligible && !refuse_nested {
                 let mut slots: Vec<i64> = Vec::with_capacity(kids.len());
                 let mut fixed_total = 0i64;
                 let mut flex_count = 0i64;
@@ -666,8 +787,36 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                             fixed_total += v;
                         }
                         None => {
-                            slots.push(-1);
-                            flex_count += 1;
+                            // Pure-inline children (nav links etc.):
+                            // measure their natural single-line width and
+                            // treat it as fixed so equal-share columns do
+                            // not wrap single words ("Govern/ance").
+                            let nat = if self.deep_pure_inline(&self.tree.boxes[c].children) {
+                                self.natural_inline_width(c)
+                            } else {
+                                None
+                            };
+                            match nat {
+                                Some(nw) => {
+                                    // The child keeps its own horizontal
+                                    // padding inside the slot (blog nav
+                                    // li.ph4-ns = 32px/side), so the
+                                    // measured text width must come on
+                                    // top of it, not instead of it.
+                                    let v = nw
+                                        + pad_or_zero(cs.padding_left)
+                                        + pad_or_zero(cs.padding_right)
+                                        + ml
+                                        + mr;
+                                    slots.push(v);
+                                    fixed_total += v;
+                                    self.stats.approx("flex-row-natural-width");
+                                }
+                                None => {
+                                    slots.push(-1);
+                                    flex_count += 1;
+                                }
+                            }
                         }
                     }
                 }
@@ -679,18 +828,51 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 } else {
                     0
                 };
-                let min_cw = slots
-                    .iter()
-                    .filter(|&&v| v != i64::MIN)
-                    .map(|&v| if v >= 0 { v } else { share })
-                    .fold(i64::MAX, i64::min);
-                if min_cw >= 64 && min_cw != i64::MAX {
+                // The 64px narrow-column refusal applies only to
+                // equal-share columns; content-measured and fixed slots
+                // are exempt (a 40px "Talk" tab is fine). A row whose
+                // measured widths exceed the container would paint off
+                // the right edge, so it refuses too.
+                let share_narrow = flex_count > 0 && share < 64;
+                // Slots lay out starting at the left padding edge, so a
+                // row may reach into the container's right padding (which
+                // paints nothing) but never past the border box.
+                let full = (i64::from(width) - pad_or_zero(style.padding_left)).max(0);
+                let overflow = fixed_total > full;
+                if !share_narrow && !overflow {
                     flex_row = true;
                     flex_slots = Some((slots, share));
                     self.stats.approx("flex-row-basic");
                 } else {
-                    self.stats.approx("flex-row-refused-narrow");
-                    self.stats.approx("flex-as-block");
+                    // Content widths exceed the container, or nothing is
+                    // left for an unmeasured child: retry with plain
+                    // equal shares (the v1 behavior) so the row stays
+                    // horizontal when equal shares still fit text.
+                    let visible_count = slots.iter().filter(|&&v| v != i64::MIN).count() as i64;
+                    let eq = if visible_count > 0 {
+                        avail / visible_count
+                    } else {
+                        0
+                    };
+                    if eq >= 64 {
+                        flex_row = true;
+                        flex_slots = Some((
+                            slots
+                                .iter()
+                                .map(|&v| if v == i64::MIN { i64::MIN } else { -1 })
+                                .collect(),
+                            eq,
+                        ));
+                        self.stats.approx("flex-row-equal-fallback");
+                        self.stats.approx("flex-row-basic");
+                    } else {
+                        if overflow {
+                            self.stats.approx("flex-row-refused-overflow");
+                        } else {
+                            self.stats.approx("flex-row-refused-narrow");
+                        }
+                        self.stats.approx("flex-as-block");
+                    }
                 }
             } else {
                 self.stats.approx("flex-as-block");
