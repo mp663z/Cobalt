@@ -5,7 +5,7 @@
 use kobo_web_document::{box_tree::BoxTree, computed_style::{Display, Margin}, css_background::paint_backgrounds, display_list::Command,
     parse_style_tree_with_inline_sheets_and_selectors, style_diagnostics::RefusalReason, Limits, SupplyBudget};
 fn m(x: Margin) -> String { match x { Margin::Px(p) => format!("{p}px"), Margin::Auto => "auto".into(), Margin::Percent(p) => format!("pct({p})"), Margin::Em(e) => format!("em({e})") } }
-fn d(x: Display) -> &'static str { match x { Display::Block => "block", Display::Inline => "inline", Display::None => "none", Display::InlineBlock => "inline-block", Display::ListItem => "list-item", Display::Flex => "flex" } }
+fn d(x: Display) -> &'static str { match x { Display::Block => "block", Display::Inline => "inline", Display::None => "none", Display::InlineBlock => "inline-block", Display::ListItem => "list-item", Display::Flex => "flex", Display::Table => "table", Display::TableRowGroup => "table-row-group", Display::TableRow => "table-row", Display::TableCell => "table-cell", Display::TableCaption => "table-caption", Display::TableColumn => "table-column" } }
 #[test]
 #[ignore = "env-driven evidence runner (needs U1_DIR and U2_OUT); run with --ignored on COPY fixtures"]
 fn matrix() {

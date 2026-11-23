@@ -102,6 +102,8 @@ pub struct StyledNode {
     pub href: Option<String>,
     /// Replaced-content facts for an `img` element; `None` on every other node.
     pub image: Option<ImageFacts>,
+    /// HTML cell spans; defaults to (1, 1). Retained for table layout.
+    pub table_span: (u32, u32),
     /// Text content for a retained #text node.
     pub text: Option<String>,
     pub style: Computed,
@@ -417,6 +419,7 @@ impl StyleTree {
                     tag: if is_before { "::before" } else { "::after" }.to_owned(),
                     href: None,
                     image: None,
+                    table_span: (1, 1),
                     text: None,
                     style,
                 });
@@ -443,6 +446,7 @@ impl StyleTree {
                     tag: "#text".to_owned(),
                     href: None,
                     image: None,
+                    table_span: (1, 1),
                     text: Some(text.clone()),
                     style: inherited,
                 });
@@ -1263,6 +1267,16 @@ impl StyleTree {
                     })
                 } else {
                     None
+                },
+                table_span: {
+                    let span = |key: &str| {
+                        attrs
+                            .iter()
+                            .find(|(attr, _)| attr.as_ref() == key)
+                            .and_then(|(_, value)| value.parse::<u32>().ok())
+                            .unwrap_or(1)
+                    };
+                    (span("colspan"), span("rowspan"))
                 },
                 text: None,
                 style,
@@ -2496,6 +2510,16 @@ pub(crate) fn properties_with(
                     "inline-block" => Some(Value::Display(Display::InlineBlock)),
                     "list-item" => Some(Value::Display(Display::ListItem)),
                     "flex" => Some(Value::Display(Display::Flex)),
+                    "table" => Some(Value::Display(Display::Table)),
+                    "table-row-group" | "table-header-group" | "table-footer-group" => {
+                        Some(Value::Display(Display::TableRowGroup))
+                    }
+                    "table-row" => Some(Value::Display(Display::TableRow)),
+                    "table-cell" => Some(Value::Display(Display::TableCell)),
+                    "table-caption" => Some(Value::Display(Display::TableCaption)),
+                    "table-column" | "table-column-group" => {
+                        Some(Value::Display(Display::TableColumn))
+                    }
                     _ => None,
                 })
                 .map(|value| (Property::Display, value)),

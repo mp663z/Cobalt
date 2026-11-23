@@ -28,6 +28,12 @@ fn d(x: Display) -> &'static str {
         Display::InlineBlock => "inline-block",
         Display::ListItem => "list-item",
         Display::Flex => "flex",
+        Display::Table => "table",
+        Display::TableRowGroup => "table-row-group",
+        Display::TableRow => "table-row",
+        Display::TableCell => "table-cell",
+        Display::TableCaption => "table-caption",
+        Display::TableColumn => "table-column",
     }
 }
 #[test]

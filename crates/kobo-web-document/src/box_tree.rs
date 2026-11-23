@@ -24,6 +24,12 @@ pub enum BoxKind {
     /// The basic painter reserves image space; the offline harness replaces
     /// its sentinel fill with decoded pixels. Not native image decoding.
     Image,
+    Table,
+    TableRowGroup,
+    TableRow,
+    TableCell,
+    TableCaption,
+    TableColumn,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,6 +48,7 @@ pub struct CssBox {
     pub text: Option<String>,
     /// Replaced-content facts when `kind == BoxKind::Image`.
     pub image: Option<crate::style_tree::ImageFacts>,
+    pub table_span: (u32, u32),
     /// EXPERIMENTAL: a generated `::before`/`::after` box (extended-CSS entry).
     /// Paintable only as the cleared child of the confined float kernel by the
     /// explicit kernel painter.
@@ -1110,8 +1117,17 @@ impl HeightPass {
                 result.unsupported = true;
             }
             let height = match node.kind {
-                BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image => {
-                    specified_block_height(node.style.height, containing).map(|declared| {
+                BoxKind::Block
+                | BoxKind::ListItem
+                | BoxKind::Flex
+                | BoxKind::Image
+                | BoxKind::Table
+                | BoxKind::TableRowGroup
+                | BoxKind::TableRow
+                | BoxKind::TableCell
+                | BoxKind::TableCaption
+                | BoxKind::TableColumn => specified_block_height(node.style.height, containing)
+                    .map(|declared| {
                         if node.style.box_sizing == BoxSizing::BorderBox {
                             declared.saturating_sub(
                                 node.style
@@ -2066,7 +2082,17 @@ impl WidthPass {
                 continue;
             }
             let (content, x) = match node.kind {
-                BoxKind::Block | BoxKind::ListItem | BoxKind::AnonymousBlock | BoxKind::Flex | BoxKind::Image => {
+                BoxKind::Block
+                | BoxKind::ListItem
+                | BoxKind::AnonymousBlock
+                | BoxKind::Flex
+                | BoxKind::Image
+                | BoxKind::Table
+                | BoxKind::TableRowGroup
+                | BoxKind::TableRow
+                | BoxKind::TableCell
+                | BoxKind::TableCaption
+                | BoxKind::TableColumn => {
                     let width = containing.map(|base| {
                         if node.kind == BoxKind::AnonymousBlock {
                             used_block_width(Length::Auto, base)
@@ -2752,6 +2778,12 @@ impl BoxTree {
                     Display::ListItem if node.style.list_style_none => Some(BoxKind::Block),
                     Display::ListItem => Some(BoxKind::ListItem),
                     Display::Flex => Some(BoxKind::Flex),
+                    Display::Table => Some(BoxKind::Table),
+                    Display::TableRowGroup => Some(BoxKind::TableRowGroup),
+                    Display::TableRow => Some(BoxKind::TableRow),
+                    Display::TableCell => Some(BoxKind::TableCell),
+                    Display::TableCaption => Some(BoxKind::TableCaption),
+                    Display::TableColumn => Some(BoxKind::TableColumn),
                 }
             };
             let Some(kind) = kind else {
@@ -2762,6 +2794,19 @@ impl BoxTree {
                 break;
             }
             let index = tree.boxes.len();
+            if matches!(
+                kind,
+                BoxKind::Table
+                    | BoxKind::TableRowGroup
+                    | BoxKind::TableRow
+                    | BoxKind::TableCell
+                    | BoxKind::TableCaption
+                    | BoxKind::TableColumn
+            ) {
+                // Legacy exact painters do not implement table formatting.
+                // The separate basic grid painter must own these roles.
+                tree.unsupported = true;
+            }
             // Every pass below sees one edge per side: padding plus border.
             // The border widths stay in `style.decor` for painting.
             let mut style = node.style;
@@ -2850,6 +2895,7 @@ impl BoxTree {
                     node.text.clone()
                 },
                 image: node.image.clone(),
+                table_span: node.table_span,
                 // Same generated-box paint confinement for both pseudo families:
                 // kernel-cleared only, by the explicit kernel painter.
                 generated: node.tag == "::after" || node.tag == "::before",
@@ -2898,6 +2944,7 @@ impl BoxTree {
                         style: alt_style,
                         text: Some(alt),
                         image: None,
+                        table_span: (1, 1),
                         generated: false,
                     });
                     tree.boxes[index].children.push(alt_index);
@@ -3064,9 +3111,21 @@ impl BoxTree {
         for parent in (0..originals).rev() {
             let kind = tree.boxes[parent].kind;
             let children = &tree.boxes[parent].children;
-            let has_block = children
-                .iter()
-                .any(|&child| matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image));
+            let has_block = children.iter().any(|&child| {
+                matches!(
+                    tree.boxes[child].kind,
+                    BoxKind::Block
+                        | BoxKind::ListItem
+                        | BoxKind::Flex
+                        | BoxKind::Image
+                        | BoxKind::Table
+                        | BoxKind::TableRowGroup
+                        | BoxKind::TableRow
+                        | BoxKind::TableCell
+                        | BoxKind::TableCaption
+                        | BoxKind::TableColumn
+                )
+            });
             if kind == BoxKind::Inline && has_block {
                 // CSS 2.1 §9.2.1.1 requires splitting inline boxes. Do not
                 // mislabel this partial tree as a valid used box tree.
@@ -3078,7 +3137,19 @@ impl BoxTree {
             let old = std::mem::take(&mut tree.boxes[parent].children);
             let mut run = Vec::new();
             for child in old {
-                if matches!(tree.boxes[child].kind, BoxKind::Block | BoxKind::ListItem | BoxKind::Flex | BoxKind::Image) {
+                if matches!(
+                    tree.boxes[child].kind,
+                    BoxKind::Block
+                        | BoxKind::ListItem
+                        | BoxKind::Flex
+                        | BoxKind::Image
+                        | BoxKind::Table
+                        | BoxKind::TableRowGroup
+                        | BoxKind::TableRow
+                        | BoxKind::TableCell
+                        | BoxKind::TableCaption
+                        | BoxKind::TableColumn
+                ) {
                     tree.wrap_inline_run(parent, &mut run, limit);
                     tree.boxes[parent].children.push(child);
                 } else {
@@ -3185,6 +3256,7 @@ impl BoxTree {
             style,
             text: None,
             image: None,
+            table_span: (1, 1),
             generated: false,
         });
         self.boxes[parent].children.push(index);

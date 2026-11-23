@@ -303,6 +303,12 @@ pub enum Display {
     ListItem,
     /// Scratch flex-row slice: block-level flex container.
     Flex,
+    Table,
+    TableRowGroup,
+    TableRow,
+    TableCell,
+    TableCaption,
+    TableColumn,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

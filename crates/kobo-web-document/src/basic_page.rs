@@ -453,6 +453,20 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut bg_insert_at = list.len();
         let entry_len = list.len();
         let node_kind = self.tree.boxes[index].kind;
+        if matches!(
+            node_kind,
+            BoxKind::Table
+                | BoxKind::TableRowGroup
+                | BoxKind::TableRow
+                | BoxKind::TableCell
+                | BoxKind::TableCaption
+                | BoxKind::TableColumn
+        ) {
+            // Table roles are retained, but the grid painter is not wired yet.
+            // Never silently call a vertical block stack a supported table.
+            self.stats.skip("table-grid-not-wired");
+            return 0;
+        }
         let style = self.tree.boxes[index].style;
         // visibility:hidden (FL38 ext, inherited): layout runs and flow
         // space is kept, but the subtree emits no paint commands.
