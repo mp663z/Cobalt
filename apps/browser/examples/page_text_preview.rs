@@ -188,6 +188,55 @@ mod tests {
     }
 
     #[test]
+    fn indic_cluster_shape_survives_a_color_span_boundary() {
+        fn ink(html: &str) -> Vec<u8> {
+            let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+                html.as_bytes(),
+                &[],
+                &Limits::DEFAULT,
+                None,
+                kobo_web_document::SupplyBudget::CANONICAL,
+            );
+            let (commands, _, _) = paint_basic_page(
+                &BoxTree::from_style(&styled),
+                300,
+                200,
+                &Face(PageFontSession::bundled().unwrap()),
+            )
+            .unwrap();
+            let mut list = DisplayList::default();
+            for c in commands {
+                if let Command::GlyphRun {
+                    bounds,
+                    layout,
+                    coverage,
+                    source,
+                    ..
+                } = c
+                {
+                    list.glyph_run(bounds, layout, coverage, Rgb(0, 0, 0), source)
+                        .unwrap();
+                }
+            }
+            list.rasterize(300, 200, Rgb(255, 255, 255)).unwrap()
+        }
+        let base = "<!doctype html><style>p{margin:0;font-size:28px}</style>";
+        let a = ink(&format!("{base}<p>हिन्दी</p>"));
+        let b = ink(&format!(
+            "{base}<p>ह<span style='color:red'>िन्दी</span></p>"
+        ));
+        assert_eq!(
+            a.chunks_exact(4)
+                .zip(b.chunks_exact(4))
+                .filter(
+                    |(a, b)| (a[..3].iter().any(|&v| v < 255)) != (b[..3].iter().any(|&v| v < 255))
+                )
+                .count(),
+            0
+        );
+    }
+
+    #[test]
     fn shaped_hindi_block_keeps_following_text_and_has_no_skips() {
         let html = "<!doctype html><p>हिन्दी पाठ</p><p>Русский текст</p><p>Latin after</p>";
         let styled = kobo_web_document::parse_style_tree(html.as_bytes(), &[], &Limits::DEFAULT);
