@@ -284,8 +284,11 @@ The historical sections above retain their original status and proposals.
   existing decoder. Successful images preserve link targets; unsupported or
   over-budget images are counted and do not paint black sentinel boxes.
   Aggregate compressed bytes are capped at 4 MiB and decoded pixels at
-  1,048,576. Geometry remains the counted marker approximation, with nearest
-  sampling, no external image fetch and no native SVG decoding. The local
+  1,048,576, behind the DOM's separate lower resource-attribute retention
+  limits. Successful decodes fit their first laid-out container width with
+  one bounded re-layout, removing the alt-text line from layout. Geometry
+  remains a counted approximation, with nearest sampling, no external image
+  fetch and no native SVG decoding. The local
   image sample and image/link drive journey exercise the actual simulator.
 - Engine: native HTML tables now retain their tags and use Page-only UA table
   roles with shared intrinsic columns, padding, separated solid borders,
@@ -301,7 +304,7 @@ The historical sections above retain their original status and proposals.
   were rebuilt together and both Clara simulator start/editing journeys plus
   a BW Page/link/pagination/Reader journey passed. Bilinear zoom reduces rough
   sampling but is not native-resolution typography or a hardware quality claim.
-- Validation: latest engine checkpoint has document 1387/0, browser 183/0
+- Validation: latest engine checkpoint has document 1395/0 (18 ignored), browser 195/0
   (2 ignored), preview 47/0 with the unchanged 13-page corpus. Restoring the
   original synthetic Clara fixture removed the simulator compilation blocker:
   simulator 108/0, profile 65/0 and Clara safety scripts 7/0, including slider

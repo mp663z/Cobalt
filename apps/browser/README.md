@@ -29,15 +29,18 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 
 ## Limits
 
-There is no JavaScript. Images are not drawn yet; a linked image is offered
-as a link. Pages are read up to 2 MB. The runtime reports only the body of a
-response, so relative links on a page that was redirected are resolved from
+There is no JavaScript. Page view draws bounded PNG/JPEG base64 data images;
+external and SVG images are unavailable. Linked images remain available in
+Navigate > Links, not by tapping inside the painted picture. The native
+reader keeps its image/link fallback. Pages are read up to 2 MB. The runtime
+reports only the body of a response, so relative links on a page that was redirected are resolved from
 the address that was asked for, unless the page names its own base.
 
 ### Painted Page view prototype
 
 Navigate > Page view paints the arriving HTML at 2 device pixels per CSS
-pixel, lays it out once, and sends only the current screen as a picture.
+pixel and sends only the current screen as a picture. Decoded images can
+trigger one bounded re-layout to fit the actual container width.
 Reader returns to the native reader at its previous place. The count is in
 the title bar so it cannot cover page ink. Page view uses the measured
 picture slot inside the toolbars, not a full-panel picture behind them.
@@ -47,8 +50,13 @@ current SDK reports named actions, not coordinates inside pictures, so a
 painted link cannot yet be tapped directly. Form documents stay in the
 native reader, where controls work. Truncated or substantially skipped
 paint also keeps Reader. Page view is opt-in and is not a parity claim.
-Images, external stylesheets, painted form controls, saved painted-page
-positions, and device memory measurements remain follow-up work.
+External images, SVG, external stylesheets, painted form controls, saved
+painted-page positions, and device memory measurements remain follow-up work.
+Data-image preparation caps each page at 4 MiB compressed bytes and 1,048,576
+decoded pixels, with separate lower DOM resource-attribute retention limits.
+Image geometry remains a counted approximation, with nearest sampling.
+`drive-images.kobo` covers decoded and narrow-container images, scoped image
+links and navigation to the target article.
 
 `drive-page.kobo` covers Page view, scoped links, link navigation and Back,
 page turns and the Reader switch. Run with the current checkout's simulator
@@ -66,6 +74,6 @@ History. Navigate > Start returns there.
 Native pages and Page view retain a URL field above content. Tap it to edit
 the current URL. The bottom Go to action starts a fresh query. Both page
 measurement paths reserve the address field before pagination or raster,
-so it cannot hide the last line. The keyboard is modal and static; no
-animation, script, or refresh timer was added. `drive-start.kobo` exercises
+so it cannot hide the last line. The keyboard edits the field inline, with caret movement and number/symbol
+layouts. No animation, script, or refresh timer was added. `drive-start.kobo` exercises
 the start field, samples, Page view's address field, and its editor.
