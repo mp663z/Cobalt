@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head>
+<title>Nothing active survives</title>
+<meta http-equiv="refresh" content="0; url=https://elsewhere.example/">
+<script>document.write("injected")</script>
+<style>p { display: none }</style>
+</head>
+<body onload="steal()">
+<p onclick="steal()">Visible paragraph.</p>
+<script>var x = "script text must not show";</script>
+<noscript><p>Please enable JavaScript.</p></noscript>
+<iframe src="https://ads.example/frame"></iframe>
+<object data="movie.swf"><p>object fallback</p></object>
+<embed src="plugin.bin">
+<video src="clip.mp4">video fallback</video>
+<audio src="clip.mp3"></audio>
+<canvas>canvas fallback</canvas>
+<svg><text>svg text</text></svg>
+<template><p>template content</p></template>
+<p hidden>Hidden by attribute.</p>
+<p aria-hidden="true">Hidden from assistive tech.</p>
+<p>Second visible paragraph with <a href="https://ok.example/" onmouseover="steal()">a safe link</a>.</p>
+</body></html>

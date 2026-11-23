@@ -1,0 +1,7 @@
+<!doctype html><style>
+.z:has(article.a,div.b){color:red}.z.q{color:blue}
+#strong:has(article.a,div.b){color:red}.z.q{color:blue}
+.w:has(article.a,div.b){color:red}.w:has(article.a){color:blue}
+.s:has(article.a div.b){color:red}.s:has(article.a,div.b){color:blue}
+.m:has(article.a,div.b):not(.x,.y){color:red}.m:has(article.a):not(.x){color:blue}
+</style><div id=e class="z q">eRank<article class=a></article></div><div id=strong class="z q">strongRank<div class=b></div></div><div id=w class=w>wRank<div class=b></div>Rank<article class=a></article></div><div id=s class=s>sRank<article class=a>Rank<div class=b></div></article></div><div id=m class=m>mRank<article class=a></article></div>

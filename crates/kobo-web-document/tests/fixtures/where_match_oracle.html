@@ -1,0 +1,9 @@
+<!doctype html><html><head><style>
+:where(#a){color:red} .x{color:blue}
+:where(p){background-color:red} *{background-color:blue}
+p:where(.x){border-top-color:red}p{border-top-color:blue}
+:where(:not(.no)){border-right-color:red}*{border-right-color:blue}
+:not(:where(.no)){border-bottom-color:red}*{border-bottom-color:blue}
+.x:where(#a){border-left-color:red}.x{border-left-color:blue}
+:where(.x):where(#a){outline-color:red}*{outline-color:blue}
+</style></head><body><div id=d><p id=a class=x>A</p>text<!--c--><span id=b class=x>B</span><p id=c>C</p><a id=e href=x>E</a></div></body></html>

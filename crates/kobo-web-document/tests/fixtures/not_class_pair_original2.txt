@@ -1,0 +1,2 @@
+#onetrust-pc-sdk ul li p[aria-level="3"]:not(.ot-host-name, .ot-host-desc)
+#onetrust-pc-sdk ul li p[aria-level="4"]:not(.ot-host-name, .ot-host-desc)

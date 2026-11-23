@@ -1,0 +1,4 @@
+width=800 height=29821 height_clamped=false blocks=469 text_blocks=187 glyph_runs=2310 fills=169 output_truncated=false intake_truncated=false
+skips={}
+approximations={"border-side": 100, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "margin-collapse-adjacent": 2}
+images=0

@@ -1,0 +1,1296 @@
+//! From the parsed tree to the document model.
+//!
+//! One pass over the tree in document order. Block elements end the paragraph
+//! being gathered and start their own; inline elements nest inside it. What
+//! the model has no word for is either dropped with its contents (scripts,
+//! frames, plugins, anything hidden) or unwrapped so its text is kept.
+
+use html5ever::{local_name, ns};
+
+use crate::css::Styles;
+use crate::dom::{Data, Handle, Node, DOCUMENT};
+use crate::{
+    Block, Field, Form, ImageRef, Inline, Limits, Link, Method, OptionValue, Table, Url, UrlError,
+    Warning,
+};
+
+/// Dropped with everything inside them.
+const DROPPED: &[&str] = &[
+    "script", "style", "template", "iframe", "frame", "frameset", "object", "embed", "applet",
+    "canvas", "video", "audio", "source", "track", "svg", "math", "map", "select", "button",
+    "textarea", "datalist", "noembed", "noframes", "dialog", "head", "link", "meta",
+];
+
+/// End the paragraph being gathered and hold their own content.
+const CONTAINERS: &[&str] = &[
+    "div",
+    "section",
+    "article",
+    "main",
+    "header",
+    "footer",
+    "aside",
+    "nav",
+    "figure",
+    "figcaption",
+    "dl",
+    "dt",
+    "dd",
+    "center",
+    "address",
+    "details",
+    "summary",
+    "fieldset",
+    "legend",
+    "hgroup",
+    "body",
+    "html",
+    "li",
+    "caption",
+    "noscript",
+    "search",
+    "menu",
+];
+
+struct Converter<'a> {
+    nodes: &'a [Node],
+    styles: Styles,
+    base: Url,
+    limits: &'a Limits,
+    links: Vec<Link>,
+    blocks_made: usize,
+    images: usize,
+    active_removed: usize,
+    unsupported_links: usize,
+    warnings: Vec<Warning>,
+    pending_anchor: Option<String>,
+    title: Option<String>,
+    main: Main,
+    /// Where the first "skip to content" link points, for a page without
+    /// `<main>`.
+    skip_target: Option<String>,
+    /// Inside a form the model carries as a [`Form`]: its labels and buttons
+    /// are part of that form, not prose to repeat beside it.
+    in_form: bool,
+    forms: usize,
+    /// Inside the `<main>` element that `main` found.
+    in_main: bool,
+    /// How many site-furniture elements (navigation, sidebars, page
+    /// header and footer) enclose the current node.
+    chrome: usize,
+    /// How many list items or quotes enclose the current node: blocks made
+    /// inside one are not top-level.
+    nested: usize,
+    /// Where each top-level block came from, for the reader view.
+    marks: Vec<Mark>,
+}
+
+/// Where one top-level block came from.
+struct Mark {
+    in_main: bool,
+    chrome: bool,
+}
+
+/// Finding where the main content starts.
+#[derive(PartialEq)]
+enum Main {
+    Looking,
+    /// Inside `<main>`, waiting for its first heading or paragraph.
+    Entered,
+    Found(String),
+}
+
+/// Paragraph content being gathered at one block level.
+#[derive(Default)]
+struct Gather {
+    inlines: Vec<Inline>,
+    /// Images met inside the paragraph, placed after it.
+    images: Vec<ImageRef>,
+}
+
+pub fn convert(
+    nodes: &[Node],
+    url: &Url,
+    limits: &Limits,
+    warnings: Vec<Warning>,
+    styles: Styles,
+) -> crate::Document {
+    let mut converter = Converter {
+        nodes,
+        styles,
+        base: url.clone(),
+        limits,
+        links: Vec::new(),
+        blocks_made: 0,
+        images: 0,
+        active_removed: 0,
+        unsupported_links: 0,
+        warnings,
+        pending_anchor: None,
+        in_form: false,
+        forms: 0,
+        title: None,
+        main: Main::Looking,
+        skip_target: None,
+        in_main: false,
+        chrome: 0,
+        nested: 0,
+        marks: Vec::new(),
+    };
+    converter.read_head(DOCUMENT, 0);
+    converter.read_base();
+    let mut blocks = Vec::new();
+    let mut gather = Gather::default();
+    converter.blocks_in(DOCUMENT, 0, &mut blocks, &mut gather);
+    converter.flush(&mut blocks, &mut gather);
+    if converter.active_removed > 0 {
+        converter
+            .warnings
+            .push(Warning::ActiveContentRemoved(converter.active_removed));
+    }
+    if converter.unsupported_links > 0 {
+        converter
+            .warnings
+            .push(Warning::UnsupportedLinks(converter.unsupported_links));
+    }
+    let reader = reader_blocks(&converter.marks, &blocks, converter.skip_target.as_deref());
+    converter.warnings.sort();
+    converter.warnings.dedup();
+    crate::Document {
+        title: converter.title,
+        base: Some(converter.base),
+        blocks,
+        links: converter.links,
+        warnings: converter.warnings,
+        parse_errors: 0,
+        source_facts: None,
+        main: match converter.main {
+            Main::Found(anchor) => Some(anchor),
+            _ => converter.skip_target,
+        },
+        reader,
+    }
+}
+
+/// The top-level blocks that make up the page's own content: those in
+/// `<main>` when it has one, else everything from the "skip to content"
+/// target on. Site furniture is left out either way. Empty when the page
+/// gives no sign of where its content is.
+fn reader_blocks(marks: &[Mark], blocks: &[Block], skip_target: Option<&str>) -> Vec<usize> {
+    let start = if marks.iter().any(|mark| mark.in_main) {
+        None
+    } else {
+        let Some(target) = skip_target else {
+            return Vec::new();
+        };
+        let found = blocks.iter().position(|block| {
+            matches!(block,
+                Block::Heading { anchor: Some(a), .. } | Block::Paragraph { anchor: Some(a), .. }
+                    if a == target)
+        });
+        let Some(found) = found else {
+            return Vec::new();
+        };
+        Some(found)
+    };
+    marks
+        .iter()
+        .enumerate()
+        .filter(|(index, mark)| !mark.chrome && start.map_or(mark.in_main, |start| *index >= start))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+impl Converter<'_> {
+    fn tag(&self, handle: Handle) -> Option<&str> {
+        match &self.nodes[handle].data {
+            Data::Element { name, .. } if name.ns == ns!(html) => Some(&name.local),
+            Data::Element { name, .. }
+                if name.ns == ns!(svg) && name.local == local_name!("svg") =>
+            {
+                Some("svg")
+            }
+            Data::Element { name, .. }
+                if name.ns == ns!(mathml) && name.local == local_name!("math") =>
+            {
+                Some("math")
+            }
+            _ => None,
+        }
+    }
+
+    fn attr(&self, handle: Handle, wanted: &str) -> Option<&str> {
+        match &self.nodes[handle].data {
+            Data::Element { attrs, .. } => attrs
+                .iter()
+                .find(|(name, _)| &**name == wanted)
+                .map(|(_, value)| value.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Takes the page's base address from the first `<base>` with an `href`,
+    /// wherever it is: in the head, or in the body where a careless page put
+    /// it. A later one does not count, and if the first cannot be used the
+    /// page's own address stays.
+    fn read_base(&mut self) {
+        let mut stack = vec![DOCUMENT];
+        while let Some(handle) = stack.pop() {
+            if self.tag(handle) == Some("base") {
+                if let Some(href) = self.attr(handle, "href") {
+                    if let Ok(base) = self.base.join(href) {
+                        self.base = base;
+                    }
+                    return;
+                }
+            }
+            stack.extend(self.nodes[handle].children.iter().rev());
+        }
+    }
+
+    /// Reads `<title>` wherever the parser put it.
+    fn read_head(&mut self, handle: Handle, depth: usize) {
+        if depth > 8 {
+            return;
+        }
+        for &child in &self.nodes[handle].children {
+            match self.tag(child) {
+                Some("title") if self.title.is_none() => {
+                    let text = collapse(&self.text_of(child));
+                    if !text.is_empty() {
+                        self.title = Some(text);
+                    }
+                }
+                Some("head" | "html") => self.read_head(child, depth + 1),
+                _ => {}
+            }
+        }
+    }
+
+    /// Whether an `<a href>` is somewhere inside, a few levels down at most.
+    fn has_link(&self, handle: Handle, depth: usize) -> bool {
+        depth < 8
+            && self.nodes[handle].children.iter().any(|&child| {
+                (self.tag(child) == Some("a") && self.attr(child, "href").is_some())
+                    || self.has_link(child, depth + 1)
+            })
+    }
+
+    fn hidden(&self, handle: Handle) -> bool {
+        if self.attr(handle, "hidden").is_some() || self.attr(handle, "aria-hidden") == Some("true")
+        {
+            return true;
+        }
+        self.styles.hidden(self.nodes, handle)
+            || self.attr(handle, "style").is_some_and(|style| {
+                let compact: String = style
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .to_ascii_lowercase();
+                compact.contains("visibility:hidden")
+            })
+    }
+
+    /// All text under a node, without structure. Iterative, so depth is free.
+    fn text_of(&self, handle: Handle) -> String {
+        let mut out = String::new();
+        let mut stack = vec![handle];
+        while let Some(node) = stack.pop() {
+            match &self.nodes[node].data {
+                Data::Text(text) => out.push_str(text),
+                Data::Element { .. } => {
+                    if self.tag(node).is_some_and(|tag| DROPPED.contains(&tag)) {
+                        continue;
+                    }
+                    if self.tag(node) == Some("br") {
+                        out.push('\n');
+                    }
+                    stack.extend(self.nodes[node].children.iter().rev());
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    fn take_anchor(&mut self, handle: Handle) -> Option<String> {
+        self.attr(handle, "id")
+            .or_else(|| self.attr(handle, "name"))
+            .map(str::to_owned)
+            .or_else(|| self.pending_anchor.take())
+    }
+
+    fn push_block(&mut self, blocks: &mut Vec<Block>, mut block: Block) {
+        if self.blocks_made >= self.limits.max_blocks {
+            self.warnings.push(Warning::TooManyBlocks);
+            return;
+        }
+        if self.main == Main::Entered {
+            if let Block::Heading { anchor, .. } | Block::Paragraph { anchor, .. } = &mut block {
+                let name = anchor.get_or_insert_with(|| crate::MAIN_ANCHOR.to_owned());
+                self.main = Main::Found(name.clone());
+            }
+        }
+        self.blocks_made += 1;
+        if self.nested == 0 {
+            self.marks.push(Mark {
+                in_main: self.in_main,
+                chrome: self.chrome > 0,
+            });
+        }
+        blocks.push(block);
+    }
+
+    /// Ends the paragraph being gathered.
+    fn flush(&mut self, blocks: &mut Vec<Block>, gather: &mut Gather) {
+        let content = trim_inlines(std::mem::take(&mut gather.inlines));
+        if !content.is_empty() {
+            let anchor = self.pending_anchor.take();
+            self.push_block(blocks, Block::Paragraph { content, anchor });
+        }
+        for image in std::mem::take(&mut gather.images) {
+            self.push_block(blocks, Block::Image(image));
+        }
+    }
+
+    /// Reads the children of a block-level node.
+    fn blocks_in(
+        &mut self,
+        handle: Handle,
+        depth: usize,
+        blocks: &mut Vec<Block>,
+        gather: &mut Gather,
+    ) {
+        for index in 0..self.nodes[handle].children.len() {
+            let child = self.nodes[handle].children[index];
+            self.block(child, depth + 1, blocks, gather);
+        }
+    }
+
+    /// One match over every block element the model knows, kept whole so
+    /// the mapping from tag to block reads in one place.
+    fn block(
+        &mut self,
+        handle: Handle,
+        depth: usize,
+        blocks: &mut Vec<Block>,
+        gather: &mut Gather,
+    ) {
+        let role = self.attr(handle, "role").unwrap_or("");
+        let tag = self.tag(handle).unwrap_or("");
+        let enters_main = self.main == Main::Looking && (tag == "main" || role == "main");
+        // A header or footer inside the content is the article's own, often
+        // holding its title; outside it, it is the site's.
+        let chrome = matches!(tag, "nav" | "aside")
+            || self.is_language_list(handle)
+            || matches!(role, "navigation" | "complementary")
+            || (!self.in_main
+                && !enters_main
+                && (matches!(tag, "header" | "footer")
+                    || matches!(role, "banner" | "contentinfo")));
+        if chrome {
+            self.chrome += 1;
+        }
+        if enters_main {
+            self.in_main = true;
+        }
+        self.block_content(handle, depth, blocks, gather);
+        if enters_main {
+            self.flush(blocks, gather);
+            self.in_main = false;
+        }
+        if chrome {
+            self.flush(blocks, gather);
+            self.chrome -= 1;
+        }
+    }
+
+    /// A list of the same page in other languages: every item a single
+    /// link marked with the language it leads to.
+    fn is_language_list(&self, handle: Handle) -> bool {
+        if !matches!(self.tag(handle), Some("ul" | "ol")) {
+            return false;
+        }
+        let mut items = 0;
+        for &child in &self.nodes[handle].children {
+            if matches!(self.nodes[child].data, Data::Text(_)) {
+                continue;
+            }
+            let mut links = Vec::new();
+            self.links_under(child, &mut links);
+            if self.tag(child) != Some("li")
+                || links.len() != 1
+                || self.attr(links[0], "lang").is_none()
+            {
+                return false;
+            }
+            items += 1;
+        }
+        items >= 3
+    }
+
+    fn links_under(&self, handle: Handle, out: &mut Vec<Handle>) {
+        for &child in &self.nodes[handle].children {
+            if self.tag(child) == Some("a") {
+                out.push(child);
+            }
+            self.links_under(child, out);
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn block_content(
+        &mut self,
+        handle: Handle,
+        depth: usize,
+        blocks: &mut Vec<Block>,
+        gather: &mut Gather,
+    ) {
+        if let Data::Text(text) = &self.nodes[handle].data {
+            push_text(&mut gather.inlines, text);
+            return;
+        }
+        let Some(tag) = self.tag(handle) else { return };
+        let tag = tag.to_owned();
+        if DROPPED.contains(&tag.as_str()) {
+            if matches!(
+                tag.as_str(),
+                "script" | "iframe" | "object" | "embed" | "applet" | "frame"
+            ) {
+                self.active_removed += 1;
+            }
+            return;
+        }
+        if self.hidden(handle) {
+            return;
+        }
+        if depth > self.limits.max_depth {
+            self.warnings.push(Warning::TooDeep);
+            push_text(&mut gather.inlines, &self.text_of(handle));
+            return;
+        }
+        if self.main == Main::Looking
+            && (tag == "main" || self.attr(handle, "role") == Some("main"))
+        {
+            self.flush(blocks, gather);
+            self.main = Main::Entered;
+        }
+        match tag.as_str() {
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
+                self.flush(blocks, gather);
+                let level = tag.as_bytes()[1] - b'0';
+                let mut inner = Gather::default();
+                self.inlines_in(handle, depth, &mut inner);
+                let content = trim_inlines(inner.inlines);
+                let anchor = self.take_anchor(handle);
+                if !content.is_empty() {
+                    self.push_block(
+                        blocks,
+                        Block::Heading {
+                            level,
+                            content,
+                            anchor,
+                        },
+                    );
+                }
+                for image in inner.images {
+                    self.push_block(blocks, Block::Image(image));
+                }
+            }
+            "p" => {
+                self.flush(blocks, gather);
+                if let Some(anchor) = self.attr(handle, "id") {
+                    self.pending_anchor = Some(anchor.to_owned());
+                }
+                self.blocks_in(handle, depth, blocks, gather);
+                self.flush(blocks, gather);
+            }
+            "ul" | "ol" => {
+                self.flush(blocks, gather);
+                let ordered = tag == "ol";
+                let start = self
+                    .attr(handle, "start")
+                    .and_then(|s| s.trim().parse().ok())
+                    .unwrap_or(1);
+                let mut items = Vec::new();
+                self.nested += 1;
+                for index in 0..self.nodes[handle].children.len() {
+                    let child = self.nodes[handle].children[index];
+                    if matches!(self.nodes[child].data, Data::Text(_)) || self.hidden(child) {
+                        continue;
+                    }
+                    let mut item = Vec::new();
+                    let mut inner = Gather::default();
+                    if self.tag(child) == Some("li") {
+                        self.blocks_in(child, depth + 1, &mut item, &mut inner);
+                    } else {
+                        self.block(child, depth + 1, &mut item, &mut inner);
+                    }
+                    self.flush(&mut item, &mut inner);
+                    if !item.is_empty() {
+                        items.push(item);
+                    }
+                }
+                self.nested -= 1;
+                if !items.is_empty() {
+                    self.push_block(
+                        blocks,
+                        Block::List {
+                            ordered,
+                            start,
+                            items,
+                        },
+                    );
+                }
+            }
+            "blockquote" => {
+                self.flush(blocks, gather);
+                let mut inner = Vec::new();
+                let mut inner_gather = Gather::default();
+                self.nested += 1;
+                self.blocks_in(handle, depth, &mut inner, &mut inner_gather);
+                self.flush(&mut inner, &mut inner_gather);
+                self.nested -= 1;
+                if !inner.is_empty() {
+                    self.push_block(blocks, Block::Quote(inner));
+                }
+            }
+            "pre" | "listing" | "xmp" | "plaintext" => {
+                self.flush(blocks, gather);
+                let text = self.text_of(handle);
+                let text = text
+                    .strip_prefix('\n')
+                    .unwrap_or(&text)
+                    .trim_end()
+                    .to_owned();
+                if !text.is_empty() {
+                    self.push_block(blocks, Block::Preformatted(text));
+                }
+            }
+            "hr" => {
+                self.flush(blocks, gather);
+                self.push_block(blocks, Block::Rule);
+            }
+            "img" => {
+                if let Some(image) = self.image(handle, None) {
+                    gather.images.push(image);
+                } else if let Some(alt) = self.attr(handle, "alt") {
+                    push_text(&mut gather.inlines, alt);
+                }
+            }
+            "table" => {
+                self.flush(blocks, gather);
+                if self.is_data_table(handle) {
+                    let table = self.table(handle, depth);
+                    if !table.rows.is_empty() {
+                        self.push_block(blocks, Block::Table(table));
+                    }
+                } else {
+                    self.layout_table(handle, depth, blocks, gather);
+                }
+            }
+            "form" => {
+                self.flush(blocks, gather);
+                let form = self.form(handle);
+                let outer = self.in_form;
+                self.in_form = outer || form.is_some();
+                self.blocks_in(handle, depth, blocks, gather);
+                self.in_form = outer;
+                self.flush(blocks, gather);
+                if let Some(form) = form {
+                    if self.forms < self.limits.max_forms {
+                        self.forms += 1;
+                        self.push_block(blocks, Block::Form(form));
+                    }
+                }
+            }
+            "br" => gather.inlines.push(Inline::LineBreak),
+            tag if CONTAINERS.contains(&tag) => {
+                self.flush(blocks, gather);
+                if let Some(anchor) = self.attr(handle, "id") {
+                    self.pending_anchor = Some(anchor.to_owned());
+                }
+                self.blocks_in(handle, depth, blocks, gather);
+                self.flush(blocks, gather);
+            }
+            _ => self.inline(handle, depth, gather),
+        }
+    }
+
+    fn inlines_in(&mut self, handle: Handle, depth: usize, gather: &mut Gather) {
+        for index in 0..self.nodes[handle].children.len() {
+            let child = self.nodes[handle].children[index];
+            match &self.nodes[child].data {
+                Data::Text(text) => push_text(&mut gather.inlines, text),
+                Data::Element { .. } => self.inline(child, depth + 1, gather),
+                _ => {}
+            }
+        }
+    }
+
+    /// One inline element. Block elements met here are unwrapped.
+    fn inline(&mut self, handle: Handle, depth: usize, gather: &mut Gather) {
+        let Some(tag) = self.tag(handle) else { return };
+        let tag = tag.to_owned();
+        if DROPPED.contains(&tag.as_str()) {
+            if matches!(
+                tag.as_str(),
+                "script" | "iframe" | "object" | "embed" | "applet" | "frame"
+            ) {
+                self.active_removed += 1;
+            }
+            return;
+        }
+        if self.hidden(handle) {
+            return;
+        }
+        if depth > self.limits.max_depth {
+            self.warnings.push(Warning::TooDeep);
+            push_text(&mut gather.inlines, &self.text_of(handle));
+            return;
+        }
+        match tag.as_str() {
+            "em" | "i" | "cite" | "dfn" | "var" => {
+                let inner = self.nested(handle, depth, gather);
+                if !inner.is_empty() {
+                    gather.inlines.push(Inline::Emphasis(inner));
+                }
+            }
+            "strong" | "b" => {
+                let inner = self.nested(handle, depth, gather);
+                if !inner.is_empty() {
+                    gather.inlines.push(Inline::Strong(inner));
+                }
+            }
+            "code" | "kbd" | "samp" | "tt" if self.has_link(handle, 0) => {
+                // Code with links in it, as API docs write `Option<Box<T>>`:
+                // the links are kept and the words stay code.
+                let inner = self.nested(handle, depth, gather);
+                gather.inlines.extend(as_code(inner));
+            }
+            "code" | "kbd" | "samp" | "tt" => {
+                let text = collapse_keep_edges(&self.text_of(handle));
+                if !text.trim().is_empty() {
+                    gather.inlines.push(Inline::Code(text.trim().to_owned()));
+                }
+            }
+            "br" => gather.inlines.push(Inline::LineBreak),
+            "img" => {
+                let link = None;
+                if let Some(image) = self.image(handle, link) {
+                    gather.images.push(image);
+                } else if let Some(alt) = self.attr(handle, "alt") {
+                    push_text(&mut gather.inlines, alt);
+                }
+            }
+            "a" => self.link(handle, depth, gather),
+            "label" | "input" if self.in_form => {}
+            "input" => {
+                if let Some(value) = self.attr(handle, "value") {
+                    if matches!(self.attr(handle, "type"), Some("submit" | "button")) {
+                        push_text(&mut gather.inlines, value);
+                    }
+                }
+            }
+            "p" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "blockquote"
+            | "section" => {
+                push_text(&mut gather.inlines, " ");
+                self.inlines_in(handle, depth, gather);
+                push_text(&mut gather.inlines, " ");
+            }
+            "td" | "th" => {
+                self.inlines_in(handle, depth, gather);
+                push_text(&mut gather.inlines, " ");
+            }
+            _ => self.inlines_in(handle, depth, gather),
+        }
+    }
+
+    /// Children of an inline element, as their own list.
+    fn nested(&mut self, handle: Handle, depth: usize, gather: &mut Gather) -> Vec<Inline> {
+        let mut inner = Gather::default();
+        self.inlines_in(handle, depth, &mut inner);
+        gather.images.extend(inner.images);
+        inner.inlines
+    }
+
+    fn link(&mut self, handle: Handle, depth: usize, gather: &mut Gather) {
+        if let Some(anchor) = self
+            .attr(handle, "id")
+            .or_else(|| self.attr(handle, "name"))
+        {
+            if self.attr(handle, "href").is_none() && self.pending_anchor.is_none() {
+                self.pending_anchor = Some(anchor.to_owned());
+            }
+        }
+        let Some(href) = self.attr(handle, "href").map(str::to_owned) else {
+            self.inlines_in(handle, depth, gather);
+            return;
+        };
+        let target = self.base.join(&href);
+        let mut inner = Gather::default();
+        self.inlines_in(handle, depth, &mut inner);
+        let label = trim_inlines(inner.inlines);
+        match target {
+            Ok(target) if self.links.len() < self.limits.max_links => {
+                let index = self.links.len();
+                let mut text = String::new();
+                flatten(&label, &mut text);
+                let mut text = collapse(&text);
+                if text.is_empty() {
+                    text = inner
+                        .images
+                        .first()
+                        .map(|image| image.alt.clone())
+                        .unwrap_or_default();
+                }
+                if self.skip_target.is_none() {
+                    if let Some(fragment) = href.trim().strip_prefix('#') {
+                        if is_skip_link(&text) && !fragment.is_empty() {
+                            self.skip_target = Some(fragment.to_owned());
+                        }
+                    }
+                }
+                self.links.push(Link { target, text });
+                for mut image in inner.images {
+                    image.link = Some(index);
+                    gather.images.push(image);
+                }
+                if !label.is_empty() {
+                    gather.inlines.push(Inline::Link { index, label });
+                }
+            }
+            Ok(_) => {
+                self.warnings.push(Warning::TooManyLinks);
+                gather.images.extend(inner.images);
+                if !label.is_empty() {
+                    gather.inlines.push(Inline::Inert(label));
+                }
+            }
+            Err(error) => {
+                if error == UrlError::UnsupportedScheme {
+                    self.unsupported_links += 1;
+                }
+                gather.images.extend(inner.images);
+                if !label.is_empty() {
+                    gather.inlines.push(Inline::Inert(label));
+                }
+            }
+        }
+    }
+
+    fn image(&mut self, handle: Handle, link: Option<usize>) -> Option<ImageRef> {
+        let src = self
+            .attr(handle, "src")
+            .filter(|s| !s.trim().is_empty() && !s.trim_start().starts_with("data:"))
+            .or_else(|| self.attr(handle, "data-src"))?;
+        let src = self.base.join(src).ok()?;
+        let dimension = |value: Option<&str>| {
+            value.and_then(|v| v.trim().trim_end_matches("px").parse::<u32>().ok())
+        };
+        let width = dimension(self.attr(handle, "width"));
+        let height = dimension(self.attr(handle, "height"));
+        // Tracking pixels and spacers are not pictures.
+        if width.is_some_and(|w| w <= 2) || height.is_some_and(|h| h <= 2) {
+            return None;
+        }
+        if self.images >= self.limits.max_images {
+            self.warnings.push(Warning::TooManyImages);
+            return None;
+        }
+        self.images += 1;
+        Some(ImageRef {
+            src,
+            alt: collapse(self.attr(handle, "alt").unwrap_or("")),
+            width,
+            height,
+            link,
+        })
+    }
+
+    fn rows(&self, handle: Handle, out: &mut Vec<Handle>, depth: usize) {
+        if depth > 3 {
+            return;
+        }
+        for &child in &self.nodes[handle].children {
+            match self.tag(child) {
+                Some("tr") => out.push(child),
+                Some("thead" | "tbody" | "tfoot") => self.rows(child, out, depth + 1),
+                _ => {}
+            }
+        }
+    }
+
+    fn cells(&self, row: Handle) -> Vec<Handle> {
+        self.nodes[row]
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| matches!(self.tag(c), Some("td" | "th")))
+            .collect()
+    }
+
+    /// A table holding data rather than page layout: it says so with header
+    /// cells or a caption, and has no table inside it.
+    fn is_data_table(&self, handle: Handle) -> bool {
+        let mut stack = vec![handle];
+        let mut header = false;
+        let mut first = true;
+        while let Some(node) = stack.pop() {
+            match self.tag(node) {
+                Some("table") if !first => return false,
+                Some("th" | "caption" | "thead") => header = true,
+                _ => {}
+            }
+            first = false;
+            stack.extend(self.nodes[node].children.iter().copied());
+        }
+        header
+    }
+
+    fn table(&mut self, handle: Handle, depth: usize) -> Table {
+        let mut row_handles = Vec::new();
+        self.rows(handle, &mut row_handles, 0);
+        let caption = self.nodes[handle]
+            .children
+            .iter()
+            .find(|&&c| self.tag(c) == Some("caption"))
+            .map(|&c| collapse(&self.text_of(c)))
+            .filter(|c| !c.is_empty());
+        let mut clipped = false;
+        if row_handles.len() > self.limits.max_table_rows {
+            row_handles.truncate(self.limits.max_table_rows);
+            clipped = true;
+        }
+        let header = row_handles
+            .first()
+            .is_some_and(|&row| self.cells(row).iter().all(|&c| self.tag(c) == Some("th")));
+        let mut rows = Vec::new();
+        for row in row_handles {
+            let mut cells = self.cells(row);
+            if cells.len() > self.limits.max_table_columns {
+                cells.truncate(self.limits.max_table_columns);
+                clipped = true;
+            }
+            let mut out = Vec::new();
+            for cell in cells {
+                let mut gather = Gather::default();
+                self.inlines_in(cell, depth + 2, &mut gather);
+                out.push(trim_inlines(gather.inlines));
+            }
+            if out.iter().any(|cell| !cell.is_empty()) {
+                rows.push(out);
+            }
+        }
+        if clipped {
+            self.warnings.push(Warning::TableClipped);
+        }
+        Table {
+            caption,
+            rows,
+            header,
+            clipped,
+        }
+    }
+
+    /// A table used to lay a page out: its cells are read in order as if
+    /// they were sections.
+    fn layout_table(
+        &mut self,
+        handle: Handle,
+        depth: usize,
+        blocks: &mut Vec<Block>,
+        gather: &mut Gather,
+    ) {
+        let mut rows = Vec::new();
+        self.rows(handle, &mut rows, 0);
+        for row in rows {
+            if self.hidden(row) {
+                continue;
+            }
+            for cell in self.cells(row) {
+                if self.hidden(cell) {
+                    continue;
+                }
+                self.blocks_in(cell, depth + 2, blocks, gather);
+                // Cells in one row read as one line, as they are seen.
+                push_text(&mut gather.inlines, " ");
+            }
+            self.flush(blocks, gather);
+        }
+    }
+
+    /// The words of the `<label>` that names an input: one pointing at its
+    /// `id` anywhere in the form, or one wrapped around it.
+    fn label_for(&self, form: Handle, input: Handle) -> Option<String> {
+        let id = self.attr(input, "id");
+        let mut stack = vec![form];
+        while let Some(node) = stack.pop() {
+            if self.tag(node) == Some("label") {
+                let names = id.is_some() && self.attr(node, "for") == id;
+                let wraps = self.contains(node, input);
+                if names || wraps {
+                    let text = collapse_keep_edges(&self.text_of(node));
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        return Some(text.to_owned());
+                    }
+                }
+            }
+            stack.extend(self.nodes[node].children.iter().rev().copied());
+        }
+        None
+    }
+
+    fn contains(&self, ancestor: Handle, node: Handle) -> bool {
+        let mut stack = vec![ancestor];
+        while let Some(at) = stack.pop() {
+            if at == node {
+                return true;
+            }
+            stack.extend(self.nodes[at].children.iter().copied());
+        }
+        false
+    }
+
+    fn field_label(&self, form: Handle, field: Handle, fallback: &str) -> String {
+        let written = self.label_for(form, field);
+        self.attr(field, "aria-label")
+            .or(written.as_deref())
+            .or_else(|| self.attr(field, "placeholder"))
+            .or_else(|| self.attr(field, "title"))
+            .unwrap_or(fallback)
+            .to_owned()
+    }
+
+    fn option_text(&self, handle: Handle) -> String {
+        let mut out = String::new();
+        let mut stack = vec![handle];
+        while let Some(node) = stack.pop() {
+            match &self.nodes[node].data {
+                Data::Text(text) => out.push_str(text),
+                _ => stack.extend(self.nodes[node].children.iter().rev().copied()),
+            }
+        }
+        out
+    }
+
+    fn select_field(&self, form: Handle, node: Handle) -> Option<Field> {
+        if self.attr(node, "multiple").is_some() {
+            return None;
+        }
+        let name = self.attr(node, "name")?.to_owned();
+        if name.len() > 128 {
+            return None;
+        }
+        let label = self.field_label(form, node, &name);
+        let mut options = Vec::new();
+        let mut chosen = None;
+        let mut nodes = vec![node];
+        while let Some(option) = nodes.pop() {
+            if self.tag(option) == Some("option") {
+                if self.attr(option, "disabled").is_none() && options.len() < 32 {
+                    let text = collapse_keep_edges(&self.option_text(option));
+                    let label = text.trim().to_owned();
+                    let value = self
+                        .attr(option, "value")
+                        .map_or_else(|| label.clone(), str::to_owned);
+                    if label.len() > 512 || value.len() > 512 {
+                        continue;
+                    }
+                    if self.attr(option, "selected").is_some() {
+                        chosen = Some(options.len());
+                    }
+                    options.push(OptionValue { value, label });
+                }
+            } else {
+                nodes.extend(self.nodes[option].children.iter().rev().copied());
+            }
+        }
+        if options.is_empty() {
+            return None;
+        }
+        Some(Field::Select {
+            name,
+            label,
+            options,
+            chosen: Some(chosen.unwrap_or(0)),
+            radio: false,
+        })
+    }
+
+    fn radio_field(
+        &self,
+        form: Handle,
+        node: Handle,
+        name: String,
+        value: String,
+        fields: &mut Vec<Field>,
+    ) {
+        let label = self.field_label(form, node, &name);
+        let value = if value.is_empty() {
+            "on".to_owned()
+        } else {
+            value
+        };
+        if let Some(Field::Select {
+            options, chosen, ..
+        }) = fields
+            .iter_mut()
+            .find(|f| matches!(f, Field::Select { name: n, radio: true, .. } if n == &name))
+        {
+            if options.len() < 32 {
+                if self.attr(node, "checked").is_some() {
+                    *chosen = Some(options.len());
+                }
+                options.push(OptionValue { value, label });
+            }
+        } else {
+            let checked = self.attr(node, "checked").is_some();
+            fields.push(Field::Select {
+                label: name.clone(),
+                name,
+                options: vec![OptionValue { value, label }],
+                chosen: checked.then_some(0),
+                radio: true,
+            });
+        }
+    }
+
+    fn form(&mut self, handle: Handle) -> Option<Form> {
+        let action = self.attr(handle, "action").unwrap_or("");
+        let action = if action.trim().is_empty() {
+            self.base.without_fragment()
+        } else {
+            self.base.join(action).ok()?
+        };
+        let method = if self
+            .attr(handle, "method")
+            .is_some_and(|m| m.eq_ignore_ascii_case("post"))
+        {
+            Method::Post
+        } else {
+            Method::Get
+        };
+        let mut fields = Vec::new();
+        let mut stack = vec![handle];
+        while let Some(node) = stack.pop() {
+            if fields.len() >= 64 {
+                break;
+            }
+            if self.attr(node, "disabled").is_some()
+                || (node != handle && self.tag(node) == Some("form"))
+            {
+                continue;
+            }
+            if self.tag(node) == Some("select") {
+                if let Some(field) = self.select_field(handle, node) {
+                    fields.push(field);
+                }
+                continue;
+            }
+            if self.tag(node) == Some("input") {
+                let kind = self
+                    .attr(node, "type")
+                    .unwrap_or("text")
+                    .to_ascii_lowercase();
+                let name = self.attr(node, "name").map(str::to_owned);
+                let value = self.attr(node, "value").unwrap_or("").to_owned();
+                if name.as_ref().is_some_and(|n| n.len() > 128) || value.len() > 512 {
+                    continue;
+                }
+                match (kind.as_str(), name) {
+                    ("text" | "search" | "email" | "url" | "tel" | "number", Some(name)) => {
+                        let label = self.field_label(handle, node, &name);
+                        fields.push(Field::Text {
+                            name,
+                            value,
+                            label,
+                            search: kind == "search",
+                        });
+                    }
+                    ("hidden", Some(name)) => fields.push(Field::Hidden { name, value }),
+                    ("checkbox", Some(name)) => fields.push(Field::Checkbox {
+                        label: self.field_label(handle, node, &name),
+                        name,
+                        value: if value.is_empty() {
+                            "on".to_owned()
+                        } else {
+                            value
+                        },
+                        checked: self.attr(node, "checked").is_some(),
+                    }),
+                    ("radio", Some(name)) => {
+                        self.radio_field(handle, node, name, value, &mut fields);
+                    }
+                    ("submit", name) => fields.push(Field::Submit {
+                        name,
+                        value: if value.is_empty() {
+                            "Submit".to_owned()
+                        } else {
+                            value
+                        },
+                    }),
+                    _ => {}
+                }
+            }
+            stack.extend(self.nodes[node].children.iter().rev().copied());
+        }
+        let has_control = fields.iter().any(|f| {
+            matches!(
+                f,
+                Field::Text { .. } | Field::Select { .. } | Field::Checkbox { .. }
+            )
+        });
+        has_control.then_some(Form {
+            action,
+            method,
+            fields,
+            urlencoded: self.attr(handle, "enctype").is_none_or(|type_| {
+                type_.eq_ignore_ascii_case("application/x-www-form-urlencoded")
+            }),
+        })
+    }
+}
+
+/// Appends text with HTML whitespace collapsed to single spaces.
+fn push_text(inlines: &mut Vec<Inline>, text: &str) {
+    let collapsed = collapse_keep_edges(text);
+    if collapsed.is_empty() {
+        return;
+    }
+    if let Some(Inline::Text(existing)) = inlines.last_mut() {
+        if existing.ends_with(' ') && collapsed.starts_with(' ') {
+            existing.push_str(&collapsed[1..]);
+        } else {
+            existing.push_str(&collapsed);
+        }
+    } else {
+        inlines.push(Inline::Text(collapsed));
+    }
+}
+
+fn collapse_keep_edges(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut space = false;
+    for c in text.chars() {
+        if c.is_whitespace() && c != '\u{a0}' {
+            space = true;
+        } else {
+            if space {
+                out.push(' ');
+                space = false;
+            }
+            out.push(c);
+        }
+    }
+    if space {
+        out.push(' ');
+    }
+    out
+}
+
+/// Collapsed and trimmed.
+fn collapse(text: &str) -> String {
+    collapse_keep_edges(text).trim().to_owned()
+}
+
+/// Drops leading and trailing whitespace and line breaks from a run.
+fn trim_inlines(mut inlines: Vec<Inline>) -> Vec<Inline> {
+    while matches!(inlines.first(), Some(Inline::LineBreak)) {
+        inlines.remove(0);
+    }
+    while matches!(inlines.last(), Some(Inline::LineBreak)) {
+        inlines.pop();
+    }
+    if let Some(Inline::Text(text)) = inlines.first_mut() {
+        *text = text.trim_start().to_owned();
+    }
+    if let Some(Inline::Text(text)) = inlines.last_mut() {
+        *text = text.trim_end().to_owned();
+    }
+    inlines.retain(|inline| !matches!(inline, Inline::Text(text) if text.is_empty()));
+    inlines
+}
+
+/// Flattens inlines to plain text.
+pub fn flatten(inlines: &[Inline], out: &mut String) {
+    for inline in inlines {
+        match inline {
+            Inline::Text(text) | Inline::Code(text) => out.push_str(text),
+            Inline::Emphasis(inner) | Inline::Strong(inner) | Inline::Inert(inner) => {
+                flatten(inner, out);
+            }
+            Inline::Link { label, .. } => flatten(label, out),
+            Inline::LineBreak => out.push('\n'),
+        }
+    }
+}
+
+pub fn visible_text(blocks: &[Block], out: &mut String) {
+    for block in blocks {
+        match block {
+            Block::Heading { content, .. } | Block::Paragraph { content, .. } => {
+                flatten(content, out);
+                out.push('\n');
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    visible_text(item, out);
+                }
+            }
+            Block::Quote(inner) => visible_text(inner, out),
+            Block::Preformatted(text) => {
+                out.push_str(text);
+                out.push('\n');
+            }
+            Block::Table(table) => {
+                for row in &table.rows {
+                    let cells: Vec<String> = row
+                        .iter()
+                        .map(|cell| {
+                            let mut text = String::new();
+                            flatten(cell, &mut text);
+                            text
+                        })
+                        .collect();
+                    out.push_str(&cells.join(" | "));
+                    out.push('\n');
+                }
+            }
+            Block::Image(image) => {
+                if !image.alt.is_empty() {
+                    out.push_str(&format!("[{}]\n", image.alt));
+                }
+            }
+            Block::Form(_) | Block::Rule => {}
+        }
+    }
+}
+
+/// Turns the words in `inlines` into code, links and all.
+fn as_code(inlines: Vec<Inline>) -> Vec<Inline> {
+    inlines
+        .into_iter()
+        .map(|inline| match inline {
+            Inline::Text(text) if text.trim().is_empty() => Inline::Text(text),
+            Inline::Text(text) => Inline::Code(text),
+            Inline::Link { index, label } => Inline::Link {
+                index,
+                label: as_code(label),
+            },
+            Inline::Inert(label) => Inline::Inert(as_code(label)),
+            Inline::Emphasis(inner) => Inline::Emphasis(as_code(inner)),
+            Inline::Strong(inner) => Inline::Strong(as_code(inner)),
+            other => other,
+        })
+        .collect()
+}
+
+/// "Skip to main content", "Jump to content" and the like.
+fn is_skip_link(text: &str) -> bool {
+    let text = text.to_lowercase();
+    (text.contains("skip") || text.contains("jump"))
+        && (text.contains("content") || text.contains("main"))
+}

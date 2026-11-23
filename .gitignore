@@ -31,3 +31,8 @@ BUILD_IN_PUBLIC.md
 /fuzz/target/
 /fuzz/artifacts/
 /fuzz/corpus/
+
+# Standalone preview builds and local visual captures.
+/tools/cobalt-text-preview/target/
+/evidence*/
+/tools/cobalt-text-preview/__pycache__/
