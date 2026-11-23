@@ -617,3 +617,51 @@ fn non_neutral_cell_wrappers_still_fall_back_without_losing_text() {
         assert_eq!(stats.text_blocks_painted, 2, "{declaration}");
     }
 }
+
+#[test]
+fn formatted_neutral_cell_wrappers_keep_native_columns() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        b"<!doctype html><style>body{margin:0}td{padding:4px;background:#123456}</style><table><tr><td>\n  <div>\n    <div>Wrapped text</div>\n  </div>\n</td><td>Peer</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].y, cells[1].y);
+    assert_eq!(stats.text_blocks_painted, 2);
+}
+
+#[test]
+fn non_collapsible_or_visible_text_beside_cell_block_still_falls_back() {
+    for prefix in ["&nbsp;", "Visible"] {
+        let html = format!("<!doctype html><table><tr><td>{prefix}<div>Wrapped text</div></td><td>Peer</td></tr></table>");
+        let style = kobo_web_document::parse_basic_style_tree(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            None,
+        );
+        let (_, stats, _) =
+            paint_basic_page(&BoxTree::from_style(&style), 300, 500, &Face).unwrap();
+        assert_eq!(
+            stats.approximations.get("table-stacked-fallback"),
+            Some(&1),
+            "{prefix}"
+        );
+    }
+}

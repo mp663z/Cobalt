@@ -10,6 +10,30 @@ use crate::table_layout::{automatic_columns, CellIntrinsic};
 type TableRow = (Option<usize>, Vec<usize>);
 
 impl<F: FontProvider> Painter<'_, F> {
+    /// Formatting whitespace beside a block is not another content block.
+    /// Box generation may wrap that whitespace in an anonymous block.
+    fn table_formatting_space(&self, index: usize) -> bool {
+        let mut stack = vec![index];
+        let mut visits = 0;
+        while let Some(index) = stack.pop() {
+            visits += 1;
+            if visits > 4096 {
+                return false;
+            }
+            let node = &self.tree.boxes[index];
+            match node.kind {
+                BoxKind::Text
+                    if node.text.as_deref().is_some_and(|text| {
+                        text.chars()
+                            .all(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r' | '\x0c'))
+                    }) => {}
+                BoxKind::AnonymousBlock => stack.extend(node.children.iter().copied()),
+                _ => return false,
+            }
+        }
+        true
+    }
+
     /// Remove only single-child, layout-neutral block wrapper chains. Never
     /// merge sibling blocks or discard their margins, edges or alignment.
     fn table_inline_children(&self, cell: usize) -> Result<Vec<usize>, &'static str> {
@@ -18,6 +42,10 @@ impl<F: FontProvider> Painter<'_, F> {
         let mut children = self.tree.boxes[cell].children.clone();
         for _ in 0..64 {
             if children.is_empty() || self.deep_pure_inline(&children) {
+                return Ok(children);
+            }
+            children.retain(|index| !self.table_formatting_space(*index));
+            if children.is_empty() {
                 return Ok(children);
             }
             if children.len() != 1 {
