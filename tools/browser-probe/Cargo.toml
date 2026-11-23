@@ -1,0 +1,19 @@
+[package]
+name = "browser-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+kobo-sdk = { path = "../../crates/kobo-sdk" }
+kobo-doc = { path = "../../crates/kobo-doc" }
+html5ever = "=0.39.0"
+markup5ever_rcdom = "0.39.0"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"
