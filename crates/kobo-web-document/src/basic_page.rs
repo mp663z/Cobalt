@@ -984,7 +984,7 @@ fn self_node(_glyphs: &[crate::inline_lines::PositionedGlyph], _i: usize) -> Opt
 /// vanishes. Cells stack vertically (no column geometry) and images show
 /// as their alt text - approximations that MUST be disclosed with any
 /// render made from normalized input.
-fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize) {
+fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, usize, usize, usize) {
     const NAMES: [&[u8]; 10] = [
         b"table", b"thead", b"tbody", b"tfoot", b"tr", b"td", b"th", b"caption", b"colgroup", b"col",
     ];
@@ -997,6 +997,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
     let mut picture_open: Vec<usize> = Vec::new();
     let mut pictures_hoisted = 0usize;
     let mut table_rows_flexed = 0usize;
+    let mut form_chrome = 0usize;
     let mut i = 0usize;
     while i < input.len() {
         if input[i] == b'<' && i + 1 < input.len() && input[i + 1] != b'!' {
@@ -1026,21 +1027,43 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                 && matches!(tag.get(6), Some(b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'))
             {
                 let ty = extract_attr(tag, b"type").unwrap_or(b"text");
+                let is_button = ty.eq_ignore_ascii_case(b"submit")
+                    || ty.eq_ignore_ascii_case(b"button")
+                    || ty.eq_ignore_ascii_case(b"reset");
                 let emit = if ty.eq_ignore_ascii_case(b"hidden")
                     || ty.eq_ignore_ascii_case(b"checkbox")
                     || ty.eq_ignore_ascii_case(b"radio")
                 {
                     None
-                } else if ty.eq_ignore_ascii_case(b"submit")
-                    || ty.eq_ignore_ascii_case(b"button")
-                    || ty.eq_ignore_ascii_case(b"reset")
-                {
-                    extract_attr(tag, b"value").or(Some(b"Submit" as &[u8]))
+                } else if is_button {
+                    Some(extract_attr(tag, b"value").unwrap_or(b"Submit"))
                 } else {
-                    extract_attr(tag, b"value").or_else(|| extract_attr(tag, b"placeholder"))
+                    // Text-like inputs always get a chrome box, even when
+                    // empty: an undrawn text field reads as a hole.
+                    Some(
+                        extract_attr(tag, b"value")
+                            .or_else(|| extract_attr(tag, b"placeholder"))
+                            .unwrap_or(b""),
+                    )
                 };
                 if let Some(text) = emit {
-                    push_escaped(&mut out, text);
+                    // Basic form chrome: a bordered block box (the class
+                    // attribute is preserved so page styling still
+                    // applies; the chrome border is only a fallback).
+                    out.extend_from_slice(b"<div");
+                    if let Some(cls) = extract_attr(tag, b"class") {
+                        out.extend_from_slice(b" class=\"");
+                        out.extend_from_slice(cls);
+                        out.extend_from_slice(b"\"");
+                    }
+                    if is_button {
+                        out.extend_from_slice(b" style=\"border:1px solid #808080;padding:2px 6px;margin:2px 0\">");
+                    } else {
+                        out.extend_from_slice(b" style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
+                    }
+                    push_escaped(&mut out, &decode_attr_entities(text));
+                    out.extend_from_slice(b"</div>");
+                    form_chrome += 1;
                 }
                 i = (tag_end + 1).min(input.len());
                 continue;
@@ -1051,7 +1074,10 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
             {
                 let close = find_close(input, tag_end, b"textarea");
                 let inner = &input[tag_end + 1..close];
+                out.extend_from_slice(b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
                 push_escaped(&mut out, inner);
+                out.extend_from_slice(b"</div>");
+                form_chrome += 1;
                 i = skip_close(input, close);
                 continue;
             }
@@ -1062,7 +1088,10 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
                 let close = find_close(input, tag_end, b"select");
                 let inner = &input[tag_end + 1..close];
                 if let Some(text) = selected_option_text(inner) {
+                    out.extend_from_slice(b"<div style=\"border:1px solid #a6a6a6;padding:3px;margin:2px 0\">");
                     push_escaped(&mut out, &text);
+                    out.extend_from_slice(b"</div>");
+                    form_chrome += 1;
                 }
                 i = skip_close(input, close);
                 continue;
@@ -1197,7 +1226,7 @@ fn normalize_tables_and_presentational(input: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>, 
         out.push(input[i]);
         i += 1;
     }
-    (out, images, pictures_hoisted, table_rows_flexed)
+    (out, images, pictures_hoisted, table_rows_flexed, form_chrome)
 }
 
 /// Full basic-mode intake normalization: table/presentational rewrite,
@@ -1218,11 +1247,11 @@ pub fn normalize_for_basic_stats(input: &[u8]) -> (Vec<u8>, PrefilterStats) {
 /// Full intake: normalized html, prefilter counts, and the data-URI image
 /// payloads (in document order) that the marker-div lane reserves space
 /// for. The harness pairs these with sentinel rectangles in the raster.
-pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize) {
-    let (out, images, pictures_hoisted, table_rows_flexed) = normalize_tables_and_presentational(input);
+pub fn normalize_for_basic_full(input: &[u8]) -> ((Vec<u8>, PrefilterStats), Vec<Vec<u8>>, usize, usize, usize) {
+    let (out, images, pictures_hoisted, table_rows_flexed, form_chrome) = normalize_tables_and_presentational(input);
     let (folded, _, _) = normalize_css_in_style_tags(&out);
     let (filtered, pf) = prefilter_data_sheets_for_basic(&folded);
-    ((filtered, pf), images, pictures_hoisted, table_rows_flexed)
+    ((filtered, pf), images, pictures_hoisted, table_rows_flexed, form_chrome)
 }
 
 /// Sentinel background colour for image marker div number `idx`
@@ -2064,6 +2093,44 @@ fn attr_num(v: &[u8]) -> Option<u32> {
         return None;
     }
     std::str::from_utf8(&v[..end]).ok()?.parse().ok()
+}
+
+/// Decode the small HTML entity set that matters inside attribute
+/// values before the text is re-escaped for emission. Numeric decimal
+/// references in the ASCII range are handled too; anything unknown is
+/// left as-is.
+fn decode_attr_entities(v: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(v.len());
+    let mut i = 0usize;
+    while i < v.len() {
+        if v[i] == b'&' {
+            if let Some(semi) = v[i..].iter().position(|&c| c == b';').map(|p| i + p) {
+                if semi - i <= 10 {
+                    let ent = &v[i + 1..semi];
+                    let decoded: Option<u8> = match ent {
+                        b"amp" => Some(b'&'),
+                        b"lt" => Some(b'<'),
+                        b"gt" => Some(b'>'),
+                        b"quot" => Some(b'"'),
+                        b"apos" => Some(b'\''),
+                        b"nbsp" => Some(b' '),
+                        _ if ent.first() == Some(&b'#') => {
+                            std::str::from_utf8(&ent[1..]).ok().and_then(|d| d.parse::<u32>().ok()).and_then(|n| u8::try_from(n).ok()).filter(|&n| n >= 0x20)
+                        }
+                        _ => None,
+                    };
+                    if let Some(c) = decoded {
+                        out.push(c);
+                        i = semi + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push(v[i]);
+        i += 1;
+    }
+    out
 }
 
 fn extract_attr<'a>(tag: &'a [u8], attr: &[u8]) -> Option<&'a [u8]> {
