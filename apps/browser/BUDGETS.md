@@ -295,3 +295,22 @@ Browser suite: 191 passed, 0 failed, 2 ignored. The normal native image RGB
 raster was regenerated and visually inspected with no new skips, one counted
 marker-geometry approximation. This does not change the image support scope
 or establish physical-reader behavior.
+
+
+### Page-only fitted image geometry, November 24, 2026
+
+Measured source: `0b52916e5d0a9411d33534a9944bc435ac6c1323`. Decoded images use their first laid-out
+container width for an app-only fit and bounded re-layout. Successful alt
+text no longer reserves an extra line. An 80px container holding a 400x200
+image now reserves 40px rather than 220px. This stays a counted marker-geometry
+approximation; CSS replaced-element conformance and exact/offline paths are
+unchanged. A width-dependent ancestor can still exceed this single correction.
+
+The locked ARM release browser is 5,188,644 bytes, +3,939,264 over hello,
+leaving 1,303,616 bytes under the +5 MiB allowance. Stripped static ARM EABI5
+was inspected. Browser: 195 passed, 0 failed, 2 ignored. Clippy completed
+with existing warnings. Narrow-container pixel bounds, multi-page images,
+following text, linked-image targets and fallback tests pass. Actual normal
+and narrow app rasters were inspected. The fresh Clara Colour simulator
+image-to-links-to-article journey passes; its screenshots are greyscale and
+do not qualify colour-panel fidelity, device RSS or latency.
