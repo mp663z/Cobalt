@@ -33,3 +33,10 @@ Additional style cuts use the same ranges and naming rules: NotoSans-Bold,
 NotoSans-Italic, NotoSans-BoldItalic and NotoSansDevanagari-Bold, from the
 same Debian distribution. These are selected by actual weight and slant.
 No Devanagari italic is synthesized. Catalog capacity is 16 explicit faces.
+
+Arabic and Hebrew regular are derived from NotoSansArabic-Regular.ttf and
+NotoSansHebrew-Regular.ttf in the same Debian distribution. Arabic ranges:
+U+0020-007E, U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF,
+U+FE70-FEFF. Hebrew ranges: U+0020-007E, U+0590-05FF, U+FB1D-FB4F.
+Modified names are Kobo Page Arabic and Kobo Page Hebrew. These sources have
+no italic cuts; none is synthesized.

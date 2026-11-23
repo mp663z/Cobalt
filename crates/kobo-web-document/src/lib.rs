@@ -20,6 +20,7 @@ pub const DEVICE_PX_PER_CSS_PX: u32 = 1;
 pub mod basic_page;
 pub mod basic_text;
 mod basic_text_paint;
+mod basic_bidi;
 pub mod box_tree;
 pub mod computed_style;
 mod convert;

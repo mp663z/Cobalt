@@ -98,3 +98,11 @@ Total bundled fallback bytes become 808,700 B. Devanagari italic is not
 available in these sources and is not synthesized. The font catalog allows
 16 explicit faces rather than eight to accommodate real style cuts; the
 shaping and raster-mask bounds are unchanged. ARM size/RSS remain unmeasured.
+
+### RTL paragraph path
+
+The already locked unicode-bidi 0.3.18 is used for resolved paragraph levels
+and visual ordering separately on each wrapped line. Arabic regular adds
+215,640 B and Hebrew regular adds 22,964 B, renamed OFL Noto subsets, making
+1,047,304 B of bundled fallback fonts in total. This is font bytes only;
+ARM binary cost and device RSS are not established by this count.
