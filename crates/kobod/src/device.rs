@@ -1841,6 +1841,7 @@ fn host_applications(
         // drawn against. Both, because the mark is undone by drawing it again
         // and that is only exact if nothing about it is recomputed.
         let mut pressed: Option<(kobo_ui::Rect, kobo_ui::DisplayMetrics, FeedbackKind)> = None;
+        let mut slider_drag = false;
         // A released control is restored with the application's answer when
         // that answer arrives promptly. If it does not, this deadline makes
         // the release visible on its own instead of leaving a key held down
@@ -2203,6 +2204,45 @@ fn host_applications(
                     let screen = screen.map(|screen| shown_screen(&apps[index], screen, &chrome));
                     let orientation = apps[index].orientation;
                     let landscape_turn = apps[index].landscape_turn;
+                    if matches!(event, TouchEvent::Cancel) {
+                        slider_drag = false;
+                    }
+                    if let (Some(current), Some((x, y))) = (
+                        screen.as_ref(),
+                        match event {
+                            TouchEvent::Down { x, y }
+                            | TouchEvent::Move { x, y }
+                            | TouchEvent::Up { x, y } => Some((x, y)),
+                            TouchEvent::Cancel => None,
+                        },
+                    ) {
+                        if let (Ok(x), Ok(y)) = (i32::try_from(x), i32::try_from(y)) {
+                            let physical = crate::device_metrics();
+                            let (x, y) = kobo_ui::logical_point_with_turn(
+                                orientation,
+                                landscape_turn,
+                                physical.width,
+                                physical.height,
+                                x,
+                                y,
+                            );
+                            let layout = current
+                                .layout_with(&metrics_for(current).oriented(orientation), &chrome);
+                            let action = layout.slider_action(x, y);
+                            if matches!(event, TouchEvent::Down { .. }) {
+                                slider_drag = action.is_some();
+                            }
+                            if slider_drag {
+                                if matches!(event, TouchEvent::Up { .. }) {
+                                    slider_drag = false;
+                                }
+                                if let Some(action) = layout.slider_drag_action(x) {
+                                    apps[index].send(Message::Action { action })?;
+                                }
+                                continue;
+                            }
+                        }
+                    }
                     // A control shows that it has been touched, before
                     // anything it does can be seen. Without this the panel is
                     // simply still for as long as the application takes to

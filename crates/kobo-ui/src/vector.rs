@@ -521,6 +521,78 @@ fn add_span(accumulator: &mut [i64], from: i64, to: i64) {
 /// a square box, which is exactly what this rasteriser already draws.
 #[must_use]
 pub fn shapes(glyph: Glyph) -> Vec<Shape> {
+    let paths = match glyph {
+        Glyph::Home => Some(vec![
+            Path::new()
+                .move_to(150, 450)
+                .line_to(500, 150)
+                .line_to(850, 450),
+            Path::new()
+                .move_to(250, 370)
+                .line_to(250, 850)
+                .line_to(430, 850)
+                .line_to(430, 600)
+                .line_to(570, 600)
+                .line_to(570, 850)
+                .line_to(750, 850)
+                .line_to(750, 370),
+        ]),
+        Glyph::Star => Some(vec![Path::new()
+            .move_to(500, 120)
+            .line_to(615, 365)
+            .line_to(885, 400)
+            .line_to(690, 590)
+            .line_to(735, 870)
+            .line_to(500, 735)
+            .line_to(265, 870)
+            .line_to(310, 590)
+            .line_to(115, 400)
+            .line_to(385, 365)
+            .close()]),
+        Glyph::Keyboard => {
+            let mut paths = vec![
+                Path::new()
+                    .move_to(100, 250)
+                    .line_to(900, 250)
+                    .line_to(900, 750)
+                    .line_to(100, 750)
+                    .close(),
+                Path::new().move_to(300, 625).line_to(700, 625),
+            ];
+            for y in [380, 500] {
+                for x in [250, 415, 580, 745] {
+                    paths.push(Path::new().move_to(x, y).line_to(x + 30, y));
+                }
+            }
+            Some(paths)
+        }
+        Glyph::Lock => Some(vec![
+            Path::new()
+                .move_to(300, 440)
+                .line_to(300, 280)
+                .line_to(380, 180)
+                .line_to(620, 180)
+                .line_to(700, 280)
+                .line_to(700, 440),
+            Path::new()
+                .move_to(230, 440)
+                .line_to(770, 440)
+                .line_to(770, 850)
+                .line_to(230, 850)
+                .close(),
+            Path::new().move_to(500, 590).line_to(500, 700),
+        ]),
+        _ => None,
+    };
+    if let Some(paths) = paths {
+        return paths
+            .into_iter()
+            .map(|path| Shape::Stroke {
+                path,
+                width: WEIGHT,
+            })
+            .collect();
+    }
     if glyph == Glyph::Shift {
         return vec![Shape::Stroke {
             path: Path::new()

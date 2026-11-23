@@ -1903,3 +1903,59 @@ fn inline_keyboard_splits_a_long_first_paragraph_instead_of_hiding_it() {
         &runner.context().metrics()
     ));
 }
+
+#[test]
+fn page_has_browser_close_separate_from_keyboard_close() {
+    let mut runner = runner(TextScale::Default);
+    let metrics = runner.context().metrics();
+    let screen = runner.app().screen(&metrics).build();
+    assert!(screen
+        .top_bar
+        .unwrap()
+        .actions
+        .iter()
+        .any(|a| a.action == action_id("browser-close")));
+    runner.action(action_id("edit-address"));
+    let screen = runner.app().screen(&metrics).build();
+    assert!(screen
+        .top_bar
+        .unwrap()
+        .actions
+        .iter()
+        .any(|a| a.action == action_id("kb.cancel")));
+    runner.action(action_id("kb.cancel"));
+    let commands = runner.action(action_id("browser-close"));
+    assert!(commands
+        .iter()
+        .any(|c| matches!(c, kobo_sdk::Command::Exit)));
+}
+
+#[test]
+fn compact_slider_coordinates_update_zoom_without_affecting_page_taps() {
+    let mut runner = runner(TextScale::Default);
+    let metrics = runner.context().metrics();
+    let screen = runner.app().screen(&metrics).build();
+    let layout = screen.layout_with(&metrics, &kobo_sdk::Chrome::measuring(true));
+    let slider = layout
+        .nodes
+        .iter()
+        .find(|node| matches!(node.kind, kobo_ui::LayoutKind::Slider(..)))
+        .unwrap()
+        .rect;
+    let a = layout
+        .slider_action(slider.x + slider.width / 4, slider.y + slider.height / 2)
+        .unwrap();
+    let b = layout
+        .slider_action(
+            slider.x + slider.width * 3 / 4,
+            slider.y + slider.height / 2,
+        )
+        .unwrap();
+    assert!(a.0 < b.0);
+    assert!(layout.slider_action(0, 0).is_none());
+    runner.action(a);
+    assert!((105..=107).contains(&runner.app().zoom));
+    runner.action(b);
+    assert!((167..=169).contains(&runner.app().zoom));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+}

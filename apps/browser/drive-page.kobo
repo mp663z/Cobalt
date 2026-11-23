@@ -3,7 +3,7 @@ tap-id samples
 wait-for Sample pages
 tap-id navigate
 tap-id page-view
-wait-for-id native-reader
+wait-for-id browser-close
 shot index-page
 tap-id navigate
 tap-id links
@@ -17,7 +17,7 @@ tap-id link-0
 wait-for Notes on reading from paper screens
 tap-id navigate
 tap-id page-view
-wait-for-id native-reader
+wait-for-id browser-close
 expect 1/
 shot article-page-1
 tap-at 1000,700
@@ -27,6 +27,7 @@ shot article-page-2
 tap-at 40,700
 wait 300
 expect 1/
+tap-id navigate
 tap-id native-reader
 expect Notes on reading from paper screens
 shot reader-return

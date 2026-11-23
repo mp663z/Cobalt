@@ -2819,6 +2819,8 @@ pub enum BarStyle {
     /// is a place you can be. Free to change from screen to screen, which
     /// destinations are not.
     Actions,
+    /// Compact browser transport controls with a continuous zoom slot.
+    Browser,
 }
 
 /// The fixed bar at the bottom of a screen, equivalent to the reader's own.
@@ -2871,6 +2873,9 @@ impl NavBar {
     /// panel can physically carry rather than honoured blindly.
     #[must_use]
     pub fn visible(&self, metrics: &DisplayMetrics) -> &[BarAction] {
+        if self.style == BarStyle::Browser {
+            return &self.destinations[..self.destinations.len().min(7)];
+        }
         let mut limit = min(self.destinations.len(), metrics.max_nav_destinations());
         if self.style == BarStyle::Actions {
             // Three verbs is the point at which a bar stops being read and
@@ -3379,6 +3384,28 @@ impl Screen {
             cursor = cursor.saturating_add(gap);
         }
 
+        if self
+            .nav_bar
+            .as_ref()
+            .is_some_and(|bar| bar.style == BarStyle::Browser)
+        {
+            for node in &mut layout.nodes {
+                node.kind = match node.kind {
+                    LayoutKind::Field(action) => LayoutKind::Address(action),
+                    LayoutKind::FieldValue(empty) => {
+                        node.rect.x += metrics.tenth_mm(40);
+                        node.rect.width -= metrics.tenth_mm(40);
+                        LayoutKind::AddressValue(
+                            empty,
+                            self.nodes
+                                .iter()
+                                .any(|node| matches!(node, Node::Grid { .. })),
+                        )
+                    }
+                    ref other => other.clone(),
+                };
+            }
+        }
         if let Some(nav_bar) = &self.nav_bar {
             layout_nav_bar(nav_bar, metrics, &mut layout);
         }
@@ -4138,6 +4165,43 @@ fn layout_nav_bar(nav_bar: &NavBar, metrics: &DisplayMetrics, layout: &mut Layou
         kind: LayoutKind::Divider,
         text_lines: Vec::new(),
     });
+
+    if nav_bar.style == BarStyle::Browser && visible.len() == 7 {
+        let side = (metrics.width / 10)
+            .max(metrics.touch_target_minimum())
+            .min(metrics.touch_target_default());
+        let track_width = metrics.width - side * 6;
+        let mut x = 0;
+        for (index, action) in visible.iter().enumerate() {
+            let width = if index == 4 { track_width } else { side };
+            let rect = Rect {
+                x,
+                y: top,
+                width,
+                height,
+            };
+            if index == 4 {
+                layout.nodes.push(LayoutNode {
+                    id: nav_bar.id,
+                    rect,
+                    kind: LayoutKind::Slider(
+                        action.action,
+                        action.label.parse::<u8>().unwrap_or(0).min(100),
+                    ),
+                    text_lines: Vec::new(),
+                });
+            } else {
+                layout.nodes.push(LayoutNode {
+                    id: nav_bar.id,
+                    rect,
+                    kind: LayoutKind::BarGlyph(action.action, action.glyph.unwrap_or(Glyph::More)),
+                    text_lines: Vec::new(),
+                });
+            }
+            x += width;
+        }
+        return;
+    }
 
     let count = visible.len() as i32;
     let slot = metrics.width / count;
@@ -5610,6 +5674,10 @@ pub enum Glyph {
     /// before this existed, and a single dot the width of a full stop is not
     /// an emblem anyone reads at arm's length.
     Mill,
+    Home,
+    Star,
+    Keyboard,
+    Lock,
 }
 
 impl Glyph {
@@ -5620,7 +5688,7 @@ impl Glyph {
     /// the set was twenty-one: `Light` and `Close` were authored, shipped, and
     /// covered by none of the tests that walk every glyph. A glyph nobody
     /// rasterises in a test is a blank space beside a label on the panel.
-    pub const ALL: [Self; 69] = [
+    pub const ALL: [Self; 73] = [
         Self::App,
         Self::Book,
         Self::Note,
@@ -5690,6 +5758,10 @@ impl Glyph {
         Self::Backspace,
         Self::Shift,
         Self::Mill,
+        Self::Home,
+        Self::Star,
+        Self::Keyboard,
+        Self::Lock,
     ];
 }
 
@@ -5906,6 +5978,8 @@ pub enum LayoutKind {
     /// which, because the two are drawn in different tones and the drawing
     /// pass must not have to consult the tree to find out.
     FieldValue(bool),
+    Address(ActionId),
+    AddressValue(bool, bool),
     /// The cross that empties a field.
     FieldClear(ActionId),
     /// One chip. `selected` chips are drawn inverted, which on a panel with
@@ -6054,6 +6128,8 @@ pub enum LayoutKind {
     StepperControl(ActionId, ControlState, Glyph),
     /// The track under a stepper, filled as far as the value has gone.
     StepperTrack(u8),
+    /// A continuous bounded value. Action is the first of 101 reserved values.
+    Slider(ActionId, u8),
     ChoiceOption(ActionId, bool),
     ChoiceFreeform(ActionId),
     Banner(BannerLevel),
@@ -6096,6 +6172,7 @@ impl LayoutKind {
             | Self::NavDestinationSelected(action, ..)
             | Self::Tile(action, ControlState::Enabled)
             | Self::Field(action)
+            | Self::Address(action)
             | Self::FieldClear(action)
             | Self::Chip(action, _)
             | Self::Tab(action, _)
@@ -6387,6 +6464,7 @@ impl Layout {
                         | LayoutKind::Cell(..)
                         | LayoutKind::Tile(_, ControlState::Enabled)
                         | LayoutKind::Field(_)
+                        | LayoutKind::Address(_)
                         | LayoutKind::FieldClear(_)
                         | LayoutKind::Chip(_, _)
                         | LayoutKind::Tab(_, _)
@@ -6493,6 +6571,39 @@ impl Layout {
         }
     }
 
+    /// Only sliders accept pointer movement; overlays stop the search.
+    pub fn slider_action(&self, x: i32, y: i32) -> Option<ActionId> {
+        for node in self.nodes.iter().rev() {
+            if matches!(node.kind, LayoutKind::Scrim { .. }) {
+                return None;
+            }
+            if let LayoutKind::Slider(base, _) = node.kind {
+                if node.rect.contains(x, y) {
+                    return Some(ActionId(base.0.saturating_add(
+                        ((x - node.rect.x).clamp(0, node.rect.width.max(1)) * 100
+                            / node.rect.width.max(1)) as u32,
+                    )));
+                }
+            }
+        }
+        None
+    }
+
+    /// An already-captured drag clamps outside the track without triggering neighbours.
+    pub fn slider_drag_action(&self, x: i32) -> Option<ActionId> {
+        for node in self.nodes.iter().rev() {
+            if matches!(node.kind, LayoutKind::Scrim { .. }) {
+                return None;
+            }
+            if let LayoutKind::Slider(base, _) = node.kind {
+                let value = ((x - node.rect.x).clamp(0, node.rect.width.max(1)) * 100
+                    / node.rect.width.max(1)) as u32;
+                return Some(ActionId(base.0.saturating_add(value)));
+            }
+        }
+        None
+    }
+
     fn hit_control(&self, x: i32, y: i32) -> Option<ActionId> {
         // Backwards, because later nodes are drawn on top of earlier ones and
         // what is on top is what the finger touched.
@@ -6501,6 +6612,12 @@ impl Layout {
                 continue;
             }
             let action = match node.kind {
+                LayoutKind::Slider(base, _) => {
+                    return Some(ActionId(base.0.saturating_add(
+                        ((x - node.rect.x).clamp(0, node.rect.width.max(1)) * 100
+                            / node.rect.width.max(1)) as u32,
+                    )))
+                }
                 // A control that is drawn as unavailable is not one, whatever
                 // action it still names.
                 LayoutKind::Button(_, ControlState::Disabled, _) => continue,
@@ -13411,6 +13528,7 @@ const fn is_tappable(kind: LayoutKind) -> bool {
             | LayoutKind::Cell(..)
             | LayoutKind::Tile(..)
             | LayoutKind::Field(_)
+            | LayoutKind::Address(_)
             | LayoutKind::FieldClear(_)
             | LayoutKind::Chip(_, _)
             | LayoutKind::Tab(_, _)
@@ -14113,6 +14231,75 @@ fn render_all_with_selected_font(
             // The border is the whole control: a field with only a baseline
             // under it reads as an underlined word, and one with a fill reads
             // as a button that has already been pressed.
+            LayoutKind::Address(_) => {
+                let radius = node.rect.height / 2;
+                fill_rounded_clipped(surface, node.rect, radius, tone::SURFACE, clip);
+                let side = metrics.tenth_mm(28);
+                draw_vector(
+                    surface,
+                    &vector::shapes(Glyph::Globe),
+                    Rect {
+                        x: node.rect.x + metrics.tenth_mm(18),
+                        y: node.rect.y + (node.rect.height - side) / 2,
+                        width: side,
+                        height: side,
+                    },
+                    clip,
+                    tone::MUTED,
+                );
+            }
+            LayoutKind::AddressValue(empty, editing) => {
+                let text = node.text_lines.first().map_or("", String::as_str);
+                let rect = node.rect;
+                if editing || empty || !text.contains("://") {
+                    draw_text(
+                        surface,
+                        &one_line(text, rect.width, FontSize::Body),
+                        rect.x,
+                        rect.y,
+                        FontSize::Body,
+                        if empty { tone::MUTED } else { tone::INK },
+                        clip,
+                    );
+                } else {
+                    let (_, after) = text.split_once("://").unwrap_or(("", text));
+                    let end = after.find(['/', '?', '#']).unwrap_or(after.len());
+                    let host = &after[..end];
+                    let tail = &after[end..];
+                    let host = one_line(host, rect.width, FontSize::Body);
+                    draw_text(
+                        surface,
+                        &host,
+                        rect.x,
+                        rect.y,
+                        FontSize::Body,
+                        tone::INK,
+                        clip,
+                    );
+                    // One extra pixel of ink gives the host a restrained semibold weight.
+                    draw_text(
+                        surface,
+                        &host,
+                        rect.x + 1,
+                        rect.y,
+                        FontSize::Body,
+                        tone::INK,
+                        clip,
+                    );
+                    let width = measure_text(&host, FontSize::Body).0;
+                    if width < rect.width {
+                        draw_text(
+                            surface,
+                            &one_line(tail, rect.width - width, FontSize::Body),
+                            rect.x + width,
+                            rect.y,
+                            FontSize::Body,
+                            tone::MUTED,
+                            clip,
+                        );
+                    }
+                }
+            }
             LayoutKind::Field(_) => stroke_clipped(
                 surface,
                 node.rect,
@@ -14293,7 +14480,16 @@ fn render_all_with_selected_font(
                     surface,
                     node.rect,
                     tone::INK,
-                    metrics.rule_thickness() * 2,
+                    metrics.rule_thickness()
+                        * if screen
+                            .nav_bar
+                            .as_ref()
+                            .is_some_and(|bar| bar.style == BarStyle::Browser)
+                        {
+                            1
+                        } else {
+                            2
+                        },
                     clip,
                 );
             }
@@ -14524,6 +14720,20 @@ fn render_all_with_selected_font(
             // Nothing at all: the picture is the whole of it.
             LayoutKind::Cell(_, CellStyle::Plain, _) => {}
             LayoutKind::Cell(_, CellStyle::Key, selected) => {
+                if screen
+                    .nav_bar
+                    .as_ref()
+                    .is_some_and(|bar| bar.style == BarStyle::Browser)
+                {
+                    stroke_rounded_clipped(
+                        surface,
+                        node.rect,
+                        metrics.tenth_mm(10),
+                        tone::RULE,
+                        metrics.rule_thickness(),
+                        clip,
+                    );
+                }
                 fill_rounded_clipped(
                     surface,
                     node.rect,
@@ -15259,6 +15469,27 @@ fn render_all_with_selected_font(
             // A hairline track rather than an outlined bar: it says where in
             // the range the value sits and is not itself a control, so it must
             // not carry as much ink as the two things that are.
+            LayoutKind::Slider(_, fill) => {
+                let thickness = metrics.tenth_mm(5).max(2);
+                let track = Rect {
+                    y: node.rect.y + node.rect.height / 2,
+                    height: thickness,
+                    ..node.rect
+                };
+                fill_clipped(surface, track, tone::RULE, clip);
+                let at = node.rect.x + node.rect.width * i32::from(fill) / 100;
+                fill_clipped(
+                    surface,
+                    Rect {
+                        x: at - thickness,
+                        y: track.y - thickness * 2,
+                        width: thickness * 2,
+                        height: thickness * 5,
+                    },
+                    tone::INK,
+                    clip,
+                );
+            }
             LayoutKind::StepperTrack(fill) => {
                 fill_clipped(surface, node.rect, tone::RULE, clip);
                 fill_clipped(

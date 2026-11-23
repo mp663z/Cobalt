@@ -1100,6 +1100,8 @@ struct AppState {
     scenario: Scenario,
     lifecycle: Lifecycle,
     last_touch: Option<SimulatedTouch>,
+    slider_drag: bool,
+    pressed_control: Option<kobo_ui::Rect>,
     apps: Arc<Mutex<SimulatedApps>>,
     runtime_navigation: bool,
     navigation: std::collections::VecDeque<String>,
@@ -1163,6 +1165,8 @@ impl AppState {
             scenario: Scenario::Normal,
             lifecycle: Lifecycle::Foreground,
             last_touch: None,
+            slider_drag: false,
+            pressed_control: None,
             apps,
             runtime_navigation: false,
             navigation: std::collections::VecDeque::new(),
@@ -1405,6 +1409,65 @@ impl AppState {
     }
 
     fn input_event(&mut self, event: kobo_hal::TouchEvent, held: bool) -> Option<Message> {
+        let physical = profile_metrics();
+        let coordinates = match event {
+            kobo_hal::TouchEvent::Down { x, y }
+            | kobo_hal::TouchEvent::Move { x, y }
+            | kobo_hal::TouchEvent::Up { x, y } => Some((x, y)),
+            kobo_hal::TouchEvent::Cancel => {
+                self.slider_drag = false;
+                if self.pressed_control.take().is_some() {
+                    self.commit_frame();
+                }
+                None
+            }
+        };
+        if let Some((x, y)) = coordinates {
+            let (x, y) = kobo_ui::logical_point(
+                self.orientation,
+                physical.width,
+                i32::try_from(x).ok()?,
+                i32::try_from(y).ok()?,
+            );
+            let layout = self
+                .screen
+                .layout_with(&physical.oriented(self.orientation), &self.chrome);
+            match event {
+                kobo_hal::TouchEvent::Down { .. } => {
+                    self.pressed_control = layout.pressed_control(x, y);
+                    if self.pressed_control.is_some() {
+                        self.commit_frame();
+                    }
+                }
+                kobo_hal::TouchEvent::Up { .. } => {
+                    if self.pressed_control.take().is_some() {
+                        self.commit_frame();
+                    }
+                }
+                kobo_hal::TouchEvent::Move { .. } => {
+                    if self
+                        .pressed_control
+                        .is_some_and(|rect| !rect.contains(x, y))
+                    {
+                        self.pressed_control = None;
+                        self.commit_frame();
+                    }
+                }
+                _ => {}
+            }
+            let action = layout.slider_action(x, y);
+            if matches!(event, kobo_hal::TouchEvent::Down { .. }) {
+                self.slider_drag = action.is_some();
+            }
+            if self.slider_drag {
+                if matches!(event, kobo_hal::TouchEvent::Up { .. }) {
+                    self.slider_drag = false;
+                }
+                return layout
+                    .slider_drag_action(x)
+                    .map(|action| Message::Action { action });
+            }
+        }
         let kobo_hal::TouchEvent::Up { x, y } = event else {
             return None;
         };
@@ -1569,6 +1632,20 @@ impl AppState {
             None,
             self.orientation,
         );
+        if let Some(rect) = self.pressed_control {
+            let metrics = profile_metrics();
+            let physical = if self.orientation == kobo_ui::Orientation::Portrait {
+                rect
+            } else {
+                kobo_ui::Rect {
+                    x: metrics.width - rect.y - rect.height,
+                    y: rect.x,
+                    width: rect.height,
+                    height: rect.width,
+                }
+            };
+            surface.invert_press(physical, &metrics);
+        }
         let before = self.panel.planner.refreshes();
         self.panel.update(&surface);
         if let Some(transition) = self
@@ -1714,6 +1791,33 @@ impl AppSession {
                         if let Some(message) = state.input_event(event, held) {
                             messages.push(message);
                         }
+                    }
+                }
+                "pointer" => {
+                    let mut parts = source.split_whitespace();
+                    let phase = parts
+                        .next()
+                        .ok_or_else(|| io::Error::other("pointer phase missing"))?;
+                    let x = parts
+                        .next()
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .ok_or_else(|| io::Error::other("pointer x missing"))?;
+                    let y = parts
+                        .next()
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .ok_or_else(|| io::Error::other("pointer y missing"))?;
+                    if parts.next().is_some() {
+                        return Err(io::Error::other("too many pointer fields"));
+                    }
+                    let event = match phase {
+                        "down" => kobo_hal::TouchEvent::Down { x, y },
+                        "move" => kobo_hal::TouchEvent::Move { x, y },
+                        "up" => kobo_hal::TouchEvent::Up { x, y },
+                        "cancel" => kobo_hal::TouchEvent::Cancel,
+                        _ => return Err(io::Error::other("invalid pointer phase")),
+                    };
+                    if let Some(message) = state.input_event(event, false) {
+                        messages.push(message);
                     }
                 }
                 "gpio" => {
@@ -5338,6 +5442,53 @@ mod tests {
         let before = session.state.lock().unwrap().hardware;
         assert!(session.change_hardware("battery 101 charging").is_err());
         assert_eq!(session.state.lock().unwrap().hardware, before);
+    }
+
+    #[test]
+    fn slider_delivers_down_move_and_release_values() {
+        let mut state = AppState::default();
+        let base = kobo_ui::ActionId(0x7ffe_0000);
+        state.screen = kobo_ui::Screen::new(1, Vec::new());
+        state.screen.nav_bar = Some(kobo_ui::NavBar {
+            id: kobo_ui::NodeId(1),
+            selected: None,
+            style: kobo_ui::BarStyle::Browser,
+            destinations: (0..7)
+                .map(|index| {
+                    kobo_ui::BarAction::new(
+                        if index == 4 {
+                            base
+                        } else {
+                            kobo_ui::ActionId(index)
+                        },
+                        "0",
+                    )
+                })
+                .collect(),
+        });
+        state.drawn_screen = state.screen.clone();
+        let metrics = profile_metrics();
+        let layout = state.screen.layout_with(&metrics, &state.chrome);
+        let rect = layout
+            .nodes
+            .iter()
+            .find(|n| matches!(n.kind, kobo_ui::LayoutKind::Slider(..)))
+            .unwrap()
+            .rect;
+        let y = (rect.y + rect.height / 2) as u32;
+        let x1 = (rect.x + rect.width / 4) as u32;
+        let x2 = (rect.x + rect.width * 3 / 4) as u32;
+        let down = state.input_event(kobo_hal::TouchEvent::Down { x: x1, y }, false);
+        let moved = state.input_event(kobo_hal::TouchEvent::Move { x: x2, y }, false);
+        let up = state.input_event(kobo_hal::TouchEvent::Up { x: x2, y }, false);
+        assert!(
+            matches!(down, Some(Message::Action { action }) if action.0 >= base.0 + 24 && action.0 <= base.0 + 26)
+        );
+        assert!(
+            matches!(moved, Some(Message::Action { action }) if action.0 >= base.0 + 74 && action.0 <= base.0 + 76)
+        );
+        assert_eq!(moved, up);
+        assert!(!state.slider_drag);
     }
 
     #[test]

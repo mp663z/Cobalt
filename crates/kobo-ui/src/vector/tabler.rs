@@ -27,6 +27,7 @@ use crate::Glyph;
 /// name.
 pub(super) fn outline(glyph: Glyph) -> &'static [&'static [Cmd]] {
     match glyph {
+        Glyph::Home | Glyph::Star | Glyph::Keyboard | Glyph::Lock => APP,
         Glyph::App => APP,
         Glyph::Book => BOOK,
         Glyph::Note => NOTE,

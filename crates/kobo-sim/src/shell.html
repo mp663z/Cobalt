@@ -178,7 +178,12 @@ function touchLocation(event){const rect=canvas.getBoundingClientRect();return{x
 async function touch(next){point=next;await post("/touch","x="+point.x+"&y="+point.y);status.textContent="Touch delivered through the selected profile transform.";}
 async function idle(){const deadline=performance.now()+5000;while(performance.now()<deadline){const response=await fetch("/activity",{cache:"no-store"});if(response.status===404)return;const activity=await checked(response).json();if(!activity.connected)throw Error("The app has disconnected. Restart it to continue.");if(!activity.callbackMarkers||activity.idle)return;await new Promise(resolve=>setTimeout(resolve,25));}throw Error("The app is still working. Refresh the frame to check its progress.");}
 async function post(path,body){const response=await fetch(path,{method:"POST",headers:{"Content-Type":"text/plain"},body});if(!response.ok)throw Error((await response.text())||"Request failed ("+response.status+")");await idle();await frame();}
-canvas.addEventListener("pointerup",event=>{event.preventDefault();touch(touchLocation(event)).catch(error=>status.textContent=error.message);});
+let pointerDown=false,pointerQueue=Promise.resolve(),lastPointerMove=0;
+function pointer(phase,event){const p=touchLocation(event);pointerQueue=pointerQueue.then(()=>post("/input","pointer "+phase+" "+p.x+" "+p.y)).catch(error=>status.textContent=error.message);}
+canvas.addEventListener("pointerdown",event=>{event.preventDefault();pointerDown=true;canvas.setPointerCapture(event.pointerId);pointer("down",event);});
+canvas.addEventListener("pointermove",event=>{if(!pointerDown||performance.now()-lastPointerMove<120)return;event.preventDefault();lastPointerMove=performance.now();pointer("move",event);});
+canvas.addEventListener("pointerup",event=>{if(!pointerDown)return;event.preventDefault();pointerDown=false;pointer("up",event);});
+canvas.addEventListener("pointercancel",event=>{pointerDown=false;pointer("cancel",event);});
 canvas.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();touch(point).catch(error=>status.textContent=error.message);}});
 document.getElementById("refresh").addEventListener("click",()=>frame().catch(error=>status.textContent=error.message));
 colour.addEventListener("change",()=>{ideal.checked=colour.checked;ideal.disabled=colour.checked;frame().catch(error=>status.textContent=error.message);});

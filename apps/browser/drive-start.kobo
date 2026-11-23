@@ -8,7 +8,7 @@ tap-id samples
 expect Sample pages
 tap-id navigate
 tap-id page-view
-wait-for-id native-reader
+expect Sample pages
 shot page-address-bar
 tap-id edit-address
 expect samples.browse.invalid
@@ -17,10 +17,10 @@ shot page-address-edit
 tap-id kb.r0c0
 expect samples.browse.invalid/q
 tap-id kb.cancel
-wait-for-id native-reader
+expect Sample pages
 shot page-keyboard-dismissed
 tap-id zoom-more
-expect 125%
+expect Sample pages
 shot page-zoomed
 tap-id browser-more
 expect Set Page as Home

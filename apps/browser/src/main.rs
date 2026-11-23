@@ -1255,6 +1255,10 @@ impl Browser {
     }
 
     fn browser_toolbar_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+        let slider = action
+            .0
+            .checked_sub(browser_chrome::SLIDER_BASE.0)
+            .filter(|value| *value <= 100);
         if action == action_id("browser-more") {
             self.browser_menu = !self.browser_menu;
         } else if self.browser_menu && action == action_id("back") {
@@ -1298,8 +1302,13 @@ impl Browser {
                 self.load(context, &url);
             }
             return true;
-        } else if action == action_id("zoom-less") || action == action_id("zoom-more") {
-            self.zoom = if action == action_id("zoom-less") {
+        } else if slider.is_some()
+            || action == action_id("zoom-less")
+            || action == action_id("zoom-more")
+        {
+            self.zoom = if let Some(value) = slider {
+                75 + (value * 125 / 100) as u16
+            } else if action == action_id("zoom-less") {
                 self.zoom.saturating_sub(25).max(75)
             } else {
                 (self.zoom + 25).min(200)
@@ -1432,7 +1441,7 @@ impl Browser {
         ScreenBuilder::new("browser-navigate")
             .top_bar(heading)
             .top_bar_action("return", "Done")
-            .top_bar_action("home", "Start")
+            .top_bar_action("native-reader", "Reader")
             .rows([
                 (
                     "page-view",
@@ -1614,14 +1623,35 @@ impl Browser {
             )
             .keyboard(self.address.keyboard(), "Go")
         } else if matches!(self.view, View::Page) {
+            let builder = builder
+                .top_bar(self.loaded.as_ref().map_or_else(
+                    || "Browse".to_owned(),
+                    |loaded| {
+                        loaded.painted.as_ref().map_or_else(
+                            || loaded.title.clone(),
+                            |painted| {
+                                format!(
+                                    "{}/{} {}",
+                                    painted.page + 1,
+                                    painted.view.pages(),
+                                    loaded.title
+                                )
+                            },
+                        )
+                    },
+                ))
+                .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
+                .top_bar_glyph("navigate", "Navigate", Glyph::More);
             let builder = browser_chrome::toolbar(builder, self.zoom, false);
             if self.browser_menu {
                 builder.popover("browser-more", |menu| {
-                    menu.button("edit-address", "Keyboard")
-                        .button("go-home", "Go Home")
-                        .button("bookmarks", "Favourites")
-                        .button("add-favourite", "Add to Favourites")
-                        .button("set-home", "Set Page as Home")
+                    menu.rows([
+                        ("edit-address", "Keyboard", "", Glyph::Keyboard),
+                        ("go-home", "Go Home", "", Glyph::Home),
+                        ("bookmarks", "Favourites", "", Glyph::Star),
+                        ("add-favourite", "Add to Favourites", "", Glyph::Star),
+                        ("set-home", "Set Page as Home", "", Glyph::Home),
+                    ])
                 })
             } else {
                 builder
@@ -1831,6 +1861,10 @@ impl KoboApp for Browser {
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         self.validate_css(context);
+        if action == action_id("browser-close") {
+            context.exit();
+            return;
+        }
         if action == action_id("home") {
             self.view = View::Start;
             self.address.close();
@@ -1845,6 +1879,17 @@ impl KoboApp for Browser {
         }
         if self.form_entry.is_open() {
             self.handle_form_entry(context, action);
+            return;
+        }
+        if self.address.is_open()
+            && (action == action_id("zoom-less")
+                || action == action_id("zoom-more")
+                || action
+                    .0
+                    .checked_sub(browser_chrome::SLIDER_BASE.0)
+                    .is_some_and(|value| value <= 100))
+        {
+            self.browser_toolbar_action(context, action);
             return;
         }
         if self.handle_address(context, action) {

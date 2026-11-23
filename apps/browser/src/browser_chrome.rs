@@ -1,33 +1,12 @@
 //! Shared bottom browser controls. Measurement and display use the same nodes.
-use kobo_sdk::{Glyph, ScreenBuilder};
+use kobo_sdk::ScreenBuilder;
 
-pub(crate) fn toolbar(builder: ScreenBuilder, zoom: u16, typing: bool) -> ScreenBuilder {
-    if typing {
-        return builder;
-    }
-    builder.fill().band(
-        kobo_sdk::BandAlign::Middle,
-        [
-            (
-                kobo_sdk::SlotWidth::Fill,
-                Box::new(move |slot: ScreenBuilder| {
-                    slot.stepper(
-                        format!("{zoom}%"),
-                        "zoom-less",
-                        Glyph::Minus,
-                        "zoom-more",
-                        Glyph::Plus,
-                    )
-                    .stepper_ends(zoom > 75, zoom < 200)
-                    .stepper_track(((zoom.saturating_sub(75)) * 100 / 125) as u8)
-                }) as Box<dyn FnOnce(ScreenBuilder) -> ScreenBuilder>,
-            ),
-            (
-                kobo_sdk::SlotWidth::Fixed(180),
-                Box::new(|slot: ScreenBuilder| slot.grid(1, false, [("browser-more", "More")]))
-                    as Box<dyn FnOnce(ScreenBuilder) -> ScreenBuilder>,
-            ),
-        ],
+pub(crate) const SLIDER_BASE: kobo_sdk::ActionId = kobo_sdk::ActionId(0x7ffe_0000);
+
+pub(crate) fn toolbar(builder: ScreenBuilder, zoom: u16, _typing: bool) -> ScreenBuilder {
+    builder.browser_bar(
+        ((zoom.saturating_sub(75)) * 100 / 125).min(100) as u8,
+        SLIDER_BASE,
     )
 }
 

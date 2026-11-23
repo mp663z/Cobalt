@@ -1329,6 +1329,39 @@ impl ScreenBuilder {
         self
     }
 
+    /// Compact browser controls. The slider reserves base..=base+100 actions.
+    #[must_use]
+    pub fn browser_bar(mut self, zoom_percent: u8, slider_base: ActionId) -> Self {
+        let id = self.next_id();
+        let mut actions = Vec::new();
+        for (name, label, glyph) in [
+            ("back", "Back", Glyph::Previous),
+            ("forward", "Forward", Glyph::Next),
+            ("reload", "Reload", Glyph::Refresh),
+            ("zoom-less", "Zoom out", Glyph::Minus),
+        ] {
+            actions.push(BarAction::new(self.register(name), label).with_glyph(glyph));
+        }
+        actions.push(BarAction::new(
+            slider_base,
+            zoom_percent.min(100).to_string(),
+        ));
+        for (name, label, glyph) in [
+            ("zoom-more", "Zoom in", Glyph::Plus),
+            ("browser-more", "More", Glyph::More),
+        ] {
+            actions.push(BarAction::new(self.register(name), label).with_glyph(glyph));
+        }
+        self.nav_bar = Some(NavBar {
+            id,
+            destinations: actions,
+            selected: None,
+            style: kobo_ui::BarStyle::Browser,
+        });
+        self.bottom_action = None;
+        self
+    }
+
     /// Pins one control to the bottom of the panel, where a bar would go.
     ///
     /// For a screen with a single way off it. Prefer this to a button at the

@@ -5198,6 +5198,7 @@ fn encode_screen(
             output.push(match nav_bar.style {
                 BarStyle::Navigation => 1,
                 BarStyle::Actions => 2,
+                BarStyle::Browser => 3,
             });
             push_u32(output, nav_bar.id.0);
             let len = u8::try_from(nav_bar.destinations.len())
@@ -6226,6 +6227,10 @@ const fn encode_glyph(glyph: Glyph) -> u8 {
         Glyph::Backspace => 66,
         Glyph::Shift => 67,
         Glyph::Mill => 68,
+        Glyph::Home => 69,
+        Glyph::Star => 70,
+        Glyph::Keyboard => 71,
+        Glyph::Lock => 72,
     }
 }
 
@@ -6300,6 +6305,10 @@ const fn decode_glyph(tag: u8) -> Option<Glyph> {
         66 => Glyph::Backspace,
         67 => Glyph::Shift,
         68 => Glyph::Mill,
+        69 => Glyph::Home,
+        70 => Glyph::Star,
+        71 => Glyph::Keyboard,
+        72 => Glyph::Lock,
 
         _ => return None,
     })
@@ -6345,11 +6354,13 @@ fn decode_screen(
     };
     let nav_bar = match reader.u8()? {
         0 => None,
-        style @ (1 | 2) => {
+        style @ (1 | 2 | 3) => {
             let style = if style == 1 {
                 BarStyle::Navigation
-            } else {
+            } else if style == 2 {
                 BarStyle::Actions
+            } else {
+                BarStyle::Browser
             };
             let bar_id = NodeId(reader.u32()?);
             let len = usize::from(reader.u8()?);
@@ -9251,6 +9262,35 @@ mod node_coverage_tests {
                 cursor: None,
             },
         ]
+    }
+
+    #[test]
+    fn compact_browser_bar_round_trips_with_vector_icons() {
+        let mut screen = Screen::new(909, Vec::new());
+        screen.nav_bar = Some(NavBar {
+            id: NodeId(1),
+            selected: None,
+            style: BarStyle::Browser,
+            destinations: [
+                Glyph::Previous,
+                Glyph::Next,
+                Glyph::Refresh,
+                Glyph::Minus,
+                Glyph::Lock,
+                Glyph::Plus,
+                Glyph::More,
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(index, glyph)| {
+                BarAction::new(ActionId(index as u32 + 10), "50").with_glyph(glyph)
+            })
+            .collect(),
+        });
+        assert_eq!(round_trip(screen.clone()), screen);
+        for glyph in [Glyph::Home, Glyph::Star, Glyph::Keyboard, Glyph::Lock] {
+            assert_eq!(decode_glyph(encode_glyph(glyph)), Some(glyph));
+        }
     }
 
     fn round_trip(screen: Screen) -> Screen {
