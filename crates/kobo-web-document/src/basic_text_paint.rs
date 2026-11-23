@@ -87,10 +87,68 @@ pub(crate) fn paint(
 ) -> Result<(Vec<Command>, i64, usize), &'static str> {
     let refs: Vec<_> = runs.iter().map(|r| (r.0.as_str(), r.1)).collect();
     let size_of = |leaf: usize| runs[leaf].3.clamp(1, 256);
-    let shaped: Vec<_> = runs
-        .iter()
-        .map(|r| font.page_shape(&r.0, r.3.clamp(1, 256), r.1, r.4))
-        .collect();
+    // Shape compatible font spans across DOM/style boundaries. Colour,
+    // decoration and source identity do not break OpenType context.
+    let mut shaped: Vec<Option<Vec<crate::css_text_page::PageCluster>>> =
+        (0..runs.len()).map(|_| None).collect();
+    let mut group_start = 0;
+    while group_start < runs.len() {
+        let mut group_end = group_start + 1;
+        while group_end < runs.len()
+            && runs[group_end].1 == runs[group_start].1
+            && runs[group_end].3 == runs[group_start].3
+            && runs[group_end].4 == runs[group_start].4
+        {
+            group_end += 1;
+        }
+        let text: String = runs[group_start..group_end]
+            .iter()
+            .map(|r| r.0.as_str())
+            .collect();
+        if let Some(clusters) = font.page_shape(
+            &text,
+            runs[group_start].3.clamp(1, 256),
+            runs[group_start].1,
+            runs[group_start].4,
+        ) {
+            let mut base = 0;
+            for leaf in group_start..group_end {
+                let end = base + runs[leaf].0.len();
+                let mut local = Vec::new();
+                for c in &clusters {
+                    if c.start >= end || c.end <= base {
+                        continue;
+                    }
+                    let origin = c.start >= base;
+                    local.push(crate::css_text_page::PageCluster {
+                        start: c.start.saturating_sub(base),
+                        end: c.end.min(end) - base,
+                        advance: if origin { c.advance } else { 0 },
+                        bitmap: if origin {
+                            GlyphBitmap {
+                                left: c.bitmap.left,
+                                top: c.bitmap.top,
+                                width: c.bitmap.width,
+                                height: c.bitmap.height,
+                                coverage: c.bitmap.coverage.clone(),
+                            }
+                        } else {
+                            GlyphBitmap {
+                                left: 0,
+                                top: 0,
+                                width: 0,
+                                height: 0,
+                                coverage: Vec::new(),
+                            }
+                        },
+                    });
+                }
+                shaped[leaf] = Some(local);
+                base = end;
+            }
+        }
+        group_start = group_end;
+    }
     let mut measure_offsets = vec![0_usize; runs.len()];
     let glyph_width = |ch: char, leaf: usize| {
         let size = size_of(leaf);
