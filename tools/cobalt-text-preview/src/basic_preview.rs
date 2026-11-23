@@ -77,7 +77,7 @@ pub fn prepare(
     if !(1..=4096).contains(&width) {
         return Err("width must be in 1..=4096");
     }
-    let ((bytes, _), images, _, _, _) = normalize_for_basic_full(html);
+    let ((bytes, _), _, _) = normalize_for_basic_full(html);
     // Sheets pass through RAW: `:link`/`:visited` are resolved by the
     // state-aware entry below and `pt` by the length parser.
     let sheets: Vec<Vec<u8>> = sheets.to_vec();
@@ -104,6 +104,9 @@ pub fn prepare(
     let style =
         parse_style_tree_with_state(&bytes, &sheets, &limits, Some(media), budget, &snapshot);
     let tree = BoxTree::from_style(&style);
+    // Image payloads come from the box tree now that img is a real box
+    // kind; the sentinel rectangles in the raster pair with these.
+    let images = tree.images_in_order();
     let (mut commands, stats, height) =
         paint_basic_page_families(&tree, width, 1, &faces.regular, &faces.regular, &faces.mono)
             .map_err(|_| "basic paint failed")?;

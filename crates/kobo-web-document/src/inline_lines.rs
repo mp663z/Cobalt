@@ -1840,7 +1840,10 @@ mod nested_inline_tests {
             "a<span style='letter-spacing:1px'>b</span>",
             "a<span style='word-spacing:1px'>b</span>",
             "a<span style='visibility:hidden'>b</span>",
-            "a<span><img></span>b",
+            // A data-URI img is now a real Image box (block-level): inside
+            // an inline span it is exactly the mixed inline/block shape
+            // this test refuses. A src-less img produces no box at all.
+            "a<span><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='></span>b",
             "a<span onclick='void(0)'><span>b</span></span>",
             "a<span><br></span>b",
         ] {

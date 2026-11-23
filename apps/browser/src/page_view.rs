@@ -187,8 +187,7 @@ impl PageView {
         if css_width == 0 || page_height_css == 0 || scale == 0 {
             return Err("viewport");
         }
-        let ((bytes, _prefilter), _images, _hoisted, _rows, _chrome) =
-            normalize_for_basic_full(bytes);
+        let ((bytes, _prefilter), _rows, _chrome) = normalize_for_basic_full(bytes);
         let budget = SupplyBudget {
             max_linked_sheets: 48,
             max_sheet_bytes: 2 * 1024 * 1024,

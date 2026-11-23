@@ -83,7 +83,9 @@ fn complete_page_nested_paint_and_rectangle_only_refusals_are_atomic() {
 fn complete_bad_subtree_and_page_cap_fail_before_metrics() {
     for html in [
         "aa<span><span style='padding:1px'></span></span>bb",
-        "aa<span><img></span>bb",
+        // A data-URI img is a real block-level Image box now: refused in
+        // inline flow by this painter. A src-less img produces no box.
+        "aa<span><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='></span>bb",
         "aa<span><br></span>bb",
     ] {
         let face = Face {
@@ -189,7 +191,7 @@ fn legacy_direct_single_text_tags_keep_pixels_but_new_shapes_stay_closed() {
         }
     }
     for html in [
-        "aa<img>bb",
+        "aa<img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='>bb",
         "aa<br>bb",
         "aa<span onclick='void(0)'>bb</span>cc",
         "aa<unknown onclick='void(0)'>bb</unknown>cc",
