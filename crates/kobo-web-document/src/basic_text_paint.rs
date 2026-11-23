@@ -120,6 +120,13 @@ pub(crate) fn paint(
         }
         let glyphs = &lines.glyphs[from..to];
         let size = size_of(first.leaf);
+        let available = width.saturating_sub(line_widths[first.line as usize]);
+        let offset = match style.align {
+            TextAlign::Center => available / 2,
+            TextAlign::Right => available,
+            TextAlign::Initial if style.direction == Direction::Rtl => available,
+            _ => 0,
+        };
         let bitmaps: Vec<_> = glyphs
             .iter()
             .map(|g| {
@@ -181,13 +188,6 @@ pub(crate) fn paint(
                     }
                 }
             }
-            let available = width.saturating_sub(line_widths[first.line as usize]);
-            let offset = match style.align {
-                TextAlign::Center => available / 2,
-                TextAlign::Right => available,
-                TextAlign::Initial if style.direction == Direction::Rtl => available,
-                _ => 0,
-            };
             let rect = Rect {
                 x: i32::try_from(origin.0 + left + i64::from(offset)).map_err(|_| "text-x")?,
                 y: i32::try_from(origin.1 + line_tops[first.line as usize] + ink_top)
@@ -219,7 +219,8 @@ pub(crate) fn paint(
             let color = contrast_floor(runs[first.leaf].2, style.background);
             commands.push(Command::Fill {
                 rect: Rect {
-                    x: i32::try_from(origin.0 + i64::from(first.x)).map_err(|_| "underline-x")?,
+                    x: i32::try_from(origin.0 + i64::from(first.x) + i64::from(offset))
+                        .map_err(|_| "underline-x")?,
                     y: i32::try_from(origin.1 + line_tops[first.line as usize] + baseline + 1)
                         .map_err(|_| "underline-y")?,
                     width: extent,

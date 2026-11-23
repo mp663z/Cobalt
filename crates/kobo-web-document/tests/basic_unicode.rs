@@ -146,3 +146,30 @@ fn pre_css_and_ordered_list_markers_survive_intake() {
     );
     assert!(styled.unsupported, "exact painter still refuses pre");
 }
+
+#[test]
+fn centered_underlines_follow_the_glyph_run() {
+    let (commands, _, _) = paint("<p style='text-align:center'><u>abc</u></p>");
+    let glyph = commands
+        .iter()
+        .find_map(|c| {
+            if let Command::GlyphRun { bounds, .. } = c {
+                Some(bounds)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    let underline = commands
+        .iter()
+        .find_map(|c| {
+            if let Command::Fill { rect, .. } = c {
+                Some(rect)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    assert_eq!(glyph.x, underline.x);
+    assert_eq!(glyph.width, underline.width);
+}

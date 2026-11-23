@@ -182,7 +182,17 @@ impl PageFontSession {
                 missing: true,
             });
         };
+        let measured = font.metrics(ch, px as f32);
+        if measured.width > 512
+            || measured.height > 512
+            || measured.width.checked_mul(measured.height)? > 262_144
+        {
+            return None;
+        }
         let (m, coverage) = font.rasterize(ch, px as f32);
+        if m.width != measured.width || m.height != measured.height {
+            return None;
+        }
         Some(PageGlyph {
             left: m.xmin,
             top: -m.ymin - i32::try_from(m.height).ok()?,
