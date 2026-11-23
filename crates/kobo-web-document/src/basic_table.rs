@@ -2,7 +2,7 @@
 //! Unsupported structures are counted, never painted as independent flex rows.
 use super::{rgb, Painter};
 use crate::box_tree::BoxKind;
-use crate::computed_style::{Direction, Length, Position};
+use crate::computed_style::{BorderColor, BorderStyle, Direction, Length, Position};
 use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Source};
 use crate::table_layout::{automatic_columns, CellIntrinsic};
@@ -196,8 +196,14 @@ impl<F: FontProvider> Painter<'_, F> {
                 if node.kind != BoxKind::TableCell {
                     return Err("table-row-child");
                 }
-                if node.style.decor.has_painted_border() {
-                    return Err("table-cell-border-not-wired");
+                if node
+                    .style
+                    .decor
+                    .border_style
+                    .iter()
+                    .any(|style| !matches!(style, BorderStyle::None | BorderStyle::Solid))
+                {
+                    return Err("table-cell-border-style");
                 }
                 if [
                     node.style.padding_top,
@@ -329,6 +335,7 @@ impl<F: FontProvider> Painter<'_, F> {
                     )?;
                     self.stats.fills += 1;
                 }
+                self.table_cell_border(cell, cell_x, y, width, height, commands)?;
                 commands.extend(ink);
                 self.stats.blocks_painted += 1;
             }
@@ -365,6 +372,50 @@ impl<F: FontProvider> Painter<'_, F> {
         }
         self.stats.blocks_painted += 1;
         Ok(y - top)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn table_cell_border(
+        &mut self,
+        cell: usize,
+        x: i64,
+        y: i64,
+        width: u32,
+        height: i64,
+        commands: &mut Vec<Command>,
+    ) -> Result<(), &'static str> {
+        let node = &self.tree.boxes[cell];
+        let [top, right, bottom, left] = node.style.decor.used_border();
+        let horizontal = i64::from(left) + i64::from(right);
+        let vertical = i64::from(top) + i64::from(bottom);
+        if horizontal > i64::from(width) || vertical > height {
+            return Err("table-cell-border-size");
+        }
+        // Box-tree padding already includes border widths. Paint inside that
+        // reserved edge, not outward into the neighbouring cell's spacing.
+        for (side, bx, by, bw, bh) in [
+            (0, x, y, width, i64::from(top)),
+            (1, x + i64::from(width - right), y, right, height),
+            (
+                2,
+                x,
+                y + height - i64::from(bottom),
+                width,
+                i64::from(bottom),
+            ),
+            (3, x, y, left, height),
+        ] {
+            let color = match node.style.decor.border_color[side] {
+                BorderColor::Transparent => continue,
+                BorderColor::CurrentColor => node.style.color,
+                BorderColor::Opaque(color) => color,
+            };
+            if bw > 0 && bh > 0 {
+                table_fill(commands, commands.len(), bx, by, bw, bh, color, node.source)?;
+                self.stats.fills += 1;
+            }
+        }
+        Ok(())
     }
 }
 

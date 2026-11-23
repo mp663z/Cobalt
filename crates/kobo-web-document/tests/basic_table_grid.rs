@@ -265,3 +265,31 @@ fn nested_block_cell_falls_back_without_losing_text() {
     assert_eq!(stats.approximations.get("table-stacked-fallback"), Some(&1));
     assert_eq!(stats.text_blocks_painted, 4);
 }
+
+#[test]
+fn separated_solid_cell_borders_use_the_shared_row_border_box() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}td{padding:4px;border:2px solid #456789;background:#123456}</style><table><tr><td>A</td><td>Longer content wraps over several lines</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 160, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let edges: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Fill {
+                rect,
+                color: Rgb(0x45, 0x67, 0x89),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(edges.len(), 8);
+    assert_eq!(edges[0].height, 2);
+    assert_eq!(edges[1].width, 2);
+    assert_eq!(edges[1].height, edges[5].height);
+    assert!(edges[1].height > 28);
+}
