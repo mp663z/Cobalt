@@ -253,13 +253,13 @@ impl<F: FontProvider> Painter<'_, F> {
         {
             return Err("table-style");
         }
-        let border = style.decor.used_border();
         if [
             style.padding_top,
             style.padding_right,
             style.padding_bottom,
             style.padding_left,
-        ] != border
+        ]
+        .contains(&crate::computed_style::PADDING_UNREPRESENTABLE)
             || style
                 .decor
                 .border_style
@@ -268,11 +268,12 @@ impl<F: FontProvider> Painter<'_, F> {
         {
             return Err("table-outer-edges");
         }
-        let horizontal_edges = border[1]
-            .checked_add(border[3])
+        let horizontal_edges = style
+            .padding_right
+            .checked_add(style.padding_left)
             .ok_or("table-outer-edges")?;
         let width_edges = horizontal_edges.checked_add(4).ok_or("table-outer-edges")?;
-        let grid_x = x + i64::from(border[3]);
+        let grid_x = x + i64::from(style.padding_left);
         let rows = self.table_rows(table)?;
         let mut grid = Vec::new();
         let mut cells = Vec::new();
@@ -477,7 +478,7 @@ impl<F: FontProvider> Painter<'_, F> {
         }
         let top = top + caption_height;
         let entry = commands.len();
-        let mut y = top + i64::from(border[0]) + 2;
+        let mut y = top + i64::from(style.padding_top) + 2;
         let mut group_extents: Vec<(usize, i64, i64)> = Vec::new();
         for (row_number, row) in grid.iter().enumerate() {
             let row_entry = commands.len();
@@ -602,7 +603,7 @@ impl<F: FontProvider> Painter<'_, F> {
                 self.stats.fills += 1;
             }
         }
-        y += i64::from(border[2]);
+        y += i64::from(style.padding_bottom);
         let outer_width = columns
             .width
             .checked_add(width_edges)

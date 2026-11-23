@@ -793,3 +793,46 @@ fn declared_border_box_cell_width_already_includes_edges() {
     assert_eq!(cells[0].width, 100);
     assert_eq!(cells[1].x, cells[0].x + 102);
 }
+
+#[test]
+fn table_outer_padding_reserves_space_inside_border_without_stacking() {
+    let style = kobo_web_document::parse_basic_style_tree(
+        br"<!doctype html><style>body{margin:0}table{width:220px;padding:8px;border:3px solid #456789;background:#dddddd}td{padding:4px;background:#123456}</style><table><tr><td>A</td><td>B</td></tr></table>",
+        &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL, None,
+    );
+    let (commands, stats, _) =
+        paint_basic_page(&BoxTree::from_style(&style), 400, 500, &Face).unwrap();
+    assert!(stats.skips.is_empty(), "{:?}", stats.skips);
+    assert!(!stats.approximations.contains_key("table-stacked-fallback"));
+    let outer = commands
+        .iter()
+        .find_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0xdd, 0xdd, 0xdd),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(outer.width, 220);
+    let cells: Vec<_> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::Fill {
+                rect,
+                color: Rgb(0x12, 0x34, 0x56),
+                ..
+            } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(cells[0].x, outer.x + 13);
+    assert_eq!(cells[0].y, outer.y + 13);
+    assert_eq!(cells[1].x + cells[1].width as i32, outer.x + 207);
+    assert_eq!(
+        cells[0].y + cells[0].height as i32 + 13,
+        outer.y + outer.height as i32
+    );
+}
