@@ -19,6 +19,7 @@ use kobo_web_document::box_tree::BoxTree;
 use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics};
 use kobo_web_document::display_list::{Command, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
+use kobo_web_document::style_tree::StyleTree;
 use kobo_web_document::{
     parse_style_tree_with_inline_sheets_and_selectors, Limits, MediaContext, SupplyBudget,
 };
@@ -114,6 +115,10 @@ impl FontProvider for PageFontAdapter {
 pub(crate) struct PageView {
     commands: Vec<Command>,
     stats: PartialStats,
+    /// Link targets in first-paint order; `TapMap` actions index this.
+    links: Vec<String>,
+    /// Tap targets resolved at paint time: `(rect, link index)`.
+    targets: Vec<(Rect, usize)>,
     /// Whole painted column, CSS px.
     content_height: u32,
     css_width: u32,
@@ -169,9 +174,12 @@ impl PageView {
         let (commands, stats, _) =
             paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
         let cuts = paginate(&commands, content_height, page_height_css);
+        let (links, targets) = link_targets(&tree, &commands);
         Ok(Self {
             commands,
             stats,
+            links,
+            targets,
             content_height,
             css_width,
             scale,
@@ -279,8 +287,60 @@ impl PageView {
     /// actions; the resolution logic is exercised by unit tests with
     /// synthetic commands.
     pub(crate) fn tap_map(&self) -> TapMap {
-        TapMap::from_commands(&self.commands)
+        TapMap {
+            targets: self.targets.clone(),
+        }
     }
+
+    /// The page's link targets in first-paint order, for the Links list.
+    pub(crate) fn links(&self) -> &[String] {
+        &self.links
+    }
+}
+
+/// Resolves every command's source node to the nearest ancestor `a` href,
+/// interning targets in first-paint order. The walk is depth-bounded: the
+/// tree comes from an untrusted document.
+fn link_targets(tree: &StyleTree, commands: &[Command]) -> (Vec<String>, Vec<(Rect, usize)>) {
+    let mut links: Vec<String> = Vec::new();
+    let mut targets: Vec<(Rect, usize)> = Vec::new();
+    for command in commands {
+        let (rect, node) = match command {
+            Command::Fill { rect, source, .. } => (rect, source.node),
+            Command::GlyphRun { layout, source, .. } => (layout, source.node),
+            Command::PushClip(_) | Command::PopClip => continue,
+        };
+        let Some(node) = node else {
+            continue;
+        };
+        let mut at = Some(node);
+        let mut depth = 0;
+        let href = loop {
+            let Some(i) = at else { break None };
+            let Some(styled) = tree.nodes.get(i) else {
+                break None;
+            };
+            if let Some(href) = &styled.href {
+                break Some(href.clone());
+            }
+            depth += 1;
+            if depth >= 64 {
+                break None;
+            }
+            at = styled.parent;
+        };
+        if let Some(href) = href {
+            let action = links
+                .iter()
+                .position(|known| known == &href)
+                .unwrap_or_else(|| {
+                    links.push(href);
+                    links.len() - 1
+                });
+            targets.push((*rect, action));
+        }
+    }
+    (links, targets)
 }
 
 /// The fallback decision on a census alone, so the app can ask before it
@@ -616,6 +676,8 @@ mod tests {
         let view = PageView {
             commands: vec![fill(5, 5, 10, 10, None)],
             stats: PartialStats::default(),
+            links: Vec::new(),
+            targets: Vec::new(),
             content_height: 100,
             css_width: 100,
             scale: 2,
@@ -639,6 +701,8 @@ mod tests {
         let view = PageView {
             commands: vec![fill(0, 60, 20, 10, None)],
             stats: PartialStats::default(),
+            links: Vec::new(),
+            targets: Vec::new(),
             content_height: 100,
             css_width: 50,
             scale: 2,
@@ -659,6 +723,8 @@ mod tests {
         let grey = PageView {
             commands: vec![fill(0, 0, 4, 4, None)],
             stats: PartialStats::default(),
+            links: Vec::new(),
+            targets: Vec::new(),
             content_height: 10,
             css_width: 10,
             scale: 1,
@@ -689,6 +755,25 @@ mod tests {
         stats.blocks_painted = 75;
         stats.skips.insert("non-ascii-text", 25);
         assert!(falls_back(&stats));
+    }
+
+    #[test]
+    fn painted_page_collects_link_targets() {
+        let face = PageFontAdapter::bundled().expect("bundled faces");
+        let html = b"<html><body><p><a href='https://x.invalid/first'>one</a></p>                     <p><a href='https://x.invalid/second'>two</a></p></body></html>";
+        let view = PageView::paint(html, 536, 724, 2, &face, &face, &face).expect("paint");
+        assert_eq!(
+            view.links(),
+            &[
+                "https://x.invalid/first".to_string(),
+                "https://x.invalid/second".to_string()
+            ]
+        );
+        let map = view.tap_map();
+        assert!(!map.is_empty());
+        let (rect, action) = map.targets[0];
+        assert_eq!(view.links()[action], "https://x.invalid/first");
+        assert_eq!(map.resolve(rect.x, rect.y), Some(action));
     }
 
     #[test]
