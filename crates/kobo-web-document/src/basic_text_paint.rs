@@ -56,13 +56,24 @@ fn placeholder(size: u32) -> GlyphBitmap {
 /// scanning the prefix so the cursor always lands on a real occurrence. A
 /// byte offset inside a multi-byte character would panic the next slice.
 fn next_occurrence(text: &str, offset: &mut usize, ch: char) -> usize {
-    let byte = text[*offset..]
+    *offset = (*offset).min(text.len());
+    while !text.is_char_boundary(*offset) {
+        *offset -= 1;
+    }
+    let found = text[*offset..]
         .char_indices()
         .find(|(_, c)| *c == ch)
         .map(|(i, _)| *offset + i)
-        .or_else(|| text[..*offset].char_indices().find(|(_, c)| *c == ch).map(|(i, _)| i))
-        .unwrap_or(*offset);
-    *offset = byte.saturating_add(ch.len_utf8()).min(text.len());
+        .or_else(|| {
+            text[..*offset]
+                .char_indices()
+                .find(|(_, c)| *c == ch)
+                .map(|(i, _)| i)
+        });
+    let Some(byte) = found else {
+        return *offset;
+    };
+    *offset = byte + ch.len_utf8();
     byte
 }
 
@@ -166,7 +177,8 @@ pub(crate) fn paint(
         let bitmaps: Vec<_> = glyphs
             .iter()
             .map(|g| {
-                let byte = next_occurrence(&runs[g.leaf].0, &mut paint_offsets[g.leaf], g.character);
+                let byte =
+                    next_occurrence(&runs[g.leaf].0, &mut paint_offsets[g.leaf], g.character);
                 if let Some(clusters) = &shaped[g.leaf] {
                     if let Some(cluster) = clusters
                         .get(clusters.partition_point(|c| c.end <= byte))
@@ -305,6 +317,21 @@ pub(crate) fn paint(
 #[cfg(test)]
 mod tests {
     use super::contrast_floor;
+    #[test]
+    fn cursor_remeasurement_and_absent_collapsed_space_stay_on_boundaries() {
+        let text = "a’ब";
+        let mut cursor = 0;
+        assert_eq!(super::next_occurrence(text, &mut cursor, 'a'), 0);
+        assert_eq!(super::next_occurrence(text, &mut cursor, '’'), 1);
+        assert_eq!(super::next_occurrence(text, &mut cursor, 'a'), 0);
+        assert!(text.is_char_boundary(cursor));
+        // A collapsed space can have originated from a tab or newline.
+        assert_eq!(super::next_occurrence(text, &mut cursor, ' '), 1);
+        assert_eq!(cursor, 1);
+        assert_eq!(super::next_occurrence(text, &mut cursor, 'ब'), 4);
+        assert_eq!(cursor, text.len());
+    }
+
     #[test]
     fn light_text_on_light_paper_is_darkened() {
         assert!(contrast_floor(0xaaaaaa, 0xffffff) <= 0x007f_7f7f);
