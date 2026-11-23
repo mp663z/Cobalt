@@ -100,15 +100,11 @@ fn place_sourced_runs_normal<'a>(
     let mut words: Vec<MeasuredWord> = Vec::new();
     let mut word: Vec<MeasuredLetter> = Vec::new();
     let mut letters = 0_usize;
-    // The current placer only has whitespace wrap opportunities. A word
-    // containing ASCII hyphen or break punctuation needs CSS/Unicode line
-    // breaking semantics when it wraps. An entirely fitting single line has
-    // no break decision and can retain its punctuation. A narrow exception
-    // allows alphanumeric words with one terminal sentence mark: those
-    // marks stay with the word and the next whitespace is the break.
-    let needs_break_rules = runs
-        .clone()
-        .any(|(text, _, _)| text.chars().any(needs_extra_break_rules));
+    // Break opportunities: whitespace, plus AFTER ASCII hyphen and solidus
+    // (UAX#14 HY/SY), implemented by splitting words into pieces below.
+    // All other punctuation stays attached to its word (no internal break,
+    // matching CSS defaults); a piece wider than the line fails closed as
+    // UnbreakableWord for the caller's counted fallback.
     let mut pending_space: Option<(bool, usize)> = None;
     for (text, bold, leaf) in runs {
         for ch in text.chars() {
@@ -153,11 +149,48 @@ fn place_sourced_runs_normal<'a>(
             leaf,
         ));
     }
-    if needs_break_rules
-        && !words.iter().all(|(word, _)| sentence_word(word))
-        && !fits_single_line(&words, &spaces, max_width)
-    {
-        return Err(LineError::UnsupportedText);
+    // Split words at the modelled break opportunities: after '-' and '/'.
+    // Pieces of one source word join with a zero-width break (no space
+    // glyph, no advance); everything else about placement is unchanged.
+    // A piece wider than the line is still UnbreakableWord, so genuinely
+    // unbreakable text keeps failing closed to the caller's fallback.
+    let mut pieces: Vec<MeasuredWord> = Vec::with_capacity(words.len());
+    let mut zero_join: Vec<bool> = Vec::with_capacity(words.len());
+    for (word, pending) in words {
+        // The word's leading-space flag belongs to its FIRST piece; later
+        // pieces are zero-width joins whose boundary is never spaced.
+        let mut pending = pending;
+        let mut current: Vec<MeasuredLetter> = Vec::new();
+        let mut first_piece = true;
+        for (i, &letter) in word.iter().enumerate() {
+            current.push(letter);
+            if matches!(letter.0, '-' | '/') && i + 1 < word.len() {
+                pieces.push((std::mem::take(&mut current), pending.take()));
+                zero_join.push(!first_piece);
+                first_piece = false;
+            }
+        }
+        pieces.push((current, pending));
+        zero_join.push(!first_piece);
+    }
+    let words = pieces;
+    // Rebuild the boundary table over pieces: intra-word joins are zero
+    // width; word boundaries keep their measured space.
+    let mut spaces: Vec<Option<(u32, bool, usize)>> = vec![None; words.len()];
+    for index in 1..words.len() {
+        if zero_join[index] {
+            let &(_, _, flag, leaf) = words[index].0.first().ok_or(LineError::InvalidMetrics)?;
+            spaces[index] = Some((0, flag, leaf));
+        } else {
+            let (flag, leaf) = words[index].1.ok_or(LineError::InvalidMetrics)?;
+            spaces[index] = Some((
+                advance(' ', flag)
+                    .filter(|&n| n > 0)
+                    .ok_or(LineError::InvalidMetrics)?,
+                flag,
+                leaf,
+            ));
+        }
     }
     let mut glyphs = Vec::new();
     let mut x = 0_u32;
@@ -180,17 +213,19 @@ fn place_sourced_runs_normal<'a>(
                 }
                 x = 0;
             } else {
-                if glyphs.len() >= MAX_GLYPH_BYTES {
-                    return Err(LineError::TooManyGlyphs);
+                if space > 0 {
+                    if glyphs.len() >= MAX_GLYPH_BYTES {
+                        return Err(LineError::TooManyGlyphs);
+                    }
+                    glyphs.push(PositionedGlyph {
+                        character: ' ',
+                        x,
+                        line,
+                        advance: space,
+                        bold: space_bold,
+                        leaf: space_leaf,
+                    });
                 }
-                glyphs.push(PositionedGlyph {
-                    character: ' ',
-                    x,
-                    line,
-                    advance: space,
-                    bold: space_bold,
-                    leaf: space_leaf,
-                });
                 x += space;
             }
         }
@@ -465,89 +500,9 @@ pub fn shaped_block_lines(
 }
 // ---- END PROTOTYPE ----
 
-fn needs_extra_break_rules(ch: char) -> bool {
-    matches!(
-        ch,
-        '\'' | '-'
-            | '/'
-            | '\u{ad}'
-            | '!'
-            | ','
-            | '.'
-            | ':'
-            | ';'
-            | '?'
-            | '('
-            | ')'
-            | '['
-            | ']'
-            | '{'
-            | '}'
-    )
-}
 
-// Deliberately excludes other internal punctuation, unmatched brackets, surrounding
-// quotes, runs of punctuation, hyphens and slashes. One ASCII apostrophe
-// between alphabetic stems stays inside a contraction or possessive.
-fn sentence_word(word: &[MeasuredLetter]) -> bool {
-    word.split(|&(ch, _, _, _)| ch == '\u{a0}')
-        .all(sentence_piece)
-}
 
-fn sentence_piece(word: &[MeasuredLetter]) -> bool {
-    let Some(&(last, _, _, _)) = word.last() else {
-        return false;
-    };
-    let stem = if matches!(last, '.' | ',' | '!' | '?' | ':' | ';') {
-        &word[..word.len() - 1]
-    } else {
-        word
-    };
-    let stem = match (stem.first(), stem.last()) {
-        (Some(&(open, _, _, _)), Some(&(close, _, _, _)))
-            if matches!((open, close), ('(', ')') | ('[', ']') | ('{', '}')) =>
-        {
-            &stem[1..stem.len() - 1]
-        }
-        _ => stem,
-    };
-    if !stem.is_empty() && stem.iter().all(|&(ch, _, _, _)| ch.is_ascii_alphanumeric()) {
-        return true;
-    }
-    let mut pieces = stem.split(|&(ch, _, _, _)| ch == '\'');
-    let alphabetic = |part: &[MeasuredLetter]| {
-        !part.is_empty() && part.iter().all(|&(ch, _, _, _)| ch.is_ascii_alphabetic())
-    };
-    pieces.next().is_some_and(alphabetic)
-        && pieces.next().is_some_and(alphabetic)
-        && pieces.next().is_none()
-}
 
-fn fits_single_line(
-    words: &[MeasuredWord],
-    spaces: &[Option<(u32, bool, usize)>],
-    max_width: u32,
-) -> bool {
-    let mut full_width = 0_u32;
-    for (index, (word, _)) in words.iter().enumerate() {
-        if index > 0 {
-            let Some(Some((space, _, _))) = spaces.get(index) else {
-                return false;
-            };
-            let Some(next) = full_width.checked_add(*space) else {
-                return false;
-            };
-            full_width = next;
-        }
-        for &(_, width, _, _) in word {
-            let Some(next) = full_width.checked_add(width) else {
-                return false;
-            };
-            full_width = next;
-        }
-    }
-    full_width <= max_width
-}
 
 /// Measured lines for one directly contained text node. Multiple inline
 /// children, nested spans, anonymous blocks and other inline contexts need a
@@ -1166,10 +1121,18 @@ mod tests {
 
     #[test]
     fn refuses_unsupported_text_and_unproven_measurements() {
-        for text in ["one-two", "one/two", "one\u{ad}two", "one,two", "one.two"] {
+        // Soft hyphen still refuses (needs hyphenation rendering); the
+        // non-ASCII and control cases below still refuse in the tokenizer.
+        assert_eq!(
+            place_ascii_normal("one\u{ad}two", 10, |_| Some(5)),
+            Err(LineError::UnsupportedText)
+        );
+        // Punctuation now stays attached to its word (bug-1 fix): a word
+        // too wide for the line is UnbreakableWord, never UnsupportedText.
+        for text in ["one-two", "one/two", "one,two", "one.two"] {
             assert_eq!(
                 place_ascii_normal(text, 10, |_| Some(5)),
-                Err(LineError::UnsupportedText)
+                Err(LineError::UnbreakableWord)
             );
         }
         assert_eq!(
@@ -1215,11 +1178,9 @@ mod punctuation_tests {
             );
             assert_eq!(
                 place_ascii_normal(text, 3, |_| Some(3)),
-                Err(if text.starts_with('(') || text.starts_with('[') {
-                    LineError::UnbreakableWord
-                } else {
-                    LineError::UnsupportedText
-                })
+                // Post bug-1 every one-word text too wide for the line
+                // fails as over-wide; punctuation stays attached.
+                Err(LineError::UnbreakableWord)
             );
         }
         let lines = place_ascii_normal("  a,b \t c.d  ", 21, |_| Some(3)).unwrap();
@@ -1228,9 +1189,10 @@ mod punctuation_tests {
             lines.glyphs.iter().map(|g| g.character).collect::<String>(),
             "a,b c.d"
         );
+        // Post bug-1: attached punctuation, so a wrap at the space succeeds.
         assert_eq!(
-            place_ascii_normal("a,b c.d", 20, |_| Some(3)),
-            Err(LineError::UnsupportedText)
+            place_ascii_normal("a,b c.d", 20, |_| Some(3)).unwrap().count,
+            2
         );
         assert_eq!(
             place_ascii_normal("a\u{ad}b", 100, |_| Some(3)),
@@ -1266,16 +1228,28 @@ mod sentence_wrap_tests {
         );
     }
     #[test]
-    fn broader_punctuation_wraps_still_refuse() {
-        for text in [
-            "a-b cd.", "a/b cd.", "a.b cd.", "a,b cd.", "(ab cd.", "ab!! cd.", ". ab.", "ab. 'cd'",
-        ] {
-            assert_eq!(
-                place_ascii_normal(text, 9, |_| Some(3)),
-                Err(LineError::UnsupportedText),
-                "{text}"
-            );
+    fn punctuation_attaches_breaks_at_spaces_and_modelled_marks() {
+        // Post bug-1 contract: punctuation rides its word; breaks happen at
+        // spaces and after '-' '/'. Width 9 = three 3px chars per line.
+        let lines = place_ascii_normal("a-b cd.", 9, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 2); // "a-b" whole (zero-width join), "cd."
+        let lines = place_ascii_normal("a-b cd", 6, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 3); // "a-", "b", "cd"
+        let b0: String = lines.glyphs.iter().filter(|g| g.line == 0).map(|g| g.character).collect();
+        assert_eq!(b0, "a-");
+        let lines = place_ascii_normal("a/b cd", 6, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 3); // "a/", "b", "cd"
+        for text in ["a.b cd.", "a,b cd.", "(ab cd.", ". ab."] {
+            let lines = place_ascii_normal(text, 9, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2, "{text}"); // marks attached, space wrap
         }
+        let lines = place_ascii_normal("ab!! cd.", 12, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 2);
+        // A word wider than the line still fails closed.
+        assert_eq!(
+            place_ascii_normal("ab. 'cd'", 9, |_| Some(3)),
+            Err(LineError::UnbreakableWord)
+        );
     }
 }
 
@@ -1303,16 +1277,18 @@ mod apostrophe_wrap_tests {
         }
     }
     #[test]
-    fn ambiguous_quotes_and_multiple_apostrophes_still_refuse() {
-        for text in [
-            "'ab' cd.", "ab' cd.", "'ab cd.", "a'b'c d.", "a'b'c d", "1'2 cd.", "a'1 cd.",
-        ] {
-            assert_eq!(
-                place_ascii_normal(text, 12, |_| Some(3)),
-                Err(LineError::UnsupportedText),
-                "{text}"
-            );
+    fn quotes_and_apostrophes_attach_to_their_word() {
+        // Post bug-1: apostrophes and quotes never create break decisions;
+        // the word wraps whole at the space. Width 12 = four 3px chars.
+        for text in ["'ab' cd.", "ab' cd.", "'ab cd.", "1'2 cd.", "a'1 cd."] {
+            let lines = place_ascii_normal(text, 12, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2, "{text}");
         }
+        // Wider than the line on its own: unbreakable, not unsupported.
+        assert_eq!(
+            place_ascii_normal("a'b'c d", 12, |_| Some(3)),
+            Err(LineError::UnbreakableWord)
+        );
     }
 }
 
@@ -1380,15 +1356,14 @@ mod bracket_word_tests {
             "ab) cd.",
             "[ab) cd.",
             "((ab)) cd.",
-            "(ab cd) ef.",
             "() abc.",
         ] {
-            assert_eq!(
-                place_ascii_normal(text, 18, |_| Some(3)),
-                Err(LineError::UnsupportedText),
-                "{text}"
-            );
+            // Post bug-1: brackets attach; wrapping happens at the space.
+            let lines = place_ascii_normal(text, 18, |_| Some(3)).unwrap();
+            assert_eq!(lines.count, 2, "{text}");
         }
+        let lines = place_ascii_normal("(ab cd) ef.", 18, |_| Some(3)).unwrap();
+        assert_eq!(lines.count, 3); // "(ab" / "cd)" / "ef."
         assert_eq!(
             place_ascii_normal("(abcd)", 12, |_| Some(3)),
             Err(LineError::UnbreakableWord)
@@ -1981,5 +1956,80 @@ mod nested_inline_tests {
             "aa bb\u{a0}cc"
         );
         assert!(l.lines.glyphs[2].bold);
+    }
+}
+
+#[cfg(test)]
+mod break_opportunity_tests {
+    use super::*;
+
+    fn adv(ch: char) -> Option<u32> {
+        Some(if ch == ' ' { 4 } else { 8 })
+    }
+
+    // A hyphenated word that does not fit wraps AFTER the hyphen instead of
+    // failing closed (was: Err(UnsupportedText) -> greedy hard-break).
+    #[test]
+    fn hyphenated_word_breaks_after_hyphen() {
+        // "return-position": pieces "return-" (56) and "position" (64).
+        let lines = place_runs_normal(&[("return-position", false)], 100, |ch, _| adv(ch)).unwrap();
+        assert_eq!(lines.count, 2);
+        let line0: String = lines.glyphs.iter().filter(|g| g.line == 0).map(|g| g.character).collect();
+        let line1: String = lines.glyphs.iter().filter(|g| g.line == 1).map(|g| g.character).collect();
+        assert_eq!(line0, "return-");
+        assert_eq!(line1, "position");
+        // Zero-width join: 'p' starts at x=0 on the new line; no space glyph anywhere.
+        assert!(!lines.glyphs.iter().any(|g| g.character == ' '));
+    }
+
+    // Same for the solidus.
+    #[test]
+    fn slashed_word_breaks_after_solidus() {
+        let lines = place_runs_normal(&[("and/or", false)], 34, |ch, _| adv(ch)).unwrap();
+        assert_eq!(lines.count, 2);
+        let line0: String = lines.glyphs.iter().filter(|g| g.line == 0).map(|g| g.character).collect();
+        assert_eq!(line0, "and/");
+    }
+
+    // A hyphenated word that fits its line is byte-identical to before.
+    #[test]
+    fn fitting_hyphenated_word_stays_whole() {
+        let lines = place_runs_normal(&[("well-known word", false)], 200, |ch, _| adv(ch)).unwrap();
+        assert_eq!(lines.count, 1);
+        let text: String = lines.glyphs.iter().map(|g| g.character).collect();
+        assert_eq!(text, "well-known word");
+    }
+
+    // Other punctuation stays attached to its word: no internal break.
+    #[test]
+    fn hard_punctuation_stays_attached_to_word() {
+        let lines = place_runs_normal(&[("xx a(b)", false)], 40, |ch, _| adv(ch)).unwrap();
+        assert_eq!(lines.count, 2);
+        let line1: String = lines.glyphs.iter().filter(|g| g.line == 1).map(|g| g.character).collect();
+        assert_eq!(line1, "a(b)");
+    }
+
+    // A contraction keeps the sentence-word exception.
+    #[test]
+    fn contraction_still_placed() {
+        let lines = place_runs_normal(&[("don't stop", false)], 200, |ch, _| adv(ch)).unwrap();
+        assert_eq!(lines.count, 1);
+    }
+
+    // One piece wider than the line is still unbreakable.
+    #[test]
+    fn over_wide_piece_still_unbreakable() {
+        let err = place_runs_normal(&[("supercalifragilistic", false)], 60, |ch, _| adv(ch));
+        assert_eq!(err, Err(LineError::UnbreakableWord));
+    }
+
+    // Mixed sentence: hyphen break mid-paragraph, spaces keep their advance.
+    #[test]
+    fn paragraph_wraps_at_spaces_and_hyphens() {
+        let lines = place_runs_normal(&[("the return-position impl", false)], 100, |ch, _| adv(ch)).unwrap();
+        // line 0: "the return-" (3+4+56=... "the"=24, sp=4, "return-"=56 -> 84 <= 100; +sp+"position"=4+64 -> 152 > 100)
+        assert_eq!(lines.count, 2);
+        let line1: String = lines.glyphs.iter().filter(|g| g.line == 1).map(|g| g.character).collect();
+        assert_eq!(line1, "position impl");
     }
 }

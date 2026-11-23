@@ -78,13 +78,17 @@ fn greedy_wrap(
     let mut x = 0u32;
     let mut line = 0u32;
     let space_w = advance(' ', false).filter(|&n| n > 0)?;
-    let mut at_word_start = true;
+    // One collapsed space per word boundary (CSS white-space collapsing):
+    // a pending flag set by trailing whitespace, consumed by the next word.
+    // The old code emitted the space on BOTH sides of the boundary.
+    let mut need_space = false;
+    let mut any_word = false;
     for (text, bold) in runs {
         for word in text.split_inclusive(|c: char| c == ' ') {
             let trimmed = word.trim_end_matches(' ');
             let trailing_space = word.len() != trimmed.len();
             if !trimmed.is_empty() {
-                if !at_word_start {
+                if need_space && any_word {
                     if x + space_w > max_width { line += 1; x = 0; } else { x += space_w; }
                 }
                 let word_w: u32 = trimmed.chars().filter_map(|c| advance(c, *bold)).sum();
@@ -103,10 +107,11 @@ fn greedy_wrap(
                     glyphs.push(crate::inline_lines::PositionedGlyph { character: ch, x, line, advance: w, bold: *bold, leaf: 0 });
                     x += w;
                 }
-                at_word_start = false;
+                any_word = true;
+                need_space = false;
             }
             if trailing_space {
-                if x + space_w > max_width { line += 1; x = 0; } else { x += space_w; }
+                need_space = true;
             }
         }
     }
@@ -1189,7 +1194,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
                         i32::try_from(x),
                         i32::try_from(y),
-                        u32::try_from(w.min(512)),
+                        u32::try_from(w),
                         u32::try_from(h),
                     ) {
                         list.insert(
@@ -2831,6 +2836,26 @@ fn capped_block_width(
 }
 
 #[cfg(test)]
+
+    #[test]
+    fn greedy_wrap_collapses_inter_word_space() {
+        // Regression: the fallback used to emit the boundary space twice
+        // (trailing step + next-word step). Width fits one word per line
+        // plus its space, so any doubling shows as a second space glyph.
+        let mut stats = PartialStats::default();
+        let lines = greedy_wrap(
+            &[("four five six", false)],
+            100,
+            |ch, _| Some(if ch == ' ' { 5 } else { 10 }),
+            &mut stats,
+        )
+        .unwrap();
+        // Greedy spaces are implicit gaps (no space glyph): "four" is 40px,
+        // so "five" starts at x=45 with exactly one 5px space, not 50.
+        assert_eq!(lines.glyphs[4].character, 'f');
+        assert_eq!(lines.glyphs[4].x, 45);
+    }
+
 mod hgeom_tests {
     use super::capped_block_width;
     use crate::computed_style::Length;
