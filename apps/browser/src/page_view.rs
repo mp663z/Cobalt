@@ -75,6 +75,19 @@ impl FontProvider for PageFontAdapter {
         self.session.advance(character, size, bold, italic)
     }
 
+    fn page_character_metrics(
+        &self,
+        character: char,
+        size: u32,
+        bold: bool,
+        italic: bool,
+    ) -> Option<NormalLineMetrics> {
+        let (height, baseline) = self
+            .session
+            .character_line_metrics(character, size, bold, italic)?;
+        Some(NormalLineMetrics { height, baseline })
+    }
+
     fn page_shape(
         &self,
         text: &str,
@@ -90,6 +103,7 @@ impl FontProvider for PageFontAdapter {
                     start: cluster.start,
                     end: cluster.end,
                     advance: cluster.glyph.advance,
+                    missing: cluster.glyph.missing,
                     bitmap: GlyphBitmap {
                         left: cluster.glyph.left,
                         top: cluster.glyph.top,
@@ -846,6 +860,26 @@ mod tests {
         stats.blocks_painted = 75;
         stats.skips.insert("non-ascii-text", 25);
         assert!(falls_back(&stats));
+    }
+
+    #[test]
+    fn page_character_metrics_grow_only_for_used_fallbacks() {
+        let face = PageFontAdapter::bundled().expect("faces");
+        let latin = face
+            .page_character_metrics('A', 24, false, false)
+            .expect("Latin");
+        let indic = face
+            .page_character_metrics('ह', 24, false, false)
+            .expect("Indic");
+        assert_ne!(latin, indic);
+        assert!(indic.height >= latin.height);
+    }
+
+    #[test]
+    fn shaped_missing_glyph_is_not_lost_by_adapter() {
+        let face = PageFontAdapter::bundled().expect("faces");
+        let clusters = face.page_shape("日本語", 24, false, false).expect("shaped");
+        assert!(clusters.iter().any(|cluster| cluster.missing));
     }
 
     #[test]
