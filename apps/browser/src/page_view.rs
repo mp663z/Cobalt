@@ -1164,6 +1164,42 @@ mod tests {
     }
 
     #[test]
+    fn native_image_compressed_budget_is_shared_across_images() {
+        let png = kobo_image::encode_png_rgb(1, 1, &[220, 20, 40]).unwrap();
+        let uri = format!("data:image/png;base64,{}", test_base64(&png));
+        let html = format!(
+            "<!doctype html><img src='{uri}' width=1 height=1><img src='{uri}' width=1 height=1>"
+        );
+        let tree = parse_basic_style_tree(
+            html.as_bytes(),
+            &[],
+            &Limits::DEFAULT,
+            None,
+            SupplyBudget::CANONICAL,
+            None,
+        );
+        let mut boxes = BoxTree::from_style(&tree);
+        let mut padded = png;
+        padded.resize(2 * 1024 * 1024 + 1, 0);
+        let uri = format!("data:image/png;base64,{}", test_base64(&padded));
+        // Exercise preparation directly: DOM resource-attribute retention
+        // has a separate, lower bound and must not be relaxed for this test.
+        for node in &mut boxes.boxes {
+            if node.kind == kobo_web_document::box_tree::BoxKind::Image {
+                node.image.as_mut().unwrap().src_data_uri = Some(uri.clone());
+            }
+        }
+        let mut stats = PartialStats::default();
+        let images = crate::page_images::prepare(&boxes, &mut stats);
+        assert_eq!(images.len(), 2);
+        assert_eq!(
+            images.values().filter(|(_, image)| image.is_some()).count(),
+            1
+        );
+        assert_eq!(stats.skips.get("native-image-unavailable"), Some(&1));
+    }
+
+    #[test]
     fn native_image_budget_is_aggregate_and_refuses_large_headers() {
         let face = PageFontAdapter::bundled().unwrap();
         for (w, h, count, good, bad) in [(800, 800, 2, 1, 1), (1025, 1024, 1, 0, 1)] {

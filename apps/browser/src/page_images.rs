@@ -130,4 +130,40 @@ mod tests {
         }
         assert!(decode_uri("data:image/png;base64,AQID", 2).is_none());
     }
+
+    #[test]
+    fn canonical_padding_bits_are_checked_exhaustively() {
+        const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        for byte in 0..=255_u32 {
+            for low in 0..16 {
+                let uri = format!(
+                    "data:image/png;base64,{}{}==",
+                    char::from(A[(byte >> 2) as usize]),
+                    char::from(A[((byte & 3) * 16 + low) as usize])
+                );
+                let decoded = decode_uri(&uri, 1);
+                if low == 0 {
+                    assert_eq!(decoded, Some(vec![byte as u8]));
+                } else {
+                    assert!(decoded.is_none());
+                }
+            }
+        }
+        for pair in 0..=65535_u32 {
+            for low in 0..4 {
+                let uri = format!(
+                    "data:image/jpeg;base64,{}{}{}=",
+                    char::from(A[(pair >> 10) as usize]),
+                    char::from(A[((pair >> 4) & 63) as usize]),
+                    char::from(A[((pair & 15) * 4 + low) as usize])
+                );
+                let decoded = decode_uri(&uri, 2);
+                if low == 0 {
+                    assert_eq!(decoded, Some(vec![(pair >> 8) as u8, pair as u8]));
+                } else {
+                    assert!(decoded.is_none());
+                }
+            }
+        }
+    }
 }
