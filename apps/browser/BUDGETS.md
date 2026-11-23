@@ -421,3 +421,20 @@ Browser: 206 passed, 0 failed, 2 ignored. Engine: 1,399 passed, 0 failed,
 Locked ARM browser: 5,192,260 bytes, +3,942,880 over the 1,249,380-byte hello,
 leaving 1,300,000 bytes under +5 MiB. Stripped static ARM EABI5 inspected.
 No new crates, unsafe code, allocator change or protocol change.
+
+
+### Native-image late Colour identity, November 24, 2026
+
+A native fetched image shown before the identity response stayed grey when
+Colour was later confirmed. On a format change the app now retires old image
+handles, cancels pending image tasks and shelf reads, then requests visible
+images with the new format's cache keys. Native position and form controls
+are not replaced by Page view. Repeated identical identity answers do not
+refetch; stale canceled task completions do not publish. The native-image
+regression fails before and passes after. The full rendered native frame was
+inspected: image RGB present, 114,464 non-grey pixels; ordinary native text
+remains neutral. This is a rendered app test, not a hardware panel result.
+
+Browser 208 passed, 0 failed, 2 ignored. Clippy completed with existing warnings.
+Locked ARM: 5,192,500 bytes, +3,943,120 over hello, 1,299,760 bytes headroom
+under +5 MiB; stripped static ARM EABI5. Engine unchanged at 1,399/0/18 ignored.

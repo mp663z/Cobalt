@@ -13,11 +13,19 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
 
 - [x] Supported fresh arrivals on confirmed Colour profiles open in RGB Page view.
 - [x] Late Colour identity republishes an already-visible Page raster in RGB.
+- [x] Native fetched images prepared before identity are retired and re-requested
+  in the confirmed panel format. Stale task completions and duplicate identities
+  are covered; native position and controls stay in place.
 - [x] Keep authored chromatic text colours instead of the neutral contrast floor.
   Regular, bold, italic, code, links and backgrounds have exact RGB pixel coverage.
 - [ ] Preserve authored CSS colours in semantic Reader paths: forms, saved-copy
   notices, restored/fragment positions and unsupported Page fallback. Do not remove
   these semantics merely to show colour. A source/style mapping is still needed.
+  Inspection confirms three missing boundaries: semantic Inline/Run provenance,
+  RGB in toolkit text presentation, and a versioned rich-text wire extension.
+  Preserve source identity through whitespace collapse and repeated text; never
+  match authored colour to content by string alone. A future increment should
+  prove RGB span round-trips and native link/form/anchor behavior before adoption.
 - [ ] Verify colour quality, memory and latency on physical hardware.
 
 ## Crates

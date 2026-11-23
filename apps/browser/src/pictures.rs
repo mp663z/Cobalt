@@ -60,8 +60,8 @@ pub fn shelf_key(url: &str, width: u32, height: u32, colour: bool) -> String {
 }
 
 impl Pictures {
-    /// Draws pictures in colour from now on, or not. Pictures already
-    /// shown stay as they are until their page is opened again.
+    /// Selects the format for future picture preparations. The caller must
+    /// clear old picture state and re-request visible images on a change.
     pub fn set_colour(&mut self, colour: bool) {
         self.colour = colour;
     }

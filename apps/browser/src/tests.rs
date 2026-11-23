@@ -1603,6 +1603,7 @@ fn save_painted_journey_frame(
         return;
     }
     struct Picture {
+        handle: kobo_sdk::PictureHandle,
         width: u32,
         height: u32,
         grey: Vec<u8>,
@@ -1610,7 +1611,7 @@ fn save_painted_journey_frame(
     }
     impl kobo_ui::Pictures for Picture {
         fn get(&self, handle: kobo_sdk::PictureHandle) -> Option<kobo_ui::PicturePixels<'_>> {
-            (handle == page_mode::HANDLE).then_some(kobo_ui::PicturePixels {
+            (handle == self.handle).then_some(kobo_ui::PicturePixels {
                 width: self.width,
                 height: self.height,
                 grey: &self.grey,
@@ -1618,7 +1619,7 @@ fn save_painted_journey_frame(
             })
         }
     }
-    let (width, height, format, pixels) = commands
+    let (handle, width, height, format, pixels) = commands
         .iter()
         .find_map(|command| match command {
             kobo_sdk::Command::PutPicture {
@@ -1627,11 +1628,12 @@ fn save_painted_journey_frame(
                 height,
                 format,
                 pixels,
-            } if *handle == page_mode::HANDLE => Some((*width, *height, *format, pixels)),
+            } => Some((*handle, *width, *height, *format, pixels)),
             _ => None,
         })
         .expect("published picture");
     let picture = Picture {
+        handle,
         width,
         height,
         grey: if format == kobo_sdk::PictureFormat::Grey {
@@ -1644,8 +1646,10 @@ fn save_painted_journey_frame(
     let metrics = kobo_ui::CLARA_BW_METRICS;
     let screen = runner.app().screen(&metrics).build();
     let room =
-        kobo_web_layout::picture_box(&screen, &metrics, page_mode::HANDLE).expect("picture room");
-    assert_eq!(room, (width, height), "raster must not be resized by UI");
+        kobo_web_layout::picture_box(&screen, &metrics, handle).expect("picture room");
+    if handle == page_mode::HANDLE {
+        assert_eq!(room, (width, height), "Page raster must not be resized by UI");
+    }
     let mut surface = kobo_ui::Surface::new(metrics.width as usize, metrics.height as usize);
     kobo_ui::render_all(
         &screen,
@@ -2079,4 +2083,53 @@ fn late_colour_identity_republishes_an_already_visible_rgb_page() {
             ..
         }
     )));
+}
+
+#[test]
+fn late_colour_identity_reloads_native_grey_images_as_rgb() {
+    let mut runner = runner(TextScale::Default);
+    let commands = open_web_page(&mut runner, PLATE);
+    let first = fetches(&commands)[0].0;
+    let png = kobo_image::encode_png_rgb(2, 1, &[255, 0, 0, 0, 128, 255]).unwrap();
+    let commands = runner.task_outcome(first, TaskOutcome::Completed(png.clone()));
+    assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Grey,..})));
+    let mut context = runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(kobo_sdk::DeviceIdentity {
+            profile_id: "SIMULATOR:clara-colour-393".into(),
+            ..kobo_sdk::DeviceIdentity::default()
+        }));
+    let commands = context.take_commands();
+    assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::DropPicture(handle) if *handle==picture_handle(0))));
+    let requested = fetches(&commands);
+    assert_eq!(requested.len(),1,"native grey image must be requested in confirmed colour format");
+    let commands=runner.task_outcome(requested[0].0,TaskOutcome::Completed(png));
+    assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::PutPicture{format:kobo_sdk::PictureFormat::Rgb,pixels,..} if pixels.chunks_exact(3).any(|p|p[0]!=p[1]||p[1]!=p[2]))));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    save_painted_journey_frame(&runner, &commands, "late-native-rgb");
+}
+
+#[test]
+fn colour_identity_change_cancels_pending_native_images_once() {
+    let mut runner = runner(TextScale::Default);
+    let commands = open_web_page(&mut runner, PLATE);
+    let old_task = fetches(&commands)[0].0;
+    let identity = kobo_sdk::DeviceIdentity {
+        profile_id: "SIMULATOR:clara-colour-393".into(),
+        ..kobo_sdk::DeviceIdentity::default()
+    };
+    let mut context = runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(identity.clone()));
+    let commands = context.take_commands();
+    assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::Cancel(task) if *task==old_task)));
+    let tasks = fetches(&commands);
+    assert_eq!(tasks.len(),1);
+    assert_ne!(tasks[0].0,old_task);
+    let stale=runner.task_outcome(old_task,TaskOutcome::Completed(a_png(2,1)));
+    assert!(put_pictures(&stale).is_empty());
+    let mut context = runner.context();
+    runner.app_mut().on_device_result(&mut context,kobo_sdk::DeviceRequest::ReadIdentity,
+        kobo_sdk::DeviceResult::Identity(identity));
+    assert!(fetches(&context.take_commands()).is_empty(),"same identity must not refetch");
 }

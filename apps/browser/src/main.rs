@@ -2115,14 +2115,16 @@ impl KoboApp for Browser {
         // A panel identity answer is exactly the moment a frame measured
         // for another panel must be retired.
         self.validate_css(context);
-        // An already-visible Page raster may have been published before the
-        // identity answer. Republish it in the confirmed panel format now.
-        if colour_changed
-            && self
-                .loaded
-                .as_ref()
-                .is_some_and(|loaded| loaded.painted.is_some())
-        {
+        if colour_changed {
+            // Pending shelf reads and shown native pictures were prepared for
+            // the old panel format. Retire them before requesting the visible
+            // images again under the new format's distinct cache keys.
+            for key in self.pictures.clear(context) {
+                self.saved.stop_reading(&key);
+            }
+            // An already-visible Page raster also needs publication in the
+            // confirmed format. Native Reader keeps its position and controls.
+            self.fetch_pictures(context);
             self.show(context);
         }
     }
