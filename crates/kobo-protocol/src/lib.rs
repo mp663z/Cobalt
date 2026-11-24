@@ -86,7 +86,9 @@ pub const COLOUR_HEADING_VERSION: u8 = 17;
 pub const COLOUR_QUOTE_VERSION: u8 = 18;
 /// Version carrying optional per-cell table colour spans.
 pub const COLOUR_TABLE_VERSION:u8=19;
-pub const VERSION: u8 = 19;
+/// Optional authored title colours on native rows.
+pub const COLOUR_ROW_VERSION:u8=20;
+pub const VERSION: u8 = 20;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1996,7 +1998,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4451,8 +4453,11 @@ fn encoded_node_len(
             if rows.len() > u8::MAX as usize {
                 return Err(ProtocolError::TooManyNodes);
             }
+            let coloured=rows.iter().any(|row|row.title_colours.is_some());
+            if coloured&&version<COLOUR_ROW_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             let mut length = 6;
             for row in rows {
+                if coloured{add_encoded_len(&mut length,1+row.title_colours.map_or(0,|(_,bg)|3+3*usize::from(bg.is_some())))?;}
                 // Four bytes of action, the fixed-width lead, one of state,
                 // one saying whether a trailing value follows and one saying
                 // whether an overflow action does, then the strings.
@@ -4677,7 +4682,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5155,7 +5160,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5850,10 +5855,16 @@ fn encode_node(
             }
         }
         Node::Rows { id, rows } => {
-            output.push(14);
+            let coloured=rows.iter().any(|row|row.title_colours.is_some());
+            if coloured&&version<COLOUR_ROW_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            output.push(if coloured{39}else{14});
             push_u32(output, id.0);
             output.push(u8::try_from(rows.len()).map_err(|_| ProtocolError::TooManyNodes)?);
             for row in rows {
+                if coloured{
+                    output.push(row.title_colours.map_or(0,|(_,bg)|1+2*u8::from(bg.is_some())));
+                    if let Some((fg,bg))=row.title_colours{output.extend_from_slice(&fg);if let Some(bg)=bg{output.extend_from_slice(&bg);}}
+                }
                 push_u32(output, row.action.0);
                 push_string(output, &row.title)?;
                 push_string(output, &row.summary)?;
@@ -7382,10 +7393,17 @@ fn decode_node(
                 cells,
             })
         }
-        14 => {
+        tag @ (14|39) if tag==14||version>=COLOUR_ROW_VERSION => {
             let len = usize::from(reader.u8()?);
             let mut rows = Vec::with_capacity(len);
             for _ in 0..len {
+                let title_colours=if tag==39{
+                    match reader.u8()?{
+                        0=>None,
+                        flags @ (1|3)=>{let fg=[reader.u8()?,reader.u8()?,reader.u8()?];let bg=if flags==3{Some([reader.u8()?,reader.u8()?,reader.u8()?])}else{None};Some((fg,bg))},
+                        _=>return Err(ProtocolError::InvalidValue("row colour flags")),
+                    }
+                }else{None};
                 let action = ActionId(reader.u32()?);
                 if action.is_reserved() {
                     return Err(ProtocolError::InvalidValue("reserved action id"));
@@ -7411,6 +7429,7 @@ fn decode_node(
                 };
                 rows.push(Row {
                     action,
+                    title_colours,
                     title,
                     summary,
                     lead,
@@ -11312,12 +11331,30 @@ mod table_rgb_wire_tests {
         for version in LEGACY_VERSION..VERSION {let mut bytes=Vec::new();let mut count=0;encode_node(&mut bytes,&plain,0,&mut count,version).unwrap();assert_eq!(bytes,plain_bytes);}
         let rgb=node(vec![vec![span()],Vec::new()]);let frame=Frame{version:VERSION,request_id:8,message:Message::SetScreen(Screen::new(1,vec![rgb.clone()]))};
         let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
-        for version in LEGACY_VERSION..VERSION{assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        for version in LEGACY_VERSION..COLOUR_TABLE_VERSION{assert!(encode(&Frame{version,..frame.clone()}).is_err());}
         for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
         let mut count=0;let mut payload=Vec::new();encode_node(&mut payload,&rgb,0,&mut count,VERSION).unwrap();let mut count=0;assert_eq!(payload.len(),encoded_node_len(&rgb,0,&mut count,VERSION).unwrap());
         let mut broken=span();broken.start=1;
         for spans in [vec![vec![broken],Vec::new()],vec![vec![span();kobo_ui::MAX_RICH_TEXT_SPANS+1],Vec::new()],vec![vec![span()]]] {
             assert!(encode(&Frame{message:Message::SetScreen(Screen::new(1,vec![node(spans)])),..frame.clone()}).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod row_rgb_wire_tests {
+    use super::*;
+    #[test]
+    fn row_colour_wire_preserves_actions_state_and_plain_bytes(){
+        let mut row=Row::new(ActionId(8),"Label","Details",Glyph::Search);row.trailing=Some("3".into());row.menu=Some(ActionId(9));
+        let node=|row|Node::Rows{id:NodeId(2),rows:vec![row]};
+        let mut plain=Vec::new();let mut count=0;encode_node(&mut plain,&node(row.clone()),0,&mut count,VERSION).unwrap();assert_eq!(plain[0],14);
+        for version in LEGACY_VERSION..VERSION{let mut bytes=Vec::new();let mut count=0;encode_node(&mut bytes,&node(row.clone()),0,&mut count,version).unwrap();assert_eq!(bytes,plain);}
+        row.title_colours=Some(([200,0,20],Some([220,230,240])));
+        let frame=Frame{version:VERSION,request_id:2,message:Message::SetScreen(Screen::new(1,vec![node(row.clone())]))};let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
+        for version in LEGACY_VERSION..COLOUR_ROW_VERSION{assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
+        let mut payload=Vec::new();let mut count=0;encode_node(&mut payload,&node(row.clone()),0,&mut count,VERSION).unwrap();let mut count=0;assert_eq!(payload.len(),encoded_node_len(&node(row),0,&mut count,VERSION).unwrap());
+        payload[6]=2;let mut count=0;assert!(decode_node(&mut Reader::new(&payload),0,&mut count,VERSION).is_err());
     }
 }

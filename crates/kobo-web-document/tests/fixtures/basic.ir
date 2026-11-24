@@ -362,6 +362,7 @@ blocks:
                     value: "Go",
                 },
             ],
+            field_colours: [],
             urlencoded: true,
         },
     ),

@@ -2423,3 +2423,29 @@ fn native_table_rgb_keeps_header_grid_links_and_form() {
         for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
     }
 }
+
+#[test]
+fn native_control_labels_take_their_own_source_colours_not_generated_names(){
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><form><label for=q style='color:red'>Red search</label><input id=q name=q><label style='color:blue'><input type=checkbox name=c>Blue choice</label><input name=generated style='color:green'><input type=submit value=Send style='color:purple'></form>");
+    let loaded=runner.app().loaded.as_ref().unwrap();let form=forms::forms(&loaded.document.blocks)[0];
+    assert_eq!(form.field_colours[0],Some(([255,0,0],None)));assert_eq!(form.field_colours[1],Some(([0,0,255],None)));assert_eq!(form.field_colours[2],None);assert_eq!(form.field_colours[3],Some(([128,0,128],None)));
+    runner.action(action_id("form-0"));let metrics=kobo_ui::CLARA_BW_METRICS;
+    let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for rgb in [[255,0,0],[0,0,255],[128,0,128]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
+    runner.action(action_id("field-1"));assert!(matches!(forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0].fields[1],Field::Checkbox{checked:true,..}));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+        use std::io::Write;let mut file=std::fs::File::create("/tmp/native-control-rgb.ppm").unwrap();write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}
+
+#[test]
+fn late_control_label_colour_keeps_edit_and_refreshes_source_style(){
+    let mut runner=runner(TextScale::Default);
+    open_web_page(&mut runner,"<!doctype html><form><label for=q style='color:red'>Search</label><input id=q name=q value=original></form>");
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::Text{name:"q".into(),label:"Search".into(),value:"edited".into(),search:false};
+    runner.app_mut().pictures.set_colour(true);let mut context=runner.context();runner.app_mut().refresh_native_colour(&mut context);
+    let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];assert_eq!(form.field_colours[0],Some(([255,0,0],None)));assert!(matches!(&form.fields[0],Field::Text{value,..} if value=="edited"));
+}

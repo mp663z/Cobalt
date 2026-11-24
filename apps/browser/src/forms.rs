@@ -106,14 +106,14 @@ fn screen(form: &Form, entries: &[usize], page: usize, of: usize, last: bool) ->
             u16::try_from(page + 1).unwrap_or(u16::MAX),
             u16::try_from(of.max(1)).unwrap_or(u16::MAX),
         );
-    builder = builder.rows(entries.iter().filter_map(|&index| {
+    builder = builder.rows_with_colours(entries.iter().filter_map(|&index| {
         let (title, detail) = field_title(form.fields.get(index)?)?;
         let action = if matches!(form.fields[index], Field::Submit { .. }) {
             format!("submit-field-{index}")
         } else {
             format!("field-{index}")
         };
-        Some((action, title, detail, Glyph::Terminal))
+        Some((action,title,detail,Glyph::Terminal,form.field_colours.get(index).copied().flatten()))
     }));
     if !last {
         return builder;
@@ -374,7 +374,7 @@ mod tests {
                 unhex(value),
                 unhex(expected),
             );
-            let form = Form {
+            let form = Form {field_colours:Vec::new(),
                 action: Url::parse("https://example.com/submit").unwrap(),
                 method: Method::Get,
                 urlencoded: true,
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn empty_name_and_repeated_names_keep_form_order() {
-        let form = Form {
+        let form = Form {field_colours:Vec::new(),
             action: Url::parse("https://example.com/find?previous=1#section").unwrap(),
             method: Method::Get,
             urlencoded: true,
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn get_replaces_existing_query_and_encodes_unicode_and_successful_controls() {
-        let form = Form {
+        let form = Form {field_colours:Vec::new(),
             action: Url::parse("https://example.com/find?old=yes#top").unwrap(),
             method: Method::Get,
             urlencoded: true,
@@ -500,7 +500,7 @@ mod tests {
 
     #[test]
     fn oversized_get_is_refused_rather_than_truncated() {
-        let form = Form {
+        let form = Form {field_colours:Vec::new(),
             action: Url::parse("https://example.com/search").unwrap(),
             method: Method::Get,
             urlencoded: true,
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn post_and_unsupported_encodings_never_make_get_urls() {
-        let mut form = Form {
+        let mut form = Form {field_colours:Vec::new(),
             action: Url::parse("https://example.com/").unwrap(),
             method: Method::Post,
             urlencoded: true,

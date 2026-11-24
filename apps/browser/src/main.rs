@@ -892,7 +892,9 @@ impl Browser {
             .any(|(old,new)|old.action!=new.action||old.method!=new.method||old.fields.len()!=new.fields.len()) {return;}
         for (index,form) in old_forms.into_iter().enumerate() {
             let Some(target)=forms::form_mut(&mut document.blocks,index) else {return};
+            let colours=std::mem::take(&mut target.field_colours);
             *target=form;
+            target.field_colours=colours;
         }
         let reader=loaded.full.is_some();
         let (document,full)=if reader {

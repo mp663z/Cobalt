@@ -659,3 +659,35 @@ runtime156/0. Clippy completes with existing warnings. Locked stripped static
 ARM EABI5:5,238,188 bytes, delta3,988,808 over hello, headroom1,254,072 under
 +5 MiB. No new crate, unsafe or allocator change. Control labels still have
 plain paths. Authored font/CSS fidelity and physical panel/RSS/latency incomplete.
+
+
+### Native control title RGB, November 24, 2026
+
+Native form-row titles now use the computed foreground/background of their
+actual naming source: explicit label, aria-label/placeholder/title-bearing
+control, or authored submit value. Browser-generated fallback names are not
+coloured from nearby text. Text/select/checkbox/submit row actions, details and
+hit rectangles stay unchanged. Radio group names remain generated/default.
+This is title-level style, not nested multicolour label runs or option-value,
+text-entry/keyboard, per-option or full authored control styling.
+
+Late identity refresh now keeps newly parsed field colours while copying edited
+fields, so edits survive without throwing away the source styles. Tests cover
+source selection, generated-name non-attribution, exact RGB, checkbox action,
+late refresh preserving edited values, unchanged row/menu geometry. Disabling
+source colour lookup fails the regression. Protocol20 tag39 carries optional
+row-title colours; plain row tag14 bytes unchanged,11-19 still readable, old
+peers refuse coloured rows. Roundtrip covers menu/trailing/action/state,
+truncation, bad flags and exact encoded size. The uncoloured golden's only
+change is the explicit empty field_colours debug field; reviewed, no text or
+form change.
+
+Actual full Clara Colour form frame inspected,6,442 non-grey pixels: red search,
+blue select title, green checkbox title, purple authored submit title. Neutral
+browser chrome/details remain neutral. Browser221/0/2 ignored; engine1,409/0/
+18 ignored148groups; protocol116/0,UI292/0/2 ignored,layout29/0,SDK166/0/
+2 ignored,sim108/0,runtime156/0; wholeworkspace check green. Clippy completes
+with existing warnings. Locked stripped static ARM EABI5:5,243,652 bytes,
+delta3,994,272 over hello,headroom1,248,608 under +5 MiB. No new crate,unsafe
+or allocator change. Ideal RGB only; physical panel/RSS/latency unverified.
+No all-fonts or complete CSS/control-fidelity claim.

@@ -1726,6 +1726,18 @@ impl ScreenBuilder {
         self
     }
 
+    /// Native rows retaining optional authored title colours and the same controls.
+    #[must_use]
+    pub fn rows_with_colours<I,N,T,S,L>(mut self,rows:I)->Self
+    where I:IntoIterator<Item=(N,T,S,L,Option<([u8;3],Option<[u8;3]>)>)>,N:AsRef<str>,T:Into<String>,S:Into<String>,L:Into<RowLead>{
+        let id=self.next_id();let mut source=rows.into_iter();let mut rows=Vec::new();
+        for (name,title,summary,lead,colours) in source.by_ref().take(MAX_ROWS){
+            let mut row=Row::new(self.register(name.as_ref()),title,summary,lead);row.title_colours=colours;rows.push(row);
+        }
+        if source.next().is_some(){self.warn_limit(id,"rows",MAX_ROWS);}
+        self.nodes.push(Node::Rows{id,rows});self
+    }
+
     /// The same, with an overflow mark against the right edge of each row.
     ///
     /// The mark is a vertical three dot control naming an action of its own,

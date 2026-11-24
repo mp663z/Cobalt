@@ -5353,6 +5353,7 @@ pub struct Row {
     pub action: ActionId,
     pub title: String,
     pub summary: String,
+    pub title_colours:Option<([u8;3],Option<[u8;3]>)>,
     pub lead: RowLead,
     pub state: RowState,
     /// A short value against the right edge: a score, a size, a date, a count.
@@ -5387,6 +5388,7 @@ impl Row {
             action,
             title: title.into(),
             summary: summary.into(),
+            title_colours:None,
             lead: lead.into(),
             state: RowState::Open,
             trailing: None,
@@ -6092,6 +6094,7 @@ pub enum LayoutKind {
     /// The rule under a table's heading row.
     TableRule,
     RowTitle,
+    ColouredRowTitle([u8;3],Option<[u8;3]>),
     /// A title whose work is finished: muted and struck through.
     RowTitleDone,
     RowSummary,
@@ -8971,7 +8974,7 @@ fn layout_node(
                         height: title_height,
                     },
                     kind: match row.state {
-                        RowState::Open => LayoutKind::RowTitle,
+                        RowState::Open => row.title_colours.map_or(LayoutKind::RowTitle,|(fg,bg)|LayoutKind::ColouredRowTitle(fg,bg)),
                         RowState::Done => LayoutKind::RowTitleDone,
                     },
                     text_lines: title_lines,
@@ -13718,6 +13721,7 @@ fn layout_text_style(node: &LayoutNode) -> Option<(FontSize, Face)> {
         | LayoutKind::Button(..)
         | LayoutKind::PagedList
         | LayoutKind::RowTitle
+        | LayoutKind::ColouredRowTitle(..)
         | LayoutKind::RowTitleDone
         | LayoutKind::ChoicePrompt
         | LayoutKind::ChoiceOption(_, _)
@@ -15282,6 +15286,10 @@ fn render_all_with_selected_font(
             // enough separation, and a box around each one would add weight
             // that a list of several entries cannot carry.
             LayoutKind::Row(_) => {}
+            LayoutKind::ColouredRowTitle(foreground,background)=>{
+                if let Some(rgb)=background{fill_rgb_clipped(surface,node.rect,rgb,clip);}
+                for (line,text) in node.text_lines.iter().enumerate(){draw_colour_text_in(surface,text,node.rect.x,node.rect.y+line as i32*FontSize::Body.line_height_in(prose),FontSize::Body,prose,tone::INK,Some(foreground),clip);}
+            }
             LayoutKind::RowTitle => draw_lines_in(
                 surface,
                 &node.text_lines,
@@ -21299,7 +21307,7 @@ mod prose_tests {
             rows: items
                 .iter()
                 .enumerate()
-                .map(|(index, label)| Row {
+                .map(|(index, label)| Row {title_colours:None,
                     action: ActionId(6 + index as u32),
                     title: (*label).to_owned(),
                     summary: String::new(),
@@ -21330,7 +21338,7 @@ mod prose_tests {
             1,
             vec![Node::Rows {
                 id: NodeId(1),
-                rows: vec![Row {
+                rows: vec![Row {title_colours:None,
                     action: ActionId(2),
                     title: "A title".to_owned(),
                     summary: String::new(),
@@ -21350,7 +21358,7 @@ mod prose_tests {
             1,
             vec![Node::Rows {
                 id: NodeId(1),
-                rows: vec![Row {
+                rows: vec![Row {title_colours:None,
                     action: ActionId(2),
                     title: "A title".to_owned(),
                     summary: "A sentence with quite enough words in it to run \
@@ -24766,5 +24774,19 @@ mod coloured_table_geometry_tests {
             assert_eq!(cells(&plain),cells(&styled));assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredTableText(..))));
             if width==120{let red:String=styled.nodes.iter().filter(|n|matches!(n.kind,LayoutKind::ColouredTableText(_,s) if s.foreground==Some([200,0,0]))).flat_map(|n|n.text_lines.iter().map(String::as_str)).collect();assert!(red.contains("Name"),"{red}");}
         }
+    }
+}
+
+#[cfg(test)]
+mod coloured_row_geometry_tests{
+    use super::*;
+    #[test]
+    fn title_colours_do_not_change_row_targets_or_measurement(){
+        let row=Row::new(ActionId(7),"A long authored label that wraps on a narrow screen","Details",Glyph::Search).with_menu(ActionId(8)).with_trailing("42");
+        let mut colour=row.clone();colour.title_colours=Some(([200,0,0],Some([240,240,240])));
+        let layout=|row|Screen::new(1,vec![Node::Rows{id:NodeId(1),rows:vec![row]}]).layout_for(&DisplayMetrics{width:400,..CLARA_BW_METRICS});
+        let plain=layout(row);let styled=layout(colour);
+        assert_eq!(plain.nodes.iter().map(|n|n.rect).collect::<Vec<_>>(),styled.nodes.iter().map(|n|n.rect).collect::<Vec<_>>());assert_eq!(plain.context_actions,styled.context_actions);
+        assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredRowTitle(..))));
     }
 }

@@ -1039,6 +1039,18 @@ impl Converter<'_> {
         false
     }
 
+    fn field_label_colour(&self,form:Handle,field:Handle)->Option<([u8;3],Option<[u8;3]>)> {
+        let source=if self.attr(field,"aria-label").is_some(){Some(field)}else{
+            let id=self.attr(field,"id");let mut stack=vec![form];let mut found=None;
+            while let Some(node)=stack.pop(){
+                if self.tag(node)==Some("label") && ((id.is_some()&&self.attr(node,"for")==id)||self.contains(node,field)) && !self.text_of(node).trim().is_empty(){found=Some(node);break;}
+                stack.extend(self.nodes[node].children.iter().rev().copied());
+            }
+            found.or_else(||(self.attr(field,"placeholder").is_some()||self.attr(field,"title").is_some()).then_some(field))
+        }?;
+        self.colours.as_ref()?.get(source).copied().flatten()
+    }
+
     fn field_label(&self, form: Handle, field: Handle, fallback: &str) -> String {
         let written = self.label_for(form, field);
         self.attr(field, "aria-label")
@@ -1161,7 +1173,7 @@ impl Converter<'_> {
         } else {
             Method::Get
         };
-        let mut fields = Vec::new();
+        let mut fields = Vec::new();let mut field_colours=Vec::new();
         let mut stack = vec![handle];
         while let Some(node) = stack.pop() {
             if fields.len() >= 64 {
@@ -1185,7 +1197,7 @@ impl Converter<'_> {
             }
             if self.tag(node) == Some("select") {
                 if let Some(field) = self.select_field(handle, node) {
-                    fields.push(field);
+                    fields.push(field);field_colours.push(self.field_label_colour(handle,node));
                 }
                 continue;
             }
@@ -1199,6 +1211,7 @@ impl Converter<'_> {
                 if name.as_ref().is_some_and(|n| n.len() > 128) || value.len() > 512 {
                     continue;
                 }
+                let before=fields.len();
                 match (kind.as_str(), name) {
                     ("text" | "search" | "email" | "url" | "tel" | "number", Some(name)) => {
                         let label = self.field_label(handle, node, &name);
@@ -1233,6 +1246,12 @@ impl Converter<'_> {
                     }),
                     _ => {}
                 }
+                if fields.len()>before{
+                    let colour=if kind=="radio"||kind=="hidden"{None}
+                        else if kind=="submit" {self.attr(node,"value").filter(|s|!s.is_empty()).and_then(|_|self.colours.as_ref()?.get(node).copied().flatten())}
+                        else{self.field_label_colour(handle,node)};
+                    field_colours.push(colour);
+                }
             }
             stack.extend(self.nodes[node].children.iter().rev().copied());
         }
@@ -1242,10 +1261,12 @@ impl Converter<'_> {
                 Field::Text { .. } | Field::Select { .. } | Field::Checkbox { .. }
             )
         });
+        if self.colours.is_none(){field_colours.clear();}
         has_control.then_some(Form {
             action,
             method,
             fields,
+            field_colours,
             urlencoded: self.attr(handle, "enctype").is_none_or(|type_| {
                 type_.eq_ignore_ascii_case("application/x-www-form-urlencoded")
             }),

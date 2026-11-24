@@ -185,6 +185,8 @@ pub struct Form {
     pub action: Url,
     pub method: Method,
     pub fields: Vec<Field>,
+    /// Computed style of the authored source naming each control. Generated labels have none.
+    pub field_colours: Vec<Option<([u8;3],Option<[u8;3]>)>>,
     /// True when this form was declared as multipart or plain text and
     /// therefore cannot be sent as URL-encoded data by this browser.
     pub urlencoded: bool,
