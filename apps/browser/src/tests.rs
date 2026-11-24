@@ -1512,6 +1512,9 @@ fn links_are_reachable_through_navigate_on_every_profile_and_text_size() {
                     .rect_of_action(action_id(action))
                     .is_some()
             };
+            assert!(reachable(runner.app(), "browser-more"));
+            assert!(!reachable(runner.app(), "navigate"));
+            runner.action(action_id("browser-more"));
             assert!(reachable(runner.app(), "navigate"));
             assert!(!reachable(runner.app(), "links"));
             runner.action(action_id("navigate"));
@@ -1521,7 +1524,7 @@ fn links_are_reachable_through_navigate_on_every_profile_and_text_size() {
             assert!(reachable(runner.app(), "return"));
             runner.action(action_id("return"));
             assert_eq!(runner.app().view, View::Page);
-            assert!(reachable(runner.app(), "navigate"));
+            assert!(reachable(runner.app(), "browser-more"));
         }
     }
 }

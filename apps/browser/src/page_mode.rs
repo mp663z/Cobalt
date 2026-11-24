@@ -33,6 +33,7 @@ fn frame(
     builder
         .reading(true)
         .page_turns("previous-page", "next-page")
+        .page_position((page+1).min(u16::MAX as usize) as u16,pages.max(1).min(u16::MAX as usize) as u16)
         .action_bar([
             ("back", "Back"),
             ("forward", "Forward"),

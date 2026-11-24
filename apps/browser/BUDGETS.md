@@ -878,3 +878,28 @@ by the existing absent panels original-pages.cbz fixture, not reported as green.
 Final locked static stripped ARM EABI5 5,253,916B, delta4,004,536 over hello1,249,380,
 headroom1,238,344 under+5MiB. No new crate,unsafe or allocator change. Hardware,
 RSS,latency,broader HTML/CSS and independent proof gates remain open.
+
+## Unified browser header, November 24, 2026
+
+Protocol24 style4 explicitly requests address-in-header layout. Existing browser
+style3 and prior wire versions remain accepted. Real top bar, runtime way back
+and Close stay present. Only the declared first Field is relocated, preserving
+its action and bounded diagnostics. The duplicate top Navigate moves under More.
+Address/keyboard controls remain hit-testable; footer preserves page position.
+Native pagination now compares pictures against picture-alone size in the same
+final unified frame. Missing image geometry refuses instead of comparing empty
+options. Painted viewport and keyboard crop measure the same footer and header.
+
+Fail-before/pass-after: disabling unified layout fails the shared-header geometry
+fixture, restored version passes. Full UI300/0/2,protocol120/0,SDK166/0; browser
+four bounded batches57+58+57+56=228 passed/0failed/2ignored. This includes profile
+and text-size menu reachability updated for More>Navigate, page/link/keyboard,
+image fitting, form and history journeys. Sim108/0,framehost7/0. Workspace check
+and scoped clippy pass with existing warnings; absent panels CBZ fixture still
+prevents a blanket workspace-tests claim. Actual Colour coordinate-link/Back/
+inline-keyboard/More replay and B&W page/keyboard/menu replay pass. Full pixels
+inspected, Colour index38,137 non-grey pixels, B&W0. Final locked static stripped
+ARM EABI5 5,252,908B,delta4,003,528,headroom1,239,352 under+5MiB.
+No unsafe/new crate/allocator change. Hardware/RSS/latency/full-web/proof gates
+remain open. The zoom slider is still permanently visible, not yet moved into a
+panel; smooth movement/scroll interaction remains future work.

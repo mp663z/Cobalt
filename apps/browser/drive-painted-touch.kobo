@@ -1,10 +1,10 @@
 wait-for Search the web
 tap-id samples
-wait-for Sample pages
+wait-for samples.browse.invalid
 shot-colour touch-start
-tap-at 350 508
-wait-for Notes on reading
+tap-at 350 378
+wait-for 1 of 3
 shot-colour touch-destination
 tap-id back
-wait-for Sample pages
+wait-for samples.browse.invalid
 shot-colour touch-restored

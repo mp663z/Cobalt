@@ -1,0 +1,14 @@
+wait-for Search the web
+tap-id samples
+wait-for samples.browse.invalid
+shot-colour unified-start
+tap-at 350 378
+wait-for 1 of 3
+shot-colour unified-article
+tap-id back
+wait-for samples.browse.invalid
+tap-id edit-address
+shot-colour unified-inline-keyboard
+tap-id kb.cancel
+tap-id browser-more
+shot-colour unified-more

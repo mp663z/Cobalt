@@ -2823,6 +2823,13 @@ pub enum BarStyle {
     Actions,
     /// Compact browser transport controls with a continuous zoom slot.
     Browser,
+    /// Browser transport with the first address field in the title strip.
+    BrowserUnified,
+}
+
+impl BarStyle {
+    #[must_use]
+    pub const fn is_browser(self)->bool{matches!(self,Self::Browser|Self::BrowserUnified)}
 }
 
 /// The fixed bar at the bottom of a screen, equivalent to the reader's own.
@@ -2875,7 +2882,7 @@ impl NavBar {
     /// panel can physically carry rather than honoured blindly.
     #[must_use]
     pub fn visible(&self, metrics: &DisplayMetrics) -> &[BarAction] {
-        if self.style == BarStyle::Browser {
+        if self.style.is_browser() {
             return &self.destinations[..self.destinations.len().min(7)];
         }
         let mut limit = min(self.destinations.len(), metrics.max_nav_destinations());
@@ -3271,6 +3278,8 @@ impl Screen {
             ..Layout::default()
         };
 
+        let unified=self.nav_bar.as_ref().is_some_and(|bar|bar.style==BarStyle::BrowserUnified)
+            && self.top_bar.is_some() && matches!(self.nodes.first(),Some(Node::Field{..}));
         let mut cursor = margin;
         // The band sits above everything, including the top bar, which is
         // where the stock reader puts it and where a reader's eye already
@@ -3283,6 +3292,22 @@ impl Screen {
         cursor = cursor.saturating_add(band);
         if let Some(top_bar) = &self.top_bar {
             cursor = layout_top_bar(top_bar, chrome, metrics, band, &mut layout);
+            if unified {
+                if let Some(Node::Field{id,action,value,placeholder,clear})=self.nodes.first(){
+                    if let Some(at)=layout.nodes.iter().position(|n|matches!(n.kind,LayoutKind::TopBarTitle)){
+                        layout.header_nodes.push(*id);
+                        let title=layout.nodes.remove(at).rect;
+                        let height=metrics.touch_target_minimum().min(metrics.top_bar_height());
+                        let rect=Rect{x:title.x,y:band+(metrics.top_bar_height()-height)/2,width:title.width,height};
+                        layout.nodes.push(LayoutNode{id:*id,rect,kind:LayoutKind::Field(*action),text_lines:Vec::new()});
+                        let inset=metrics.space(Space::Small);
+                        let clear_width=if clear.is_some(){height}else{0};
+                        let text_width=(rect.width-2*inset-clear_width).max(1);
+                        layout.nodes.push(LayoutNode{id:*id,rect:Rect{x:rect.x+inset,y:rect.y+(height-FontSize::Body.line_height())/2,width:text_width,height:FontSize::Body.line_height()},kind:LayoutKind::FieldValue(value.is_empty()),text_lines:vec![if value.is_empty(){placeholder.clone()}else{value.clone()}]});
+                        if let Some(clear)=clear{layout.nodes.push(LayoutNode{id:*id,rect:Rect{x:rect.x+rect.width-height,y:rect.y,width:height,height},kind:LayoutKind::FieldClear(*clear),text_lines:Vec::new()});}
+                    }
+                }
+            }
             cursor = cursor.saturating_add(gap);
         }
         let content_top = cursor;
@@ -3333,6 +3358,7 @@ impl Screen {
         let flow_width = metrics.width - 2 * margin - rail_reserved;
 
         for (position, node) in self.nodes.iter().enumerate() {
+            if unified&&position==0{continue;}
             if layout.nodes.len() >= MAX_LAYOUT_NODES || cursor >= content_bottom {
                 break;
             }
@@ -3389,7 +3415,7 @@ impl Screen {
         if self
             .nav_bar
             .as_ref()
-            .is_some_and(|bar| bar.style == BarStyle::Browser)
+            .is_some_and(|bar| bar.style.is_browser())
         {
             for node in &mut layout.nodes {
                 node.kind = match node.kind {
@@ -3397,6 +3423,7 @@ impl Screen {
                     LayoutKind::FieldValue(empty) => {
                         node.rect.x += metrics.tenth_mm(40);
                         node.rect.width -= metrics.tenth_mm(40);
+                        if let Some(text)=node.text_lines.first_mut(){*text=one_line(text,node.rect.width,FontSize::Body);}
                         LayoutKind::AddressValue(
                             empty,
                             self.nodes
@@ -3488,7 +3515,7 @@ impl Screen {
                 return true;
             }
             let bounds =
-                if interaction_uses_panel_bounds(node.kind) || pinned_bottom == Some(node.id) {
+                if interaction_uses_panel_bounds(node.kind) || pinned_bottom == Some(node.id) || layout.header_nodes.contains(&node.id) {
                     panel
                 } else {
                     content_bounds
@@ -4168,7 +4195,7 @@ fn layout_nav_bar(nav_bar: &NavBar, metrics: &DisplayMetrics, layout: &mut Layou
         text_lines: Vec::new(),
     });
 
-    if nav_bar.style == BarStyle::Browser && visible.len() == 7 {
+    if nav_bar.style.is_browser() && visible.len() == 7 {
         let side = (metrics.width / 10)
             .max(metrics.touch_target_minimum())
             .min(metrics.touch_target_default());
@@ -6259,6 +6286,8 @@ pub struct LayoutNode {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Layout {
+    /// Flow nodes deliberately relocated into a declared unified header.
+    header_nodes: Vec<NodeId>,
     pub nodes: Vec<LayoutNode>,
     /// The band between the bars, which is what the page-turn zones cover.
     pub content: Rect,
@@ -13342,7 +13371,7 @@ fn validate_content_bounds(
         // A picture that is the page is outside the content box on purpose,
         // so it answers to the panel instead. Off the panel is still off the
         // panel, which is the thing this check exists to catch.
-        let allowed = if matches!(node, Node::Picture { bleed: true, .. }) {
+        let allowed = if matches!(node, Node::Picture { bleed: true, .. }) || layout.header_nodes.contains(&id) {
             panel
         } else {
             layout.content
@@ -13357,7 +13386,7 @@ fn validate_content_bounds(
             .map(|laid_out| laid_out.rect)
             .collect::<Vec<_>>();
         let offscreen_interactive = laid_out.iter().find(|laid_out| {
-            is_enabled_interactive(laid_out.kind) && !rect_is_inside(laid_out.rect, layout.content)
+            is_enabled_interactive(laid_out.kind) && !rect_is_inside(laid_out.rect, allowed)
         });
         let expected_interactions = node_enabled_interaction_count(node);
         let visible_interactions = laid_out
@@ -13374,7 +13403,7 @@ fn validate_content_bounds(
             && (rects.is_empty()
                 || rects
                     .iter()
-                    .all(|rect| rect.intersection(layout.content).is_none()));
+                    .all(|rect| rect.intersection(allowed).is_none()));
         if completely_hidden {
             hidden.push(id);
             if expected_interactions > 0 {
@@ -14644,7 +14673,7 @@ fn render_all_with_selected_font(
                         * if screen
                             .nav_bar
                             .as_ref()
-                            .is_some_and(|bar| bar.style == BarStyle::Browser)
+                            .is_some_and(|bar| bar.style.is_browser())
                         {
                             1
                         } else {
@@ -14880,7 +14909,7 @@ fn render_all_with_selected_font(
             // Nothing at all: the picture is the whole of it.
             LayoutKind::Cell(_, CellStyle::Plain, _) => {}
             LayoutKind::Cell(_, CellStyle::Key, selected) => {
-                let browser = screen.nav_bar.as_ref().is_some_and(|bar| bar.style == BarStyle::Browser);
+                let browser = screen.nav_bar.as_ref().is_some_and(|bar| bar.style.is_browser());
                 let radius = metrics.tenth_mm(if browser { 10 } else { BUTTON_RADIUS_TENTH_MM });
                 fill_rounded_clipped(surface, node.rect, radius,
                     if browser { tone::PAPER } else { tone::SURFACE }, clip);
@@ -24995,5 +25024,26 @@ mod picture_link_tests {
         let hit=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::PictureLink(_))).unwrap();
         assert_eq!(layout.hit_test(hit.rect.x+2,hit.rect.y+2),None);
         assert_eq!(layout.nodes.iter().filter(|n|matches!(n.kind,LayoutKind::PictureLink(_))).count(),2);
+    }
+}
+
+#[cfg(test)]
+mod unified_browser_tests {
+    use super::*;
+    #[test]
+    fn address_shares_header_and_retains_taps_without_consuming_page_flow(){
+        for metrics in [CLARA_BW_METRICS,DisplayMetrics{width:758,height:1024,..CLARA_BW_METRICS}]{
+            let mut screen=Screen::new(1,vec![Node::Field{id:NodeId(2),action:ActionId(4),value:"https://sample.invalid/article".into(),placeholder:"Address".into(),clear:None},Node::Text{id:NodeId(3),text:"The page".into(),links:Vec::new()}]);
+            screen.top_bar=Some(TopBar::new(NodeId(1),"Page").with_action(BarAction::new(ActionId(5),"Close").with_glyph(Glyph::Close)));
+            screen.nav_bar=Some(NavBar{id:NodeId(6),destinations:(0..7).map(|i|BarAction::new(ActionId(10+i),"50").with_glyph(Glyph::More)).collect(),selected:None,style:BarStyle::Browser});
+            let legacy=screen.layout_with(&metrics,&Chrome::with_back(true));
+            screen.nav_bar.as_mut().unwrap().style=BarStyle::BrowserUnified;
+            let layout=screen.layout_with(&metrics,&Chrome::with_back(true));
+            let address=layout.rect_of_action(ActionId(4)).unwrap();let close=layout.rect_of_action(ActionId(5)).unwrap();
+            assert!(address.y<layout.content.y);assert!(address.x+address.width<=close.x);
+            assert_eq!(layout.hit_test(address.x+address.width/2,address.y+address.height/2),Some(ActionId(4)));
+            let text_y=|l:&Layout|l.nodes.iter().find(|n|n.id==NodeId(3)).unwrap().rect.y;
+            assert!(text_y(&layout)<text_y(&legacy));
+        }
     }
 }

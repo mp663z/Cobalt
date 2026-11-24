@@ -508,8 +508,10 @@ main stream. The existing browser is still paginated, not a scrolling browser.
   regions follow the raster's scaling/page crop. Keyboard/toolbar controls win;
   ambiguous overlaps refuse, with Links as fallback. Protocol23 optional tag42,
   old unlinked-picture tag17 unchanged. Requires a matching runtime for links.
-- [ ] Consolidate duplicated title/address/menu chrome into a compact browsing
-  surface, measuring content against the same final nodes actually drawn.
+- [x] Consolidate title/address into one explicit browser header, retain Back
+  and Close, and route Navigate through the existing bottom More. Native and
+  painted page measurement uses the final frame, including picture fit and
+  page-position footer. Zoom remains directly draggable in this checkpoint.
 - [ ] Add page movement/scroll interaction appropriate to an e-ink display,
   with predictable link taps and restore behavior. Do not call page turns scroll.
 - [ ] Audit address/search, Back/Forward/restore, keyboard, forms and navigation

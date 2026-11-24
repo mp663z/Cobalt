@@ -134,3 +134,12 @@ Links for the full list. Protocol23 is required for interactive pictures, with
 older plain picture bytes unchanged. `drive-painted-touch.kobo` reproduces a
 Clara Colour link tap, article arrival and Back. This fixes interaction, not the
 remaining compact-chrome/scrolling or full-web compatibility gaps.
+
+### Unified browsing header
+
+The address now shares one top strip with Back and Close rather than sitting
+under a separate title row. Navigate is under the bottom More menu. Keyboard
+editing stays inline and page position is visible above the bottom toolbar.
+The draggable zoom control remains available. Protocol24 carries the explicit
+unified-browser style; old styles retain their wire values. This is a smaller
+frame, not smooth scrolling or a full-web compatibility claim.

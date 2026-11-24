@@ -7,7 +7,7 @@ pub(crate) fn toolbar(builder: ScreenBuilder, zoom: u16, _typing: bool) -> Scree
     builder.browser_bar(
         ((zoom.saturating_sub(75)) * 100 / 125).min(100) as u8,
         SLIDER_BASE,
-    )
+    ).unified_browser_header()
 }
 
 pub(crate) fn address_keys(builder: ScreenBuilder) -> ScreenBuilder {
@@ -39,4 +39,15 @@ pub(crate) fn fits(
         .rect_of_action(kobo_sdk::action_id(required))
         .is_some()
         && kobo_web_layout::fits(&screen, metrics)
+}
+
+/// Fit the final browser frame, including picture-alone size guarantees.
+pub(crate) fn page_fits(screen:&kobo_sdk::Screen,pieces:&[kobo_web_layout::Piece],metrics:&kobo_sdk::DisplayMetrics,alone:impl Fn(&kobo_web_layout::Piece)->kobo_sdk::Screen)->bool{
+    if !kobo_web_layout::fits(screen,metrics){return false;}
+    pieces.iter().all(|piece|{
+        let kobo_web_layout::Piece::Picture{image,..}=piece else{return true;};
+        let handle=kobo_web_layout::picture_handle(*image);
+        let size=|screen:&kobo_sdk::Screen|kobo_web_layout::picture_box(screen,metrics,handle).map(|(_,h)|h);
+        match (size(screen),size(&alone(piece))){(Some(drawn),Some(whole))=>drawn>=whole,_=>false}
+    })
 }

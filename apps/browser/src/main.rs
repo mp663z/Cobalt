@@ -707,16 +707,10 @@ impl Browser {
                 &metrics,
                 Some(&loaded.url.to_string()),
             );
-            kobo_web_layout::page_fits_with_address(
-                &title,
-                pieces,
-                &metrics,
-                Some(&loaded.url.to_string()),
-            ) && browser_chrome::fits(
-                browser_chrome::toolbar(builder, self.zoom, false),
-                &metrics,
-                false,
-            )
+            let screen=browser_chrome::toolbar(builder,self.zoom,false).build();
+            browser_chrome::page_fits(&screen,pieces,&metrics,|piece|browser_chrome::toolbar(page_screen_with_address(
+                &title,std::slice::from_ref(piece),998,Some(999),Some(false),&metrics,Some(&loaded.url.to_string())
+            ),self.zoom,false).build())
         };
         while loaded.paginator.pages().len() <= page.saturating_add(1)
             && loaded.paginator.next_page(&mut fits)
@@ -1709,11 +1703,12 @@ impl Browser {
                     },
                 ))
                 .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
-                .top_bar_glyph("navigate", "Navigate", Glyph::More);
+                ;
             let builder = browser_chrome::toolbar(builder, self.zoom, false);
             if self.browser_menu {
                 builder.popover("browser-more", |menu| {
                     menu.rows([
+                        ("navigate", "Navigate", "Links, sections and page modes", Glyph::Note),
                         ("edit-address", "Keyboard", "", Glyph::Keyboard),
                         ("go-home", "Go Home", "", Glyph::Home),
                         ("bookmarks", "Favourites", "", Glyph::Star),

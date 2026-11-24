@@ -94,7 +94,8 @@ pub const MONO_RICH_TEXT_VERSION:u8=21;
 pub const INLINE_CODE_VERSION:u8=22;
 /// Version carrying bounded source-pixel links on picture node tag 42.
 pub const PICTURE_LINK_VERSION:u8=23;
-pub const VERSION: u8 = 23;
+pub const UNIFIED_BROWSER_VERSION:u8=24;
+pub const VERSION: u8 = 24;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -2004,7 +2005,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4174,6 +4175,7 @@ fn encoded_screen_len(
         add_encoded_len(&mut length, 4)?;
     }
     if let Some(nav_bar) = &screen.nav_bar {
+        if nav_bar.style==BarStyle::BrowserUnified&&version<UNIFIED_BROWSER_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
         if nav_bar.destinations.len() > u8::MAX as usize {
             return Err(ProtocolError::TooManyNodes);
         }
@@ -4696,7 +4698,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5174,7 +5176,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5242,6 +5244,7 @@ fn encode_screen(
     match &screen.nav_bar {
         None => output.push(0),
         Some(nav_bar) => {
+            if nav_bar.style==BarStyle::BrowserUnified&&version<UNIFIED_BROWSER_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             // Refused here as well as on the way in. A bar of one destination
             // is a bar that says nothing about where else the reader could go,
             // and the decoder has always rejected it, so an application that
@@ -5258,6 +5261,7 @@ fn encode_screen(
                 BarStyle::Navigation => 1,
                 BarStyle::Actions => 2,
                 BarStyle::Browser => 3,
+                BarStyle::BrowserUnified => 4,
             });
             push_u32(output, nav_bar.id.0);
             let len = u8::try_from(nav_bar.destinations.len())
@@ -6496,14 +6500,14 @@ fn decode_screen(
     };
     let nav_bar = match reader.u8()? {
         0 => None,
-        style @ (1 | 2 | 3) => {
+        style @ (1 | 2 | 3 | 4) if style!=4||version>=UNIFIED_BROWSER_VERSION => {
             let style = if style == 1 {
                 BarStyle::Navigation
             } else if style == 2 {
                 BarStyle::Actions
-            } else {
+            } else if style==3 {
                 BarStyle::Browser
-            };
+            } else { BarStyle::BrowserUnified };
             let bar_id = NodeId(reader.u32()?);
             let len = usize::from(reader.u8()?);
             let selected = usize::from(reader.u8()?);
@@ -11462,5 +11466,21 @@ mod picture_link_tests {
         assert_eq!(old,current);assert_eq!(old[0],17);
         assert_eq!(decode_node(&mut Reader::new(&old),0,&mut 0,INLINE_CODE_VERSION).unwrap(),plain);
         if let Node::Picture{mut links,..}=node {links[0].x=u32::MAX;assert!(validate_picture_links(&links,(400,600)).is_err());links.resize(129,links[0]);assert!(validate_picture_links(&links,(400,600)).is_err());}
+    }
+}
+
+#[cfg(test)]
+mod unified_browser_tests {
+    use super::*;
+    #[test]
+    fn unified_header_style_is_explicitly_versioned(){
+        let mut screen=Screen::new(3,Vec::new());
+        screen.nav_bar=Some(NavBar{id:NodeId(1),destinations:vec![BarAction::new(ActionId(2),"Back"),BarAction::new(ActionId(3),"More")],selected:None,style:BarStyle::BrowserUnified});
+        let frame=Frame{version:VERSION,request_id:1,message:Message::SetScreen(screen.clone())};
+        let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
+        for version in LEGACY_VERSION..UNIFIED_BROWSER_VERSION{assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        screen.nav_bar.as_mut().unwrap().style=BarStyle::Browser;
+        let old=Frame{version:PICTURE_LINK_VERSION,request_id:1,message:Message::SetScreen(screen)};
+        assert_eq!(decode(&encode(&old).unwrap()).unwrap(),old);
     }
 }

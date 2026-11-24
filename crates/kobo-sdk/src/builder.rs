@@ -1380,6 +1380,14 @@ impl ScreenBuilder {
         self
     }
 
+    /// Uses the first address field in the top strip, preserving its action
+    /// and runtime-owned way back. Requires protocol24.
+    #[must_use]
+    pub fn unified_browser_header(mut self)->Self{
+        if let Some(bar)=self.nav_bar.as_mut(){if bar.style.is_browser(){bar.style=kobo_ui::BarStyle::BrowserUnified;}}
+        self
+    }
+
     /// Pins one control to the bottom of the panel, where a bar would go.
     ///
     /// For a screen with a single way off it. Prefer this to a button at the
