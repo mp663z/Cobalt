@@ -845,3 +845,15 @@ across148groups,whole-workspace check green,clippy completes with existing
 warnings. Locked stripped static ARM EABI5:5,248,884B,headroom1,243,376 under+5MiB.
 No wire,newcrate,unsafe or allocator change. Text-exclusion regression,not a
 new visual or physical-device fidelity claim.
+
+### Styled native source boundary whitespace, November24,2026
+
+Collapsed HTML spaces now remain single across computed strong/emphasis source
+wrappers. The old boundary check saw only direct colour leaves,so a trailing
+space in a bold leaf and leading space in the next italic leaf were duplicated.
+The source-tail check looks through semantic/link wrappers without changing
+styles,RGB,ranges or raw-pre whitespace. Exact-text regression fails before the
+fix and passes after. Browser226/0/2 ignored,engine1411/0/18 across148groups;
+workspace check green;clippy completes with existing warnings. Locked static
+stripped ARM EABI5:5,248,708B,headroom1,243,552 under+5MiB. No new crate,unsafe,
+allocator or protocol change. Text-identity check,not new hardware evidence.

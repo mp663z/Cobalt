@@ -242,9 +242,9 @@ impl Converter<'_> {
         let mut text=collapse_keep_edges(text);
         if text.is_empty(){return;}
         let (strong,emphasis)=self.font_treatments.as_ref().and_then(|items|items.get(handle)).copied().flatten().unwrap_or_default();
+        if text.starts_with(' ')&&inline_tail_space(inlines){text.remove(0);}
         if !strong&&!emphasis {
             if let Some(Inline::ColouredText{text:previous,foreground:fg,background:bg,code:false})=inlines.last_mut() {
-                if previous.ends_with(' ')&&text.starts_with(' ') {text.remove(0);}
                 if fg==foreground&&bg==background {previous.push_str(&text);return;}
             }
         }
@@ -1285,6 +1285,17 @@ impl Converter<'_> {
             }),
         })
     }
+}
+
+/// A collapsed space may belong to a styled or linked source leaf.
+/// Look through semantic wrappers without changing their ranges or identity.
+fn inline_tail_space(inlines:&[Inline])->bool {
+    inlines.last().is_some_and(|inline|match inline {
+        Inline::Text(text)|Inline::Code(text)|Inline::ColouredText{text,..}=>text.ends_with(' '),
+        Inline::Emphasis(inner)|Inline::Strong(inner)|Inline::Inert(inner)=>inline_tail_space(inner),
+        Inline::Link{label,..}=>inline_tail_space(label),
+        Inline::LineBreak=>false,
+    })
 }
 
 /// Appends text with HTML whitespace collapsed to single spaces.

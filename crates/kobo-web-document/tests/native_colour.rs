@@ -52,3 +52,10 @@ fn raw_coloured_pre_does_not_reveal_hidden_source_text_or_trim_indents(){
     assert_eq!(document.visible_text(),"  kept\n\n    tail\n");
     assert!(!document.visible_text().contains("private"));
 }
+
+#[test]
+fn computed_treatments_do_not_duplicate_spaces_between_source_slices(){
+    let html=br#"<p><span style='font-weight:700;color:red'>one </span><span style='font-style:italic;color:blue'> two </span><span style='color:green'> three</span></p>"#;
+    let doc=parse_coloured_document(html,&Url::parse("https://fixture.invalid/").unwrap(),&Limits::DEFAULT);
+    assert_eq!(doc.visible_text(),"one two three\n");
+}
