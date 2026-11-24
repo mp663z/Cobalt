@@ -2496,3 +2496,15 @@ fn native_plain_heading_quote_table_preserve_semantic_style_without_rgb(){
     runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
     if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-plain-emphasis.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
 }
+
+#[test]
+fn native_colour_uses_computed_css_font_treatments_and_normal_resets(){
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><style>.heavy{font-weight:700;font-style:italic;color:red}.normal{font-weight:normal;font-style:normal;color:blue}</style><p class=heavy>Inherited <span class=normal>reset</span> again</p><p><strong class=normal>reset tag</strong> <span style='font-weight:600;font-style:oblique;color:green'>numeric</span></p><form><input name=q></form>");
+    let pieces=runner.app().current_pieces();let runs:Vec<_>=pieces.iter().filter_map(|p|if let Piece::Prose(runs)=p{Some(runs)}else{None}).flatten().collect();
+    assert_eq!(runs.iter().map(|r|r.text.as_str()).collect::<String>(),"Inherited reset againreset tag numeric");
+    for word in ["Inherited","again","numeric"]{assert!(runs.iter().any(|r|r.text.contains(word)&&r.strong&&r.emphasis),"{word}: {runs:?}");}
+    for word in ["reset","reset tag"]{assert!(runs.iter().any(|r|r.text.contains(word)&&!r.strong&&!r.emphasis&&r.foreground==Some([0,0,255])),"{word}");}
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-css-fonts.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
+}

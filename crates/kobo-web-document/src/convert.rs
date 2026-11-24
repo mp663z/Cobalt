@@ -56,6 +56,7 @@ const CONTAINERS: &[&str] = &[
 struct Converter<'a> {
     nodes: &'a [Node],
     colours: Option<Vec<Option<([u8;3],Option<[u8;3]>)>>>,
+    font_treatments:Option<Vec<Option<(bool,bool)>>>,
     styles: Styles,
     base: Url,
     limits: &'a Limits,
@@ -117,12 +118,13 @@ pub fn convert(
     warnings: Vec<Warning>,
     styles: Styles,
 ) -> crate::Document {
-    convert_with_colours(nodes,url,limits,warnings,styles,None)
+    convert_with_colours(nodes,url,limits,warnings,styles,None,None)
 }
 
 pub(crate) fn convert_coloured(nodes:&[Node],url:&Url,limits:&Limits,warnings:Vec<Warning>,styles:Styles)->crate::Document {
     let (tree,sources)=crate::style_tree::StyleTree::from_dom_with_sources(nodes,&[],None);
     let mut colours=vec![None;nodes.len()];
+    let mut font_treatments=vec![None;nodes.len()];
     // Retain safely computed colour from the supported CSS subset even when
     // unrelated paint/layout properties are unsupported. A truncated walk has
     // no complete mapping and falls back to uncoloured semantic text.
@@ -135,17 +137,19 @@ pub(crate) fn convert_coloured(nodes:&[Node],url:&Url,limits:&Limits,warnings:Ve
             backgrounds.push(background);
             if let Some(handle)=source {
                 colours[handle]=Some((rgb(styled.style.color),background));
+                font_treatments[handle]=Some((styled.style.font_weight>=600,styled.style.font_style!=crate::computed_style::FontStyle::Normal));
             }
         }
     }
-    convert_with_colours(nodes,url,limits,warnings,styles,Some(colours))
+    convert_with_colours(nodes,url,limits,warnings,styles,Some(colours),(!tree.truncated).then_some(font_treatments))
 }
 
 fn convert_with_colours(nodes:&[Node],url:&Url,limits:&Limits,warnings:Vec<Warning>,styles:Styles,
-    colours:Option<Vec<Option<([u8;3],Option<[u8;3]>)>>>)->crate::Document {
+    colours:Option<Vec<Option<([u8;3],Option<[u8;3]>)>>>,font_treatments:Option<Vec<Option<(bool,bool)>>>)->crate::Document {
     let mut converter = Converter {
         nodes,
         colours,
+        font_treatments,
         styles,
         base: url.clone(),
         limits,
@@ -237,11 +241,18 @@ impl Converter<'_> {
         };
         let mut text=collapse_keep_edges(text);
         if text.is_empty(){return;}
-        if let Some(Inline::ColouredText{text:previous,foreground:fg,background:bg,code:false})=inlines.last_mut() {
-            if previous.ends_with(' ')&&text.starts_with(' ') {text.remove(0);}
-            if fg==foreground&&bg==background {previous.push_str(&text);return;}
+        let (strong,emphasis)=self.font_treatments.as_ref().and_then(|items|items.get(handle)).copied().flatten().unwrap_or_default();
+        if !strong&&!emphasis {
+            if let Some(Inline::ColouredText{text:previous,foreground:fg,background:bg,code:false})=inlines.last_mut() {
+                if previous.ends_with(' ')&&text.starts_with(' ') {text.remove(0);}
+                if fg==foreground&&bg==background {previous.push_str(&text);return;}
+            }
         }
-        if !text.is_empty(){inlines.push(Inline::ColouredText{text,foreground:*foreground,background:*background,code:false});}
+        if text.is_empty(){return;}
+        let mut run=Inline::ColouredText{text,foreground:*foreground,background:*background,code:false};
+        if emphasis{run=Inline::Emphasis(vec![run]);}
+        if strong{run=Inline::Strong(vec![run]);}
+        inlines.push(run);
     }
 
     fn tag(&self, handle: Handle) -> Option<&str> {
@@ -732,6 +743,7 @@ impl Converter<'_> {
             return;
         }
         match tag.as_str() {
+            "em" | "i" | "cite" | "dfn" | "var" | "strong" | "b" if self.font_treatments.is_some()=>self.inlines_in(handle,depth,gather),
             "em" | "i" | "cite" | "dfn" | "var" => {
                 let inner = self.nested(handle, depth, gather);
                 if !inner.is_empty() {

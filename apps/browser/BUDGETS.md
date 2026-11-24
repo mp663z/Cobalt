@@ -800,3 +800,21 @@ with existing warnings. Removing semantic span retention fails the fixture,
 restoration passes. Actual full native raster inspected. Static stripped ARM
 EABI5:5,247,404 bytes,delta3,998,024 over hello,headroom1,244,856 under+5MiB.
 No new crate,unsafe,allocator or protocol change. Not a physical-panel result.
+
+
+### Native Colour computed font treatments, November24,2026
+
+The same-DOM colour conversion now maps computed inherited font-weight>=600
+to synthetic bold and computed italic/oblique to synthetic emphasis. Computed
+normal resets take precedence over semantic strong/em tags in this path.
+The ordinary uncoloured parser is unchanged. Incomplete style-tree mappings
+fall back to semantic tags rather than losing them. No font file/true variant,
+wire,new crate,unsafe or allocator change. Raw preformatted traversal and
+complex control styling are separate limits; this does not implement arbitrary
+CSS font families. RGB and ordinary prose text/links/form identity remain.
+Browser225/0/2 ignored,engine1409/0/18 across148groups,layout34/0; workspace
+check green;clippy completes with existing warnings. Mapping-disabled mutation
+fails,restoration passes. Initial disk-full links were rerun after disposable
+build output cleanup. Full native raster inspected:6,831 non-grey pixels.
+Static stripped ARM EABI5:5,248,436B,delta3,999,056 over hello,headroom1,243,824
+under+5MiB. No physical panel/RSS/latency qualification.

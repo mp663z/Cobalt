@@ -481,3 +481,12 @@ an authored RGB colour. Tests refuse invented foreground/background, and the
 full raster remains greyscale. Code-only fragmentation also triggers the
 existing simplification notice. See BUDGETS.md. Block-inline code face and
 arbitrary font/physical-device limits remain open.
+
+
+#### November24 native Colour computed-style follow-through
+
+Same-DOM native Colour text carries inherited computed bold/italic treatments,
+including normal resets overriding strong/em tags. Existing synthetic glyph
+routines remain; this is not true font variants or arbitrary families. Plain
+parser behavior stays stable. Incomplete style mappings retain semantic tags.
+BUDGETS.md records tests,failed mutation,restoration,raster and ARM size.
