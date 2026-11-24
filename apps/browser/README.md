@@ -17,8 +17,8 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 
 - Pages are cut to fit the screen and the type size, and turned with a tap on
   either side. The position is shown at the bottom.
-- Headings, paragraphs, lists, quotations, code and tables are kept. Scripts,
-  styles, frames, video and advertising are dropped.
+- Headings, paragraphs, lists, quotations, code and tables are kept. Supported
+  inline CSS is parsed. Scripts, frames, video and active content are dropped.
 - Pages load over the network. A page that fails to arrive says why, and
   offers Try again when that could help.
 - Tap a link to follow it. **Links** lists every link in the page, the ones on
@@ -51,9 +51,12 @@ painted link cannot yet be tapped directly. Form documents stay in the
 native reader, where controls work. Truncated or substantially skipped
 paint also keeps Reader. Supported fresh pages on confirmed Colour panels
 open in Page view to preserve authored RGB. BW keeps its Reader-first default.
-Forms, saved-copy notices and restored/fragment positions retain native Reader
-for now; it does not preserve arbitrary authored CSS colours. This is not a
-claim that all CSS, fonts or image formats are supported.
+Forms, saved-copy notices and restored/fragment positions retain native Reader.
+On confirmed Colour profiles, native Reader carries supported same-DOM authored
+RGB foreground/background through prose, links, headings, quotes, preformatted
+text, table cells and explicit control titles. Late identity refresh retains
+edited form values, notices and native place when retained source is available.
+This is not a claim that all CSS, fonts or image formats are supported.
 External images, SVG, external stylesheets, painted form controls, saved
 painted-page positions, and device memory measurements remain follow-up work.
 Data-image preparation caps each page at 4 MiB compressed bytes and 1,048,576
@@ -66,6 +69,33 @@ links and navigation to the target article.
 page turns and the Reader switch. Run with the current checkout's simulator
 on `clara-bw-391` and `clara-colour-393`. The normal `drive.kobo` continues
 to cover the native reader. No live network is required for either script.
+
+### Native colour coverage, November 24, 2026
+
+<img width="360" src="screenshots/native-colour-blocks.png" alt="Native Colour page with red and blue headings, nested coloured quotes, a coloured table, preformatted text and a form control">
+<img width="360" src="screenshots/native-colour-controls.png" alt="Native Colour form with red search label, blue select label, green checkbox label and purple authored submit label">
+
+These are actual Clara Colour simulator captures, ideal RGB rather than
+calibrated physical-panel appearance. The page and the form remain native
+controls. Matching protocol-20 app and runtime required for all shown paths;
+the runtime still reads versions11-19, and old plain-node wire bytes are kept.
+Older peers refuse colour payloads they cannot read instead of misreading them.
+
+- Text colour is tied to the same parsed DOM source, not matched by words.
+- Native headings, quotes and table cells retain inline bold/slant treatments;
+  these are synthetic treatments on installed type, not arbitrary CSS families.
+- Preformatted text keeps spaces and blank lines, using the existing native
+  face. Inline code and preformatted text do not yet select a monospaced face.
+- Control colours apply to the actual authored title source. Generated labels
+  and details stay neutral. Nested multicolour labels, per-option and editable
+  value styling are not complete authored-control styling.
+- More than256 native colour spans are simplified with a visible note, keeping
+  text. Heavy heading/quote/table fragmentation can use plain text to preserve
+  the tail and following content within the layout budget.
+
+Physical colour quality, device RSS/latency, complete font/CSS fidelity and
+unsupported formats remain unverified or unsupported. These captures do not
+close the Nickel-equivalence or hardware-readiness gates.
 
 ### Start page and address field
 

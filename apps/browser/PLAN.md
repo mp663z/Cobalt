@@ -18,14 +18,18 @@ Branch: `agent/browser` on mp663z/Cobalt, cut from upstream `beta` at fc88fd3.
   are covered; native position and controls stay in place.
 - [x] Keep authored chromatic text colours instead of the neutral contrast floor.
   Regular, bold, italic, code, links and backgrounds have exact RGB pixel coverage.
-- [ ] Preserve authored CSS colours in semantic Reader paths: forms, saved-copy
-  notices, restored/fragment positions and unsupported Page fallback. Do not remove
-  these semantics merely to show colour. A source/style mapping is still needed.
-  Inspection confirms three missing boundaries: semantic Inline/Run provenance,
-  RGB in toolkit text presentation, and a versioned rich-text wire extension.
-  Preserve source identity through whitespace collapse and repeated text; never
-  match authored colour to content by string alone. A future increment should
-  prove RGB span round-trips and native link/form/anchor behavior before adoption.
+- [x] Carry supported same-DOM authored RGB into semantic Reader prose/links,
+  headings, quotes, preformatted blocks, table cells and explicit control titles.
+  Forms, saved-copy notices and restored/fragment positions retain native paths.
+  Late identity reparses retained source while keeping edited fields/place/notices.
+  Protocol20 carries the combined extensions, preserves old plain bytes and reads
+  versions11-19. Matching runtime required. Bound excessive span fragmentation
+  with a visible simplification note and preserve complete text.
+- [x] Paint retained inline bold/slant treatments in coloured native blocks at
+  their existing sizes. Keep these distinct from true font-family/variant support.
+- [ ] Complete native code/preformatted monospaced face selection, nested
+  multicolour control labels and per-option/editable value styling. These are
+  fidelity gaps, not a reason to remove native forms or claim all-fonts support.
 - [ ] Verify colour quality, memory and latency on physical hardware.
 
 ## Crates
@@ -335,7 +339,8 @@ The historical sections above retain their original status and proposals.
 
 ## Native authored colour implementation plan, November 24, 2026
 
-The current native renderer cannot carry arbitrary authored RGB text. This is
+Historical checkpoint before the November24 native RGB increments below:
+the native renderer could not carry arbitrary authored RGB text. This was
 not an image decoder limitation. `Inline` loses source/style identity during
 semantic conversion, layout `Run` retains only strong/emphasis/link, and the
 shared `TextPresentation` wire byte encodes six style flags, no colour.
@@ -433,3 +438,15 @@ colour fidelity. A coloured paragraph is useful support, not all-fonts support.
 SourceText remains a tested normalization primitive, not a claim that every
 nested conversion already routes through it. Ordinary code keeps the existing
 native face; the coloured leaf preserves its code semantic flag for later work.
+
+### Combined native colour audit, November 24, 2026, 06:53 IST
+
+The historical increments above are superseded by the current colour checklist
+at the top and README's coverage table. Native RGB now reaches prose/links,
+headings,quotes,preformatted blocks,table cells and authored control titles;
+late identity preserves edited forms/place/notices. Protocol20 is current.
+No claim of arbitrary CSS/fonts or physical readiness. Inline code/pre mono,
+complex control styling,true variant selection and device measurements remain.
+Shared consumer audit after the protocol/toolkit additions: book reader82/0,
+flashcards binary14/0,frame-host7/0. This supplements whole-workspace compile,
+not a replacement for full workspace tests or any independent proof gate.
