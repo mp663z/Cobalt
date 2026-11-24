@@ -95,7 +95,8 @@ pub const INLINE_CODE_VERSION:u8=22;
 /// Version carrying bounded source-pixel links on picture node tag 42.
 pub const PICTURE_LINK_VERSION:u8=23;
 pub const UNIFIED_BROWSER_VERSION:u8=24;
-pub const VERSION: u8 = 24;
+pub const PICTURE_SCROLL_VERSION:u8=25;
+pub const VERSION: u8 = 25;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -2005,7 +2006,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4522,10 +4523,11 @@ fn encoded_node_len(
             return Err(ProtocolError::InvalidValue("protocol 12 page rail"));
         }
         Node::PageRail { .. } => 9,
-        Node::Picture {links,source,..} => {
+        Node::Picture {links,source,scroll,..} => {
+            validate_picture_scroll(*scroll,version)?;
             if !links.is_empty()&&version<PICTURE_LINK_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             validate_picture_links(links,*source)?;
-            20+if links.is_empty(){0}else{2+20*links.len()}
+            20+if links.is_empty()&&scroll.is_none(){0}else{2+20*links.len()}+if scroll.is_some(){4}else{0}
         },
         Node::Table { rows, weights, .. } => {
             if rows.len() > u8::MAX as usize || weights.len() > u8::MAX as usize {
@@ -4698,7 +4700,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5176,7 +5178,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5426,6 +5428,10 @@ fn decode_bar_action(reader: &mut Reader<'_>) -> Result<BarAction, ProtocolError
 // One exhaustive match over every node kind. Splitting it would only move
 // arms out of reach of the compiler's exhaustiveness check, which is the one
 // thing making it impossible to add a node and forget the wire format.
+fn validate_picture_scroll(base:Option<ActionId>,version:u8)->Result<(),ProtocolError>{
+    if let Some(base)=base{if version<PICTURE_SCROLL_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}if base.0.checked_add(200).is_none(){return Err(ProtocolError::InvalidValue("picture scroll base"));}}Ok(())
+}
+
 fn validate_picture_links(links:&[kobo_ui::PictureLink],source:(u32,u32))->Result<(),ProtocolError>{
     if links.len()>kobo_ui::MAX_PICTURE_LINKS{return Err(ProtocolError::TooManyNodes);}
     if links.iter().any(|l|l.width==0||l.height==0||l.x.checked_add(l.width).is_none_or(|end|end>source.0)||l.y.checked_add(l.height).is_none_or(|end|end>source.1)){return Err(ProtocolError::InvalidValue("picture link region"));}
@@ -5979,10 +5985,12 @@ fn encode_node(
             framed,
             bleed,
             links,
+            scroll,
         } => {
             if !links.is_empty()&&version<PICTURE_LINK_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             validate_picture_links(links,*source)?;
-            output.push(if links.is_empty(){17}else{42});
+            validate_picture_scroll(*scroll,version)?;
+            output.push(if scroll.is_some(){43}else if links.is_empty(){17}else{42});
             push_u32(output, id.0);
             push_u32(output, handle.0);
             push_u32(output, source.0);
@@ -5993,7 +6001,8 @@ fn encode_node(
             // changes shape. Only protocol 15 may set it.
             let bleeds = *bleed && version >= PICTURE_BLEED_VERSION;
             output.push(u8::from(*framed) | (u8::from(bleeds) << 1));
-            if !links.is_empty(){push_u16(output,links.len() as u16);for link in links{for value in [link.action.0,link.x,link.y,link.width,link.height]{push_u32(output,value);}}}
+            if !links.is_empty()||scroll.is_some(){push_u16(output,links.len() as u16);for link in links{for value in [link.action.0,link.x,link.y,link.width,link.height]{push_u32(output,value);}}}
+            if let Some(base)=scroll{push_u32(output,base.0);}
         }
         Node::Table { id, rows, weights } => {
             let coloured=rows.iter().any(|row|!row.spans.is_empty());
@@ -7146,7 +7155,7 @@ fn decode_node(
             page: reader.u16()?,
             of: reader.u16()?,
         }),
-        tag @ (17|42) if tag==17||version>=PICTURE_LINK_VERSION => {
+        tag @ (17|42|43) if tag==17||(tag==42&&version>=PICTURE_LINK_VERSION)||(tag==43&&version>=PICTURE_SCROLL_VERSION) => {
             let handle = PictureHandle(reader.u32()?);
             let source = (reader.u32()?, reader.u32()?);
             let max_height_tenths_mm = reader.u16()?;
@@ -7155,8 +7164,10 @@ fn decode_node(
                 return Err(ProtocolError::InvalidValue("picture flags"));
             }
             let mut links=Vec::new();
-            if tag==42{let count=usize::from(reader.u16()?);if count>kobo_ui::MAX_PICTURE_LINKS{return Err(ProtocolError::TooManyNodes);}for _ in 0..count{links.push(kobo_ui::PictureLink{action:ActionId(reader.u32()?),x:reader.u32()?,y:reader.u32()?,width:reader.u32()?,height:reader.u32()?});}}
+            if tag==42||tag==43{let count=usize::from(reader.u16()?);if count>kobo_ui::MAX_PICTURE_LINKS{return Err(ProtocolError::TooManyNodes);}for _ in 0..count{links.push(kobo_ui::PictureLink{action:ActionId(reader.u32()?),x:reader.u32()?,y:reader.u32()?,width:reader.u32()?,height:reader.u32()?});}}
             validate_picture_links(&links,source)?;
+            let scroll=if tag==43{Some(ActionId(reader.u32()?))}else{None};
+            validate_picture_scroll(scroll,version)?;
             Ok(Node::Picture {
                 id,
                 handle,
@@ -7165,6 +7176,7 @@ fn decode_node(
                 framed: flags & 0b1 != 0,
                 bleed: flags & 0b10 != 0,
                 links,
+                scroll,
             })
         }
         10 => {
@@ -10674,7 +10686,7 @@ mod picture_tests {
                     framed: true,
                     bleed: false,
                     links: Vec::new(),
-                },
+                scroll:None,},
             ],
         );
         let frame = Frame {
@@ -11452,7 +11464,7 @@ mod picture_link_tests {
     #[test]
     fn picture_regions_are_bounded_versioned_and_roundtrip(){
         let node=Node::Picture{id:NodeId(1),handle:PictureHandle(7),source:(400,600),max_height_tenths_mm:1000,framed:false,bleed:false,
-            links:vec![kobo_ui::PictureLink{action:ActionId(9),x:10,y:20,width:100,height:50}]};
+            links:vec![kobo_ui::PictureLink{action:ActionId(9),x:10,y:20,width:100,height:50}],scroll:None};
         let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();assert_eq!(bytes[0],42);
         assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
         assert_eq!(encoded_node_len(&node,0,&mut 0,VERSION).unwrap(),bytes.len());
@@ -11483,4 +11495,17 @@ mod unified_browser_tests {
         let old=Frame{version:PICTURE_LINK_VERSION,request_id:1,message:Message::SetScreen(screen)};
         assert_eq!(decode(&encode(&old).unwrap()).unwrap(),old);
     }
+}
+
+#[cfg(test)]
+mod picture_scroll_tests{
+ use super::*;
+ #[test]fn scroll_metadata_is_bounded_and_versioned(){
+  let node=Node::Picture{id:NodeId(1),handle:PictureHandle(7),source:(400,600),max_height_tenths_mm:1000,framed:false,bleed:false,links:Vec::new(),scroll:Some(ActionId(1000))};
+  let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();assert_eq!(bytes[0],43);assert_eq!(encoded_node_len(&node,0,&mut 0,VERSION).unwrap(),bytes.len());
+  assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+  for v in LEGACY_VERSION..PICTURE_SCROLL_VERSION{assert!(encode_node(&mut Vec::new(),&node,0,&mut 0,v).is_err());assert!(encoded_node_len(&node,0,&mut 0,v).is_err());assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,v).is_err());}
+  for n in 1..=6{assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
+  assert!(validate_picture_scroll(Some(ActionId(u32::MAX)),VERSION).is_err());
+ }
 }

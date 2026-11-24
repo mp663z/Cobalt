@@ -1701,10 +1701,17 @@ impl ScreenBuilder {
             source: picture.source,
             max_height_tenths_mm: max_height_mm.saturating_mul(10),
             links:Vec::new(),
+            scroll:None,
             framed,
             bleed,
         });
         self
+    }
+
+    /// Enables settled vertical drag actions on the last picture.
+    #[must_use]
+    pub fn picture_scroll(mut self,base:Option<ActionId>)->Self{
+        if let Some(Node::Picture{scroll,..})=self.nodes.last_mut(){*scroll=base;}self
     }
 
     /// Attaches source-pixel links to the last picture only.

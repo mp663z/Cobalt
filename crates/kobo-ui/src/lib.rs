@@ -2177,6 +2177,7 @@ pub const MAX_ACTION_BAR_ACTIONS: usize = 3;
 
 mod environment;
 pub mod vector;
+pub mod scroll_gesture;
 
 /// Grayscale values used by the built-in monochrome design system.
 ///
@@ -3526,6 +3527,7 @@ impl Screen {
         // popover hanging off a top-bar control has to cover to be readable --
         // and so hit testing, which walks the list backwards, reaches it first.
         if let Some(overlay) = &self.overlay {
+            layout.scroll_regions.clear();
             layout_overlay(overlay, metrics, prose, &mut layout);
             // A popover cannot also be a page turn: the zones are whatever is
             // left of the content area, and "left over" must not include the
@@ -4929,6 +4931,8 @@ pub enum Node {
         bleed: bool,
         /// Bounded source-pixel link regions, scaled with this picture.
         links: Vec<PictureLink>,
+        /// Base of 201 vertical-drag actions: base+100 is no movement.
+        scroll: Option<ActionId>,
     },
     /// Work in flight, typically a network request.
     ///
@@ -6288,6 +6292,7 @@ pub struct LayoutNode {
 pub struct Layout {
     /// Flow nodes deliberately relocated into a declared unified header.
     header_nodes: Vec<NodeId>,
+    pub scroll_regions: Vec<(Rect,ActionId)>,
     pub nodes: Vec<LayoutNode>,
     /// The band between the bars, which is what the page-turn zones cover.
     pub content: Rect,
@@ -9126,6 +9131,7 @@ fn layout_node(
             framed,
             bleed,
             links,
+            scroll,
         } => {
             // Against the panel, not the column. Pulled up to the top edge
             // only when nothing has been placed above it: a picture that
@@ -9156,6 +9162,7 @@ fn layout_node(
                 },
                 text_lines: Vec::new(),
             });
+            if let Some(base)=scroll{layout.scroll_regions.push((Rect{x:x+(width-drawn_width)/2,y,width:drawn_width,height:drawn_height},*base));}
             if source.0>0&&source.1>0 {
                 let origin=x+(width-drawn_width)/2;
                 let scale=|n:u32,total:u32,drawn:i32|((u64::from(n)*drawn.max(0) as u64)/u64::from(total)) as i32;
@@ -17764,7 +17771,7 @@ mod tests {
                     framed,
                     bleed: false,
                     links: Vec::new(),
-                }],
+                scroll:None,}],
             )
             .layout()
             .nodes
@@ -17802,7 +17809,7 @@ mod tests {
                             framed: false,
                             bleed: false,
                             links: Vec::new(),
-                        },
+                        scroll:None,},
                         Node::Grid {
                             id: NodeId(2),
                             columns: 1,
@@ -17865,7 +17872,7 @@ mod tests {
                 framed: true,
                 bleed: false,
                 links: Vec::new(),
-            }],
+            scroll:None,}],
         );
         let diagnostics = screen.diagnostics_with_pictures(
             &CLARA_BW_METRICS,
@@ -25005,7 +25012,7 @@ mod bounded_code_tests {
 mod picture_link_tests {
     use super::*;
     fn screen(links:Vec<PictureLink>)->Screen{
-        let mut screen=Screen::new(1,vec![Node::Picture{id:NodeId(1),handle:PictureHandle(1),source:(400,600),max_height_tenths_mm:1500,framed:false,bleed:false,links}]);
+        let mut screen=Screen::new(1,vec![Node::Picture{id:NodeId(1),handle:PictureHandle(1),source:(400,600),max_height_tenths_mm:1500,framed:false,bleed:false,links,scroll:None}]);
         screen.page_turns=Some(PageTurns::new(ActionId(90),ActionId(91)));screen
     }
     #[test]

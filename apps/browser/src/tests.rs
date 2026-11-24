@@ -2556,3 +2556,42 @@ fn painted_links_open_by_touch_at_every_zoom(){
         assert_eq!(runner.app().loaded.as_ref().unwrap().url.to_string(),SAMPLES);
     }}
 }
+
+#[test]
+fn painted_scroll_is_a_real_offset_clamped_to_content_and_keeps_links(){
+ let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+ runner.action(link_to(&runner,"Notes on reading"));runner.action(action_id("page-view"));
+ let commands=runner.action(ActionId(page_mode::SCROLL_BASE.0+150));
+ let painted=runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+ assert_eq!(painted.top_for_test(),painted.view.viewport_height()/2);
+ let top=painted.top_for_test();assert_ne!(top,painted.view.page_top(painted.page));
+ save_painted_journey_frame(&runner,&commands,"scroll-half");
+ runner.action(action_id("edit-address"));runner.action(ActionId(page_mode::SCROLL_BASE.0+200));
+ assert_eq!(runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().top_for_test(),top);
+ runner.action(action_id("kb.cancel"));
+ for _ in 0..20{runner.action(ActionId(page_mode::SCROLL_BASE.0+200));}
+ let p=runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();assert_eq!(p.top_for_test(),p.view.max_scroll());
+ for _ in 0..20{runner.action(ActionId(page_mode::SCROLL_BASE.0));}
+ assert_eq!(runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().top_for_test(),0);
+}
+
+#[test]
+fn scroll_place_returns_on_back_and_only_visible_scrolled_links_open(){
+ let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+ let url=Url::parse("https://scroll.invalid/read").unwrap();
+ let mut html=String::from("<title>Scroll links</title><p><a href='/top'>Top link</a></p>");
+ for _ in 0..15{html.push_str("<p>Readable content with enough lines to scroll through the middle of an article.</p>");}
+ html.push_str("<p><a href='/bottom'>Bottom link</a></p>");
+ let mut context=runner.context();runner.app_mut().show_document(&mut context,&url,html.as_bytes());runner.action(action_id("page-view"));
+ for _ in 0..10{runner.action(ActionId(page_mode::SCROLL_BASE.0+200));}
+ let p=runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();assert!(p.scroll_position()>0);
+ let metrics=runner.context().metrics();let layout=runner.app().screen(&metrics).build().layout_with(&metrics,&Chrome::measuring(true));
+ let r=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::PictureLink(_))).unwrap().rect;
+ let action=layout.hit_test(r.x+r.width/2,r.y+r.height/2).unwrap();let index=runner.app().link_named(action).unwrap();
+ assert_eq!(runner.app().loaded.as_ref().unwrap().document.links[index].target.path(),"/bottom");
+ // Real local navigation gives Back a restorable cached sample document.
+ let mut runner=self::runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);let target=link_to(&runner,"Notes on reading");runner.action(target);runner.action(action_id("page-view"));
+ runner.action(ActionId(page_mode::SCROLL_BASE.0+150));let top=runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position();
+ runner.action(action_id("samples"));runner.action(action_id("back"));
+ assert_eq!(runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),top);
+}

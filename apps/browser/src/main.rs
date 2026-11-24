@@ -137,6 +137,7 @@ struct Browser {
     browser_menu: bool,
     home_page: Option<Url>,
     zoom: u16,
+    scroll_places:std::collections::BTreeMap<String,(u16,u32)>,
     loaded: Option<Loaded>,
     view: View,
     /// The address field. Its inline keyboard leaves the page visible.
@@ -192,6 +193,7 @@ impl Default for Browser {
             browser_menu: false,
             home_page: None,
             zoom: 100,
+            scroll_places:Default::default(),
             loaded: None,
             view: View::Page,
             address: TextEntry::new().opened_by("address"),
@@ -670,6 +672,12 @@ impl Browser {
                 }
             }
         }
+        if let Some((zoom,top))=self.scroll_places.get(&url.to_string()).copied(){
+            if url.fragment().is_none(){if let Some(loaded)=self.loaded.as_mut(){if forms::forms(&loaded.document.blocks).is_empty(){
+                loaded.painted=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom(bytes,&loaded.title,&metrics,zoom));
+                if let Some(painted)=loaded.painted.as_mut(){painted.restore_scroll(top);self.zoom=zoom;}
+            }}}
+        }
         if let Some(loaded) = &self.loaded {
             let title = loaded
                 .document
@@ -842,7 +850,7 @@ impl Browser {
             .as_mut()
             .and_then(|loaded| loaded.painted.as_mut())
         {
-            painted.page = page.min(painted.view.pages().saturating_sub(1));
+            painted.turn_to(page);
             return;
         }
         self.make_pages(context, page);
@@ -971,8 +979,7 @@ impl Browser {
         if let Some(loaded) = &self.loaded {
             if let Some(painted) = &loaded.painted {
                 return painted
-                    .view
-                    .screen_links(painted.page)
+                    .visible_links()
                     .into_iter()
                     .filter_map(|index| {
                         let target = loaded.url.join(&painted.view.links()[index]).ok()?;
@@ -1358,6 +1365,7 @@ impl Browser {
             }
             self.browser_menu = false;
         } else if action == action_id("reload") {
+            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             // The old raster is retired before the new document arrives.
             // Reset the label before publishing that intermediate native frame.
             self.zoom = 100;
@@ -1932,6 +1940,17 @@ impl KoboApp for Browser {
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         self.validate_css(context);
+        if let Some(value)=action.0.checked_sub(page_mode::SCROLL_BASE.0).filter(|value|*value<=200){
+            if matches!(self.view,View::Page)&&!self.address.is_open()&&!self.browser_menu{
+                if let Some(loaded)=self.loaded.as_mut(){if let Some(painted)=loaded.painted.as_mut(){
+                    painted.scroll(value as i32-100);
+                    let key=loaded.url.to_string();let place=(self.zoom,painted.scroll_position());
+                    if self.scroll_places.len()>=64&&!self.scroll_places.contains_key(&key){if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}}
+                    self.scroll_places.insert(key,place);self.show(context);
+                }}
+            }
+            return;
+        }
         if action == action_id("browser-close") {
             context.exit();
             return;
@@ -1983,6 +2002,7 @@ impl KoboApp for Browser {
             return;
         }
         if action == action_id("next-page") || action == action_id("previous-page") {
+            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             if let Some(page) = self.loaded.as_ref().map(|loaded| {
                 loaded
                     .painted

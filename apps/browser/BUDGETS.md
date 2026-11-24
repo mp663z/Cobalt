@@ -903,3 +903,31 @@ ARM EABI5 5,252,908B,delta4,003,528,headroom1,239,352 under+5MiB.
 No unsafe/new crate/allocator change. Hardware/RSS/latency/full-web/proof gates
 remain open. The zoom slider is still permanently visible, not yet moved into a
 panel; smooth movement/scroll interaction remains future work.
+
+## Settled painted-viewport scrolling, November 24, 2026
+
+Protocol25 optional Picture tag43 carries bounded scroll action base (201 IDs)
+plus existing source-pixel links; prior tags17/42 are unchanged when absent.
+Both simulator input and device-write runtime use one shared gesture recognizer.
+A captured vertical drag emits once on release, proportional to distance; tiny
+taps pass to normal link hit-testing, horizontal/moved releases are consumed.
+Cancel/reflow/keyboard/overlay/foreground transitions retire capture. A real
+painted CSS window, not page increment, drives both raster and visible links.
+Scroll is disabled while typing/menu is open. A bounded64-entry in-session URL
+map restores offsets/zoom on Back; it is not persistent across app restarts.
+
+Fail-before/pass-after: zeroing the scroll delta fails the half-viewport offset
+fixture; restored implementation passes. Full browser four batches57+58+58+57=
+230 passed/0failed/2ignored, plus final changed navigation/gesture rechecks.
+UI302/0/2,protocol121/0,SDK166/0,sim109/0,framehost7/0. Device-write tests26 library
+and177 binary pass (1ignored); device-write check and scoped clippy pass with
+existing warnings. Workspace check passes; absent panels CBZ still prevents a
+blanket workspace-tests claim. Actual pointer Down/Move/Up Colour article
+before/after/inline-keyboard replay passed; full frames inspected. Final locked
+static stripped ARM EABI5 5,265,220B,delta4,015,840 over hello1,249,380,
+headroom1,227,040 under+5MiB. No unsafe/new dependency/allocator changes.
+
+This is settled viewport scrolling, not animation/inertia or native forms/reader
+scrolling. Top/bottom clipped text is expected viewport cropping. Physical
+panel quality, latency/RSS, restart restoration and independent/fullweb proof
+gates remain unverified. Page-position footer names the containing page.

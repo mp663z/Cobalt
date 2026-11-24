@@ -1102,6 +1102,7 @@ struct AppState {
     lifecycle: Lifecycle,
     last_touch: Option<SimulatedTouch>,
     slider_drag: bool,
+    scroll_gesture:kobo_ui::scroll_gesture::ScrollGesture,
     pressed_control: Option<kobo_ui::Rect>,
     apps: Arc<Mutex<SimulatedApps>>,
     runtime_navigation: bool,
@@ -1167,6 +1168,7 @@ impl AppState {
             lifecycle: Lifecycle::Foreground,
             last_touch: None,
             slider_drag: false,
+            scroll_gesture:Default::default(),
             pressed_control: None,
             apps,
             runtime_navigation: false,
@@ -1417,6 +1419,7 @@ impl AppState {
             | kobo_hal::TouchEvent::Up { x, y } => Some((x, y)),
             kobo_hal::TouchEvent::Cancel => {
                 self.slider_drag = false;
+                self.scroll_gesture.cancel();
                 if self.pressed_control.take().is_some() {
                     self.commit_frame();
                 }
@@ -1433,6 +1436,9 @@ impl AppState {
             let layout = self
                 .screen
                 .layout_with(&physical.oriented(self.orientation), &self.chrome);
+            use kobo_ui::scroll_gesture::{Phase,Outcome};
+            let phase=match event{kobo_hal::TouchEvent::Down{..}=>Phase::Down,kobo_hal::TouchEvent::Move{..}=>Phase::Move,kobo_hal::TouchEvent::Up{..}=>Phase::Up,kobo_hal::TouchEvent::Cancel=>Phase::Cancel};
+            match self.scroll_gesture.observe(phase,x,y,&layout){Outcome::Action(action)=>return Some(Message::Action{action}),Outcome::Captured|Outcome::Consumed=>return None,Outcome::Pass=>{}}
             match event {
                 kobo_hal::TouchEvent::Down { .. } => {
                     self.pressed_control = layout.pressed_control(x, y);
@@ -1600,6 +1606,7 @@ impl AppState {
     }
 
     fn set_screen(&mut self, mut screen: Screen) {
+        self.scroll_gesture.cancel();
         screen.reading_font = screen
             .reading_font
             .and_then(|local| self.fonts.resolve(local));
@@ -3187,12 +3194,14 @@ fn read_app_messages(
                 let mut state = state
                     .lock()
                     .map_err(|_| io::Error::other("app state lock poisoned"))?;
+                state.scroll_gesture.cancel();
                 state.set_screen(screen);
             }
             Message::SetOrientation(orientation) => {
                 let mut state = state
                     .lock()
                     .map_err(|_| io::Error::other("app state lock poisoned"))?;
+                state.scroll_gesture.cancel();
                 state.orientation = orientation;
                 state.commit_frame();
             }
@@ -5937,4 +5946,20 @@ mod tests {
             kobo_ui::Orientation::Portrait
         );
     }
+}
+
+#[cfg(test)]
+mod scroll_input_tests{
+ use super::*;
+ #[test]fn explicit_picture_drag_emits_one_settled_action_and_taps_keep_link(){
+  let mut state=AppState::default();
+  state.screen=Screen::new(1,vec![kobo_ui::Node::Picture{id:kobo_ui::NodeId(1),handle:kobo_ui::PictureHandle(1),source:(400,600),max_height_tenths_mm:1500,framed:false,bleed:false,links:vec![kobo_ui::PictureLink{action:ActionId(7),x:10,y:10,width:200,height:200}],scroll:Some(ActionId(1000))}]);
+  let layout=state.screen.layout_with(&profile_metrics(),&state.chrome);let rect=layout.scroll_regions[0].0;
+  let x=(rect.x+rect.width/4) as u32;let y=(rect.y+rect.height/4) as u32;
+  assert!(state.input_event(kobo_hal::TouchEvent::Down{x,y},false).is_none());
+  assert!(state.input_event(kobo_hal::TouchEvent::Move{x,y:y+50},false).is_none());
+  assert!(matches!(state.input_event(kobo_hal::TouchEvent::Up{x,y:y+100},false),Some(Message::Action{action}) if action.0>=1000&&action.0<1100));
+  state.input_event(kobo_hal::TouchEvent::Down{x,y},false);
+  assert!(matches!(state.input_event(kobo_hal::TouchEvent::Up{x,y},false),Some(Message::Action{action:ActionId(7)})));
+ }
 }

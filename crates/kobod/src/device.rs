@@ -1843,6 +1843,8 @@ fn host_applications(
         // and that is only exact if nothing about it is recomputed.
         let mut pressed: Option<(kobo_ui::Rect, kobo_ui::DisplayMetrics, FeedbackKind)> = None;
         let mut slider_drag = false;
+        let mut scroll_gesture=kobo_ui::scroll_gesture::ScrollGesture::default();
+        let mut scroll_owner=front;
         // A released control is restored with the application's answer when
         // that answer arrives promptly. If it does not, this deadline makes
         // the release visible on its own instead of leaving a key held down
@@ -2205,8 +2207,10 @@ fn host_applications(
                     let screen = screen.map(|screen| shown_screen(&apps[index], screen, &chrome));
                     let orientation = apps[index].orientation;
                     let landscape_turn = apps[index].landscape_turn;
+                    if scroll_owner!=front{scroll_gesture.cancel();scroll_owner=front;}
                     if matches!(event, TouchEvent::Cancel) {
                         slider_drag = false;
+                        scroll_gesture.cancel();
                     }
                     if let (Some(current), Some((x, y))) = (
                         screen.as_ref(),
@@ -2229,6 +2233,9 @@ fn host_applications(
                             );
                             let layout = current
                                 .layout_with(&metrics_for(current).oriented(orientation), &chrome);
+                            use kobo_ui::scroll_gesture::{Phase,Outcome};
+                            let phase=match event{TouchEvent::Down{..}=>Phase::Down,TouchEvent::Move{..}=>Phase::Move,TouchEvent::Up{..}=>Phase::Up,TouchEvent::Cancel=>Phase::Cancel};
+                            match scroll_gesture.observe(phase,x,y,&layout){Outcome::Action(action)=>{apps[index].send(Message::Action{action})?;continue;},Outcome::Captured|Outcome::Consumed=>continue,Outcome::Pass=>{}}
                             let action = layout.slider_action(x, y);
                             if matches!(event, TouchEvent::Down { .. }) {
                                 slider_drag = action.is_some();
@@ -2439,6 +2446,7 @@ fn host_applications(
                             }
                         }
                         Message::SetScreen(mut screen) => {
+                            scroll_gesture.cancel();
                             if let Some(local) = screen.reading_font {
                                 screen.reading_font = apps[index].fonts.resolve(local);
                             }

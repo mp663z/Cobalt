@@ -522,3 +522,21 @@ Clara Colour, arrival at the article, and Back. Unit journey covers both panel
 formats and four zooms, plus opening/dismissing the keyboard. A deliberately
 removed attachment fails the same test before restoration. Neither simulator
 success nor direct taps establish hardware latency, RSS or full HTML/CSS support.
+
+## Settled painted-viewport scrolling, November 24, 2026
+
+- [x] Drag a painted page vertically to a real CSS offset proportional to finger
+  travel, clamped to content. One refresh on release, no per-motion animation.
+- [x] Share the gesture recognizer between simulator and device input paths.
+  Tiny taps still activate links; horizontal/moved releases cannot hit a link.
+  Cancel, overlay, keyboard, layout or foreground changes retire the gesture.
+- [x] Move raster and link geometry through the same viewport window; keep
+  physical/page controls as explicit page navigation, not fake scrolling.
+- [x] Keep bounded offsets for Back/Forward within this running session (64 URL
+  entries, with zoom); reload/page navigation retire the stored offset.
+- [ ] Durable scroll restoration across app restarts, native reader/form scroll,
+  inertial/continuous feedback and physical panel qualification.
+
+Native reader/forms remain paginated. Page position reports the containing page
+of the offset, not a continuous scrollbar. The initial implementation settles on
+release, which is intentionally different from live phone-browser scrolling.

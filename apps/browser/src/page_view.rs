@@ -292,19 +292,17 @@ impl PageView {
     }
 
     /// Rasters one screen as RGB, three bytes per device pixel.
-    pub(crate) fn raster_page_rgb(&self, page: usize) -> Vec<u8> {
-        let (width, height) = self.screen_device_px();
-        let mut buffer = vec![255u8; width as usize * height as usize * 3];
-        let top = self
-            .cuts
-            .get(page.min(self.cuts.len().saturating_sub(1)))
-            .copied()
-            .unwrap_or(0);
-        let bottom = self
-            .cuts
-            .get(page + 1)
-            .copied()
-            .unwrap_or(self.content_height);
+    pub(crate) fn raster_page_rgb(&self,page:usize)->Vec<u8>{
+        self.raster_window_rgb(self.page_top(page),self.page_bottom(page))
+    }
+    pub(crate) fn page_top(&self,page:usize)->u32{self.cuts.get(page.min(self.pages().saturating_sub(1))).copied().unwrap_or(0)}
+    fn page_bottom(&self,page:usize)->u32{self.cuts.get(page+1).copied().unwrap_or(self.content_height)}
+    pub(crate) fn viewport_height(&self)->u32{self.page_height_css}
+    pub(crate) fn max_scroll(&self)->u32{self.content_height.saturating_sub(self.page_height_css)}
+    pub(crate) fn page_at(&self,top:u32)->usize{self.cuts.partition_point(|cut|*cut<=top).saturating_sub(1)}
+    pub(crate) fn raster_window_rgb(&self,top:u32,bottom:u32)->Vec<u8>{
+        let (width,height)=self.screen_device_px();
+        let mut buffer=vec![255u8;width as usize*height as usize*3];
         let mut clips: Vec<Rect> = vec![Rect {
             x: 0,
             y: 0,
@@ -397,8 +395,9 @@ impl PageView {
     /// Visible link regions in source pixels of the uploaded picture. Clip
     /// before scaling, matching the raster crop and keyboard preview exactly.
     pub(crate) fn picture_links(&self,page:usize,width:u32,height:u32,full_height:u32)->Vec<(kobo_sdk::PictureLink,usize)>{
-        let page=page.min(self.pages().saturating_sub(1));
-        let top=self.cuts[page];let bottom=self.cuts.get(page+1).copied().unwrap_or(self.content_height);
+        self.window_links(self.page_top(page),self.page_bottom(page),width,height,full_height)
+    }
+    pub(crate) fn window_links(&self,top:u32,bottom:u32,width:u32,height:u32,full_height:u32)->Vec<(kobo_sdk::PictureLink,usize)>{
         let (sw,sh)=self.screen_device_px();
         let sx=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(width)/u64::from(sw)) as u32;
         let sy=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(full_height)/u64::from(sh)) as u32;
@@ -412,13 +411,8 @@ impl PageView {
     }
 
     /// Link actions with visible geometry on this screen, in paint order.
-    pub(crate) fn screen_links(&self, page: usize) -> Vec<usize> {
-        let top = self.cuts[page.min(self.pages().saturating_sub(1))];
-        let bottom = self
-            .cuts
-            .get(page + 1)
-            .copied()
-            .unwrap_or(self.content_height);
+    pub(crate) fn screen_links(&self,page:usize)->Vec<usize>{self.window_screen_links(self.page_top(page),self.page_bottom(page))}
+    pub(crate) fn window_screen_links(&self,top:u32,bottom:u32)->Vec<usize>{
         let mut links = Vec::new();
         for (rect, action) in &self.targets {
             if i64::from(rect.y) < i64::from(bottom)

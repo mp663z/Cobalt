@@ -1,0 +1,12 @@
+wait-for Search the web
+tap-id samples
+tap-at 350 378
+wait-for 1 of 3
+shot-colour scroll-before
+input pointer down 700 1000
+input pointer move 700 700
+input pointer up 700 500
+shot-colour scroll-after
+tap-id edit-address
+shot-colour scroll-keyboard
+tap-id kb.cancel

@@ -3,6 +3,7 @@ use crate::page_view::{PageFontAdapter, PageView};
 use kobo_sdk::keyboard::Keyboard;
 use kobo_sdk::{Context, DisplayMetrics, PictureHandle, ScreenBuilder, TilePicture};
 
+pub(crate) const SCROLL_BASE:kobo_sdk::ActionId=kobo_sdk::ActionId(0x7ffd_0000);
 pub(crate) const HANDLE: PictureHandle = PictureHandle(0x7fff_0001);
 
 pub(crate) struct PageMode {
@@ -10,6 +11,7 @@ pub(crate) struct PageMode {
     pub(crate) page: usize,
     pub(crate) metrics: DisplayMetrics,
     viewport: (u32, u32),
+    scroll_top:Option<u32>,
 }
 
 fn frame(
@@ -88,9 +90,23 @@ impl PageMode {
             page: 0,
             metrics: *metrics,
             viewport: (room_width, room_height),
+            scroll_top:None,
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn top_for_test(&self)->u32{self.top()}
+    pub(crate) fn scroll_position(&self)->u32{self.top()}
+    pub(crate) fn restore_scroll(&mut self,top:u32){let top=top.min(self.view.max_scroll());self.scroll_top=Some(top);self.page=self.view.page_at(top);}
+    fn top(&self)->u32{self.scroll_top.unwrap_or_else(||self.view.page_top(self.page))}
+    fn bottom(&self)->u32{self.top().saturating_add(self.view.viewport_height())}
+    pub(crate) fn visible_links(&self)->Vec<usize>{if self.scroll_top.is_some(){self.view.window_screen_links(self.top(),self.bottom())}else{self.view.screen_links(self.page)}}
+    pub(crate) fn turn_to(&mut self,page:usize){self.page=page.min(self.view.pages().saturating_sub(1));self.scroll_top=None;}
+    pub(crate) fn scroll(&mut self,amount:i32){
+        let delta=i64::from(amount)*i64::from(self.view.viewport_height())/100;
+        let top=(i64::from(self.top())+delta).clamp(0,i64::from(self.view.max_scroll())) as u32;
+        self.scroll_top=Some(top);self.page=self.view.page_at(top);
+    }
     fn visible_height(&self, keyboard: Option<&Keyboard>) -> u32 {
         let (width, height) = self.viewport;
         let Some(keyboard) = keyboard else {
@@ -104,6 +120,7 @@ impl PageMode {
         .keyboard(keyboard, "Go")
         .build();
         kobo_web_layout::picture_box(&preview, &self.metrics, HANDLE).map_or(1, |(_, room)| {
+            if self.scroll_top.is_some(){return room.min(height).max(1);}
             self.view.preview_height(
                 self.page,
                 room.min(height) * self.view.screen_device_px().1 / height,
@@ -121,7 +138,8 @@ impl PageMode {
     ) -> ScreenBuilder {
         let (width, _) = self.viewport;
         let height=self.visible_height(keyboard);
-        let links:Vec<_>=self.view.picture_links(self.page,width,height,self.viewport.1).into_iter().filter_map(|(mut region,index)|{region.action=resolve(index)?;Some(region)}).collect();
+        let regions=if self.scroll_top.is_some(){self.view.window_links(self.top(),self.bottom(),width,height,self.viewport.1)}else{self.view.picture_links(self.page,width,height,self.viewport.1)};
+        let links:Vec<_>=regions.into_iter().filter_map(|(mut region,index)|{region.action=resolve(index)?;Some(region)}).collect();
         let screen=frame(
             title,
             width,
@@ -131,7 +149,7 @@ impl PageMode {
             address,
             keyboard.is_some(),
         );
-        screen.picture_links(links)
+        screen.picture_links(links).picture_scroll(keyboard.is_none().then_some(SCROLL_BASE))
     }
 
     pub(crate) fn publish(
@@ -143,7 +161,7 @@ impl PageMode {
         let (width, _) = self.viewport;
         let height = self.visible_height(keyboard);
         let (source_width, source_height) = self.view.screen_device_px();
-        let source = self.view.raster_page_rgb(self.page);
+        let source = if self.scroll_top.is_some(){self.view.raster_window_rgb(self.top(),self.bottom())}else{self.view.raster_page_rgb(self.page)};
         let mut pixels =
             Vec::with_capacity(width as usize * height as usize * if colour { 3 } else { 1 });
         for y in 0..height {

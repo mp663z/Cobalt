@@ -143,3 +143,15 @@ editing stays inline and page position is visible above the bottom toolbar.
 The draggable zoom control remains available. Protocol24 carries the explicit
 unified-browser style; old styles retain their wire values. This is a smaller
 frame, not smooth scrolling or a full-web compatibility claim.
+
+### Settled scrolling in Page view
+
+Drag a painted page up or down to move by the distance of the drag. It redraws
+once when you lift your finger, rather than animating on every motion event.
+Links keep their positions in the visible window; a tiny tap still opens one,
+and a drag does not accidentally open the link at release. Address editing
+keeps the current offset. Back/Forward restore bounded in-session offsets, not
+offsets across app restarts. Native Reader and forms remain paginated.
+Protocol25 is required for scroll-enabled pictures. `drive-scroll.kobo` replays
+an article drag and inline keyboard. Device input uses the same recognizer as
+the simulator, but hardware responsiveness and panel quality are not measured.
