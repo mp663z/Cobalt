@@ -2701,6 +2701,7 @@ fn gather_table(pieces: &[Piece], from: usize) -> (Vec<kobo_ui::TableRow>, Vec<u
         rows.push(kobo_ui::TableRow {
             header,
             cells: cells.clone(),
+            spans:Vec::new(),
         });
         at += 1;
     }

@@ -642,14 +642,17 @@ impl Gallery {
                     TableRow {
                         header: true,
                         cells: vec!["Size".into(), "Space it takes".into()],
+                        spans:Vec::new(),
                     },
                     TableRow {
                         header: false,
                         cells: vec!["Tiny".into(), "2½ by 2½ ft".into()],
+                        spans:Vec::new(),
                     },
                     TableRow {
                         header: false,
                         cells: vec!["Small".into(), "5 by 5 ft".into()],
+                        spans:Vec::new(),
                     },
                 ],
                 // Empty rather than a pair of ratios: the weights are the

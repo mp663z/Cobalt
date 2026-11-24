@@ -84,7 +84,9 @@ pub const COLOUR_RICH_TEXT_VERSION: u8 = 16;
 pub const COLOUR_HEADING_VERSION: u8 = 17;
 /// Version adding optional authored quote colour spans.
 pub const COLOUR_QUOTE_VERSION: u8 = 18;
-pub const VERSION: u8 = 18;
+/// Version carrying optional per-cell table colour spans.
+pub const COLOUR_TABLE_VERSION:u8=19;
+pub const VERSION: u8 = 19;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1994,7 +1996,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4508,6 +4510,8 @@ fn encoded_node_len(
             if rows.len() > u8::MAX as usize || weights.len() > u8::MAX as usize {
                 return Err(ProtocolError::TooManyNodes);
             }
+            let coloured=rows.iter().any(|row|!row.spans.is_empty());
+            if coloured&&version<COLOUR_TABLE_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             let mut length = 7;
             add_encoded_len(&mut length, weights.len().saturating_mul(2))?;
             for row in rows {
@@ -4515,8 +4519,16 @@ fn encoded_node_len(
                     return Err(ProtocolError::TooManyNodes);
                 }
                 add_encoded_len(&mut length, 2)?;
-                for cell in &row.cells {
+                if !row.spans.is_empty() && row.spans.len()!=row.cells.len(){return Err(ProtocolError::InvalidValue("table spans"));}
+                for (index,cell) in row.cells.iter().enumerate() {
                     add_encoded_len(&mut length, encoded_string_len(cell)?)?;
+                    if coloured {
+                        add_encoded_len(&mut length,2)?;
+                        if let Some(spans)=row.spans.get(index){
+                            if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                            for span in spans{add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+                        }
+                    }
                 }
             }
             length
@@ -4665,7 +4677,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5143,7 +5155,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5939,7 +5951,9 @@ fn encode_node(
             output.push(u8::from(*framed) | (u8::from(bleeds) << 1));
         }
         Node::Table { id, rows, weights } => {
-            output.push(30);
+            let coloured=rows.iter().any(|row|!row.spans.is_empty());
+            if coloured&&version<COLOUR_TABLE_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            output.push(if coloured{38}else{30});
             push_u32(output, id.0);
             output.push(u8::try_from(weights.len()).map_err(|_| ProtocolError::TooManyNodes)?);
             for weight in weights {
@@ -5950,8 +5964,22 @@ fn encode_node(
                 output.push(u8::from(row.header));
                 output
                     .push(u8::try_from(row.cells.len()).map_err(|_| ProtocolError::TooManyNodes)?);
-                for cell in &row.cells {
+                if !row.spans.is_empty() && row.spans.len()!=row.cells.len(){return Err(ProtocolError::InvalidValue("table spans"));}
+                for (index,cell) in row.cells.iter().enumerate() {
                     push_string(output, cell)?;
+                    if coloured {
+                        let spans=row.spans.get(index).map_or(&[][..],Vec::as_slice);
+                        if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                        push_u16(output,spans.len() as u16);
+                        for span in spans {
+                            if span.start>=span.end||span.end>cell.len()||!cell.is_char_boundary(span.start)||!cell.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("table span"));}
+                            push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                            output.push(text_presentation_byte(span.presentation));let style=span.presentation;
+                            output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
+                            if let Some(rgb)=style.foreground{output.extend_from_slice(&rgb);}
+                            if let Some(rgb)=style.background{output.extend_from_slice(&rgb);}
+                        }
+                    }
                 }
             }
         }
@@ -7126,7 +7154,7 @@ fn decode_node(
                 freeform,
             })
         }
-        30 => {
+        tag @ (30 | 38) if tag==30||version>=COLOUR_TABLE_VERSION => {
             let count = reader.u8()? as usize;
             let mut weights = Vec::with_capacity(count.min(MAX_NODES));
             for _ in 0..count {
@@ -7142,10 +7170,27 @@ fn decode_node(
                 };
                 let cells = reader.u8()? as usize;
                 let mut row = Vec::with_capacity(cells.min(MAX_NODES));
+                let mut cell_spans=Vec::new();
                 for _ in 0..cells {
-                    row.push(reader.string()?);
+                    let cell=reader.string()?;
+                    if tag==38 {
+                        let count=usize::from(reader.u16()?);if count>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                        let mut spans=Vec::new();
+                        for _ in 0..count {
+                            let start=reader.u32()? as usize;let end=reader.u32()? as usize;
+                            let mut presentation=text_presentation_from_byte(reader.u8()?)?;
+                            let flags=reader.u8()?;if flags & !3 != 0{return Err(ProtocolError::InvalidValue("table colour flags"));}
+                            if flags&1!=0{presentation.foreground=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                            if flags&2!=0{presentation.background=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                            if start>=end||end>cell.len()||!cell.is_char_boundary(start)||!cell.is_char_boundary(end){return Err(ProtocolError::InvalidValue("table span"));}
+                            spans.push(kobo_ui::RichTextSpan{start,end,presentation});
+                        }
+                        cell_spans.push(spans);
+                    }
+                    row.push(cell);
                 }
-                rows.push(kobo_ui::TableRow { header, cells: row });
+                if cell_spans.iter().all(Vec::is_empty){cell_spans.clear();}
+                rows.push(kobo_ui::TableRow { header, cells:row,spans:cell_spans});
             }
             Ok(Node::Table { id, rows, weights })
         }
@@ -9049,10 +9094,12 @@ mod node_coverage_tests {
                     kobo_ui::TableRow {
                         header: true,
                         cells: vec!["Model".into(), "Top-1".into()],
+                        spans:Vec::new(),
                     },
                     kobo_ui::TableRow {
                         header: false,
                         cells: vec!["ResNet-50".into(), "76.1".into()],
+                        spans:Vec::new(),
                     },
                 ],
                 weights: vec![240, 90],
@@ -11240,7 +11287,7 @@ mod quote_rgb_tests {
         }
         let frame=Frame{version:VERSION,request_id:4,message:Message::SetScreen(Screen::new(2,vec![node(vec![span()])]))};
         let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
-        for version in LEGACY_VERSION..VERSION {assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        for version in LEGACY_VERSION..COLOUR_QUOTE_VERSION {assert!(encode(&Frame{version,..frame.clone()}).is_err());}
         for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
         let rgb=node(vec![span()]);let mut payload=Vec::new();let mut count=0;encode_node(&mut payload,&rgb,0,&mut count,VERSION).unwrap();
         let mut count=0;assert_eq!(encoded_node_len(&rgb,0,&mut count,VERSION).unwrap(),payload.len());
@@ -11251,5 +11298,26 @@ mod quote_rgb_tests {
         // A bad colour flag is rejected by the node decoder independently of frame integrity.
         let flags=payload.len()-4;payload[flags]=4;
         let mut count=0;assert!(decode_node(&mut Reader::new(&payload),0,&mut count,VERSION).is_err());
+    }
+}
+
+#[cfg(test)]
+mod table_rgb_wire_tests {
+    use super::*;
+    fn span()->kobo_ui::RichTextSpan{kobo_ui::RichTextSpan{start:0,end:5,presentation:kobo_ui::TextPresentation{background:Some([2,3,4]),..Default::default()}}}
+    fn node(spans:Vec<Vec<kobo_ui::RichTextSpan>>)->Node {Node::Table{id:NodeId(3),weights:vec![20,30],rows:vec![kobo_ui::TableRow{header:true,cells:vec!["é red".into(),"blue".into()],spans},kobo_ui::TableRow{header:false,cells:vec!["x".into(),"y".into()],spans:Vec::new()}]}}
+    #[test]
+    fn table_rgb_roundtrip_plain_compatibility_and_bounds(){
+        let plain=node(Vec::new());let mut plain_bytes=Vec::new();let mut count=0;encode_node(&mut plain_bytes,&plain,0,&mut count,VERSION).unwrap();assert_eq!(plain_bytes[0],30);
+        for version in LEGACY_VERSION..VERSION {let mut bytes=Vec::new();let mut count=0;encode_node(&mut bytes,&plain,0,&mut count,version).unwrap();assert_eq!(bytes,plain_bytes);}
+        let rgb=node(vec![vec![span()],Vec::new()]);let frame=Frame{version:VERSION,request_id:8,message:Message::SetScreen(Screen::new(1,vec![rgb.clone()]))};
+        let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
+        for version in LEGACY_VERSION..VERSION{assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
+        let mut count=0;let mut payload=Vec::new();encode_node(&mut payload,&rgb,0,&mut count,VERSION).unwrap();let mut count=0;assert_eq!(payload.len(),encoded_node_len(&rgb,0,&mut count,VERSION).unwrap());
+        let mut broken=span();broken.start=1;
+        for spans in [vec![vec![broken],Vec::new()],vec![vec![span();kobo_ui::MAX_RICH_TEXT_SPANS+1],Vec::new()],vec![vec![span()]]] {
+            assert!(encode(&Frame{message:Message::SetScreen(Screen::new(1,vec![node(spans)])),..frame.clone()}).is_err());
+        }
     }
 }

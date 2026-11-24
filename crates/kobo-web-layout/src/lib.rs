@@ -733,6 +733,7 @@ impl Flattener {
             .enumerate()
             .map(|(index, row)| TableRow {
                 header: table.header && index == 0,
+                spans:{let spans:Vec<_>=row.iter().map(|cell|heading_spans(cell)).collect();if spans.iter().all(Vec::is_empty){Vec::new()}else{spans}},
                 cells: row
                     .iter()
                     .map(|cell| plain(cell).trim().to_owned())

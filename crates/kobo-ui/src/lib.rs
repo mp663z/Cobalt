@@ -5339,6 +5339,8 @@ pub struct TableRow {
     /// because on sixteen greys a rule separates more clearly than weight.
     pub header: bool,
     pub cells: Vec<String>,
+    /// Optional authored spans for each cell, indexed like cells.
+    pub spans: Vec<Vec<RichTextSpan>>,
 }
 
 /// One entry in a [`Node::Rows`] list.
@@ -6083,6 +6085,7 @@ pub enum LayoutKind {
     CrosswordBoard,
     /// One cell of a table, drawn in the body face.
     TableCell,
+    ColouredTableText(bool, TextPresentation),
     /// One cell of a table's heading row, drawn muted so the rule under it
     /// reads as the edge of the heading rather than an arbitrary line.
     TableHeaderCell,
@@ -7051,6 +7054,24 @@ fn lead_rect(
         y: top,
         width: side,
         height: side,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn layout_table_cell(layout:&mut Layout,id:NodeId,rect:Rect,header:bool,text:&str,spans:&[RichTextSpan],lines:Vec<String>,face:Face){
+    layout.nodes.push(LayoutNode{id,rect,kind:if header{LayoutKind::TableHeaderCell}else{LayoutKind::TableCell},text_lines:if spans.is_empty(){lines}else{Vec::new()}});
+    if spans.is_empty(){return;}
+    let size=FontSize::Body;
+    for (line,(from,to)) in wrap_ranges(text,rect.width,size,face).into_iter().enumerate(){
+        let mut cursor=from;
+        while cursor<to && layout.nodes.len()<MAX_LAYOUT_NODES{
+            let (end,style)=rich_run_at(cursor,to,spans);
+            if end<=cursor||end>to||!text.is_char_boundary(end){break;}
+            let before=measure_text_in(&text[from..cursor],size,face).0;
+            let through=measure_text_in(&text[from..end],size,face).0;
+            layout.nodes.push(LayoutNode{id,rect:Rect{x:rect.x.saturating_add(before),y:rect.y.saturating_add(line as i32*size.line_height_in(face)),width:through.saturating_sub(before),height:size.line_height_in(face)},kind:LayoutKind::ColouredTableText(header,style),text_lines:vec![text[cursor..end].to_owned()]});
+            cursor=end;
+        }
     }
 }
 
@@ -8249,24 +8270,24 @@ fn layout_node(
                             continue;
                         }
                         let labelled = stacked_cell(labels, index, column, cell);
+                        let mut spans=row.spans.get(column).cloned().unwrap_or_default();
+                        if let Some(labelled)=&labelled {
+                            let prefix=labelled.len().saturating_sub(cell.len());
+                            for span in &mut spans {span.start+=prefix;span.end+=prefix;}
+                            if let Some(header)=rows.first().filter(|r|r.header){
+                                let label=header.cells.get(column).map_or("",String::as_str);
+                                let trim=label.len()-label.trim_start().len();
+                                for span in header.spans.get(column).into_iter().flatten(){
+                                    let start=span.start.max(trim);let end=span.end.min(label.trim_end().len());
+                                    if start<end{spans.push(RichTextSpan{start:start-trim,end:end-trim,presentation:span.presentation});}
+                                }
+                                spans.sort_by_key(|span|span.start);
+                            }
+                        }
                         let cell = labelled.as_deref().unwrap_or(cell);
                         let lines = wrap_text_in(cell, width, size, prose);
                         let height = max(line, lines.len() as i32 * line);
-                        layout.nodes.push(LayoutNode {
-                            id: *id,
-                            rect: Rect {
-                                x,
-                                y: cursor,
-                                width,
-                                height,
-                            },
-                            kind: if row.header {
-                                LayoutKind::TableHeaderCell
-                            } else {
-                                LayoutKind::TableCell
-                            },
-                            text_lines: lines,
-                        });
+                        layout_table_cell(layout,*id,Rect{x,y:cursor,width,height},row.header,cell,&spans,lines,prose);
                         cursor = cursor.saturating_add(height);
                     }
                     cursor = cursor.saturating_add(gap);
@@ -8284,21 +8305,7 @@ fn layout_node(
                         let lines = wrap_text_in(cell, *width, size, prose);
                         let height = max(line, lines.len() as i32 * line);
                         tallest = max(tallest, height);
-                        layout.nodes.push(LayoutNode {
-                            id: *id,
-                            rect: Rect {
-                                x: column_x,
-                                y: cursor,
-                                width: *width,
-                                height,
-                            },
-                            kind: if row.header {
-                                LayoutKind::TableHeaderCell
-                            } else {
-                                LayoutKind::TableCell
-                            },
-                            text_lines: lines,
-                        });
+                        layout_table_cell(layout,*id,Rect{x:column_x,y:cursor,width:*width,height},row.header,cell,row.spans.get(column).map_or(&[],Vec::as_slice),lines,prose);
                     }
                     column_x = column_x.saturating_add(*width).saturating_add(gap);
                 }
@@ -13503,6 +13510,7 @@ fn validate_layout_nodes(layout: &Layout, metrics: &DisplayMetrics, issues: &mut
         }
         let style = match node.kind {
             LayoutKind::Quote(_, role) | LayoutKind::ColouredQuoteText(role,_) => Some((role.size(), layout.prose_face)),
+            LayoutKind::ColouredTableText(..)=>Some((FontSize::Body,layout.prose_face)),
             _ => layout_text_style(node),
         };
         let Some((size, face)) = style else {
@@ -14498,6 +14506,10 @@ fn render_all_with_selected_font(
                 tone::INK,
                 clip,
             ),
+            LayoutKind::ColouredTableText(header,style)=>{
+                if let Some(background)=style.background{fill_rgb_clipped(surface,node.rect,background,clip);}
+                for text in &node.text_lines {draw_colour_text_in(surface,text,node.rect.x,node.rect.y,FontSize::Body,prose,if header{tone::MUTED}else{tone::INK},style.foreground,clip);}
+            }
             LayoutKind::TableCell => draw_lines(
                 surface,
                 &node.text_lines,
@@ -24734,6 +24746,25 @@ mod coloured_quote_geometry_tests {
             let folds=|l:&Layout|l.nodes.iter().filter_map(|n|matches!(n.kind,LayoutKind::QuoteFold(..)).then_some(n.rect)).collect::<Vec<_>>();
             assert_eq!(folds(&plain),folds(&styled));
             assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredQuoteText(..))));
+        }
+    }
+}
+
+#[cfg(test)]
+mod coloured_table_geometry_tests {
+    use super::*;
+    #[test]
+    fn coloured_table_stacked_labels_and_grid_keep_geometry(){
+        let style=TextPresentation{foreground:Some([200,0,0]),..Default::default()};
+        for width in [120,1072]{
+            let rows=vec![TableRow{header:true,cells:vec!["Name".into(),"Value".into()],spans:vec![vec![RichTextSpan{start:0,end:4,presentation:style}],Vec::new()]},TableRow{header:false,cells:vec!["Item".into(),"42".into()],spans:vec![vec![RichTextSpan{start:0,end:4,presentation:style}],Vec::new()]}];
+            let plain=rows.iter().map(|r|TableRow{spans:Vec::new(),..r.clone()}).collect();
+            let metrics=DisplayMetrics{width,..CLARA_BW_METRICS};
+            let make=|rows|Screen::new(1,vec![Node::Table{id:NodeId(1),rows,weights:Vec::new()}]).layout_for(&metrics);
+            let styled=make(rows);let plain=make(plain);
+            let cells=|l:&Layout|l.nodes.iter().filter_map(|n|matches!(n.kind,LayoutKind::TableCell|LayoutKind::TableHeaderCell|LayoutKind::TableRule).then_some(n.rect)).collect::<Vec<_>>();
+            assert_eq!(cells(&plain),cells(&styled));assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredTableText(..))));
+            if width==120{let red:String=styled.nodes.iter().filter(|n|matches!(n.kind,LayoutKind::ColouredTableText(_,s) if s.foreground==Some([200,0,0]))).flat_map(|n|n.text_lines.iter().map(String::as_str)).collect();assert!(red.contains("Name"),"{red}");}
         }
     }
 }

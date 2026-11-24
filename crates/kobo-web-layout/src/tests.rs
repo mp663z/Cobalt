@@ -569,10 +569,12 @@ fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() 
                 TableRow {
                     header: true,
                     cells: vec!["Mode".into(), "Speed".into()],
+                    spans:Vec::new(),
                 },
                 TableRow {
                     header: false,
                     cells: vec!["Full".into(), "Slow".into()],
+                    spans:Vec::new(),
                 },
             ];
             let pieces = [
@@ -615,6 +617,7 @@ fn browser_fitting_tables_stay_in_the_prose_measure_and_wide_tables_keep_room() 
                     "A long unbroken sentence taking more than the prose measure".repeat(3),
                     "Second cell".into(),
                 ],
+                spans:Vec::new(),
             }];
             let screen = page_screen_with_metrics(
                 "Wide",
@@ -730,4 +733,16 @@ fn pre_colour_keeps_raw_spaces_blank_lines_and_split_ranges() {
     assert_eq!(format!("{head}\n{tail}"),*text);
     assert_eq!(hs.last().unwrap().end,head.len());assert_eq!(ts[0].start,0);
     assert!(ts[0].presentation.foreground==Some([0,0,255]));
+}
+
+#[test]
+fn coloured_table_repeats_header_spans_across_pages(){
+    let mut html=String::from("<table><tr><th style='color:red'>Name</th><th>Value</th></tr>");
+    for _ in 0..30{html.push_str("<tr><td style='color:blue'>Item</td><td>42</td></tr>");}html.push_str("</table>");
+    let doc=kobo_web_document::parse_coloured_document(html.as_bytes(),&Url::parse("https://fixtures.example/").unwrap(),&Limits::DEFAULT);
+    let pages=paginate(&doc,|pieces|pieces.iter().map(|p|match p{Piece::Table{rows,..}=>rows.len(),_=>1}).sum::<usize>()<=5);assert!(pages.pages.len()>2);
+    for piece in pages.pages.iter().flatten(){if let Piece::Table{rows,..}=piece{
+        assert!(rows[0].header);assert_eq!(rows[0].spans[0][0].presentation.foreground,Some([255,0,0]));
+        for row in &rows[1..]{assert_eq!(row.spans[0][0].presentation.foreground,Some([0,0,255]));}
+    }}
 }

@@ -2404,3 +2404,22 @@ fn native_pre_rgb_retains_spaces_blank_line_and_form() {
         for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
     }
 }
+
+#[test]
+fn native_table_rgb_keeps_header_grid_links_and_form() {
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><table><tr><th style='color:red'>Name</th><th style='color:blue'>Value</th></tr><tr><td><a href='/next' style='color:green'>Item</a></td><td style='color:purple'>42</td></tr></table><form><input name=q></form>");
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+    assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::ColouredTableText(true,_))));
+    assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::TableRule)));
+    assert!(runner.app().current_pieces().iter().any(|p|matches!(p,Piece::Table{links,..} if links.iter().any(|row|row==&vec![0]))));
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for rgb in [[255,0,0],[0,0,255],[0,128,0],[128,0,128]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
+    runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+        use std::io::Write;let mut file=std::fs::File::create("/tmp/native-table-rgb.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}

@@ -634,3 +634,28 @@ warning-free build. Locked stripped static ARM EABI5:5,224,620 bytes,
 delta3,975,240 over hello, headroom1,267,640 under +5 MiB. No new crate, unsafe,
 allocator or wire change. Tables/control labels still have plain paths; physical
 panel/RSS/latency and complete authored CSS/font fidelity remain unverified.
+
+
+### Native table RGB, November 24, 2026
+
+Native table rows now carry bounded per-cell spans from same-DOM coloured
+inlines. Grid headers/values preserve their rules and geometry. Stacked tables
+rebase value spans and retain coloured repeated labels. Header-row cloning keeps
+colour through page splits; links remain reachable on the Links screen.
+Protocol19 tag38 adds colour spans, while plain table tag30 bytes stay unchanged.
+Versions11-18 remain readable; coloured tables refuse older peers. Tests cover
+background-only roundtrip, no invented foreground, old bytes, truncation,
+UTF8/range/count/shape bounds and exact encoded length. Empty semantic span rows
+stay on the plain path. Existing reader/gallery constructors explicitly use no
+spans; whole-workspace check passes.
+
+Removing table spans fails the browser regression; restoring them passes.
+Header-repetition and stacked/grid geometry tests pass. Actual Clara Colour full
+frame inspected:31,413 non-grey pixels including earlier headings/quote/pre,
+red/blue column labels and green/purple values. Native form opens in the journey.
+Ideal RGB, not calibrated panel appearance. Browser219/0/2 ignored,
+protocol115/0, UI291/0/2 ignored, layout29/0, SDK166/0/2 ignored, sim108/0,
+runtime156/0. Clippy completes with existing warnings. Locked stripped static
+ARM EABI5:5,238,188 bytes, delta3,988,808 over hello, headroom1,254,072 under
++5 MiB. No new crate, unsafe or allocator change. Control labels still have
+plain paths. Authored font/CSS fidelity and physical panel/RSS/latency incomplete.
