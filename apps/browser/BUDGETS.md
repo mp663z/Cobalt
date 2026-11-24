@@ -962,3 +962,12 @@ Actual Colour pointer drag reached168%, reset100%, closed and edited inline;
 full frames inspected. No physical panel/latency/RSS claim. Missing panels CBZ
 continues to block an all-workspace-tests claim. Fullweb and independent proof
 gates are not marked complete by these UI tests.
+
+Post-panel journey audit: all Zoom controls fit four portrait/landscape sizes
+(1072x1448,1448x1072,758x1024,1024x758) at Default/Large/ExtraLarge text.
+B&W actual track drag/reset/close passes (separate script because native and
+painted article page counts differ; no false-green reuse of Colour wait).
+Runtime Back while typing exposed an existing gap: keyboard stayed open. The
+new fixture fails before and passes after routing runtime Back to keyboard
+close before leaving the document. Final browser234/0/2 in four full batches,
+scoped clippy and locked ARM pass. ARM5,267,044B,headroom1,225,216.

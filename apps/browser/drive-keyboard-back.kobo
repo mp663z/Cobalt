@@ -1,0 +1,6 @@
+wait-for Search the web
+tap-id samples
+tap-id edit-address
+shot-colour back-keyboard-open
+tap-at 98 62
+shot-colour back-keyboard-closed

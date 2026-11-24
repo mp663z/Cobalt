@@ -1,0 +1,11 @@
+wait-for Search the web
+tap-id samples
+tap-id browser-zoom
+shot-colour bw-zoom
+input pointer down 400 942
+input pointer move 800 942
+input pointer up 800 942
+shot-colour bw-dragged
+tap-id zoom-reset
+tap-id zoom-done
+shot-colour bw-closed

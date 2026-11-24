@@ -1479,7 +1479,7 @@ impl Browser {
                 true
             }
             None if self.address.is_open() => {
-                if action == action_id("back") {
+                if action == action_id("back") || action==ActionId::BACK {
                     self.address.close();
                     self.show(context);
                 }

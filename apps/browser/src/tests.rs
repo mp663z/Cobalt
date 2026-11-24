@@ -2628,3 +2628,26 @@ fn zoom_controls_live_in_a_deliberate_panel_not_the_browsing_row(){
  let layout=r.app().screen(&m).build().layout_with(&m,&Chrome::measuring(true));
  assert!(!layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::Slider(..))));
 }
+
+#[test]
+fn zoom_panel_controls_fit_portrait_and_landscape_at_all_text_sizes(){
+ for (width,height) in [(1072,1448),(1448,1072),(758,1024),(1024,758)]{
+  for text_scale in [TextScale::Default,TextScale::Large,TextScale::ExtraLarge]{
+   let m=DisplayMetrics{width,height,text_scale,..kobo_ui::CLARA_BW_METRICS};
+   let mut r=AppRunner::with_metrics(Browser::default(),m);r.start();r.action(action_id("samples"));r.action(action_id("browser-zoom"));
+   let screen=r.app().screen(&m).build();let l=screen.layout_with(&m,&Chrome::measuring(true));
+   for a in ["zoom-less","zoom-more","zoom-reset","zoom-done"]{
+    let rect=l.rect_of_action(action_id(a)).unwrap_or_else(||panic!("{width}x{height} {text_scale:?}: missing {a}"));
+    assert!(rect.y>=0&&rect.y+rect.height<=height,"{width}x{height} {text_scale:?}: {a} offscreen {rect:?}");
+   }
+   let slider=l.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::Slider(..))).unwrap();assert!(slider.rect.y+slider.rect.height<=height);
+  }
+ }
+}
+
+#[test]
+fn runtime_back_closes_inline_keyboard_before_leaving_the_document(){
+ let mut r=runner(TextScale::Default);r.action(action_id("edit-address"));
+ assert!(r.app().address.is_open());let url=r.app().loaded.as_ref().unwrap().url.clone();
+ r.action(ActionId::BACK);assert!(!r.app().address.is_open());assert_eq!(r.app().loaded.as_ref().unwrap().url,url);
+}
