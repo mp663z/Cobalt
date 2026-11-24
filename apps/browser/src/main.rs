@@ -362,6 +362,7 @@ impl Browser {
     }
 
     fn show_failure(&mut self, url: &Url, failure: Failure, stepped_from: Option<usize>) {
+        self.zoom_panel=false;self.browser_menu=false;
         if let Some(position) = stepped_from {
             // Back or Forward moved history onto a page that did not come;
             // the page still on screen is the one history should name.
@@ -394,6 +395,7 @@ impl Browser {
         body: &[u8],
         note: Option<String>,
     ) -> bool {
+        self.zoom_panel=false;self.browser_menu=false;
         match fetch::sniff(body) {
             Kind::Unsupported(what) => {
                 if let Some(position) = stepped_from {

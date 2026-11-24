@@ -1041,3 +1041,11 @@ and late responses stay retired. Transient panels close with cancellation.
 New fixture fails before and passes after. Full browser241/0/2,workspacecheck/
 scopedclippy/lockedARM pass. ARM5,269,196B,headroom1,223,064. No visual/hardware
 claim from this state fix; independent gates remain open.
+
+## Transient panels retire on navigation result, November 25, 2026
+
+Zoom/More opened while loading no longer survives a failure or a new response,
+where the recovery row has no matching anchor and the stale panel could cover
+the error. Both failure-panel cases fail before and pass after. Full browser
+242/0/2,workspacecheck/scopedclippy/lockedARM pass. ARM5,269,204B,headroom
+1,223,056. No new visual feature/hardware claim; independent gates stay open.

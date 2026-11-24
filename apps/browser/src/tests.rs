@@ -2735,3 +2735,13 @@ fn cancelling_the_first_navigation_returns_to_start_not_an_empty_document(){
  let task=pending_task(&r);r.action(action_id("cancel-load"));assert_eq!(r.app().view,View::Start);
  r.task_outcome(task,TaskOutcome::Completed(b"<title>Late</title><p>Old".to_vec()));assert_eq!(r.app().view,View::Start);
 }
+
+#[test]
+fn pending_page_panels_do_not_survive_into_a_failure_screen(){
+ for panel in ["browser-zoom","browser-more"]{
+  let mut r=runner(TextScale::Default);r.action(link_to(&r,"example.com"));let task=pending_task(&r);
+  r.action(action_id(panel));r.task_outcome(task,TaskOutcome::Failed(TaskError::TimedOut));
+  assert!(!r.app().zoom_panel&&!r.app().browser_menu,"{panel} survived failure");
+  assert!(r.app().screen(&r.context().metrics()).build().overlay.is_none());
+ }
+}
