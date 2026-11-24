@@ -557,3 +557,9 @@ release, which is intentionally different from live phone-browser scrolling.
 - [x] Keep address/Back/Close and transport row while loading.
 - [x] Replace Reload with Stop, retain elapsed wait and stale-response guards.
 - [ ] Real-network/hardware interaction qualification; avoid invented progress.
+
+## Error recovery, November 24, 2026
+
+- [x] Keep attempted address editable on failure/unsupported responses.
+- [x] Retry the attempted URL from the recovery row, not the retained page.
+- [ ] Real-network/hardware failure and cancellation qualification.

@@ -984,3 +984,16 @@ fixture frame was inspected (unit-render evidence, not a live-network capture).
 Full browser235/0/2 across four batches,SDK166/0,workspacecheck/scopedclippy pass.
 Locked static stripped ARM5,267,004B,headroom1,225,256. Earlier device/core proofs
 unchanged; physical hardware/latency/RSS/fullweb proof gates remain open.
+
+## Error recovery retains the attempted address, November 24, 2026
+
+Failure/unsupported screens keep unified address/Back/Close and an explicit
+recovery row (Back,Forward,Retry,Address,Home), not document-specific Zoom/More
+commands for a previous page. Address editing starts from the attempted URL;
+Reload retries that URL rather than silently loading the retained document.
+Existing Try Again/return/history behavior is preserved. No wire extension.
+The recovery fixture failed before (address absent) and passes after, checking
+attempted-URL editing/reload and retained page. Inspected unit-rendered timeout
+frame, not live-network evidence. Full browser236/0/2,SDK166/0,workspacecheck/
+scopedclippy pass; locked static stripped ARM5,268,476B,headroom1,223,784.
+Earlier device/core proofs unchanged. Hardware/latency/RSS/fullweb gates open.

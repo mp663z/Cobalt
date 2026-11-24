@@ -2669,3 +2669,20 @@ fn pending_navigation_keeps_the_browser_header_and_exposes_stop_in_the_row(){
  assert_eq!(r.app().view,View::Page);assert_eq!(title(&r),"Browse: sample pages");
  r.task_outcome(task,TaskOutcome::Completed(b"<title>Late</title><p>Stale".to_vec()));assert_eq!(title(&r),"Browse: sample pages");
 }
+
+#[test]
+fn failure_recovery_edits_and_reloads_the_failed_url_not_the_retained_document(){
+ let mut r=runner(TextScale::Default);r.action(link_to(&r,"example.com"));let task=pending_task(&r);
+ r.task_outcome(task,TaskOutcome::Failed(TaskError::TimedOut));
+ let m=r.context().metrics();let l=r.app().screen(&m).build().layout_with(&m,&Chrome::measuring(true));
+ assert!(l.rect_of_action(action_id("edit-address")).is_some());
+ assert!(l.rect_of_action(action_id("browser-close")).is_some());
+ if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+  use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+  kobo_ui::render_all(&r.app().screen(&m).build(),&m,&Chrome::measuring(true),&(),&mut surface,None);
+  let mut f=std::fs::File::create("/tmp/browser-recovery-chrome.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",m.width,m.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+ }
+ r.action(action_id("edit-address"));assert_eq!(r.app().address.keyboard().text(),"https://example.com/");r.action(action_id("kb.cancel"));
+ let commands=r.action(action_id("reload"));let fetched=fetches(&commands);assert!(fetched.iter().any(|(_,url,_)|url=="https://example.com/"));
+ assert!(matches!(r.app().view,View::Loading(_)));assert_eq!(title(&r),"Browse: sample pages");
+}

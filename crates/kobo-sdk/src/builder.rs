@@ -1398,6 +1398,16 @@ impl ScreenBuilder {
         this
     }
 
+    /// Recovery actions refer to the attempted URL, not the previous document.
+    #[must_use]
+    pub fn recovery_browser_bar(mut self)->Self{
+        let id=self.next_id();let mut destinations=Vec::new();
+        for (name,label,glyph) in [("back","Back",Glyph::Previous),("forward","Forward",Glyph::Next),("reload","Retry",Glyph::Refresh),("edit-address","Address",Glyph::Keyboard),("go-home","Home",Glyph::Home)]{
+            destinations.push(BarAction::new(self.register(name),label).with_glyph(glyph));
+        }
+        self.nav_bar=Some(NavBar{id,destinations,selected:None,style:kobo_ui::BarStyle::BrowserCompact});self.bottom_action=None;self
+    }
+
     /// A continuous track. Reserves base..=base+100. Requires protocol26.
     #[must_use]
     pub fn slider(mut self,base:ActionId,value:u8)->Self{

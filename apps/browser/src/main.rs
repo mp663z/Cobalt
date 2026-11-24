@@ -1375,6 +1375,9 @@ impl Browser {
             }
             self.browser_menu = false;
         } else if action == action_id("reload") {
+            if let View::Failed(url,_)|View::Unsupported(url,_)=&self.view{
+                let url=url.clone();self.fetch(context,&url,None);self.show(context);return true;
+            }
             if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             // The old raster is retired before the new document arrives.
             // Reset the label before publishing that intermediate native frame.
@@ -1435,15 +1438,7 @@ impl Browser {
         if action == action_id("edit-address") && !self.address.is_open() {
             self.browser_menu = false;
             self.zoom_panel=false;
-            let value = if matches!(self.view, View::Start) {
-                String::new()
-            } else if let View::Loading(url) = &self.view {
-                url.to_string()
-            } else {
-                self.loaded
-                    .as_ref()
-                    .map_or(String::new(), |loaded| loaded.url.to_string())
-            };
+            let value=if matches!(self.view,View::Start){String::new()}else{self.displayed_address()};
             self.address.open_with(value);
             self.show(context);
             return true;
@@ -1707,7 +1702,7 @@ impl Browser {
                 ),
             )
             .keyboard(self.address.keyboard(), "Go")
-        } else if matches!(self.view, View::Page|View::Loading(_)) {
+        } else if matches!(self.view, View::Page|View::Loading(_)|View::Failed(..)|View::Unsupported(..)) {
             let builder = builder
                 .top_bar(self.loaded.as_ref().map_or_else(
                     || "Browse".to_owned(),
@@ -1727,7 +1722,7 @@ impl Browser {
                 ))
                 .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
                 ;
-            let builder = if matches!(self.view,View::Loading(_)){builder.loading_browser_bar()}else{browser_chrome::toolbar(builder, self.zoom, false)};
+            let builder = if matches!(self.view,View::Loading(_)){builder.loading_browser_bar()}else if matches!(self.view,View::Failed(..)|View::Unsupported(..)){builder.recovery_browser_bar()}else{browser_chrome::toolbar(builder, self.zoom, false)};
             if self.zoom_panel {
                 builder.popover("browser-zoom",|panel|panel
                     .section(format!("Zoom {}%",self.zoom))
@@ -1791,6 +1786,8 @@ impl Browser {
     fn displayed_address(&self) -> String {
         if self.address.is_open() {
             self.address.keyboard().caret_text()
+        } else if let View::Loading(url)|View::Failed(url,_)|View::Unsupported(url,_)=&self.view{
+            url.to_string()
         } else {
             self.loaded
                 .as_ref()
@@ -1832,6 +1829,7 @@ impl Browser {
                 let (heading, sentence) = failure.explain();
                 let mut builder = ScreenBuilder::new("browser-failed")
                     .top_bar(url.host())
+                    .field("edit-address",self.displayed_address(),"Search or enter address")
                     .heading(heading)
                     .text(sentence)
                     .secondary(url.to_string());
@@ -1850,6 +1848,7 @@ impl Browser {
             (View::Unsupported(url, what), loaded) => {
                 let builder = ScreenBuilder::new("browser-unsupported")
                     .top_bar(url.host())
+                    .field("edit-address",self.displayed_address(),"Search or enter address")
                     .heading("Not a web page")
                     .text(format!(
                         "This address leads to {what}. Browse shows web pages and plain text."
