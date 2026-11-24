@@ -473,3 +473,11 @@ Protocol22 tag41 keeps legacy style bytes unchanged; older peers reject the
 new optional node. See BUDGETS.md for failure/restoration, profile coverage and
 actual Colour evidence. Code in heading/quote/table blocks remains in the
 block face, and arbitrary CSS families/true variants/hardware remain open.
+
+#### November24 uncoloured semantic-span follow-through
+
+Native headings/quotes/table cells retain semantic bold/emphasis even without
+an authored RGB colour. Tests refuse invented foreground/background, and the
+full raster remains greyscale. Code-only fragmentation also triggers the
+existing simplification notice. See BUDGETS.md. Block-inline code face and
+arbitrary font/physical-device limits remain open.

@@ -2483,3 +2483,16 @@ fn native_inline_code_colours_and_mono_survive_links_form_and_paint(){
     for rgb in [[255,0,0],[255,240,224]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
     runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
 }
+
+#[test]
+fn native_plain_heading_quote_table_preserve_semantic_style_without_rgb(){
+    let mut runner=runner(TextScale::Default);
+    open_web_page(&mut runner,"<!doctype html><h2><strong><em>Plain heading</em></strong></h2><blockquote><p><strong><em>Plain quote</em></strong></p></blockquote><table><tr><th>Key</th><th>Value</th></tr><tr><td><strong><em>Plain cell</em></strong></td><td>42</td></tr></table><form><input name=q></form>");
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+    let styles:Vec<_>=layout.nodes.iter().filter_map(|n|match n.kind{kobo_ui::LayoutKind::ColouredHeading(_,s)|kobo_ui::LayoutKind::ColouredQuoteText(_,s)|kobo_ui::LayoutKind::ColouredTableText(_,s) if s.strong&&s.emphasis=>Some(s),_=>None}).collect();
+    assert_eq!(styles.len(),3);assert!(styles.iter().all(|s|s.foreground.is_none()&&s.background.is_none()));
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    assert!(!(0..surface.pixels.len()).any(|i|surface.rgb_at(i).is_some_and(|[r,g,b]|r!=g||g!=b)));
+    runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-plain-emphasis.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
+}

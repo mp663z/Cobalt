@@ -537,7 +537,7 @@ pub fn pieces(document: &Document) -> (Vec<Piece>, Vec<(String, usize)>) {
         match piece{
             Piece::Heading{spans,..}|Piece::Quote{spans,..}|Piece::ColouredPreformatted{spans,..}=>bound(spans),
             Piece::Table{rows,..}=>for row in rows{for spans in &mut row.spans{bound(spans);}},
-            Piece::Prose(runs)=>{if runs.iter().filter(|r|r.strong||r.emphasis||r.foreground.is_some()||r.background.is_some()).count()>kobo_ui::MAX_RICH_TEXT_SPANS{prose_reduced=true;}},
+            Piece::Prose(runs)=>{if runs.iter().filter(|r|r.code||r.strong||r.emphasis||r.foreground.is_some()||r.background.is_some()).count()>kobo_ui::MAX_RICH_TEXT_SPANS{prose_reduced=true;}},
             _=>{}
         }
     }
@@ -979,7 +979,7 @@ fn spans_from_runs(runs:&[Run])->Vec<RichTextSpan> {
     let mut at=0;let mut spans=Vec::new();
     for run in runs {
         let start=at;at+=run.text.len();
-        if run.foreground.is_some()||run.background.is_some(){spans.push(RichTextSpan{
+        if run.strong||run.emphasis||run.foreground.is_some()||run.background.is_some(){spans.push(RichTextSpan{
             start,end:at,presentation:TextPresentation{foreground:run.foreground,background:run.background,
                 strong:run.strong,emphasis:run.emphasis,..Default::default()}});}
     }

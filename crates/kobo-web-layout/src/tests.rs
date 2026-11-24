@@ -804,3 +804,26 @@ fn inline_code_keeps_mono_face_rgb_and_link_geometry_when_wrapped(){
         assert!(fits(&screen,&metrics),"{name}");
     }
 }
+
+#[test]
+fn uncoloured_block_spans_keep_authored_emphasis_without_inventing_rgb(){
+    let doc=parse_document(b"<h2><strong>Heading</strong></h2><blockquote><p><em>Quote</em></p></blockquote><table><tr><th>Key</th><th>Value</th></tr><tr><td><strong><em>Cell</em></strong></td><td>42</td></tr></table>",&Url::parse("https://fixtures.example/styles").unwrap(),&Limits::DEFAULT);
+    let (items,_)=pieces(&doc);
+    let mut styles=Vec::new();
+    for p in items {match p {
+        Piece::Heading{spans,..}|Piece::Quote{spans,..}=>styles.extend(spans.iter().map(|s|s.presentation)),
+        Piece::Table{rows,..}=>for r in rows{styles.extend(r.spans.into_iter().flatten().map(|s|s.presentation));},_=>{}
+    }}
+    assert_eq!(styles.len(),3,"{styles:?}");
+    assert!(styles[0].strong);assert!(styles[1].emphasis);assert!(styles[2].strong&&styles[2].emphasis);
+    assert!(styles.iter().all(|s|s.foreground.is_none()&&s.background.is_none()));
+}
+
+#[test]
+fn too_many_uncoloured_code_spans_show_a_simplification_note(){
+    let html=format!("<p>{}</p>","<code>i</code> x ".repeat(600));
+    let doc=parse_document(html.as_bytes(),&Url::parse("https://fixtures.example/styles").unwrap(),&Limits::DEFAULT);
+    let (items,_)=pieces(&doc);
+    assert!(items.iter().any(|p|matches!(p,Piece::Note(s) if s=="Some text colours simplified.")));
+    assert!(items.iter().filter_map(|p|if let Piece::Prose(runs)=p{Some(runs)}else{None}).flatten().filter(|r|r.code).count()>256);
+}

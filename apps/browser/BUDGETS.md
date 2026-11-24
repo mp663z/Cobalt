@@ -786,3 +786,17 @@ would exhaust layout nodes, the entire paragraph simplifies to its ordinary
 face before both measurement and painting. A200-run regression confirms the
 plain-bounds marker,no mono tail mismatch,and following text survives. This
 fallback may remove colour/emphasis as well as mono in that paragraph.
+
+### Native semantic styles without authored RGB, November24,2026
+
+Heading/quote/table spans now retain strong/emphasis even when no author RGB
+was supplied. Previously only coloured runs reached the existing span painter.
+No foreground/background is invented; a plain raster fixture remains entirely
+greyscale while showing bold/slanted words. Code-only prose overflow is now
+included in the existing simplification-notice count. Code in heading/quote/
+table still uses the block face; this does not change that limit.
+Browser224/0/2 ignored,layout34/0; whole-workspace check green; clippy completes
+with existing warnings. Removing semantic span retention fails the fixture,
+restoration passes. Actual full native raster inspected. Static stripped ARM
+EABI5:5,247,404 bytes,delta3,998,024 over hello,headroom1,244,856 under+5MiB.
+No new crate,unsafe,allocator or protocol change. Not a physical-panel result.
