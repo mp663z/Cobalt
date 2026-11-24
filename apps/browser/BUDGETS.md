@@ -691,3 +691,24 @@ with existing warnings. Locked stripped static ARM EABI5:5,243,652 bytes,
 delta3,994,272 over hello,headroom1,248,608 under +5 MiB. No new crate,unsafe
 or allocator change. Ideal RGB only; physical panel/RSS/latency unverified.
 No all-fonts or complete CSS/control-fidelity claim.
+
+
+### Native colour fragmentation bounds, November 24, 2026
+
+Audit found that pathological alternating colour runs could exceed the256-span
+wire bound. Native semantic spans now cap at that bound, retaining all words
+and appending an explicit colour-simplification note. Prose also caps encoded
+spans without inserting paragraph breaks or changing link ranges. At high
+layout-node pressure, heading/quote/table cells fall back to complete plain
+text rather than using the remaining nodes for fragments and losing the tail.
+Tests retain all text and following content with300 fragments, and bound
+600-run prose/headings/pre/quote/table payloads. Disabling bounds fails the
+regression; restoration passes. This is intentional partial style fidelity
+under resource pressure, not a promise to draw every authored colour.
+
+Browser221/0/2 ignored,UI293/0/2 ignored,layout30/0; whole-workspace check green.
+Clippy completes with existing warnings. Locked static stripped ARM EABI5:
+5,243,532 bytes,delta3,994,152 over hello,headroom1,248,728 under +5 MiB.
+Actual Clara Colour combined page/form journey rerun, full page inspected.
+No new crate,unsafe,allocator or wire change. Other colour/font/hardware
+caveats above still apply.

@@ -7062,6 +7062,7 @@ fn lead_rect(
 
 #[allow(clippy::too_many_arguments)]
 fn layout_table_cell(layout:&mut Layout,id:NodeId,rect:Rect,header:bool,text:&str,spans:&[RichTextSpan],lines:Vec<String>,face:Face){
+    let spans=if layout.nodes.len().saturating_add(lines.len()).saturating_add(spans.len().saturating_mul(2))>MAX_LAYOUT_NODES.saturating_sub(16){&[][..]}else{spans};
     layout.nodes.push(LayoutNode{id,rect,kind:if header{LayoutKind::TableHeaderCell}else{LayoutKind::TableCell},text_lines:if spans.is_empty(){lines}else{Vec::new()}});
     if spans.is_empty(){return;}
     let size=FontSize::Body;
@@ -7186,6 +7187,7 @@ fn layout_node(
             let size=FontSize::for_heading_level(*level);
             let ranges=wrap_ranges(text,width,size,Face::Text);
             let height=max(36,ranges.len() as i32*size.line_height());
+            let spans=if layout.nodes.len().saturating_add(ranges.len()).saturating_add(spans.len().saturating_mul(2))>MAX_LAYOUT_NODES.saturating_sub(16){&[][..]}else{spans.as_slice()};
             if spans.is_empty() {
                 layout.nodes.push(LayoutNode{id:*id,rect:Rect{x,y,width,height},
                     kind:LayoutKind::Heading(*level),text_lines:wrap_text(text,width,size)});
@@ -7666,6 +7668,7 @@ fn layout_node(
             let mark = fold.map_or(0, |_| fold_mark_width(metrics));
             let text_width = max(1, full_width - mark);
             let lines = wrap_text_in(text, text_width, size, prose);
+            let spans=if layout.nodes.len().saturating_add(lines.len()).saturating_add(spans.len().saturating_mul(2))>MAX_LAYOUT_NODES.saturating_sub(16){&[][..]}else{spans.as_slice()};
             // A byline is one short line and is allowed to be shorter than a
             // finger: it is not a control, and forcing it to the minimum text
             // height is what put a comment's author a whole blank line away
@@ -24788,5 +24791,21 @@ mod coloured_row_geometry_tests{
         let plain=layout(row);let styled=layout(colour);
         assert_eq!(plain.nodes.iter().map(|n|n.rect).collect::<Vec<_>>(),styled.nodes.iter().map(|n|n.rect).collect::<Vec<_>>());assert_eq!(plain.context_actions,styled.context_actions);
         assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredRowTitle(..))));
+    }
+}
+
+#[cfg(test)]
+mod colour_fragment_budget_tests{
+    use super::*;
+    #[test]
+    fn excessive_fragments_fall_back_to_complete_plain_text(){
+        let text="x".repeat(300);
+        let spans=(0..300).map(|i|RichTextSpan{start:i,end:i+1,presentation:TextPresentation{foreground:Some([200,0,0]),..Default::default()}}).collect::<Vec<_>>();
+        for node in [Node::Heading{id:NodeId(1),level:1,text:text.clone(),spans:spans.clone()},Node::Quote{id:NodeId(1),depth:1,role:QuoteRole::Body,text:text.clone(),fold:None,spans:spans.clone()},Node::Table{id:NodeId(1),weights:Vec::new(),rows:vec![TableRow{header:false,cells:vec![text.clone()],spans:vec![spans.clone()]}]}]{
+            let screen=Screen::new(1,vec![node,Node::Text{id:NodeId(2),text:"Trailing content".into(),links:Vec::new()}]);
+            let layout=screen.layout_for(&CLARA_BW_METRICS);
+            let actual:String=layout.nodes.iter().filter(|n|n.id==NodeId(1)).flat_map(|n|n.text_lines.iter().map(String::as_str)).collect();
+            assert_eq!(actual,text);assert!(layout.nodes.iter().any(|n|n.id==NodeId(2)));
+        }
     }
 }

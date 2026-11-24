@@ -509,6 +509,7 @@ fn prose(builder: ScreenBuilder, runs: &[Run]) -> ScreenBuilder {
             }
         }
     }
+    spans.truncate(kobo_ui::MAX_RICH_TEXT_SPANS);
     if spans.is_empty() && links.is_empty() {
         builder.text(text)
     } else if spans.is_empty() {
@@ -526,6 +527,19 @@ pub fn pieces(document: &Document) -> (Vec<Piece>, Vec<(String, usize)>) {
         flat.out.push(Piece::Note(note));
     }
     flat.blocks(&document.blocks, 0);
+    let mut reduced=false;let mut prose_reduced=false;
+    let mut bound=|spans:&mut Vec<RichTextSpan>|{
+        if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{spans.truncate(kobo_ui::MAX_RICH_TEXT_SPANS);reduced=true;}
+    };
+    for piece in &mut flat.out{
+        match piece{
+            Piece::Heading{spans,..}|Piece::Quote{spans,..}|Piece::ColouredPreformatted{spans,..}=>bound(spans),
+            Piece::Table{rows,..}=>for row in rows{for spans in &mut row.spans{bound(spans);}},
+            Piece::Prose(runs)=>{if runs.iter().filter(|r|r.strong||r.emphasis||r.foreground.is_some()||r.background.is_some()).count()>kobo_ui::MAX_RICH_TEXT_SPANS{prose_reduced=true;}},
+            _=>{}
+        }
+    }
+    if reduced||prose_reduced{flat.out.push(Piece::Note("Some text colours simplified.".into()));}
     (flat.out, flat.anchors)
 }
 

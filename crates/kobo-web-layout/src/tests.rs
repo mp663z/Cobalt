@@ -746,3 +746,18 @@ fn coloured_table_repeats_header_spans_across_pages(){
         for row in &rows[1..]{assert_eq!(row.spans[0][0].presentation.foreground,Some([0,0,255]));}
     }}
 }
+
+#[test]
+fn excessive_colour_runs_keep_text_and_have_bounded_payloads(){
+    let inner=(0..600).map(|i|format!("<span style='color:{}'>w{i} </span>",if i%2==0{"red"}else{"blue"})).collect::<String>();
+    for tag in ["p","h1","pre","blockquote","th"]{
+        let html=if tag=="th"{format!("<table><tr><th>{inner}</th></tr></table>")}else{format!("<{tag}>{inner}</{tag}>")};
+        let doc=kobo_web_document::parse_coloured_document(html.as_bytes(),&Url::parse("https://fixtures.example/").unwrap(),&Limits::DEFAULT);
+        let (flat,_)=pieces(&doc);let all=flat.iter().map(|p|match p{Piece::Table{rows,..}=>rows.iter().flat_map(|r|r.cells.iter().map(String::as_str)).collect::<String>(),_=>text_of_piece(p)}).collect::<String>();assert!(all.contains("w599"),"{tag}");
+        for piece in &flat{match piece{
+            Piece::Prose(_)=>{let screen=append(ScreenBuilder::new("bounded"),std::slice::from_ref(piece)).build();assert!(screen.nodes.iter().all(|n|!matches!(n,kobo_ui::Node::RichText{spans,..} if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS)));},
+            Piece::Heading{spans,..}|Piece::Quote{spans,..}|Piece::ColouredPreformatted{spans,..}=>assert!(spans.len()<=kobo_ui::MAX_RICH_TEXT_SPANS),
+            Piece::Table{rows,..}=>assert!(rows.iter().flat_map(|r|&r.spans).all(|s|s.len()<=kobo_ui::MAX_RICH_TEXT_SPANS)),_=>{}
+        }}
+    }
+}
