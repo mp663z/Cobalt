@@ -2703,3 +2703,16 @@ fn home_without_a_saved_home_retires_pending_navigation(){
  r.action(action_id("go-home"));assert_eq!(r.app().view,View::Start);assert!(r.app().pending.is_none());
  r.task_outcome(task,TaskOutcome::Completed(b"<title>Wrong late destination</title><p>Stale".to_vec()));assert_eq!(r.app().view,View::Start);
 }
+
+#[test]
+fn runtime_back_is_offered_to_native_subviews_and_returns_without_leaving_browser(){
+ for action in ["navigate","links","sections","bookmarks","recent"]{
+  let mut r=runner(TextScale::Default);r.action(action_id("browser-more"));r.action(action_id(action));let m=r.context().metrics();
+  assert!(r.app().screen(&m).build().owns_back,"{action} must accept runtime Back");
+  r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page,"{action}");
+ }
+ let mut r=form_runner(TextScale::Default);r.action(action_id("form-0"));r.action(action_id("field-0"));
+ assert!(r.app().screen(&r.context().metrics()).build().owns_back);
+ r.action(ActionId::BACK);assert!(!r.app().form_entry.is_open());assert!(matches!(r.app().view,View::Form(0,_)));
+ r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page);
+}

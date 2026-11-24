@@ -356,6 +356,10 @@ fn the_artifact_is_never_displayed() {
             .expect("the actual normal Screen must construct and validate")
     }
     let mut disabled = runner(SYNTHETIC_METRICS);
+    // producer_runner performs this prerequisite arrival before enabling the
+    // seam. Mirror it so full-screen equality also compares equal history.
+    go(&mut disabled, "https://example.test/prerequisite");
+    arrive(&mut disabled, FIXTURE);
     go(&mut disabled, "https://example.test/arrival");
     arrive(&mut disabled, FIXTURE);
     let mut enabled = producer_runner();

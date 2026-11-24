@@ -1692,6 +1692,12 @@ impl Browser {
     }
 
     fn screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
+        let owns=self.address.is_open()||self.form_entry.is_open()||self.zoom_panel||self.browser_menu
+            || (!matches!(self.view,View::Start|View::Page)) || self.history.position()>0;
+        self.browser_screen(metrics).owns_back(owns)
+    }
+
+    fn browser_screen(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
         let mut builder = self.browser_content(metrics);
         if self.address.is_open() {
             builder = builder.top_bar(
@@ -1965,6 +1971,15 @@ impl KoboApp for Browser {
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         self.validate_css(context);
+        // The shell offers its reserved Back only on screens that declare an
+        // internal destination. Match the app's named Back after that boundary.
+        if action==ActionId::BACK && self.form_entry.is_open(){
+            self.form_entry.close();self.editing=None;self.show(context);return;
+        }
+        let action=if action==ActionId::BACK{action_id("back")}else{action};
+        if ["navigate","links","sections","bookmarks","recent"].into_iter().any(|name|action==action_id(name)){
+            self.browser_menu=false;self.zoom_panel=false;
+        }
         if let Some(value)=action.0.checked_sub(page_mode::SCROLL_BASE.0).filter(|value|*value<=200){
             if matches!(self.view,View::Page)&&!self.address.is_open()&&!self.browser_menu&&!self.zoom_panel{
                 if let Some(loaded)=self.loaded.as_mut(){if let Some(painted)=loaded.painted.as_mut(){
@@ -2079,6 +2094,7 @@ impl KoboApp for Browser {
             self.carry_out(context, go);
             return;
         } else if action == action_id("navigate") {
+            self.browser_menu=false;self.zoom_panel=false;
             self.view = View::Navigate;
         } else if action == action_id("links") {
             self.view = View::Links(0);

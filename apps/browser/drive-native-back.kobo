@@ -1,0 +1,9 @@
+wait-for Search the web
+tap-id samples
+tap-id browser-more
+tap-id navigate
+shot-colour native-navigate
+tap-at 98 110
+shot-colour native-returned
+
+wait-for Sample pages

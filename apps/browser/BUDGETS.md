@@ -1007,3 +1007,20 @@ choosing a local destination; Home/library/Forward paths retire abandoned work
 too. The clock and transient panels retire with it. Full browser238/0/2 across
 four batches, workspacecheck/scopedclippy and locked ARM pass. ARM5,268,748B,
 headroom1,223,512. No new visual feature or hardware claim from this race fix.
+
+## Runtime Back in native subviews, November 24, 2026
+
+Native subviews/typing/internal history now declare owns_back so the shell
+first offers its reserved Back instead of immediately leaving the application.
+The runtime Back is mapped at the browser boundary to named Back; form typing
+cancels first. More/Zoom state is retired before entering native subviews, so
+a stale hidden menu cannot consume the first return tap. New fixture failed
+before; actual coordinate replay exposed and then verified the hidden-menu
+fix. Final replay returns Navigate to the document; pixels inspected.
+
+The independent never-displayed artifact equality fixture initially failed on
+owns_back: producer rig had a prerequisite history entry and disabled rig did
+not. Mirrored the same prerequisite arrival in the disabled rig, keeping full
+Screen equality intact instead of ignoring a field. Full browser239/0/2 after
+all changes, workspacecheck/scopedclippy and locked ARM pass. ARM5,269,172B,
+headroom1,223,088. No new wire/unsafe/dependencies. Hardware/fullweb gates open.
