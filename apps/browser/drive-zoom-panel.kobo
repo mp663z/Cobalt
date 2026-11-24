@@ -1,0 +1,18 @@
+wait-for Search the web
+tap-id samples
+tap-at 350 378
+wait-for 1 of 3
+shot-colour zoom-browse
+tap-id browser-zoom
+shot-colour zoom-panel
+input pointer down 400 942
+input pointer move 800 942
+input pointer up 800 942
+shot-colour zoom-dragged
+tap-id zoom-reset
+wait-for Zoom 100%
+tap-id zoom-done
+shot-colour zoom-closed
+tap-id edit-address
+shot-colour zoom-keyboard
+tap-id kb.cancel

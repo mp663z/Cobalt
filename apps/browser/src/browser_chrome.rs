@@ -3,11 +3,8 @@ use kobo_sdk::ScreenBuilder;
 
 pub(crate) const SLIDER_BASE: kobo_sdk::ActionId = kobo_sdk::ActionId(0x7ffe_0000);
 
-pub(crate) fn toolbar(builder: ScreenBuilder, zoom: u16, _typing: bool) -> ScreenBuilder {
-    builder.browser_bar(
-        ((zoom.saturating_sub(75)) * 100 / 125).min(100) as u8,
-        SLIDER_BASE,
-    ).unified_browser_header()
+pub(crate) fn toolbar(builder: ScreenBuilder, _zoom: u16, _typing: bool) -> ScreenBuilder {
+    builder.compact_browser_bar()
 }
 
 pub(crate) fn address_keys(builder: ScreenBuilder) -> ScreenBuilder {

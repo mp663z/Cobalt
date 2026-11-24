@@ -1380,6 +1380,22 @@ impl ScreenBuilder {
         self
     }
 
+    /// Unified address header and five transport actions, without a zoom track.
+    #[must_use]
+    pub fn compact_browser_bar(mut self)->Self{
+        let id=self.next_id();let mut destinations=Vec::new();
+        for (name,label,glyph) in [("back","Back",Glyph::Previous),("forward","Forward",Glyph::Next),("reload","Reload",Glyph::Refresh),("browser-zoom","Zoom",Glyph::Search),("browser-more","More",Glyph::More)]{
+            destinations.push(BarAction::new(self.register(name),label).with_glyph(glyph));
+        }
+        self.nav_bar=Some(NavBar{id,destinations,selected:None,style:kobo_ui::BarStyle::BrowserCompact});self.bottom_action=None;self
+    }
+
+    /// A continuous track. Reserves base..=base+100. Requires protocol26.
+    #[must_use]
+    pub fn slider(mut self,base:ActionId,value:u8)->Self{
+        let id=self.next_id();self.nodes.push(Node::Slider{id,base,value:value.min(100)});self
+    }
+
     /// Uses the first address field in the top strip, preserving its action
     /// and runtime-owned way back. Requires protocol24.
     #[must_use]

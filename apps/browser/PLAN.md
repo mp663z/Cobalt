@@ -540,3 +540,14 @@ success nor direct taps establish hardware latency, RSS or full HTML/CSS support
 Native reader/forms remain paginated. Page position reports the containing page
 of the offset, not a continuous scrollbar. The initial implementation settles on
 release, which is intentionally different from live phone-browser scrolling.
+
+## Deliberate zoom panel, November 24, 2026
+
+- [x] Replace the permanent seven-control row with five large transport controls.
+- [x] Open Zoom as a popover with percentage, continuous track, +/- steps,
+  actual-size reset and Done. Outside/Back dismisses, typing/navigation retires it.
+- [x] Add explicit protocol26 compact-browser style and standalone slider node;
+  keep old browser bars and prior plain wire frames unchanged.
+- [x] Replay real pointer down/move/up through the panel, reset and type inline;
+  inspect full frames and retain same device/simulator input implementation.
+- [ ] Hardware interaction/latency qualification and continuous-scroll feedback.

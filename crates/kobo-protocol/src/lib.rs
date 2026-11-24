@@ -96,7 +96,8 @@ pub const INLINE_CODE_VERSION:u8=22;
 pub const PICTURE_LINK_VERSION:u8=23;
 pub const UNIFIED_BROWSER_VERSION:u8=24;
 pub const PICTURE_SCROLL_VERSION:u8=25;
-pub const VERSION: u8 = 25;
+pub const ZOOM_PANEL_VERSION:u8=26;
+pub const VERSION: u8 = 26;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -2006,7 +2007,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | PICTURE_SCROLL_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4177,6 +4178,7 @@ fn encoded_screen_len(
     }
     if let Some(nav_bar) = &screen.nav_bar {
         if nav_bar.style==BarStyle::BrowserUnified&&version<UNIFIED_BROWSER_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+        if nav_bar.style==BarStyle::BrowserCompact&&version<ZOOM_PANEL_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
         if nav_bar.destinations.len() > u8::MAX as usize {
             return Err(ProtocolError::TooManyNodes);
         }
@@ -4417,6 +4419,7 @@ fn encoded_node_len(
         // One tag byte, not a length. This was 9 while the node still carried
         // a raw i32, which over-reserved the frame by three bytes and tripped
         // the encoder's own length assertion in debug builds.
+        Node::Slider { base,value,.. } => {validate_slider(*base,*value,version)?;10},
         Node::Spacer { .. } => 6,
         // Tag and identifier and nothing else: a flex carries no value.
         Node::Flex { .. } => 5,
@@ -4700,7 +4703,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | PICTURE_SCROLL_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5178,7 +5181,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | PICTURE_LINK_VERSION | UNIFIED_BROWSER_VERSION | PICTURE_SCROLL_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5247,6 +5250,7 @@ fn encode_screen(
         None => output.push(0),
         Some(nav_bar) => {
             if nav_bar.style==BarStyle::BrowserUnified&&version<UNIFIED_BROWSER_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+        if nav_bar.style==BarStyle::BrowserCompact&&version<ZOOM_PANEL_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
             // Refused here as well as on the way in. A bar of one destination
             // is a bar that says nothing about where else the reader could go,
             // and the decoder has always rejected it, so an application that
@@ -5264,6 +5268,7 @@ fn encode_screen(
                 BarStyle::Actions => 2,
                 BarStyle::Browser => 3,
                 BarStyle::BrowserUnified => 4,
+                BarStyle::BrowserCompact => 5,
             });
             push_u32(output, nav_bar.id.0);
             let len = u8::try_from(nav_bar.destinations.len())
@@ -5428,6 +5433,10 @@ fn decode_bar_action(reader: &mut Reader<'_>) -> Result<BarAction, ProtocolError
 // One exhaustive match over every node kind. Splitting it would only move
 // arms out of reach of the compiler's exhaustiveness check, which is the one
 // thing making it impossible to add a node and forget the wire format.
+fn validate_slider(base:ActionId,value:u8,version:u8)->Result<(),ProtocolError>{
+ if version<ZOOM_PANEL_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+ if value>100||base.0.checked_add(100).is_none(){return Err(ProtocolError::InvalidValue("slider"));}Ok(())
+}
 fn validate_picture_scroll(base:Option<ActionId>,version:u8)->Result<(),ProtocolError>{
     if let Some(base)=base{if version<PICTURE_SCROLL_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}if base.0.checked_add(200).is_none(){return Err(ProtocolError::InvalidValue("picture scroll base"));}}Ok(())
 }
@@ -5817,6 +5826,7 @@ fn encode_node(
             output.push(27);
             push_u32(output, id.0);
         }
+        Node::Slider { id, base, value } => {validate_slider(*base,*value,version)?;output.push(44);push_u32(output,id.0);push_u32(output,base.0);output.push(*value);}
         Node::Spacer { id, space } => {
             output.push(6);
             push_u32(output, id.0);
@@ -6509,14 +6519,14 @@ fn decode_screen(
     };
     let nav_bar = match reader.u8()? {
         0 => None,
-        style @ (1 | 2 | 3 | 4) if style!=4||version>=UNIFIED_BROWSER_VERSION => {
+        style @ (1 | 2 | 3 | 4 | 5) if (style!=4||version>=UNIFIED_BROWSER_VERSION)&&(style!=5||version>=ZOOM_PANEL_VERSION) => {
             let style = if style == 1 {
                 BarStyle::Navigation
             } else if style == 2 {
                 BarStyle::Actions
             } else if style==3 {
                 BarStyle::Browser
-            } else { BarStyle::BrowserUnified };
+            } else if style==4 { BarStyle::BrowserUnified } else { BarStyle::BrowserCompact };
             let bar_id = NodeId(reader.u32()?);
             let len = usize::from(reader.u8()?);
             let selected = usize::from(reader.u8()?);
@@ -7052,6 +7062,7 @@ fn decode_node(
             }
             Ok(Node::Band { id, align, slots })
         }
+        44 if version>=ZOOM_PANEL_VERSION => {let base=ActionId(reader.u32()?);let value=reader.u8()?;validate_slider(base,value,version)?;Ok(Node::Slider{id,base,value})},
         5 => Ok(Node::Divider { id }),
         27 => Ok(Node::Flex { id }),
         6 => Ok(Node::Spacer {
@@ -11507,5 +11518,30 @@ mod picture_scroll_tests{
   for v in LEGACY_VERSION..PICTURE_SCROLL_VERSION{assert!(encode_node(&mut Vec::new(),&node,0,&mut 0,v).is_err());assert!(encoded_node_len(&node,0,&mut 0,v).is_err());assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,v).is_err());}
   for n in 1..=6{assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
   assert!(validate_picture_scroll(Some(ActionId(u32::MAX)),VERSION).is_err());
+ }
+}
+
+#[cfg(test)]
+mod zoom_panel_wire_tests{
+ use super::*;
+ #[test]fn standalone_slider_is_versioned_bounded_and_round_trips(){
+  let n=Node::Slider{id:NodeId(5),base:ActionId(1000),value:50};let mut bytes=Vec::new();
+  encode_node(&mut bytes,&n,0,&mut 0,VERSION).unwrap();assert_eq!(bytes.len(),encoded_node_len(&n,0,&mut 0,VERSION).unwrap());
+  assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),n);
+  for v in LEGACY_VERSION..ZOOM_PANEL_VERSION{assert!(encode_node(&mut Vec::new(),&n,0,&mut 0,v).is_err());assert!(encoded_node_len(&n,0,&mut 0,v).is_err());assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,v).is_err());}
+  for (base,value) in [(u32::MAX,50),(1000,101)]{let n=Node::Slider{id:NodeId(1),base:ActionId(base),value};assert!(encode_node(&mut Vec::new(),&n,0,&mut 0,VERSION).is_err());assert!(encoded_node_len(&n,0,&mut 0,VERSION).is_err());}
+ }
+}
+#[cfg(test)]
+mod compact_browser_wire_tests{
+ use super::*;
+ #[test]fn compact_style_requires_its_explicit_version(){
+  let mut screen=Screen::new(1,vec![]);
+  screen.nav_bar=Some(NavBar{id:NodeId(1),destinations:vec![BarAction::new(ActionId(2),"Back"),BarAction::new(ActionId(3),"More")],selected:None,style:BarStyle::BrowserCompact});
+  let frame=Frame{version:VERSION,request_id:1,message:Message::SetScreen(screen)};let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
+  for version in LEGACY_VERSION..ZOOM_PANEL_VERSION{
+   assert!(encode(&Frame{version,..frame.clone()}).is_err());
+   let mut old=bytes.clone();old[4]=version;assert!(decode(&old).is_err());
+  }
  }
 }

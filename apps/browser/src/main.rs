@@ -135,6 +135,7 @@ struct Browser {
     library: Library,
     library_loaded: bool,
     browser_menu: bool,
+    zoom_panel:bool,
     home_page: Option<Url>,
     zoom: u16,
     scroll_places:std::collections::BTreeMap<String,(u16,u32)>,
@@ -191,6 +192,7 @@ impl Default for Browser {
             library: Library::default(),
             library_loaded: false,
             browser_menu: false,
+            zoom_panel:false,
             home_page: None,
             zoom: 100,
             scroll_places:Default::default(),
@@ -242,6 +244,7 @@ impl Browser {
     }
 
     fn open(&mut self, context: &mut Context, url: &Url) {
+        self.zoom_panel=false;
         let same = self
             .loaded
             .as_ref()
@@ -1336,9 +1339,14 @@ impl Browser {
             .0
             .checked_sub(browser_chrome::SLIDER_BASE.0)
             .filter(|value| *value <= 100);
-        if action == action_id("browser-more") {
+        if action == action_id("browser-zoom") {
+            self.zoom_panel=!self.zoom_panel;self.browser_menu=false;
+        } else if action==action_id("zoom-done") || (self.zoom_panel && (action==action_id("back")||action==ActionId::BACK)){
+            self.zoom_panel=false;
+        } else if action == action_id("browser-more") {
+            self.zoom_panel=false;
             self.browser_menu = !self.browser_menu;
-        } else if self.browser_menu && action == action_id("back") {
+        } else if self.browser_menu && (action == action_id("back")||action==ActionId::BACK) {
             self.browser_menu = false;
         } else if action == action_id("go-home") {
             self.browser_menu = false;
@@ -1383,11 +1391,12 @@ impl Browser {
         } else if slider.is_some()
             || action == action_id("zoom-less")
             || action == action_id("zoom-more")
+            || action == action_id("zoom-reset")
         {
             // A new zoom rebuild starts at its first viewport. Retire the
             // old session offset rather than resurrecting it on Back.
             if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
-            self.zoom = if let Some(value) = slider {
+            self.zoom = if action==action_id("zoom-reset"){100} else if let Some(value) = slider {
                 75 + (value * 125 / 100) as u16
             } else if action == action_id("zoom-less") {
                 self.zoom.saturating_sub(25).max(75)
@@ -1425,6 +1434,7 @@ impl Browser {
     fn handle_address(&mut self, context: &mut Context, action: ActionId) -> bool {
         if action == action_id("edit-address") && !self.address.is_open() {
             self.browser_menu = false;
+            self.zoom_panel=false;
             let value = if matches!(self.view, View::Start) {
                 String::new()
             } else if let View::Loading(url) = &self.view {
@@ -1718,7 +1728,13 @@ impl Browser {
                 .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
                 ;
             let builder = browser_chrome::toolbar(builder, self.zoom, false);
-            if self.browser_menu {
+            if self.zoom_panel {
+                builder.popover("browser-zoom",|panel|panel
+                    .section(format!("Zoom {}%",self.zoom))
+                    .slider(browser_chrome::SLIDER_BASE,((self.zoom.saturating_sub(75))*100/125).min(100) as u8)
+                    .grid(3,false,[("zoom-less","-"),("zoom-reset","100%"),("zoom-more","+")])
+                    .button("zoom-done","Done"))
+            } else if self.browser_menu {
                 builder.popover("browser-more", |menu| {
                     menu.rows([
                         ("navigate", "Navigate", "Links, sections and page modes", Glyph::Note),
@@ -1946,7 +1962,7 @@ impl KoboApp for Browser {
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
         self.validate_css(context);
         if let Some(value)=action.0.checked_sub(page_mode::SCROLL_BASE.0).filter(|value|*value<=200){
-            if matches!(self.view,View::Page)&&!self.address.is_open()&&!self.browser_menu{
+            if matches!(self.view,View::Page)&&!self.address.is_open()&&!self.browser_menu&&!self.zoom_panel{
                 if let Some(loaded)=self.loaded.as_mut(){if let Some(painted)=loaded.painted.as_mut(){
                     painted.scroll(value as i32-100);
                     let key=loaded.url.to_string();let place=(self.zoom,painted.scroll_position());

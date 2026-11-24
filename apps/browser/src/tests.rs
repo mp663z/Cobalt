@@ -1940,6 +1940,7 @@ fn page_has_browser_close_separate_from_keyboard_close() {
 #[test]
 fn compact_slider_coordinates_update_zoom_without_affecting_page_taps() {
     let mut runner = runner(TextScale::Default);
+    runner.action(action_id("browser-zoom"));
     let metrics = runner.context().metrics();
     let screen = runner.app().screen(&metrics).build();
     let layout = screen.layout_with(&metrics, &kobo_sdk::Chrome::measuring(true));
@@ -2607,4 +2608,23 @@ fn explicit_zoom_and_native_reader_retire_stored_scroll_offsets(){
   r.action(action_id(action));
   assert!(!r.app().scroll_places.contains_key(&key),"{action} retained stale offset");
  }
+}
+
+#[test]
+fn zoom_controls_live_in_a_deliberate_panel_not_the_browsing_row(){
+ let mut r=runner(TextScale::Default);r.action(action_id("page-view"));
+ let m=r.context().metrics();
+ let layout=r.app().screen(&m).build().layout_with(&m,&Chrome::measuring(true));
+ assert!(layout.rect_of_action(action_id("browser-zoom")).is_some());
+ assert!(!layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::Slider(..))));
+ r.action(action_id("browser-zoom"));
+ let layout=r.app().screen(&m).build().layout_with(&m,&Chrome::measuring(true));
+ let slider=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::Slider(..))).expect("zoom panel has a draggable track");
+ let a=layout.slider_action(slider.rect.x+slider.rect.width/2,slider.rect.y+slider.rect.height/2).unwrap();
+ r.action(a);assert!(r.app().zoom>=136&&r.app().zoom<=138);
+ r.action(action_id("zoom-done"));
+ r.action(action_id("browser-zoom"));r.action(ActionId::BACK);assert!(!r.app().zoom_panel);
+ r.action(action_id("browser-zoom"));r.action(action_id("edit-address"));assert!(!r.app().zoom_panel);r.action(action_id("kb.cancel"));
+ let layout=r.app().screen(&m).build().layout_with(&m,&Chrome::measuring(true));
+ assert!(!layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::Slider(..))));
 }

@@ -941,3 +941,24 @@ browser batches58+58+58+57=231 passed,0failed,2ignored after these fixes.
 Device-write26lib/177bin/1ignored, workspace check and scoped clippy pass;
 Colour pointer replay rerun. Locked static stripped ARM5,265,908B,headroom
 1,226,352 under+5MiB. Remaining hardware/native-scroll caveats unchanged.
+
+## Deliberate zoom panel, November 24, 2026
+
+Explicit BrowserCompact/style5 and Slider node/tag44 require protocol26.
+Standalone sliders bound value0..100 and reject overflowing action bases in
+preflight/encode/decode. Versions11..25 remain accepted, old styles/tags are
+unchanged. The existing shared Slider hit/drag and paint paths serve both
+standalone and legacy bar sliders. Five large main controls replace the
+permanent seven-slot track. Zoom popover includes percentage, track, +/- steps,
+100% reset and Done. Outside/runtime Back dismisses it, address/navigation
+retires it; scrolling cannot run behind the panel.
+
+A feature fixture failed before (no Zoom control) and passes after. Full browser
+batches58+59+58+57=232 passed,0failed,2ignored. Protocol123/0,UI302/0/2,SDK166/0,
+simulator110/0 (new standalone actual Down/Move/Up test),device-write26lib+
+177bin/1ignored,framehost7/0. Workspace check and scoped clippy pass with existing
+warnings. Locked static stripped ARM5,267,036B,headroom1,225,224 under+5MiB.
+Actual Colour pointer drag reached168%, reset100%, closed and edited inline;
+full frames inspected. No physical panel/latency/RSS claim. Missing panels CBZ
+continues to block an all-workspace-tests claim. Fullweb and independent proof
+gates are not marked complete by these UI tests.

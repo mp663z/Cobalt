@@ -5502,6 +5502,36 @@ mod tests {
     }
 
     #[test]
+    fn standalone_slider_delivers_down_move_and_release_values() {
+        let mut state = AppState::default();
+        let base = kobo_ui::ActionId(0x7ffe_0000);
+        state.screen = kobo_ui::Screen::new(1,vec![kobo_ui::Node::Slider{id:kobo_ui::NodeId(1),base,value:0}]);
+        state.drawn_screen = state.screen.clone();
+        let metrics = profile_metrics();
+        let layout = state.screen.layout_with(&metrics, &state.chrome);
+        let rect = layout
+            .nodes
+            .iter()
+            .find(|n| matches!(n.kind, kobo_ui::LayoutKind::Slider(..)))
+            .unwrap()
+            .rect;
+        let y = (rect.y + rect.height / 2) as u32;
+        let x1 = (rect.x + rect.width / 4) as u32;
+        let x2 = (rect.x + rect.width * 3 / 4) as u32;
+        let down = state.input_event(kobo_hal::TouchEvent::Down { x: x1, y }, false);
+        let moved = state.input_event(kobo_hal::TouchEvent::Move { x: x2, y }, false);
+        let up = state.input_event(kobo_hal::TouchEvent::Up { x: x2, y }, false);
+        assert!(
+            matches!(down, Some(Message::Action { action }) if action.0 >= base.0 + 24 && action.0 <= base.0 + 26)
+        );
+        assert!(
+            matches!(moved, Some(Message::Action { action }) if action.0 >= base.0 + 74 && action.0 <= base.0 + 76)
+        );
+        assert_eq!(moved, up);
+        assert!(!state.slider_drag);
+    }
+
+    #[test]
     fn raw_hold_and_page_press_deliver_real_messages_and_background_input_is_quiet() {
         let clock = Arc::new(
             kobo_policy::clock::ManualClock::new(kobo_policy::clock::Snapshot {

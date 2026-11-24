@@ -2826,11 +2826,13 @@ pub enum BarStyle {
     Browser,
     /// Browser transport with the first address field in the title strip.
     BrowserUnified,
+    /// Unified header and a compact row without a permanent zoom track.
+    BrowserCompact,
 }
 
 impl BarStyle {
     #[must_use]
-    pub const fn is_browser(self)->bool{matches!(self,Self::Browser|Self::BrowserUnified)}
+    pub const fn is_browser(self)->bool{matches!(self,Self::Browser|Self::BrowserUnified|Self::BrowserCompact)}
 }
 
 /// The fixed bar at the bottom of a screen, equivalent to the reader's own.
@@ -3279,7 +3281,7 @@ impl Screen {
             ..Layout::default()
         };
 
-        let unified=self.nav_bar.as_ref().is_some_and(|bar|bar.style==BarStyle::BrowserUnified)
+        let unified=self.nav_bar.as_ref().is_some_and(|bar|matches!(bar.style,BarStyle::BrowserUnified|BarStyle::BrowserCompact))
             && self.top_bar.is_some() && matches!(self.nodes.first(),Some(Node::Field{..}));
         let mut cursor = margin;
         // The band sits above everything, including the top bar, which is
@@ -4253,7 +4255,9 @@ fn layout_nav_bar(nav_bar: &NavBar, metrics: &DisplayMetrics, layout: &mut Layou
                 width,
                 height,
             },
-            kind: if nav_bar.style == BarStyle::Navigation && nav_bar.selected == Some(index) {
+            kind: if nav_bar.style == BarStyle::BrowserCompact {
+                LayoutKind::BarGlyph(destination.action,destination.glyph.unwrap_or(Glyph::More))
+            } else if nav_bar.style == BarStyle::Navigation && nav_bar.selected == Some(index) {
                 LayoutKind::NavDestinationSelected(destination.action, destination.glyph)
             } else {
                 LayoutKind::NavDestination(destination.action, destination.glyph)
@@ -4496,6 +4500,8 @@ impl Default for ParagraphPresentation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Node {
+    /// Continuous control reserving base..=base+100 actions.
+    Slider { id:NodeId, base:ActionId, value:u8 },
     Heading {
         id: NodeId,
         text: String,
@@ -5845,7 +5851,8 @@ impl Node {
     #[must_use]
     pub const fn id(&self) -> NodeId {
         match self {
-            Self::Heading { id, .. }
+            Self::Slider { id, .. }
+            | Self::Heading { id, .. }
             | Self::Text { id, .. }
             | Self::RichText { id, .. }
             | Self::Secondary { id, .. }
@@ -7218,7 +7225,8 @@ fn layout_flow_node(
             | Node::Band { .. }
             | Node::Rows { .. }
             | Node::Progress { .. }
-            | Node::Stepper { .. } => width.min(metrics.control_width()),
+            | Node::Stepper { .. }
+            | Node::Slider { .. } => width.min(metrics.control_width()),
             Node::Card { .. }
             | Node::Divider { .. }
             | Node::Spacer { .. }
@@ -8511,6 +8519,11 @@ fn layout_node(
                 text_lines: Vec::new(),
             });
             y.saturating_add(2 * inset + thickness)
+        }
+        Node::Slider { id, base, value } => {
+            let height=metrics.touch_target_default();
+            layout.nodes.push(LayoutNode{id:*id,rect:Rect{x,y,width,height},kind:LayoutKind::Slider(*base,(*value).min(100)),text_lines:Vec::new()});
+            y.saturating_add(height)
         }
         Node::Spacer { id, space } => {
             let height = metrics.space(*space);
@@ -13159,7 +13172,8 @@ fn validate_node(
                 check_text_coverage(id, value, Face::Text, issues);
             }
         }
-        Node::Card { .. }
+        Node::Slider { .. }
+        | Node::Card { .. }
         | Node::Band { .. }
         | Node::Divider { .. }
         | Node::Spacer { .. }
@@ -13590,6 +13604,7 @@ fn node_enabled_interaction_count(node: &Node) -> usize {
             options, freeform, ..
         } => options.len() + usize::from(freeform.is_some()),
         Node::Activity { cancel, .. } => usize::from(cancel.is_some()),
+        Node::Slider { .. } => 1,
         Node::Heading { .. }
         | Node::Secondary { .. }
         | Node::Facts { .. }

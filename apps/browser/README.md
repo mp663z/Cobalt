@@ -155,3 +155,12 @@ offsets across app restarts. Native Reader and forms remain paginated.
 Protocol25 is required for scroll-enabled pictures. `drive-scroll.kobo` replays
 an article drag and inline keyboard. Device input uses the same recognizer as
 the simulator, but hardware responsiveness and panel quality are not measured.
+
+### Zoom without a permanent track
+
+The main row has Back, Forward, Reload, Zoom and More. Zoom opens a panel with a
+continuous track, current percentage, +/- buttons, 100% reset and Done. Tap
+outside or Back to close it. Address editing and navigation close the panel.
+The track is a real shared runtime slider, not a set of disguised buttons.
+Protocol26 is required for the compact row and standalone slider. The replay
+`drive-zoom-panel.kobo` includes an actual drag, reset and inline typing.
