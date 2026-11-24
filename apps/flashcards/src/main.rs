@@ -1435,6 +1435,7 @@ fn ui_spans(spans: &[CardTextSpan]) -> Vec<RichTextSpan> {
             start: span.start,
             end: span.end,
             presentation: TextPresentation {
+                code:false,
                 foreground:None,
                 background:None,
                 strong: span.style.strong,

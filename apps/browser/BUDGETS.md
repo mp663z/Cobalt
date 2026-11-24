@@ -756,3 +756,33 @@ Locked stripped static ARM EABI5:5,244,396 bytes,delta3,995,016 over hello
 Inline code within prose remains proportional; arbitrary CSS font families,
 true variant selection, complex control styling, physical RSS and latency
 remain incomplete or unverified.
+
+
+### Mixed native inline code in prose, November24,2026
+
+Native prose carries the source code flag through plain and coloured inline
+runs. It measures each run in its actual face during regular and emergency
+wrapping, positioning, link targets and selection. Code paints mono with RGB
+ink/background; neighbouring prose retains its existing face. Line height
+accommodates both faces. Protocol22 tag41 carries this opt-in flag;11-21 reject
+the new node, and old tags/style-byte semantics remain unchanged. Code flags on
+other node kinds are explicitly refused instead of silently discarded.
+
+Browser223/0/2 ignored,UI297/0/2 ignored,protocol118/0,layout32/0,SDK166/0/2,
+sim108/0,runtime156/0,reader82/0,framehost7/0,flashcards14/0. Whole-workspace
+check green; clippy completes with existing warnings. Mutation removing source
+code flags fails; restoring passes. The32 layout checks include a160-character
+unbroken code link across9 profile/size combinations, retaining every character
+and actual mono link rectangles. Mixed selection-offset test passes.
+Actual Clara Colour page/form journey passes; both full frames inspected.
+Page44,984 non-grey pixels,form6,442. Ideal simulator,not panel calibration.
+Locked stripped static ARM EABI5:5,247,428 bytes,delta3,998,048 over hello,
+headroom1,244,832 under +5MiB. No new crate,unsafe or allocator change.
+Code within headings/quotes/tables still uses its block face. Arbitrary CSS
+font families,true variants,complex controls,physical RSS/latency remain open.
+
+Mixed-code fragmentation is conservatively estimated before wrapping; when it
+would exhaust layout nodes, the entire paragraph simplifies to its ordinary
+face before both measurement and painting. A200-run regression confirms the
+plain-bounds marker,no mono tail mismatch,and following text survives. This
+fallback may remove colour/emphasis as well as mono in that paragraph.

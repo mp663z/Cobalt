@@ -779,3 +779,28 @@ fn mono_unbroken_tokens_wrap_inside_the_same_measured_page() {
         assert_eq!(runs.iter().map(|n|n.text_lines[0].as_str()).collect::<String>(),text,"{name}");
     }
 }
+
+#[test]
+fn inline_code_keeps_mono_face_rgb_and_link_geometry_when_wrapped(){
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    let url=Url::parse("https://fixtures.example/code").unwrap();
+    let html=format!("<p>before <a href='/next'><code>{}</code></a> after</p>","i".repeat(160));
+    let doc=parse_document(html.as_bytes(),&url,&Limits::DEFAULT);
+    for (metrics,name) in code_panels(){
+        let items=pieces(&doc).0;
+        assert!(items.iter().any(|p|matches!(p,Piece::Prose(runs) if runs.iter().any(|r|r.code))));
+        let screen=page_screen_with_metrics("Code",&items,0,Some(1),None,&metrics).build();
+        let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+        let runs:Vec<_>=layout.nodes.iter().filter(|n|matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(_))&&!n.text_lines.is_empty()).collect();
+        assert!(runs.len()>1,"{name}");
+        let bound=layout.nodes.iter().find(|n|n.id==runs[0].id&&n.text_lines.is_empty()&&matches!(n.kind,kobo_ui::LayoutKind::RichText(_))).unwrap();
+        assert!(runs.iter().all(|n|n.rect.x+n.rect.width<=bound.rect.x+bound.rect.width),"{name}");
+        assert_eq!(runs.iter().map(|n|n.text_lines[0].as_str()).collect::<String>(),"i".repeat(160));
+        for run in &runs {
+            let width=kobo_ui::with_reading_scale(screen.text_scale.unwrap_or(metrics.text_scale),||kobo_ui::measure_text_in(&run.text_lines[0],kobo_ui::FontSize::Body,kobo_ui::Face::ReadingMono).0);
+            assert_eq!(run.rect.width,width,"{name}");
+            assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::InlineLink(_))&&n.rect==run.rect),"{name}: link must cover actual mono run");
+        }
+        assert!(fits(&screen,&metrics),"{name}");
+    }
+}

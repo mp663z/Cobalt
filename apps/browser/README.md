@@ -56,8 +56,9 @@ On confirmed Colour profiles, native Reader carries supported same-DOM authored
 RGB foreground/background through prose, links, headings, quotes, preformatted
 text, table cells and explicit control titles. Preformatted blocks use the embedded
 fixed-pitch face, with reading-size measurement and painting, including long-token
-wrapping, indentation and blank lines. Inline code inside prose still uses the
-prose face. Late identity refresh retains
+wrapping, indentation and blank lines. Inline code in prose also uses the fixed-pitch
+face, with mixed-run wrapping and link geometry. Code inside headings, quotes
+and table cells still uses each block's face. Late identity refresh retains
 edited form values, notices and native place when retained source is available.
 This is not a claim that all CSS, fonts or image formats are supported.
 External images, SVG, external stylesheets, painted form controls, saved

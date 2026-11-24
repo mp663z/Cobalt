@@ -463,3 +463,13 @@ Colour evidence is in screenshots/native-colour-blocks.png. See BUDGETS.md for
 checks and limits. Inline code inside prose, arbitrary authored font families,
 true font variants, complex control styles and physical panel/RSS/latency are
 still incomplete or unverified. This does not close the broad browser goal.
+
+
+#### November24 native mixed inline-code follow-through
+
+Prose code runs now retain semantic code identity and use fixed pitch for both
+measurement and RGB paint, including wrapped link and selection rectangles.
+Protocol22 tag41 keeps legacy style bytes unchanged; older peers reject the
+new optional node. See BUDGETS.md for failure/restoration, profile coverage and
+actual Colour evidence. Code in heading/quote/table blocks remains in the
+block face, and arbitrary CSS families/true variants/hardware remain open.

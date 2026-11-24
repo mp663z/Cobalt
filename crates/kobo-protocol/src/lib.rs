@@ -90,7 +90,9 @@ pub const COLOUR_TABLE_VERSION:u8=19;
 pub const COLOUR_ROW_VERSION:u8=20;
 /// Version adding mono rich-text blocks measured in the mono face.
 pub const MONO_RICH_TEXT_VERSION:u8=21;
-pub const VERSION: u8 = 21;
+/// Version carrying mixed mono/proportional runs in rich paragraphs.
+pub const INLINE_CODE_VERSION:u8=22;
+pub const VERSION: u8 = 22;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -2000,7 +2002,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4233,7 +4235,7 @@ fn encoded_node_len(
                 if version < COLOUR_HEADING_VERSION {return Err(ProtocolError::UnsupportedVersion(version));}
                 if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
                 let mut length=8+encoded_string_len(text)?;
-                for span in spans {add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+                for span in spans {if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
                 return Ok(length);
             }
             let mut length = 6;
@@ -4267,7 +4269,9 @@ fn encoded_node_len(
                 return Err(ProtocolError::TooManyNodes);
             }
             if presentation.monospaced&&version<MONO_RICH_TEXT_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
-            let coloured = presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            let code=spans.iter().any(|s|s.presentation.code);
+            if code&&(version<INLINE_CODE_VERSION||presentation.monospaced){return Err(ProtocolError::UnsupportedVersion(version));}
+            let coloured = code || presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
             if coloured && version < COLOUR_RICH_TEXT_VERSION {
                 return Err(ProtocolError::UnsupportedVersion(version));
             }
@@ -4319,7 +4323,7 @@ fn encoded_node_len(
             add_encoded_len(&mut length, encoded_string_len(text)?)?;
             if !spans.is_empty(){
                 add_encoded_len(&mut length,2)?;
-                for span in spans {add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+                for span in spans {if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
             }
             length
         }
@@ -4535,7 +4539,7 @@ fn encoded_node_len(
                         add_encoded_len(&mut length,2)?;
                         if let Some(spans)=row.spans.get(index){
                             if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
-                            for span in spans{add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+                            for span in spans{if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
                         }
                     }
                 }
@@ -4686,7 +4690,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5164,7 +5168,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5428,6 +5432,7 @@ fn text_presentation_from_byte(value: u8) -> Result<kobo_ui::TextPresentation, P
     Ok(kobo_ui::TextPresentation {
         foreground: None,
         background: None,
+        code:false,
         strong: value & 1 != 0,
         emphasis: value & 2 != 0,
         underline: value & 4 != 0,
@@ -5462,6 +5467,7 @@ fn encode_node(
                 for span in spans {
                     if span.start>=span.end||span.end>text.len()||!text.is_char_boundary(span.start)||!text.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("heading span"));}
                     push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                    if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}
                     output.push(text_presentation_byte(span.presentation));
                     let style=span.presentation;
                     output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
@@ -5500,11 +5506,13 @@ fn encode_node(
                 return Err(ProtocolError::TooManyNodes);
             }
             if presentation.monospaced&&version<MONO_RICH_TEXT_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
-            let coloured = presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            let code=spans.iter().any(|s|s.presentation.code);
+            if code&&(version<INLINE_CODE_VERSION||presentation.monospaced){return Err(ProtocolError::UnsupportedVersion(version));}
+            let coloured = code || presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
             if coloured && version < COLOUR_RICH_TEXT_VERSION {
                 return Err(ProtocolError::UnsupportedVersion(version));
             }
-            output.push(if presentation.monospaced{40}else if coloured {35} else {28});
+            output.push(if code{41}else if presentation.monospaced{40}else if coloured {35} else {28});
             push_u32(output, id.0);
             push_string(output, text)?;
             push_u16(
@@ -5527,7 +5535,7 @@ fn encode_node(
                     output,
                     u32::try_from(span.end).map_err(|_| ProtocolError::FrameTooLarge)?,
                 );
-                output.push(text_presentation_byte(span.presentation));
+                output.push(text_presentation_byte(span.presentation)|if span.presentation.code{64}else{0});
                 if coloured {
                     let style = span.presentation;
                     output.push(u8::from(style.foreground.is_some()) | (u8::from(style.background.is_some()) << 1));
@@ -5652,6 +5660,7 @@ fn encode_node(
                 for span in spans {
                     if span.start>=span.end||span.end>text.len()||!text.is_char_boundary(span.start)||!text.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("quote span"));}
                     push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                    if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}
                     output.push(text_presentation_byte(span.presentation));
                     let style=span.presentation;
                     output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
@@ -5990,6 +5999,7 @@ fn encode_node(
                         for span in spans {
                             if span.start>=span.end||span.end>cell.len()||!cell.is_char_boundary(span.start)||!cell.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("table span"));}
                             push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                            if span.presentation.code{return Err(ProtocolError::InvalidValue("inline code requires rich paragraph"));}
                             output.push(text_presentation_byte(span.presentation));let style=span.presentation;
                             output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
                             if let Some(rgb)=style.foreground{output.extend_from_slice(&rgb);}
@@ -6681,7 +6691,7 @@ fn decode_node(
             }
             Ok(Node::Text { id, text, links })
         }
-        tag @ (28 | 35 | 40) if tag==28 || (tag==35&&version>=COLOUR_RICH_TEXT_VERSION) || (tag==40&&version>=MONO_RICH_TEXT_VERSION) => {
+        tag @ (28 | 35 | 40 | 41) if tag==28 || (tag==35&&version>=COLOUR_RICH_TEXT_VERSION) || (tag==40&&version>=MONO_RICH_TEXT_VERSION) || (tag==41&&version>=INLINE_CODE_VERSION) => {
             let coloured = tag != 28;
             let text = reader.string()?;
             let span_count = usize::from(reader.u16()?);
@@ -6692,7 +6702,9 @@ fn decode_node(
             for _ in 0..span_count {
                 let start = reader.u32()? as usize;
                 let end = reader.u32()? as usize;
-                let mut style = text_presentation_from_byte(reader.u8()?)?;
+                let bits=reader.u8()?;
+                let mut style=text_presentation_from_byte(if tag==41{bits&!64}else{bits})?;
+                style.code=tag==41&&bits&64!=0;
                 if coloured {
                     let flags = reader.u8()?;
                     if flags & !3 != 0 {return Err(ProtocolError::InvalidValue("rich text colour flags"));}
@@ -11385,5 +11397,26 @@ mod mono_rich_block_tests {
             assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,version).is_err());
         }
         for n in 1..=8 {assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
+    }
+}
+
+#[cfg(test)]
+mod inline_code_tests {
+    use super::*;
+    #[test]
+    fn inline_mono_is_versioned_without_changing_existing_style_byte_semantics(){
+        let node=Node::RichText{id:NodeId(1),text:"before ii after".into(),
+            spans:vec![kobo_ui::RichTextSpan{start:7,end:9,presentation:kobo_ui::TextPresentation{code:true,foreground:Some([200,30,40]),strong:true,..Default::default()}}],
+            links:vec![kobo_ui::TextLink{action:ActionId(2),start:7,end:9}],
+            presentation:Default::default(),selection:None,formulae:Vec::new()};
+        let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();assert_eq!(bytes[0],41);
+        assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+        for version in LEGACY_VERSION..INLINE_CODE_VERSION {
+            assert!(encoded_node_len(&node,0,&mut 0,version).is_err());
+            assert!(encode_node(&mut Vec::new(),&node,0,&mut 0,version).is_err());
+            assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,version).is_err());
+        }
+        assert!(text_presentation_from_byte(64).is_err());
+        for n in 1..=8{assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
     }
 }

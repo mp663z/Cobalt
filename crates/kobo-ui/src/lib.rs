@@ -4272,6 +4272,8 @@ pub struct TextPresentation {
     pub foreground: Option<[u8; 3]>,
     /// Authored RGB wash behind this run, distinct from reader annotation.
     pub background: Option<[u8; 3]>,
+    /// Inline fixed-pitch code. Supported by the versioned rich paragraph node.
+    pub code: bool,
     pub strong: bool,
     pub emphasis: bool,
     pub underline: bool,
@@ -4366,7 +4368,18 @@ fn measure_range_in(
     face: Face,
     formulae: &[InlineFormula],
     line_height: i32,
+    spans: &[RichTextSpan],
 ) -> i32 {
+    if spans.iter().any(|s|s.presentation.code) {
+        let mut cursor=from;let mut total=0i32;
+        while cursor<to {
+            let (end,style)=rich_run_at(cursor,to,spans);
+            if end<=cursor||!text.is_char_boundary(end){break;}
+            total=total.saturating_add(measure_range_in(text,cursor,end,size,if style.code{Face::ReadingMono}else{face},formulae,line_height,&[]));
+            cursor=end;
+        }
+        return total;
+    }
     if formulae.is_empty() {
         return measure_text_in(&text[from..to], size, face).0;
     }
@@ -5958,6 +5971,8 @@ pub enum LayoutKind {
     Text,
     RichText(TextPresentation),
     MonoRichText(TextPresentation),
+    /// Empty bounds marker for a rich paragraph simplified before measurement.
+    PlainRichBounds,
     /// A run inside a paragraph that goes somewhere.
     ///
     /// Drawn as an underline under words the paragraph node has already set,
@@ -7300,10 +7315,18 @@ fn layout_node(
             // draws nothing, but lets diagnostics distinguish several runs
             // on one line from wrapped lines discarded at the height bound.
             let rich_text_limit = MAX_LAYOUT_NODES.saturating_sub(1);
-            let (line_height, before, after, indent) = rich_text_spacing(*presentation, prose);
+            let (mut line_height, before, after, indent) = rich_text_spacing(*presentation, prose);
+            if spans.iter().any(|s|s.presentation.code){line_height=line_height.max(FontSize::Body.line_height_in(Face::ReadingMono)*i32::from(presentation.line_height_percent.clamp(80,250))/100);}
             let measure = width.saturating_sub(indent.max(0)).max(1);
-            let ranges =
-                wrap_ranges_with(text, measure, FontSize::Body, prose, formulae, line_height);
+            let mut ranges =
+                wrap_ranges_with(text, measure, FontSize::Body, prose, formulae, line_height, spans);
+            // A node-budget fallback must not measure mixed faces and paint a
+            // plain tail. Simplify the whole paragraph before either operation.
+            let simplify=spans.iter().any(|s|s.presentation.code) && ranges.len().saturating_mul(spans.len().saturating_mul(2).saturating_add(1)).saturating_add(layout.nodes.len()).saturating_add(2)>=rich_text_limit;
+            let spans=if simplify {
+                ranges=wrap_ranges_with(text,measure,FontSize::Body,prose,formulae,line_height,&[]);
+                &[][..]
+            }else{spans.as_slice()};
             let visible_lines = if legacy_typography() && !flow_height_bound() {
                 usize::MAX
             } else {
@@ -7325,7 +7348,7 @@ fn layout_node(
                 }
                 let line = &text[from..to];
                 let line_width =
-                    measure_range_in(text, from, to, FontSize::Body, prose, formulae, line_height);
+                    measure_range_in(text, from, to, FontSize::Body, prose, formulae, line_height, spans);
                 let first_indent = if line_index == 0 { indent } else { 0 };
                 let available = width.saturating_sub(first_indent.max(0));
                 let aligned = match presentation.alignment {
@@ -7417,7 +7440,7 @@ fn layout_node(
                         styled = TextPresentation::default();
                     }
                     let run = &text[cursor..end];
-                    let run_width = measure_text_in(run, FontSize::Body, prose).0;
+                    let run_width = measure_text_in(run, FontSize::Body, if styled.code{Face::ReadingMono}else{prose}).0;
                     layout.nodes.push(LayoutNode {
                         id: *id,
                         rect: Rect {
@@ -7426,7 +7449,7 @@ fn layout_node(
                             width: run_width,
                             height: line_height,
                         },
-                        kind: kind(styled),
+                        kind: if styled.code{LayoutKind::MonoRichText(styled)}else{kind(styled)},
                         text_lines: vec![run.to_owned()],
                     });
                     run_x = run_x.saturating_add(run_width);
@@ -7457,6 +7480,7 @@ fn layout_node(
                             prose,
                             formulae,
                             line_height,
+                            spans,
                         );
                         let through = measure_range_in(
                             text,
@@ -7466,6 +7490,7 @@ fn layout_node(
                             prose,
                             formulae,
                             line_height,
+                            spans,
                         );
                         layout.nodes.push(LayoutNode {
                             id: *id,
@@ -7501,6 +7526,7 @@ fn layout_node(
                             prose,
                             formulae,
                             line_height,
+                            spans,
                         );
                         let through = measure_range_in(
                             text,
@@ -7510,6 +7536,7 @@ fn layout_node(
                             prose,
                             formulae,
                             line_height,
+                            spans,
                         );
                         layout.text_hits.push((
                             Rect {
@@ -7541,7 +7568,7 @@ fn layout_node(
                     width,
                     height: end.saturating_sub(y),
                 },
-                kind: kind(TextPresentation::default()),
+                kind: if simplify{LayoutKind::PlainRichBounds}else{kind(TextPresentation::default())},
                 text_lines: Vec::new(),
             });
             end
@@ -11649,7 +11676,7 @@ pub fn wrap_text_with_formulae(
     formulae: &[InlineFormula],
     line_height: i32,
 ) -> Vec<String> {
-    let lines = wrap_ranges_with(text, max_width, size, face, formulae, line_height);
+    let lines = wrap_ranges_with(text, max_width, size, face, formulae, line_height, &[]);
     if lines.is_empty() {
         return vec![String::new()];
     }
@@ -11670,7 +11697,7 @@ pub fn wrap_text_with_formulae(
 /// Empty for text that wraps to nothing, which [`wrap_text_in`] turns back into
 /// the single empty line every caller downstream expects.
 fn wrap_ranges(text: &str, max_width: i32, size: FontSize, face: Face) -> Vec<(usize, usize)> {
-    wrap_ranges_with(text, max_width, size, face, &[], 0)
+    wrap_ranges_with(text, max_width, size, face, &[], 0, &[])
 }
 
 /// The same, for a paragraph with formulas set into it.
@@ -11686,6 +11713,7 @@ fn wrap_ranges_with(
     face: Face,
     formulae: &[InlineFormula],
     line_height: i32,
+    spans: &[RichTextSpan],
 ) -> Vec<(usize, usize)> {
     if text.is_empty() || max_width <= 0 {
         return Vec::new();
@@ -11731,6 +11759,7 @@ fn wrap_ranges_with(
                 face,
                 formulae,
                 line_height,
+                spans,
             ) <= max_width
             {
                 best = Some((end, candidate_end));
@@ -11749,7 +11778,7 @@ fn wrap_ranges_with(
                 start = best_end;
             } else {
                 let forced_end =
-                    force_grapheme_break(text, start, visible_end, max_width, size, face, &graphemes);
+                    force_styled_break(text, start, visible_end, max_width, size, face, &graphemes,formulae,line_height,spans);
                 lines.push((start, start + text[start..forced_end].trim_end().len()));
                 start = forced_end;
             }
@@ -11759,7 +11788,7 @@ fn wrap_ranges_with(
 
         if !emitted {
             let forced_end =
-                force_grapheme_break(text, start, text.len(), max_width, size, face, &graphemes);
+                force_styled_break(text, start, text.len(), max_width, size, face, &graphemes,formulae,line_height,spans);
             lines.push((start, start + text[start..forced_end].trim_end().len()));
             start = forced_end;
         }
@@ -11795,6 +11824,17 @@ fn trim_line_separator(text: &str, start: usize, mut end: usize) -> usize {
 
 const fn is_line_separator(character: char) -> bool {
     matches!(character, '\n' | '\r' | '\u{2028}' | '\u{2029}')
+}
+
+#[allow(clippy::too_many_arguments)]
+fn force_styled_break(text:&str,start:usize,limit:usize,width:i32,size:FontSize,face:Face,graphemes:&[usize],formulae:&[InlineFormula],height:i32,spans:&[RichTextSpan])->usize {
+    if spans.is_empty(){return force_grapheme_break(text,start,limit,width,size,face,graphemes);}
+    let mut first=None;let mut best=None;
+    for &end in graphemes.iter().filter(|&&end|end>start&&end<=limit){
+        first.get_or_insert(end);
+        if measure_range_in(text,start,end,size,face,formulae,height,spans)<=width{best=Some(end);}else{break;}
+    }
+    best.or(first).unwrap_or(limit)
 }
 
 fn force_grapheme_break(
@@ -12992,7 +13032,10 @@ fn validate_node(
 ) {
     let id = node.id();
     match node {
-        Node::RichText{text,presentation,..}=>check_text_coverage(id,text,if presentation.monospaced{Face::ReadingMono}else{prose_face},issues),
+        Node::RichText{text,presentation,spans,..}=>{
+            check_text_coverage(id,text,if presentation.monospaced{Face::ReadingMono}else{prose_face},issues);
+            for span in spans.iter().filter(|s|s.presentation.code){if let Some(run)=text.get(span.start..span.end){check_text_coverage(id,run,Face::ReadingMono,issues);}}
+        },
         Node::Text { text, .. } | Node::Quote { text, .. } => {
             check_text_coverage(id, text, prose_face, issues);
         }
@@ -13348,16 +13391,19 @@ fn validate_content_bounds(
                 text,
                 presentation,
                 formulae,
+                spans,
                 ..
             } = node
             {
                 if let Some(text_layout) = laid_out.iter().find(|laid_out| {
-                    matches!(laid_out.kind, LayoutKind::RichText(_)|LayoutKind::MonoRichText(_))
+                    matches!(laid_out.kind, LayoutKind::RichText(_)|LayoutKind::MonoRichText(_)|LayoutKind::PlainRichBounds)
                         && laid_out.text_lines.is_empty()
                 }) {
                     let face=if presentation.monospaced{Face::ReadingMono}else{layout.prose_face};
-                    let (line_height, before, after, indent) =
+                    let (mut line_height, before, after, indent) =
                         rich_text_spacing(*presentation, face);
+                    if spans.iter().any(|s|s.presentation.code){line_height=line_height.max(FontSize::Body.line_height_in(Face::ReadingMono)*i32::from(presentation.line_height_percent.clamp(80,250))/100);}
+                    let spans=if matches!(text_layout.kind,LayoutKind::PlainRichBounds){&[][..]}else{spans.as_slice()};
                     let measure = text_layout.rect.width.saturating_sub(indent.max(0)).max(1);
                     let required = wrap_ranges_with(
                         text,
@@ -13366,6 +13412,7 @@ fn validate_content_bounds(
                         face,
                         formulae,
                         line_height,
+                        spans,
                     )
                     .len();
                     let rendered = usize::try_from(
@@ -14298,7 +14345,7 @@ fn render_all_with_selected_font(
             // adding a dim later is a deliberate act and not an oversight: on
             // this panel, shading the whole screen costs a full refresh in and
             // a full refresh out.
-            LayoutKind::Scrim { .. } => {}
+            LayoutKind::Scrim { .. } | LayoutKind::PlainRichBounds => {}
             // Nothing either. A band is the extent of its columns, not a
             // surface: giving it a fill or a border would put a box around
             // every cover-and-metadata pair on the panel.
@@ -24854,5 +24901,36 @@ mod mono_block_tests {
         assert_eq!(linked.rect.width,measure_text_in("ii WW",FontSize::Body,Face::ReadingMono).0);
         assert_eq!(runs.last().unwrap().rect.y-runs[0].rect.y,2*FontSize::Body.line_height_in(Face::ReadingMono));
         assert!(!layout.text_hits.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod mixed_code_selection_tests {
+    use super::*;
+    #[test]
+    fn selected_code_word_and_following_text_share_actual_run_positions(){
+        let screen=Screen::new(1,vec![Node::RichText{id:NodeId(1),text:"before code after".into(),
+            spans:vec![RichTextSpan{start:7,end:11,presentation:TextPresentation{code:true,..Default::default()}}],
+            links:Vec::new(),presentation:Default::default(),selection:Some(TextSelection{context:7,offset:100}),formulae:Vec::new()}]);
+        let layout=screen.layout();
+        let code=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::MonoRichText(_))&&!n.text_lines.is_empty()).unwrap();
+        let after=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::RichText(_))&&n.text_lines.first().is_some_and(|s|s.contains("after"))).unwrap();
+        assert_eq!(after.rect.x,code.rect.x+code.rect.width);
+        let hit=layout.text_hits.iter().find(|(_,h)|h.start==107&&h.end==111).unwrap();
+        assert_eq!(hit.0,code.rect);assert_eq!(hit.1.context,7);
+    }
+}
+
+#[cfg(test)]
+mod bounded_code_tests {
+    use super::*;
+    #[test]
+    fn fragmented_code_simplifies_before_wrapping_and_keeps_tail(){
+        let text="i ".repeat(200);let spans=(0..200).map(|i|RichTextSpan{start:i*2,end:i*2+1,presentation:TextPresentation{code:true,..Default::default()}}).collect();
+        let screen=Screen::new(1,vec![Node::RichText{id:NodeId(1),text,spans,links:Vec::new(),presentation:Default::default(),selection:None,formulae:Vec::new()},Node::Text{id:NodeId(2),text:"tail survives".into(),links:Vec::new()}]);
+        let layout=screen.layout();
+        assert!(layout.nodes.iter().any(|n|matches!(n.kind,LayoutKind::PlainRichBounds)));
+        assert!(!layout.nodes.iter().any(|n|matches!(n.kind,LayoutKind::MonoRichText(_))));
+        assert!(layout.nodes.iter().any(|n|n.id==NodeId(2)));
     }
 }

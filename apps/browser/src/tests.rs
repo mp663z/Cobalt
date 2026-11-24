@@ -2468,3 +2468,18 @@ fn native_coloured_heading_quote_table_apply_inline_font_styles(){
     }
     for i in 0..3{assert!(rendered[1][i]>rendered[0][i],"bold colour ink must grow: {rendered:?}");}
 }
+
+#[test]
+fn native_inline_code_colours_and_mono_survive_links_form_and_paint(){
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><p>Plain before <a href='/next'><code style='color:red;background-color:#fff0e0'>ii WWW code</code></a> after.</p><form><input name=q></form>");
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();
+    let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+    let mono=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(style) if style.foreground==Some([255,0,0]))&&!n.text_lines.is_empty()).expect("source code style carried");
+    assert_eq!(mono.text_lines[0],"ii WWW code");
+    assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::InlineColourLink(_,rgb) if rgb==[255,0,0])&&n.rect==mono.rect));
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for rgb in [[255,0,0],[255,240,224]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
+    runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
+}

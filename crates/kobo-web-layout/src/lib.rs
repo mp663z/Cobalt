@@ -61,6 +61,7 @@ pub fn link_of(action: &str) -> Option<usize> {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Run {
     pub text: String,
+    pub code:bool,
     pub foreground: Option<[u8;3]>,
     pub background: Option<[u8;3]>,
     pub strong: bool,
@@ -486,13 +487,14 @@ fn prose(builder: ScreenBuilder, runs: &[Run]) -> ScreenBuilder {
         if start == end {
             continue;
         }
-        if run.strong || run.emphasis || run.foreground.is_some() || run.background.is_some() {
+        if run.code || run.strong || run.emphasis || run.foreground.is_some() || run.background.is_some() {
             spans.push(RichTextSpan {
                 start,
                 end,
                 presentation: TextPresentation {
                     foreground:run.foreground,
                     background:run.background,
+                    code:run.code,
                     strong: run.strong,
                     emphasis: run.emphasis,
 
@@ -849,13 +851,15 @@ fn inline_runs(content: &[Inline], style: Style, out: &mut Vec<Run>) {
         match inline {
             Inline::Text(text) | Inline::Code(text) => out.push(Run {
                 text: drawable(text),
+                code:matches!(inline,Inline::Code(_)),
                 foreground: None,
                 background: None,
                 strong: style.strong,
                 emphasis: style.emphasis,
                 link: style.link,
             }),
-            Inline::ColouredText{text,foreground,background,..} => out.push(Run {
+            Inline::ColouredText{text,foreground,background,code} => out.push(Run {
+                code:*code,
                 text:drawable(text),foreground:Some(*foreground),background:*background,
                 strong:style.strong,emphasis:style.emphasis,link:style.link,
             }),
@@ -908,7 +912,7 @@ fn tidy(runs: Vec<Run>) -> Vec<Run> {
         }
         match out.last_mut() {
             Some(last)
-                if last.strong == run.strong
+                if last.code==run.code && last.strong == run.strong
                     && last.emphasis == run.emphasis
                     && last.link == run.link
                     && last.foreground == run.foreground
