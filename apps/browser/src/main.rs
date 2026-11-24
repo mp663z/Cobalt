@@ -297,7 +297,8 @@ impl Browser {
                 self.history.return_to(position);
             }
         }
-        self.view = View::Page;
+        self.zoom_panel=false;self.browser_menu=false;
+        self.view = if self.loaded.is_some(){View::Page}else{View::Start};
     }
 
     fn load(&mut self, context: &mut Context, url: &Url) {

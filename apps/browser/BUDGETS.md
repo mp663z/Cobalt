@@ -1032,3 +1032,12 @@ The regression fixture failed before and passes after for both panels. Full
 browser240/0/2 across four batches, workspacecheck/scopedclippy and locked ARM
 pass. ARM5,269,204B,headroom1,223,056. This is input isolation, not physical
 hardware qualification or a new visual feature. Independent gates stay open.
+
+## First-navigation cancellation, November 24, 2026
+
+Cancelling before any document has loaded now returns to Start rather than an
+empty Page state. Existing-document cancellation still returns to that page,
+and late responses stay retired. Transient panels close with cancellation.
+New fixture fails before and passes after. Full browser241/0/2,workspacecheck/
+scopedclippy/lockedARM pass. ARM5,269,196B,headroom1,223,064. No visual/hardware
+claim from this state fix; independent gates remain open.

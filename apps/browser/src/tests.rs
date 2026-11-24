@@ -2727,3 +2727,11 @@ fn physical_page_keys_do_not_move_the_document_behind_an_open_panel(){
   assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().page,page,"{panel}");
  }
 }
+
+#[test]
+fn cancelling_the_first_navigation_returns_to_start_not_an_empty_document(){
+ let mut r=AppRunner::with_metrics(Browser::default(),kobo_ui::CLARA_BW_METRICS);r.start();
+ let url=Url::parse("https://first.invalid/").unwrap();let mut context=r.context();r.app_mut().open(&mut context,&url);
+ let task=pending_task(&r);r.action(action_id("cancel-load"));assert_eq!(r.app().view,View::Start);
+ r.task_outcome(task,TaskOutcome::Completed(b"<title>Late</title><p>Old".to_vec()));assert_eq!(r.app().view,View::Start);
+}
