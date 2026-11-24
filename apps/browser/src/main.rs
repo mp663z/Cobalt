@@ -1707,7 +1707,7 @@ impl Browser {
                 ),
             )
             .keyboard(self.address.keyboard(), "Go")
-        } else if matches!(self.view, View::Page) {
+        } else if matches!(self.view, View::Page|View::Loading(_)) {
             let builder = builder
                 .top_bar(self.loaded.as_ref().map_or_else(
                     || "Browse".to_owned(),
@@ -1727,7 +1727,7 @@ impl Browser {
                 ))
                 .top_bar_glyph("browser-close", "Close browser", Glyph::Close)
                 ;
-            let builder = browser_chrome::toolbar(builder, self.zoom, false);
+            let builder = if matches!(self.view,View::Loading(_)){builder.loading_browser_bar()}else{browser_chrome::toolbar(builder, self.zoom, false)};
             if self.zoom_panel {
                 builder.popover("browser-zoom",|panel|panel
                     .section(format!("Zoom {}%",self.zoom))
@@ -1827,8 +1827,7 @@ impl Browser {
                 )
                 .activity("Loading the page", None)
                 .secondary(self.clock.waited_words())
-                .secondary(url.to_string())
-                .button("cancel-load", "Cancel"),
+                .secondary(url.to_string()),
             (View::Failed(url, failure), loaded) => {
                 let (heading, sentence) = failure.explain();
                 let mut builder = ScreenBuilder::new("browser-failed")
@@ -2038,7 +2037,7 @@ impl KoboApp for Browser {
                 self.turn_to(context, to);
             }
         } else if matches!(self.view, View::Loading(_))
-            && (action == action_id("cancel-load") || action == action_id("back"))
+            && (action == action_id("cancel-load") || action == action_id("back") || action==ActionId::BACK)
         {
             self.stop(context);
         } else if action == action_id("retry") {

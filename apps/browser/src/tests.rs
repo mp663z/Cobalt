@@ -2651,3 +2651,21 @@ fn runtime_back_closes_inline_keyboard_before_leaving_the_document(){
  assert!(r.app().address.is_open());let url=r.app().loaded.as_ref().unwrap().url.clone();
  r.action(ActionId::BACK);assert!(!r.app().address.is_open());assert_eq!(r.app().loaded.as_ref().unwrap().url,url);
 }
+
+#[test]
+fn pending_navigation_keeps_the_browser_header_and_exposes_stop_in_the_row(){
+ let mut r=runner(TextScale::Default);r.action(link_to(&r,"example.com"));let task=pending_task(&r);
+ let m=r.context().metrics();let screen=r.app().screen(&m).build();let l=screen.layout_with(&m,&Chrome::measuring(true));
+ let address=l.rect_of_action(action_id("edit-address")).unwrap();assert!(address.y<m.top_bar_height());
+ let stop=l.rect_of_action(action_id("cancel-load")).unwrap();assert!(stop.y>m.height-m.top_bar_height()*2);
+ if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+  use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+  kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&(),&mut surface,None);
+  let mut f=std::fs::File::create("/tmp/browser-loading-chrome.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",m.width,m.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+ }
+
+ assert!(l.rect_of_action(action_id("browser-close")).is_some());
+ let cmds=r.action(action_id("cancel-load"));assert!(cmds.iter().any(|c|matches!(c,kobo_sdk::Command::Cancel(t) if *t==task)));
+ assert_eq!(r.app().view,View::Page);assert_eq!(title(&r),"Browse: sample pages");
+ r.task_outcome(task,TaskOutcome::Completed(b"<title>Late</title><p>Stale".to_vec()));assert_eq!(title(&r),"Browse: sample pages");
+}

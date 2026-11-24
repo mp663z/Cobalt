@@ -971,3 +971,16 @@ Runtime Back while typing exposed an existing gap: keyboard stayed open. The
 new fixture fails before and passes after routing runtime Back to keyboard
 close before leaving the document. Final browser234/0/2 in four full batches,
 scoped clippy and locked ARM pass. ARM5,267,044B,headroom1,225,216.
+
+## Pending navigation keeps browser chrome, November 24, 2026
+
+Loading now keeps the unified address/Back/Close header and compact row; Stop
+replaces Reload while a fetch is pending. No new wire feature is needed, just
+explicit bar actions on the existing style. Cancel/runtime Back retires the
+pending task and late responses cannot replace the retained document. Existing
+elapsed-wait words remain honest rather than inventing progress percentage.
+A header/Stop/cancellation fixture failed before and passes after. The rendered
+fixture frame was inspected (unit-render evidence, not a live-network capture).
+Full browser235/0/2 across four batches,SDK166/0,workspacecheck/scopedclippy pass.
+Locked static stripped ARM5,267,004B,headroom1,225,256. Earlier device/core proofs
+unchanged; physical hardware/latency/RSS/fullweb proof gates remain open.

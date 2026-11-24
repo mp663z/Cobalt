@@ -1390,6 +1390,14 @@ impl ScreenBuilder {
         self.nav_bar=Some(NavBar{id,destinations,selected:None,style:kobo_ui::BarStyle::BrowserCompact});self.bottom_action=None;self
     }
 
+    /// Pending navigation keeps the transport row, replacing Reload with Stop.
+    #[must_use]
+    pub fn loading_browser_bar(self)->Self{
+        let mut this=self.compact_browser_bar();let stop=this.register("cancel-load");
+        if let Some(bar)=this.nav_bar.as_mut(){if let Some(action)=bar.destinations.get_mut(2){*action=BarAction::new(stop,"Stop loading").with_glyph(Glyph::Close);}}
+        this
+    }
+
     /// A continuous track. Reserves base..=base+100. Requires protocol26.
     #[must_use]
     pub fn slider(mut self,base:ActionId,value:u8)->Self{

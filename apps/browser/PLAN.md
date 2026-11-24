@@ -551,3 +551,9 @@ release, which is intentionally different from live phone-browser scrolling.
 - [x] Replay real pointer down/move/up through the panel, reset and type inline;
   inspect full frames and retain same device/simulator input implementation.
 - [ ] Hardware interaction/latency qualification and continuous-scroll feedback.
+
+## Pending navigation, November 24, 2026
+
+- [x] Keep address/Back/Close and transport row while loading.
+- [x] Replace Reload with Stop, retain elapsed wait and stale-response guards.
+- [ ] Real-network/hardware interaction qualification; avoid invented progress.
