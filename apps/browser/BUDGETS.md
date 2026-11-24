@@ -931,3 +931,13 @@ This is settled viewport scrolling, not animation/inertia or native forms/reader
 scrolling. Top/bottom clipped text is expected viewport cropping. Physical
 panel quality, latency/RSS, restart restoration and independent/fullweb proof
 gates remain unverified. Page-position footer names the containing page.
+
+Follow-up scroll-state audit: explicit zoom or Reader/Page rebuild retires old
+session offsets, so Back cannot resurrect a stale zoom/window. Saved-copy
+notices are not bypassed by offset restoration. Foreground orientation changes
+cancel gestures; background-app screen updates do not cancel the front app's
+gesture. The new stale-zoom fixture failed before and passes after. Final full
+browser batches58+58+58+57=231 passed,0failed,2ignored after these fixes.
+Device-write26lib/177bin/1ignored, workspace check and scoped clippy pass;
+Colour pointer replay rerun. Locked static stripped ARM5,265,908B,headroom
+1,226,352 under+5MiB. Remaining hardware/native-scroll caveats unchanged.

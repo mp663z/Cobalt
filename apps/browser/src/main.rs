@@ -673,7 +673,7 @@ impl Browser {
             }
         }
         if let Some((zoom,top))=self.scroll_places.get(&url.to_string()).copied(){
-            if url.fragment().is_none(){if let Some(loaded)=self.loaded.as_mut(){if forms::forms(&loaded.document.blocks).is_empty(){
+            if url.fragment().is_none(){if let Some(loaded)=self.loaded.as_mut(){if loaded.note.is_none() && forms::forms(&loaded.document.blocks).is_empty(){
                 loaded.painted=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom(bytes,&loaded.title,&metrics,zoom));
                 if let Some(painted)=loaded.painted.as_mut(){painted.restore_scroll(top);self.zoom=zoom;}
             }}}
@@ -1183,6 +1183,7 @@ impl Browser {
 
     fn page_mode_action(&mut self, context: &mut Context, action: ActionId) -> bool {
         if action == action_id("page-view") {
+            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             if self
                 .loaded
                 .as_ref()
@@ -1208,6 +1209,7 @@ impl Browser {
                 loaded.paint_refused = loaded.painted.is_none();
             }
         } else if action == action_id("native-reader") {
+            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             if let Some(loaded) = self.loaded.as_mut() {
                 loaded.painted = None;
             }
@@ -1382,6 +1384,9 @@ impl Browser {
             || action == action_id("zoom-less")
             || action == action_id("zoom-more")
         {
+            // A new zoom rebuild starts at its first viewport. Retire the
+            // old session offset rather than resurrecting it on Back.
+            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             self.zoom = if let Some(value) = slider {
                 75 + (value * 125 / 100) as u16
             } else if action == action_id("zoom-less") {

@@ -2446,7 +2446,7 @@ fn host_applications(
                             }
                         }
                         Message::SetScreen(mut screen) => {
-                            scroll_gesture.cancel();
+                            if id == front { scroll_gesture.cancel(); }
                             if let Some(local) = screen.reading_font {
                                 screen.reading_font = apps[index].fonts.resolve(local);
                             }
@@ -2494,6 +2494,7 @@ fn host_applications(
                             // rather than the reader watching it be rebuilt.
                         }
                         Message::SetOrientation(orientation) => {
+                            if id == front { scroll_gesture.cancel(); }
                             apps[index].orientation = orientation;
                             if id == front {
                                 if let Some(screen) = apps[index].screen.clone() {

@@ -2595,3 +2595,16 @@ fn scroll_place_returns_on_back_and_only_visible_scrolled_links_open(){
  runner.action(action_id("samples"));runner.action(action_id("back"));
  assert_eq!(runner.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),top);
 }
+
+#[test]
+fn explicit_zoom_and_native_reader_retire_stored_scroll_offsets(){
+ for action in ["zoom-more","native-reader"]{
+  let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+  r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+  r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+  let key=r.app().loaded.as_ref().unwrap().url.to_string();
+  assert!(r.app().scroll_places.contains_key(&key));
+  r.action(action_id(action));
+  assert!(!r.app().scroll_places.contains_key(&key),"{action} retained stale offset");
+ }
+}
