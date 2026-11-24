@@ -2449,3 +2449,19 @@ fn late_control_label_colour_keeps_edit_and_refreshes_source_style(){
     runner.app_mut().pictures.set_colour(true);let mut context=runner.context();runner.app_mut().refresh_native_colour(&mut context);
     let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];assert_eq!(form.field_colours[0],Some(([255,0,0],None)));assert!(matches!(&form.fields[0],Field::Text{value,..} if value=="edited"));
 }
+
+#[test]
+fn native_coloured_heading_quote_table_apply_inline_font_styles(){
+    let mut rendered=Vec::new();
+    for styled in [false,true]{
+        let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+        let inner=if styled{"<strong><em>Styled words</em></strong>"}else{"Styled words"};
+        let html=format!("<!doctype html><h2 style='color:red'>{inner}</h2><blockquote><p style='color:blue'>{inner}</p></blockquote><table><tr><th>Title</th></tr><tr><td style='color:green'>{inner}</td></tr></table><form><input name=q></form>");
+        open_web_page(&mut runner,&html);let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+        kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+        let census=|rgb|(0..surface.pixels.len()).filter(|&i|surface.rgb_at(i)==Some(rgb)).count();
+        rendered.push([[255,0,0],[0,0,255],[0,128,0]].map(census));
+        if styled&&std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut file=std::fs::File::create("/tmp/native-block-font-styles.ppm").unwrap();write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
+    }
+    for i in 0..3{assert!(rendered[1][i]>rendered[0][i],"bold colour ink must grow: {rendered:?}");}
+}

@@ -14515,7 +14515,7 @@ fn render_all_with_selected_font(
             ),
             LayoutKind::ColouredTableText(header,style)=>{
                 if let Some(background)=style.background{fill_rgb_clipped(surface,node.rect,background,clip);}
-                for text in &node.text_lines {draw_colour_text_in(surface,text,node.rect.x,node.rect.y,FontSize::Body,prose,if header{tone::MUTED}else{tone::INK},style.foreground,clip);}
+                for text in &node.text_lines {draw_sized_rich_text(surface,text,node.rect,FontSize::Body,prose,style,if header{tone::MUTED}else{tone::INK},clip);}
             }
             LayoutKind::TableCell => draw_lines(
                 surface,
@@ -14940,8 +14940,7 @@ fn render_all_with_selected_font(
             LayoutKind::ColouredHeading(level,style) => {
                 if let Some(background)=style.background {fill_rgb_clipped(surface,node.rect,background,clip);}
                 for text in &node.text_lines {
-                    draw_colour_text_in(surface,text,node.rect.x,node.rect.y,
-                        FontSize::for_heading_level(level),Face::Text,tone::INK,style.foreground,clip);
+                    draw_sized_rich_text(surface,text,node.rect,FontSize::for_heading_level(level),Face::Text,style,tone::INK,clip);
                 }
             }
             LayoutKind::Heading(level) => draw_lines(
@@ -14956,7 +14955,7 @@ fn render_all_with_selected_font(
             LayoutKind::ColouredQuoteText(role,style) => {
                 if let Some(background)=style.background{fill_rgb_clipped(surface,node.rect,background,clip);}
                 for text in &node.text_lines {
-                    draw_colour_text_in(surface,text,node.rect.x,node.rect.y,role.size(),prose,role.tone(),style.foreground,clip);
+                    draw_sized_rich_text(surface,text,node.rect,role.size(),prose,style,role.tone(),clip);
                 }
             }
             LayoutKind::Quote(depth, role) => {
@@ -16673,7 +16672,12 @@ fn draw_rich_text(
     tone: u8,
     clip: Rect,
 ) {
-    let line = FontSize::Body.line_height_in(face).max(1);
+    draw_sized_rich_text(surface,text,rect,FontSize::Body,face,presentation,tone,clip);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_sized_rich_text(surface:&mut Surface,text:&str,rect:Rect,size:FontSize,face:Face,presentation:TextPresentation,tone:u8,clip:Rect){
+    let line = size.line_height_in(face).max(1);
     let vertical = if presentation.superscript {
         -line / 4
     } else if presentation.subscript {
@@ -16687,7 +16691,7 @@ fn draw_rich_text(
             text,
             rect.x,
             y,
-            FontSize::Body,
+            size,
             face,
             &mut |pixel_x, pixel_y, coverage| {
                 let skew = if presentation.emphasis {
@@ -16707,9 +16711,9 @@ fn draw_rich_text(
     })
     .is_none()
     {
-        draw_fallback_ink(surface, text, rect.x, y, FontSize::Body, tone, presentation.foreground, clip);
+        draw_fallback_ink(surface, text, rect.x, y, size, tone, presentation.foreground, clip);
         if presentation.strong {
-            draw_fallback_ink(surface, text, rect.x + 1, y, FontSize::Body, tone, presentation.foreground, clip);
+            draw_fallback_ink(surface, text, rect.x + 1, y, size, tone, presentation.foreground, clip);
         }
     }
     if presentation.underline {

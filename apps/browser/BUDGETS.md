@@ -712,3 +712,23 @@ Clippy completes with existing warnings. Locked static stripped ARM EABI5:
 Actual Clara Colour combined page/form journey rerun, full page inspected.
 No new crate,unsafe,allocator or wire change. Other colour/font/hardware
 caveats above still apply.
+
+
+### Inline font treatments on coloured native blocks, November 24, 2026
+
+Coloured native heading/quote/table spans now use the same bold/emphasis glyph
+routine as native prose, parameterized by each block's existing font size.
+Previously these nodes retained strong/emphasis flags but painted plain glyphs.
+The RGB path now preserves both treatments without changing measurement, rules,
+backgrounds, controls or wire shape. Pixel census for red heading,blue quote and
+green table text grows when bold is enabled. Removing the treatments fails the
+regression; restoration passes. Full native installed-font raster inspected:
+11,047 non-grey pixels. Native semantic fixture, not physical panel calibration.
+
+Browser222/0/2 ignored,UI293/0/2 ignored,layout30/0,SDK166/0/2 ignored,
+sim108/0,runtime156/0,whole-workspace check green. Clippy completes with existing
+warnings. Locked stripped static ARM EABI5 remains5,243,532 bytes,delta3,994,152,
+headroom1,248,728 under +5 MiB. No new crate,unsafe,allocator or wire change.
+This is synthetic bold/slant,not arbitrary authored font families or true font
+variant selection. Inline code/pre mono fidelity,complex control styling and
+physical panel/RSS/latency remain unverified or incomplete.
