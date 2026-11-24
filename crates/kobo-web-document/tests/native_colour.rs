@@ -41,3 +41,14 @@ fn adjacent_colours_collapse_shared_spaces_and_keep_background_inheritance() {
     let Block::Paragraph{content,..}=&doc.blocks[0] else {panic!()};
     assert!(content.iter().all(|i|matches!(i,Inline::ColouredText{background:Some([221,238,255]),..})));
 }
+
+#[test]
+fn raw_coloured_pre_does_not_reveal_hidden_source_text_or_trim_indents(){
+    let html=br#"<!doctype html><style>.gone{display:none}</style><pre style='color:red'>
+  kept<span hidden>private-hidden</span><span aria-hidden='true'>private-aria</span><span style='visibility:hidden'>private-inline</span><span class=gone>private-css</span>
+
+    tail</pre>"#;
+    let document=parse_coloured_document(html,&Url::parse("https://fixture.invalid/").unwrap(),&Limits::DEFAULT);
+    assert_eq!(document.visible_text(),"  kept\n\n    tail\n");
+    assert!(!document.visible_text().contains("private"));
+}

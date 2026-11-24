@@ -833,3 +833,15 @@ including accented text,blank row and child reset. Not panel calibration.
 Static stripped ARM EABI5:5,248,876B,delta3,999,496 over hello,headroom1,243,384
 under+5MiB. No new crate,unsafe,allocator or protocol change. Arbitrary families,
 true font variants,complex controls and physical RSS/latency remain open.
+
+### Raw native Colour pre visibility, November24,2026
+
+Raw Colour pre traversal now applies the same element visibility check as the
+semantic text walk. Hidden,aria-hidden,inline visibility:hidden and supported
+stylesheet display:none descendants no longer enter its source slices.
+Indentation and blank rows are preserved. Removing the visibility check fails
+the four-mode fixture; restoration passes. Browser226/0/2 ignored,engine1410/0/18
+across148groups,whole-workspace check green,clippy completes with existing
+warnings. Locked stripped static ARM EABI5:5,248,884B,headroom1,243,376 under+5MiB.
+No wire,newcrate,unsafe or allocator change. Text-exclusion regression,not a
+new visual or physical-device fidelity claim.

@@ -380,7 +380,7 @@ impl Converter<'_> {
                     runs.push((text.clone(),colour,treatment));
                 }
                 Data::Element{..}=>{
-                    if self.tag(node).is_some_and(|tag|DROPPED.contains(&tag)){continue;}
+                    if self.hidden(node)||self.tag(node).is_some_and(|tag|DROPPED.contains(&tag)){continue;}
                     if self.tag(node)==Some("br"){runs.push(("\n".into(),None,(false,false)));}
                     stack.extend(self.nodes[node].children.iter().rev());
                 }
