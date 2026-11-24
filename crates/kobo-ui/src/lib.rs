@@ -4555,6 +4555,8 @@ pub enum Node {
         /// Whether this paragraph is what was said, or who said it.
         role: QuoteRole,
         text: String,
+        /// Optional authored colours, with the ordinary quote geometry retained.
+        spans: Vec<RichTextSpan>,
         /// Set on a byline to make it a handle for showing and hiding the
         /// replies underneath it. Ignored on a body: a paragraph is not a
         /// thing that can be folded away, only the comment it belongs to is.
@@ -5968,6 +5970,7 @@ pub enum LayoutKind {
     /// paragraph is for, so the renderer can draw the gutter rules and pick a
     /// size without consulting the tree.
     Quote(u8, QuoteRole),
+    ColouredQuoteText(QuoteRole, TextPresentation),
     Button(ActionId, ControlState, Emphasis),
     /// A checker stack on a backgammon point. `from_top` pins its base to the
     /// matching board edge so a five-checker point reads as one familiar pile.
@@ -7622,6 +7625,7 @@ fn layout_node(
             depth,
             role,
             text,
+            spans,
             fold,
         } => {
             let depth = (*depth).min(MAX_QUOTE_DEPTH);
@@ -7662,8 +7666,25 @@ fn layout_node(
                     height,
                 },
                 kind: LayoutKind::Quote(depth, *role),
-                text_lines: lines,
+                text_lines: if spans.is_empty(){lines}else{Vec::new()},
             });
+            if !spans.is_empty() {
+                let top=if *role==QuoteRole::Byline{metrics.space(Space::Tight)}else{0};
+                for (line,(from,to)) in wrap_ranges(text,text_width,size,prose).into_iter().enumerate() {
+                    let mut cursor=from;
+                    while cursor<to && layout.nodes.len()<MAX_LAYOUT_NODES {
+                        let (end,style)=rich_run_at(cursor,to,spans);
+                        if end<=cursor||end>to||!text.is_char_boundary(end){break;}
+                        let before=measure_text_in(&text[from..cursor],size,prose).0;
+                        let through=measure_text_in(&text[from..end],size,prose).0;
+                        layout.nodes.push(LayoutNode{id:*id,rect:Rect{
+                            x:text_x.saturating_add(before),y:y.saturating_add(top).saturating_add(line as i32*size.line_height_in(prose)),
+                            width:through.saturating_sub(before),height:size.line_height_in(prose)},
+                            kind:LayoutKind::ColouredQuoteText(*role,style),text_lines:vec![text[cursor..end].to_owned()]});
+                        cursor=end;
+                    }
+                }
+            }
             if let Some(fold) = fold {
                 // The whole strip, not just the mark. A ten-point plus sign is
                 // not something a finger can be asked to find on a panel this
@@ -13481,7 +13502,7 @@ fn validate_layout_nodes(layout: &Layout, metrics: &DisplayMetrics, issues: &mut
             });
         }
         let style = match node.kind {
-            LayoutKind::Quote(_, role) => Some((role.size(), layout.prose_face)),
+            LayoutKind::Quote(_, role) | LayoutKind::ColouredQuoteText(role,_) => Some((role.size(), layout.prose_face)),
             _ => layout_text_style(node),
         };
         let Some((size, face)) = style else {
@@ -14913,6 +14934,12 @@ fn render_all_with_selected_font(
                 tone::INK,
                 clip,
             ),
+            LayoutKind::ColouredQuoteText(role,style) => {
+                if let Some(background)=style.background{fill_rgb_clipped(surface,node.rect,background,clip);}
+                for text in &node.text_lines {
+                    draw_colour_text_in(surface,text,node.rect.x,node.rect.y,role.size(),prose,role.tone(),style.foreground,clip);
+                }
+            }
             LayoutKind::Quote(depth, role) => {
                 // One rule for every level, not one for the innermost. The
                 // indent step is two millimetres, so between a reply and a
@@ -16963,6 +16990,7 @@ mod tests {
                 role: QuoteRole::Body,
                 text: "A good walk leaves room to notice small details along the river. ".repeat(3),
                 fold: None,
+                spans: Vec::new(),
             }],
         )
         .with_reading(true)
@@ -19779,6 +19807,7 @@ mod prose_tests {
                 role: *role,
                 text: paragraph.clone(),
                 fold: None,
+                spans: Vec::new(),
             })
             .collect();
         let screen = Screen::new(1, nodes)
@@ -19925,6 +19954,7 @@ mod prose_tests {
                 role: QuoteRole::Body,
                 fold: None,
                 text: "A reply, which answers the one above it.".to_owned(),
+                spans: Vec::new(),
             })
             .collect();
         let layout = Screen::new(1, nodes).layout_with(&CLARA_BW_METRICS, &Chrome::default());
@@ -20404,6 +20434,7 @@ mod prose_tests {
                     role: QuoteRole::Body,
                     fold: None,
                     text: "A reply, which answers the one above it.".to_owned(),
+                    spans: Vec::new(),
                 }],
             );
             let quote = screen
@@ -20450,6 +20481,7 @@ mod prose_tests {
                 role: QuoteRole::Body,
                 fold: None,
                 text: "patio11 2 hours ago".to_owned(),
+                spans: Vec::new(),
             }],
         );
         let byline = Screen::new(
@@ -20460,6 +20492,7 @@ mod prose_tests {
                 role: QuoteRole::Byline,
                 fold: None,
                 text: "patio11 2 hours ago".to_owned(),
+                spans: Vec::new(),
             }],
         );
         assert_eq!(QuoteRole::Byline.size(), FontSize::Caption);
@@ -21045,6 +21078,7 @@ mod prose_tests {
                     role: QuoteRole::Byline,
                     text: "someone 3 hours ago".to_owned(),
                     fold,
+                    spans: Vec::new(),
                 },
                 Node::Quote {
                     id: NodeId(2),
@@ -21052,6 +21086,7 @@ mod prose_tests {
                     role: QuoteRole::Body,
                     text: "What they said.".to_owned(),
                     fold: None,
+                    spans: Vec::new(),
                 },
             ],
         )
@@ -24681,6 +24716,24 @@ mod authored_rgb_text_tests {
             let mut file=std::fs::File::create(path).unwrap();
             write!(file,"P6\n{} {}\n255\n",CLARA_BW_METRICS.width,CLARA_BW_METRICS.height).unwrap();
             for i in 0..colour.pixels.len(){file.write_all(&colour.rgb_at(i).unwrap()).unwrap();}
+        }
+    }
+}
+
+#[cfg(test)]
+mod coloured_quote_geometry_tests {
+    use super::*;
+    #[test]
+    fn colour_quote_retains_byline_fold_and_body_gutters() {
+        for role in [QuoteRole::Body,QuoteRole::Byline] {
+            let build=|spans| Screen::new(1,vec![Node::Quote{id:NodeId(1),depth:2,role,text:"Quoted words".into(),fold:Some(Fold{action:ActionId(8),collapsed:true,hidden:12}),spans}]);
+            let plain=build(Vec::new()).layout_for(&CLARA_BW_METRICS);
+            let styled=build(vec![RichTextSpan{start:0,end:12,presentation:TextPresentation{foreground:Some([200,20,30]),..Default::default()}}]).layout_for(&CLARA_BW_METRICS);
+            let base=|l:&Layout|l.nodes.iter().find(|n|matches!(n.kind,LayoutKind::Quote(..))).unwrap().rect;
+            assert_eq!(base(&plain),base(&styled));
+            let folds=|l:&Layout|l.nodes.iter().filter_map(|n|matches!(n.kind,LayoutKind::QuoteFold(..)).then_some(n.rect)).collect::<Vec<_>>();
+            assert_eq!(folds(&plain),folds(&styled));
+            assert!(styled.nodes.iter().any(|n|matches!(n.kind,LayoutKind::ColouredQuoteText(..))));
         }
     }
 }

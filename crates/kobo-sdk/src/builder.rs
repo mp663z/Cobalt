@@ -708,6 +708,14 @@ impl ScreenBuilder {
         self.quote_full(depth, role, text, None)
     }
 
+    /// A body quote retaining native gutter rules and authored text colours.
+    #[must_use]
+    pub fn coloured_quote(mut self,depth:u8,text:impl Into<String>,spans:Vec<RichTextSpan>)->Self {
+        let id=self.next_id();
+        self.nodes.push(Node::Quote{id,depth:depth.min(MAX_QUOTE_DEPTH),role:QuoteRole::Body,text:text.into(),fold:None,spans});
+        self
+    }
+
     fn quote_full(
         mut self,
         depth: u8,
@@ -722,6 +730,7 @@ impl ScreenBuilder {
             role,
             text: text.into(),
             fold,
+            spans: Vec::new(),
         });
         self
     }

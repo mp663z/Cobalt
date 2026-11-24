@@ -82,7 +82,9 @@ pub const AUTO_HIDDEN_TOP_BAR_VERSION: u8 = 15;
 pub const COLOUR_RICH_TEXT_VERSION: u8 = 16;
 /// Version carrying optional authored heading colour spans.
 pub const COLOUR_HEADING_VERSION: u8 = 17;
-pub const VERSION: u8 = 17;
+/// Version adding optional authored quote colour spans.
+pub const COLOUR_QUOTE_VERSION: u8 = 18;
+pub const VERSION: u8 = 18;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1992,7 +1994,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4300,11 +4302,17 @@ fn encoded_node_len(
             }
             length
         }
-        Node::Quote { text, fold, .. } => {
+        Node::Quote { text, fold, spans, .. } => {
+            if !spans.is_empty() && version<COLOUR_QUOTE_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
             // id, depth, role, whether it folds, then the text. A fold costs
             // seven more: the action, whether it is shut, and the count.
             let mut length = 8 + if fold.is_some() { 7 } else { 0 };
             add_encoded_len(&mut length, encoded_string_len(text)?)?;
+            if !spans.is_empty(){
+                add_encoded_len(&mut length,2)?;
+                for span in spans {add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+            }
             length
         }
         Node::Button { label, .. } => {
@@ -4657,7 +4665,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5135,7 +5143,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5594,9 +5602,12 @@ fn encode_node(
             depth,
             role,
             text,
+            spans,
             fold,
         } => {
-            output.push(18);
+            if !spans.is_empty() && version<COLOUR_QUOTE_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+            output.push(if spans.is_empty(){18}else{37});
             push_u32(output, id.0);
             output.push((*depth).min(kobo_ui::MAX_QUOTE_DEPTH));
             output.push(match role {
@@ -5614,6 +5625,19 @@ fn encode_node(
                 output.push(0);
             }
             push_string(output, text)?;
+            if !spans.is_empty(){
+                push_u16(output,spans.len() as u16);
+                for span in spans {
+                    if span.start>=span.end||span.end>text.len()||!text.is_char_boundary(span.start)||!text.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("quote span"));}
+                    push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                    output.push(text_presentation_byte(span.presentation));
+                    let style=span.presentation;
+                    output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
+                    if let Some(rgb)=style.foreground{output.extend_from_slice(&rgb);}
+                    if let Some(rgb)=style.background{output.extend_from_slice(&rgb);}
+                }
+            }
+
         }
         Node::Button {
             id,
@@ -6721,7 +6745,7 @@ fn decode_node(
                 formulae,
             })
         }
-        18 => {
+        tag @ (18 | 37) if tag==18 || version>=COLOUR_QUOTE_VERSION => {
             let depth = reader.u8()?;
             let role = reader.u8()?;
             // Anything other than the flag we write means no fold, on the same
@@ -6736,6 +6760,22 @@ fn decode_node(
             } else {
                 None
             };
+            let text=reader.string()?;
+            let mut spans=Vec::new();
+            if tag==37 {
+                let count=usize::from(reader.u16()?);
+                if count>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                for _ in 0..count {
+                    let start=reader.u32()? as usize;let end=reader.u32()? as usize;
+                    let mut presentation=text_presentation_from_byte(reader.u8()?)?;
+                    let flags=reader.u8()?;
+                    if flags & !3 != 0{return Err(ProtocolError::InvalidValue("quote colour flags"));}
+                    if flags&1!=0{presentation.foreground=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                    if flags&2!=0{presentation.background=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                    if start>=end||end>text.len()||!text.is_char_boundary(start)||!text.is_char_boundary(end){return Err(ProtocolError::InvalidValue("quote span"));}
+                    spans.push(kobo_ui::RichTextSpan{start,end,presentation});
+                }
+            }
             Ok(Node::Quote {
                 id,
                 // Clamped rather than rejected: a depth past the cap is a
@@ -6750,7 +6790,8 @@ fn decode_node(
                     _ => kobo_ui::QuoteRole::Body,
                 },
                 fold,
-                text: reader.string()?,
+                text,
+                spans,
             })
         }
         3 => Ok(Node::Button {
@@ -9061,6 +9102,7 @@ mod node_coverage_tests {
                 role: kobo_ui::QuoteRole::Body,
                 fold: None,
                 text: "A reply".into(),
+                spans: Vec::new(),
             },
             Node::Button {
                 id: NodeId(3),
@@ -9483,6 +9525,7 @@ mod node_coverage_tests {
                 role: kobo_ui::QuoteRole::Byline,
                 fold,
                 text: "someone 3 hours ago".to_owned(),
+                spans: Vec::new(),
             };
             assert_eq!(
                 round_trip(Screen::new(1, vec![node.clone()])).nodes,
@@ -9542,6 +9585,7 @@ mod node_coverage_tests {
                 role: kobo_ui::QuoteRole::Body,
                 fold: None,
                 text: "Deep in an argument".into(),
+                spans: Vec::new(),
             }],
         );
         assert_eq!(
@@ -9552,6 +9596,7 @@ mod node_coverage_tests {
                 role: kobo_ui::QuoteRole::Body,
                 fold: None,
                 text: "Deep in an argument".into(),
+                spans: Vec::new(),
             }]
         );
     }
@@ -11174,5 +11219,37 @@ mod coloured_heading_tests {
             assert_eq!(decode(&encode(&frame).unwrap()).unwrap(),frame);
             for version in 11..COLOUR_HEADING_VERSION {assert!(encode(&Frame{version,..frame.clone()}).is_err());}
         }
+    }
+}
+
+#[cfg(test)]
+mod quote_rgb_tests {
+    use super::*;
+    fn node(spans:Vec<kobo_ui::RichTextSpan>)->Node {
+        Node::Quote{id:NodeId(9),depth:2,role:kobo_ui::QuoteRole::Byline,text:"é red blue".into(),fold:Some(kobo_ui::Fold{action:ActionId(5),collapsed:true,hidden:7}),spans}
+    }
+    fn span()->kobo_ui::RichTextSpan {
+        kobo_ui::RichTextSpan{start:0,end:11,presentation:kobo_ui::TextPresentation{background:Some([100,200,50]),..Default::default()}}
+    }
+    #[test]
+    fn quote_rgb_wire_bounds_folds_and_old_plain_bytes() {
+        let plain=node(Vec::new());let mut current=Vec::new();let mut count=0;
+        encode_node(&mut current,&plain,0,&mut count,VERSION).unwrap();assert_eq!(current[0],18);
+        for version in LEGACY_VERSION..VERSION {
+            let mut old=Vec::new();let mut count=0;encode_node(&mut old,&plain,0,&mut count,version).unwrap();assert_eq!(old,current);
+        }
+        let frame=Frame{version:VERSION,request_id:4,message:Message::SetScreen(Screen::new(2,vec![node(vec![span()])]))};
+        let bytes=encode(&frame).unwrap();assert_eq!(decode(&bytes).unwrap(),frame);
+        for version in LEGACY_VERSION..VERSION {assert!(encode(&Frame{version,..frame.clone()}).is_err());}
+        for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
+        let rgb=node(vec![span()]);let mut payload=Vec::new();let mut count=0;encode_node(&mut payload,&rgb,0,&mut count,VERSION).unwrap();
+        let mut count=0;assert_eq!(encoded_node_len(&rgb,0,&mut count,VERSION).unwrap(),payload.len());
+        let mut broken=span();broken.start=1;
+        for spans in [vec![broken],vec![span();kobo_ui::MAX_RICH_TEXT_SPANS+1]] {
+            assert!(encode(&Frame{message:Message::SetScreen(Screen::new(2,vec![node(spans)])),..frame.clone()}).is_err());
+        }
+        // A bad colour flag is rejected by the node decoder independently of frame integrity.
+        let flags=payload.len()-4;payload[flags]=4;
+        let mut count=0;assert!(decode_node(&mut Reader::new(&payload),0,&mut count,VERSION).is_err());
     }
 }

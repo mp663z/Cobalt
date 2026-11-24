@@ -86,6 +86,7 @@ pub enum Piece {
     Quote {
         depth: u8,
         text: String,
+        spans:Vec<RichTextSpan>,
         links: Vec<usize>,
     },
     Preformatted(String),
@@ -397,7 +398,9 @@ fn append_at_reading_scale(
                 else {builder.coloured_heading_at_level(*level,text,spans.clone())}
             },
             Piece::Prose(runs) => prose(builder, runs),
-            Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
+            Piece::Quote { depth, text, spans, .. } => {
+                if spans.is_empty(){builder.quote(*depth,text)}else{builder.coloured_quote(*depth,text,spans.clone())}
+            },
             Piece::Preformatted(text) => builder.text(text),
             Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
             Piece::Note(text) => builder.secondary(text),
@@ -703,6 +706,7 @@ impl Flattener {
             self.out.push(Piece::Quote {
                 depth: quote,
                 text,
+                spans:spans_from_runs(&runs),
                 links,
             });
             return;
@@ -942,8 +946,12 @@ fn links_in(content: &[Inline]) -> Vec<usize> {
 
 fn heading_spans(content:&[Inline])->Vec<RichTextSpan> {
     let mut runs=Vec::new();inline_runs(content,Style::default(),&mut runs);
+    spans_from_runs(&tidy(runs))
+}
+
+fn spans_from_runs(runs:&[Run])->Vec<RichTextSpan> {
     let mut at=0;let mut spans=Vec::new();
-    for run in tidy(runs) {
+    for run in runs {
         let start=at;at+=run.text.len();
         if run.foreground.is_some()||run.background.is_some(){spans.push(RichTextSpan{
             start,end:at,presentation:TextPresentation{foreground:run.foreground,background:run.background,
@@ -1316,6 +1324,13 @@ fn char_points(piece: &Piece) -> Vec<usize> {
         .unwrap_or_default()
 }
 
+fn slice_spans(spans:&[RichTextSpan],start:usize,end:usize)->Vec<RichTextSpan> {
+    spans.iter().filter_map(|span|{
+        let from=span.start.max(start);let to=span.end.min(end);
+        (from<to).then_some(RichTextSpan{start:from.saturating_sub(start),end:to.saturating_sub(start),presentation:span.presentation})
+    }).collect()
+}
+
 fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
     match piece {
         Piece::Table { rows, links } => {
@@ -1349,15 +1364,17 @@ fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
         ),
         // Both halves offer the quote's links: which half a link's words fell
         // in is not tracked, and a link offered twice is better than one lost.
-        Piece::Quote { depth, text, links } => (
+        Piece::Quote { depth, text, spans, links } => (
             Piece::Quote {
                 depth: *depth,
                 text: text[..at].trim_end().to_owned(),
+                spans:slice_spans(spans,0,text[..at].trim_end().len()),
                 links: links.clone(),
             },
             Piece::Quote {
                 depth: *depth,
                 text: text[at..].to_owned(),
+                spans:slice_spans(spans,at,text.len()),
                 links: links.clone(),
             },
         ),

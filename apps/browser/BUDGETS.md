@@ -587,3 +587,27 @@ warnings. Locked stripped static ARM EABI5:5,211,948 bytes, delta3,962,568 over
 hello, headroom1,280,312 under +5 MiB. Disk exhaustion during runtime/simulator
 linking was corrected by clearing disposable outputs, then affected checks and
 the simulator journey were rerun green. No new crate, unsafe or allocator change.
+
+
+### Native quote RGB, November 24, 2026
+
+Native quote text now carries authored foreground/background spans through
+flattening, pagination, toolkit layout and RGB glyph/background drawing. The
+quote keeps its gutter depth/rules, body/byline geometry and fold hit rectangle.
+Links remain on the Links screen, as before. UTF8 pagination clips/rebases spans
+without changing words or link identity. Disabling quote spans makes the browser
+regression fail; restoring them passes. Plain quote tag18 stays byte-identical.
+New tag37 requires protocol18;11-17 remain readable, coloured quotes refuse
+older peers. Background-only roundtrip retains absent foreground. Truncated
+frames, invalid ranges/flags, excess spans and encoded-length count are tested.
+
+Actual Clara Colour full frames inspected: red quote, blue article link, nested
+green quote, then form opened successfully. Frame has26,502 non-grey pixels,
+including the preceding coloured headings. Ideal RGB, not calibrated panel.
+Browser217/0/2 ignored, protocol114/0, UI290/0/2 ignored, layout27/0,
+SDK166/0/2 ignored, sim108/0, runtime156/0. Whole-workspace check green, not full
+workspace tests; clippy completed with existing warnings. Locked stripped static
+ARM EABI5:5,218,356 bytes, delta3,968,976 over hello, headroom1,273,904 under
++5 MiB. No new crate, unsafe or allocator change. Native tables, preformatted
+blocks and control labels remain plain paths. No full authored font-style,
+all-fonts, physical-panel, RSS or latency claim.

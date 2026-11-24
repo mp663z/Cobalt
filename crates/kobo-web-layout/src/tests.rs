@@ -690,3 +690,25 @@ fn a_forced_cut_drops_the_unicode_space_it_leaves_at_the_next_line() {
         assert_eq!(lines, vec!["aaaa", "bbb", "bbb", "bbb", "bbb"], "{space:?}");
     }
 }
+
+#[test]
+fn quote_colour_spans_follow_utf8_splits_and_link_identity() {
+    let piece=Piece::Quote{depth:2,text:"é red blue".into(),links:vec![7],spans:vec![RichTextSpan{start:0,end:6,presentation:TextPresentation{foreground:Some([200,0,0]),..Default::default()}},RichTextSpan{start:6,end:11,presentation:TextPresentation{background:Some([0,0,200]),..Default::default()}}]};
+    let (left,right)=split_at(&piece,7);
+    let Piece::Quote{text,spans,links,..}=left else{panic!()};
+    assert_eq!(text,"é red");assert_eq!(links,vec![7]);assert_eq!(spans[0].end,text.len());assert_eq!(spans.len(),1);
+    let Piece::Quote{text,spans,links,..}=right else{panic!()};
+    assert_eq!(text,"blue");assert_eq!(links,vec![7]);assert_eq!(spans[0].start,0);assert_eq!(spans[0].end,4);
+}
+
+#[test]
+fn long_coloured_quote_pagination_keeps_rgb_and_words() {
+    let html=format!("<blockquote><p style='color:red'>{}</p></blockquote>","é quoted words ".repeat(160));
+    let doc=kobo_web_document::parse_coloured_document(html.as_bytes(),&Url::parse("https://fixtures.example/").unwrap(),&Limits::DEFAULT);
+    let flat=pieces(&doc).0;let pages=paginate(&doc,budget(220));
+    assert!(pages.pages.len()>3);assert_eq!(words(&flat),words(&pages.pages.iter().flatten().cloned().collect::<Vec<_>>()));
+    for piece in pages.pages.iter().flatten(){if let Piece::Quote{text,spans,..}=piece {
+        assert!(!spans.is_empty());assert_eq!(spans[0].start,0);assert_eq!(spans.last().unwrap().end,text.len());
+        assert!(spans.iter().all(|s|s.presentation.foreground==Some([255,0,0])));
+    }}
+}
