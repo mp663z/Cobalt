@@ -78,6 +78,7 @@ pub enum Piece {
     Heading {
         level: u8,
         text: String,
+        spans:Vec<RichTextSpan>,
         links: Vec<usize>,
     },
     Prose(Vec<Run>),
@@ -391,7 +392,10 @@ fn append_at_reading_scale(
 ) -> ScreenBuilder {
     for piece in pieces {
         builder = match piece {
-            Piece::Heading { level, text, .. } => builder.heading_at_level(*level, text),
+            Piece::Heading { level, text, spans, .. } => {
+                if spans.is_empty(){builder.heading_at_level(*level,text)}
+                else {builder.coloured_heading_at_level(*level,text,spans.clone())}
+            },
             Piece::Prose(runs) => prose(builder, runs),
             Piece::Quote { depth, text, .. } => builder.quote(*depth, text),
             Piece::Preformatted(text) => builder.text(text),
@@ -587,6 +591,7 @@ impl Flattener {
                     self.out.push(Piece::Heading {
                         level: (*level).clamp(1, 6),
                         text: text.trim().to_owned(),
+                        spans:heading_spans(content),
                         links: links_in(content),
                     });
                 }
@@ -933,6 +938,18 @@ fn links_in(content: &[Inline]) -> Vec<usize> {
         }
     }
     links
+}
+
+fn heading_spans(content:&[Inline])->Vec<RichTextSpan> {
+    let mut runs=Vec::new();inline_runs(content,Style::default(),&mut runs);
+    let mut at=0;let mut spans=Vec::new();
+    for run in tidy(runs) {
+        let start=at;at+=run.text.len();
+        if run.foreground.is_some()||run.background.is_some(){spans.push(RichTextSpan{
+            start,end:at,presentation:TextPresentation{foreground:run.foreground,background:run.background,
+                strong:run.strong,emphasis:run.emphasis,..Default::default()}});}
+    }
+    spans
 }
 
 fn plain(content: &[Inline]) -> String {

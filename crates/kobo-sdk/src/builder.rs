@@ -51,7 +51,16 @@ impl ScreenBuilder {
             id,
             text: text.into(),
             level: level.max(1),
+            spans:Vec::new(),
         });
+        self
+    }
+
+    /// Author-coloured heading with the same hierarchy and native metrics.
+    #[must_use]
+    pub fn coloured_heading_at_level(mut self,level:u8,text:impl Into<String>,spans:Vec<RichTextSpan>)->Self {
+        let id=self.next_id();
+        self.nodes.push(Node::Heading{id,text:text.into(),level:level.max(1),spans});
         self
     }
 

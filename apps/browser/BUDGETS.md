@@ -560,3 +560,30 @@ regression. Actual full native frame inspected, 2,829 non-grey pixels. Clippy
 completed with existing warnings. Locked static stripped ARM EABI5:5,205,148
 bytes, delta3,955,768 over hello, 1,287,112 bytes headroom under +5 MiB. Native
 headings/quotes/tables/preformatted/control labels remain partial plain paths.
+
+
+### Native heading RGB, November 24, 2026
+
+Native headings now carry bounded optional foreground/background spans from the
+same semantic runs, preserving H1/H2 size, section anchors and native form
+controls. Plain headings retain their old tag and bytes. New heading tag36 uses
+protocol17, accepts earlier11-16 frames and refuses coloured headings for older
+peers. Matching runtime required. Roundtrips include background-only spans
+without inventing a foreground, truncation/range/span-count bounds, plain-wire
+compatibility and counted payload length. A disabled-span mutation fails the
+native heading regression; restoring it passes.
+
+The Clara Colour simulator journey opens the native form after rendering red H1
+and blue H2. Both full frames inspected; heading frame has18,994 non-grey pixels.
+These are ideal RGB, not calibrated panel appearance. Quotes, tables,
+preformatted blocks and control labels still have plain-string paths. Heading
+spans preserve colours, not full per-run authored font styling. No all-fonts or
+physical-panel/RSS/latency claim.
+
+Final checks: browser216/0/2 ignored, protocol113/0, UI289/0/2 ignored,
+SDK166/0/2 ignored, layout25/0, simulator108/0, runtime156/0. Whole-workspace
+check passes; this is not full workspace testing. Clippy completes with existing
+warnings. Locked stripped static ARM EABI5:5,211,948 bytes, delta3,962,568 over
+hello, headroom1,280,312 under +5 MiB. Disk exhaustion during runtime/simulator
+linking was corrected by clearing disposable outputs, then affected checks and
+the simulator journey were rerun green. No new crate, unsafe or allocator change.

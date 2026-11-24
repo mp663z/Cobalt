@@ -513,6 +513,7 @@ mod tests {
                 id: kobo_ui::NodeId(1),
                 text: "Background work".into(),
                 level: 1,
+                spans: Vec::new(),
             }],
         ));
         assert_eq!(state.panel.state_json(), before);

@@ -1,0 +1,11 @@
+wait-for Search the web
+tap-id samples
+wait-for Sample pages
+tap-id navigate
+tap-id native-reader
+tap-id link-5
+wait-for Native coloured headings
+shot-colour native-heading-form
+tap-id form-0
+wait-for Search words
+shot-colour native-heading-form-open

@@ -400,6 +400,7 @@ impl Simulator {
                     id: NodeId(1),
                     text: "Counter".into(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Text {
                     id: NodeId(2),

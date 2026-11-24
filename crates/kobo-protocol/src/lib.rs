@@ -80,7 +80,9 @@ pub const AUTO_HIDDEN_TOP_BAR_VERSION: u8 = 15;
 
 /// Optional RGB rich-text spans use node tag 35. Tag 28 stays byte-identical.
 pub const COLOUR_RICH_TEXT_VERSION: u8 = 16;
-pub const VERSION: u8 = 16;
+/// Version carrying optional authored heading colour spans.
+pub const COLOUR_HEADING_VERSION: u8 = 17;
+pub const VERSION: u8 = 17;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1990,7 +1992,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4218,7 +4220,14 @@ fn encoded_node_len(
 
     let length = match node {
         // The tag, the id, the text, and one byte for the heading's level.
-        Node::Heading { text, .. } => {
+        Node::Heading { text, spans, .. } => {
+            if !spans.is_empty() {
+                if version < COLOUR_HEADING_VERSION {return Err(ProtocolError::UnsupportedVersion(version));}
+                if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                let mut length=8+encoded_string_len(text)?;
+                for span in spans {add_encoded_len(&mut length,10+3*usize::from(span.presentation.foreground.is_some())+3*usize::from(span.presentation.background.is_some()))?;}
+                return Ok(length);
+            }
             let mut length = 6;
             add_encoded_len(&mut length, encoded_string_len(text)?)?;
             length
@@ -4648,7 +4657,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5126,7 +5135,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5415,7 +5424,23 @@ fn encode_node(
         return Err(ProtocolError::TooManyNodes);
     }
     match node {
-        Node::Heading { id, text, level } => {
+        Node::Heading { id, text, level, spans } => {
+            if !spans.is_empty() {
+                if version < COLOUR_HEADING_VERSION {return Err(ProtocolError::UnsupportedVersion(version));}
+                if spans.len()>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+                output.push(36);push_u32(output,id.0);push_string(output,text)?;
+                output.push(*level);push_u16(output,spans.len() as u16);
+                for span in spans {
+                    if span.start>=span.end||span.end>text.len()||!text.is_char_boundary(span.start)||!text.is_char_boundary(span.end){return Err(ProtocolError::InvalidValue("heading span"));}
+                    push_u32(output,span.start as u32);push_u32(output,span.end as u32);
+                    output.push(text_presentation_byte(span.presentation));
+                    let style=span.presentation;
+                    output.push(u8::from(style.foreground.is_some())|(u8::from(style.background.is_some())<<1));
+                    if let Some(rgb)=style.foreground{output.extend_from_slice(&rgb);}
+                    if let Some(rgb)=style.background{output.extend_from_slice(&rgb);}
+                }
+                return Ok(());
+            }
             output.push(1);
             push_u32(output, id.0);
             push_string(output, text)?;
@@ -6549,7 +6574,24 @@ fn decode_node(
             id,
             text: reader.string()?,
             level: reader.u8()?,
+            spans:Vec::new(),
         }),
+        36 if version>=COLOUR_HEADING_VERSION => {
+            let text=reader.string()?;let level=reader.u8()?;let count=usize::from(reader.u16()?);
+            if count>kobo_ui::MAX_RICH_TEXT_SPANS{return Err(ProtocolError::TooManyNodes);}
+            let mut spans=Vec::with_capacity(count);
+            for _ in 0..count {
+                let start=reader.u32()? as usize;let end=reader.u32()? as usize;
+                let mut presentation=text_presentation_from_byte(reader.u8()?)?;
+                let flags=reader.u8()?;
+                if flags & !3 != 0{return Err(ProtocolError::InvalidValue("heading colour flags"));}
+                if flags&1!=0{presentation.foreground=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                if flags&2!=0{presentation.background=Some([reader.u8()?,reader.u8()?,reader.u8()?]);}
+                if start>=end||end>text.len()||!text.is_char_boundary(start)||!text.is_char_boundary(end){return Err(ProtocolError::InvalidValue("heading span"));}
+                spans.push(kobo_ui::RichTextSpan{start,end,presentation});
+            }
+            Ok(Node::Heading{id,text,level,spans})
+        }
         2 => {
             let text = reader.string()?;
             let count = usize::from(reader.u8()?);
@@ -8673,6 +8715,7 @@ mod tests {
                 id: NodeId(1),
                 text: "Existing app".into(),
                 level: 1,
+                spans: Vec::new(),
             },
             Node::Text {
                 id: NodeId(2),
@@ -8977,6 +9020,7 @@ mod node_coverage_tests {
                 id: NodeId(1),
                 text: "Heading".into(),
                 level: 1,
+                spans: Vec::new(),
             },
             Node::Text {
                 id: NodeId(2),
@@ -9113,6 +9157,7 @@ mod node_coverage_tests {
                             id: NodeId(27),
                             text: "Moby Dick".into(),
                             level: 1,
+                            spans: Vec::new(),
                         },
                         Node::Secondary {
                             id: NodeId(28),
@@ -10947,6 +10992,7 @@ mod update_task_tests {
                 id: NodeId(1),
                 level: 1,
                 text: "Chapter".into(),
+                spans: Vec::new(),
             }],
         )
         .with_top_bar(TopBar::new(NodeId(2), "Books"))
@@ -11087,6 +11133,46 @@ mod rgb_flag_variants_tests {
             };
             let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();
             assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+        }
+    }
+}
+
+#[cfg(test)]
+mod coloured_heading_tests {
+    use super::*;
+    fn heading(spans:Vec<kobo_ui::RichTextSpan>)->Node {
+        Node::Heading{id:NodeId(4),text:"é heading".into(),level:2,spans}
+    }
+    fn span()->kobo_ui::RichTextSpan {
+        kobo_ui::RichTextSpan{start:0,end:10,presentation:kobo_ui::TextPresentation{foreground:Some([200,30,40]),..Default::default()}}
+    }
+    #[test]
+    fn heading_plain_wire_stays_identical_and_payload_bounds_hold() {
+        let node=heading(Vec::new());let mut current=Vec::new();let mut count=0;
+        encode_node(&mut current,&node,0,&mut count,VERSION).unwrap();
+        assert_eq!(current[0],1);
+        for version in 11..COLOUR_HEADING_VERSION {
+            let mut older=Vec::new();let mut count=0;
+            encode_node(&mut older,&node,0,&mut count,version).unwrap();assert_eq!(older,current);
+        }
+        let node=heading(vec![span()]);let frame=Frame{version:VERSION,request_id:1,message:Message::SetScreen(Screen::new(1,vec![node.clone()]))};
+        let bytes=encode(&frame).unwrap();
+        for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err(),"truncated {end}");}
+        let mut count=0;let length=encoded_node_len(&node,0,&mut count,VERSION).unwrap();
+        let mut payload=Vec::new();let mut count=0;encode_node(&mut payload,&node,0,&mut count,VERSION).unwrap();assert_eq!(length,payload.len());
+        let mut invalid=span();invalid.start=1;
+        assert!(encode(&Frame{message:Message::SetScreen(Screen::new(1,vec![heading(vec![invalid])])),..frame.clone()}).is_err());
+        assert!(encode(&Frame{message:Message::SetScreen(Screen::new(1,vec![heading(vec![span();kobo_ui::MAX_RICH_TEXT_SPANS+1])])),..frame}).is_err());
+    }
+    #[test]
+    fn heading_rgb_roundtrip_retains_none_and_refuses_old_peers() {
+        for foreground in [None,Some([200,30,40])] {
+            let node=Node::Heading{id:NodeId(4),text:"é heading".into(),level:2,
+                spans:vec![kobo_ui::RichTextSpan{start:0,end:10,presentation:kobo_ui::TextPresentation{
+                    foreground,background:Some([220,230,240]),..Default::default()}}]};
+            let frame=Frame{version:VERSION,request_id:1,message:Message::SetScreen(Screen::new(1,vec![node]))};
+            assert_eq!(decode(&encode(&frame).unwrap()).unwrap(),frame);
+            for version in 11..COLOUR_HEADING_VERSION {assert!(encode(&Frame{version,..frame.clone()}).is_err());}
         }
     }
 }

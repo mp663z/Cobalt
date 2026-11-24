@@ -2346,3 +2346,24 @@ fn late_native_colour_keeps_saved_notice_fragment_place_and_reader_view() {
         assert!(runner.app().current_pieces().iter().any(|p|matches!(p,Piece::Prose(runs) if runs.iter().any(|r|r.foreground.is_some()))));
     }
 }
+
+#[test]
+fn native_headings_keep_hierarchy_rgb_and_section_anchor() {
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><h1 id=top style='color:red'>Native heading</h1><h2 style='color:blue'>Second heading</h2><p>Prose.</p><form><input name=q></form>");
+    let metrics=kobo_ui::CLARA_BW_METRICS;
+    let screen=runner.app().screen(&metrics).build();
+    let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+    assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::ColouredHeading(1,_))));
+    assert!(layout.nodes.iter().any(|n|matches!(n.kind,kobo_ui::LayoutKind::ColouredHeading(2,_))));
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([255,0,0])));
+    assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some([0,0,255])));
+    let context=runner.context();assert_eq!(runner.app_mut().fragment_page(&context,"top"),Some(0));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some() {
+        use std::io::Write;let mut file=std::fs::File::create("/tmp/native-colour-heading.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}

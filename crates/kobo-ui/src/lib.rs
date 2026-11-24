@@ -832,6 +832,7 @@ mod responsive_profile_tests {
                     id: NodeId(1),
                     text: "A responsive Folio screen".into(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Text {
                     id: NodeId(2),
@@ -1194,6 +1195,7 @@ mod responsive_profile_tests {
                             id: NodeId(1),
                             text: "O to play".into(),
                             level: 1,
+                            spans: Vec::new(),
                         },
                         Node::Grid {
                             id: NodeId(2),
@@ -4463,6 +4465,8 @@ pub enum Node {
         /// at [`FontSize::Title`], which is bold enough to lead the prose
         /// under it without competing with the title above it.
         level: u8,
+        /// Optional authored styles. Empty preserves the historical heading.
+        spans: Vec<RichTextSpan>,
     },
     Text {
         id: NodeId,
@@ -5941,6 +5945,7 @@ pub enum LayoutKind {
     /// A heading, carrying the level it sits at so it is drawn at the size it
     /// was measured at.
     Heading(u8),
+    ColouredHeading(u8,TextPresentation),
     Text,
     RichText(TextPresentation),
     /// A run inside a paragraph that goes somewhere.
@@ -7150,21 +7155,29 @@ fn layout_node(
     }
     let width = max(0, width);
     match node {
-        Node::Heading { id, text, level } => {
-            let size = FontSize::for_heading_level(*level);
-            let lines = wrap_text(text, width, size);
-            let height = max(36, lines.len() as i32 * size.line_height());
-            layout.nodes.push(LayoutNode {
-                id: *id,
-                rect: Rect {
-                    x,
-                    y,
-                    width,
-                    height,
-                },
-                kind: LayoutKind::Heading(*level),
-                text_lines: lines,
-            });
+        Node::Heading { id, text, level, spans } => {
+            let size=FontSize::for_heading_level(*level);
+            let ranges=wrap_ranges(text,width,size,Face::Text);
+            let height=max(36,ranges.len() as i32*size.line_height());
+            if spans.is_empty() {
+                layout.nodes.push(LayoutNode{id:*id,rect:Rect{x,y,width,height},
+                    kind:LayoutKind::Heading(*level),text_lines:wrap_text(text,width,size)});
+            } else {
+                for (line,(from,to)) in ranges.into_iter().enumerate() {
+                    let mut cursor=from;
+                    while cursor<to && layout.nodes.len()<MAX_LAYOUT_NODES {
+                        let (end,style)=rich_run_at(cursor,to,spans);
+                        if end<=cursor||end>to||!text.is_char_boundary(end){break;}
+                        let before=measure_text(&text[from..cursor],size).0;
+                        let through=measure_text(&text[from..end],size).0;
+                        layout.nodes.push(LayoutNode{id:*id,rect:Rect{
+                            x:x.saturating_add(before),y:y.saturating_add(line as i32*size.line_height()),
+                            width:through.saturating_sub(before),height:size.line_height()},
+                            kind:LayoutKind::ColouredHeading(*level,style),text_lines:vec![text[cursor..end].to_owned()]});
+                        cursor=end;
+                    }
+                }
+            }
             y.saturating_add(height)
         }
         Node::Text { id, text, links } => {
@@ -13637,7 +13650,7 @@ fn key_label_style(node: &LayoutNode) -> (FontSize, TextScale) {
 
 fn layout_text_style(node: &LayoutNode) -> Option<(FontSize, Face)> {
     let size = match node.kind {
-        LayoutKind::Heading(level) => FontSize::for_heading_level(level),
+        LayoutKind::Heading(level) | LayoutKind::ColouredHeading(level,_) => FontSize::for_heading_level(level),
         LayoutKind::CellLabel(true) => board_label_size(node),
         LayoutKind::PencilNumber(_) => pencil::label_style(node).0,
         LayoutKind::CellLabel(false) => key_label_style(node).0,
@@ -14884,6 +14897,13 @@ fn render_all_with_selected_font(
                 );
             }
 
+            LayoutKind::ColouredHeading(level,style) => {
+                if let Some(background)=style.background {fill_rgb_clipped(surface,node.rect,background,clip);}
+                for text in &node.text_lines {
+                    draw_colour_text_in(surface,text,node.rect.x,node.rect.y,
+                        FontSize::for_heading_level(level),Face::Text,tone::INK,style.foreground,clip);
+                }
+            }
             LayoutKind::Heading(level) => draw_lines(
                 surface,
                 &node.text_lines,
@@ -16563,7 +16583,12 @@ fn draw_figures(
 
 /// Draws one run of text in a chosen face.
 #[allow(clippy::too_many_arguments)]
-fn draw_text_in(
+fn draw_text_in(surface:&mut Surface,text:&str,x:i32,y:i32,size:FontSize,face:Face,tone:u8,clip:Rect) {
+    draw_colour_text_in(surface,text,x,y,size,face,tone,None,clip);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_colour_text_in(
     surface: &mut Surface,
     text: &str,
     x: i32,
@@ -16571,12 +16596,13 @@ fn draw_text_in(
     size: FontSize,
     face: Face,
     tone: u8,
+    colour: Option<[u8;3]>,
     clip: Rect,
 ) {
     if with_typesetter(face, |typesetter| {
         typesetter.draw(text, x, y, size, face, &mut |pixel_x, pixel_y, coverage| {
             if coverage > 0 && clip.contains(pixel_x, pixel_y) {
-                surface.blend(pixel_x, pixel_y, tone, coverage);
+                blend_text_ink(surface,pixel_x,pixel_y,tone,colour,coverage);
             }
         });
     })
@@ -16584,7 +16610,7 @@ fn draw_text_in(
     {
         return;
     }
-    draw_fallback_text(surface, text, x, y, size, tone, clip);
+    draw_fallback_ink(surface, text, x, y, size, tone, colour, clip);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -17872,6 +17898,7 @@ mod tests {
                 id: NodeId(1),
                 text: "Hi".into(),
                 level: 1,
+                spans: Vec::new(),
             }],
         );
         let mut surface = Surface::new(128, 128);
@@ -17943,6 +17970,7 @@ mod tests {
                     id: NodeId(2),
                     text: "Card".into(),
                     level: 1,
+                    spans: Vec::new(),
                 }],
             }],
         );
@@ -19419,6 +19447,7 @@ mod loading_tests {
                 id: NodeId(1),
                 text: "Heading".into(),
                 level: 1,
+                spans: Vec::new(),
             },
             Node::Text {
                 id: NodeId(2),
@@ -23381,11 +23410,13 @@ mod prose_tests {
                                 id: NodeId(2),
                                 text: "Tall".to_owned(),
                                 level: 1,
+                                spans: Vec::new(),
                             },
                             Node::Heading {
                                 id: NodeId(4),
                                 text: "Still tall".to_owned(),
                                 level: 1,
+                                spans: Vec::new(),
                             },
                         ]),
                         BandSlot::fill(vec![Node::Secondary {
@@ -23467,6 +23498,7 @@ mod prose_tests {
                     id: NodeId(1),
                     text: "Moby Dick".to_owned(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Section {
                     id: NodeId(2),
@@ -24229,6 +24261,7 @@ mod press_feedback_tests {
                     id: NodeId(1),
                     text: "Shelf".to_owned(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Secondary {
                     id: NodeId(2),
@@ -24269,6 +24302,7 @@ mod press_feedback_tests {
                     id: NodeId(1),
                     text: "Shelf".to_owned(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Secondary {
                     id: NodeId(2),
@@ -24373,6 +24407,7 @@ mod press_feedback_tests {
                     id: NodeId(1),
                     text: "Moby Dick".into(),
                     level: 1,
+                    spans: Vec::new(),
                 },
                 Node::Activity {
                     id: NodeId(2),

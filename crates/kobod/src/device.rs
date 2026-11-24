@@ -1297,6 +1297,7 @@ fn consent_screen(notice: &crate::consent::Notice) -> Screen {
         id: kobo_ui::NodeId(1),
         text: notice.title.clone(),
         level: 1,
+        spans: Vec::new(),
     }];
     let mut next = 2;
     for line in &notice.body {
