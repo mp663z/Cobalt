@@ -1875,6 +1875,10 @@ impl Browser {
                     &loaded.title,
                     &self.displayed_address(),
                     self.address.is_open().then(|| self.address.keyboard()),
+                    |index|{
+                        let target=loaded.url.join(loaded.painted.as_ref()?.view.links().get(index)?).ok()?;
+                        loaded.document.links.iter().position(|link|link.target==target).map(|i|action_id(&link_action(i)))
+                    },
                 )
             }
             (_, Some(loaded)) => page_screen_with_address(

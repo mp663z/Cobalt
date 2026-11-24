@@ -857,3 +857,24 @@ fix and passes after. Browser226/0/2 ignored,engine1411/0/18 across148groups;
 workspace check green;clippy completes with existing warnings. Locked static
 stripped ARM EABI5:5,248,708B,headroom1,243,552 under+5MiB. No new crate,unsafe,
 allocator or protocol change. Text-identity check,not new hardware evidence.
+
+## Painted direct-link interaction, November 24, 2026
+
+Protocol23 adds optional bounded (128) source-pixel picture regions. Tag17 stays
+unchanged for pictures without links; tag42 requires version23. Encoder/decoder
+reject old-version rich regions, invalid geometry/counts and truncated payloads.
+Layout scales/clips with the picture; ambiguous different actions refuse and do
+not page-turn. Keyboard/toolbar overlays keep priority. The browser maps painted
+URLs back to existing document link IDs, preserving its navigation/history path.
+
+Genuine fail-before/pass-after: removing picture-region attachment makes
+`painted_links_open_by_touch_at_every_zoom` fail on missing visible link target;
+restoration passes both formats at75/100/150/200 with keyboard open/dismiss and
+Back. Actual coordinate-touch Clara Colour replay and full-frame pixel inspection
+passed (sample index -> tapped article -> Back). Browser228/0/2 (227 in four batches plus the new region test) in bounded
+batches; UI299/0/2,protocol119/0,SDK166/0,sim108/0,framehost7/0. Workspace check and
+scoped clippy complete with existing warnings. Workspace --tests remains blocked
+by the existing absent panels original-pages.cbz fixture, not reported as green.
+Final locked static stripped ARM EABI5 5,253,916B, delta4,004,536 over hello1,249,380,
+headroom1,238,344 under+5MiB. No new crate,unsafe or allocator change. Hardware,
+RSS,latency,broader HTML/CSS and independent proof gates remain open.

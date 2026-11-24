@@ -497,3 +497,26 @@ Raw preformatted source traversal now retains computed font treatments while
 keeping UTF8 spacing/blank lines and normal resets. It still measures and paints
 in the existing mono face. See BUDGETS.md for fail/restore,full-raster and checks.
 No arbitrary font family,true-variant or hardware claim.
+
+## Mobile-browser experience, November 24, 2026
+
+The user's latest target is a real mobile-browser experience, not successive
+colour-only screens. This sequence supersedes small font follow-through as the
+main stream. The existing browser is still paginated, not a scrolling browser.
+
+- [x] Direct taps on visible painted links, at 75/100/150/200% zoom. Source-pixel
+  regions follow the raster's scaling/page crop. Keyboard/toolbar controls win;
+  ambiguous overlaps refuse, with Links as fallback. Protocol23 optional tag42,
+  old unlinked-picture tag17 unchanged. Requires a matching runtime for links.
+- [ ] Consolidate duplicated title/address/menu chrome into a compact browsing
+  surface, measuring content against the same final nodes actually drawn.
+- [ ] Add page movement/scroll interaction appropriate to an e-ink display,
+  with predictable link taps and restore behavior. Do not call page turns scroll.
+- [ ] Audit address/search, Back/Forward/restore, keyboard, forms and navigation
+  together on complete journeys, not isolated colour samples.
+
+Direct-link checkpoint: `drive-painted-touch.kobo` records a coordinate tap on
+Clara Colour, arrival at the article, and Back. Unit journey covers both panel
+formats and four zooms, plus opening/dismissing the keyboard. A deliberately
+removed attachment fails the same test before restoration. Neither simulator
+success nor direct taps establish hardware latency, RSS or full HTML/CSS support.

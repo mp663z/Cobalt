@@ -2522,3 +2522,34 @@ fn native_pre_computed_font_treatments_preserve_raw_utf8_whitespace(){
     runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
     if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-pre-fonts.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
 }
+
+#[test]
+fn painted_links_open_by_touch_at_every_zoom(){
+    for colour in [false,true]{for zoom in [75,100,150,200]{
+        let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(colour);
+        runner.app_mut().zoom=zoom;
+        runner.action(action_id("page-view"));
+        runner.action(action_id("edit-address"));
+        let metrics=runner.context().metrics();
+        let keyboard=runner.app().screen(&metrics).build().layout_with(&metrics,&Chrome::measuring(true));
+        let go=keyboard.rect_of_action(action_id("kb.enter")).expect("keyboard has Go");
+        assert_eq!(keyboard.hit_test(go.x+go.width/2,go.y+go.height/2),Some(action_id("kb.enter")));
+        runner.action(action_id("kb.cancel"));
+        let commands=runner.action(action_id("previous-page"));
+        let metrics=runner.context().metrics();
+        let layout=runner.app().screen(&metrics).build().layout_with(&metrics,&Chrome::measuring(true));
+        let region=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::PictureLink(_))).expect("visible link has a touch target");
+        let x=region.rect.x+region.rect.width/2;let y=region.rect.y+region.rect.height/2;
+        let action=layout.hit_test(x,y).expect("link responds to a finger");
+        assert!(runner.app().link_named(action).is_some());
+        if zoom==100{save_painted_journey_frame(&runner,&commands,if colour{"touch-colour-start"}else{"touch-bw-start"});}
+        let index=runner.app().link_named(action).unwrap();
+        let expected=runner.app().loaded.as_ref().unwrap().document.links[index].target.clone();
+        runner.action(action);
+        assert_eq!(runner.app().loaded.as_ref().unwrap().url,expected);
+        let commands=runner.action(action_id("page-view"));
+        if zoom==100{save_painted_journey_frame(&runner,&commands,if colour{"touch-colour-destination"}else{"touch-bw-destination"});}
+        runner.action(action_id("back"));
+        assert_eq!(runner.app().loaded.as_ref().unwrap().url.to_string(),SAMPLES);
+    }}
+}

@@ -116,17 +116,21 @@ impl PageMode {
         title: &str,
         address: &str,
         keyboard: Option<&Keyboard>,
+        resolve:impl Fn(usize)->Option<kobo_sdk::ActionId>,
     ) -> ScreenBuilder {
         let (width, _) = self.viewport;
-        frame(
+        let height=self.visible_height(keyboard);
+        let links:Vec<_>=self.view.picture_links(self.page,width,height,self.viewport.1).into_iter().filter_map(|(mut region,index)|{region.action=resolve(index)?;Some(region)}).collect();
+        let screen=frame(
             title,
             width,
-            self.visible_height(keyboard),
+            height,
             self.page,
             self.view.pages(),
             address,
             keyboard.is_some(),
-        )
+        );
+        screen.picture_links(links)
     }
 
     pub(crate) fn publish(

@@ -1692,10 +1692,17 @@ impl ScreenBuilder {
             handle: picture.handle,
             source: picture.source,
             max_height_tenths_mm: max_height_mm.saturating_mul(10),
+            links:Vec::new(),
             framed,
             bleed,
         });
         self
+    }
+
+    /// Attaches source-pixel links to the last picture only.
+    #[must_use]
+    pub fn picture_links(mut self,links:Vec<kobo_ui::PictureLink>)->Self{
+        if let Some(Node::Picture{links:targets,..})=self.nodes.last_mut(){*targets=links;}self
     }
 
     /// Lists entries that each need a sentence of explanation.

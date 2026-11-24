@@ -4900,6 +4900,8 @@ pub enum Node {
         /// screen only loses by them, and a plate with a four millimetre
         /// border reads as a photograph of a page rather than the page.
         bleed: bool,
+        /// Bounded source-pixel link regions, scaled with this picture.
+        links: Vec<PictureLink>,
     },
     /// Work in flight, typically a network request.
     ///
@@ -5054,6 +5056,19 @@ pub struct PictureHandle(pub u32);
 /// Handles are application-local, exactly like [`PictureHandle`]s.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FontHandle(pub u32);
+
+/// Maximum interactive regions attached to one picture.
+pub const MAX_PICTURE_LINKS: usize = 128;
+/// A link rectangle in picture source pixels. Invalid regions are ignored by
+/// local layout and rejected on the wire. No visual decoration is added.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PictureLink {
+    pub action: ActionId,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
 
 /// A picture on a tile, together with the size it was handed over at.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -5971,6 +5986,7 @@ pub enum LayoutKind {
     Text,
     RichText(TextPresentation),
     MonoRichText(TextPresentation),
+    PictureLink(ActionId),
     /// Empty bounds marker for a rich paragraph simplified before measurement.
     PlainRichBounds,
     /// A run inside a paragraph that goes somewhere.
@@ -6647,6 +6663,13 @@ impl Layout {
     fn hit_control(&self, x: i32, y: i32) -> Option<ActionId> {
         // Backwards, because later nodes are drawn on top of earlier ones and
         // what is on top is what the finger touched.
+        let mut picture_action=None;let mut ambiguous=false;
+        for node in self.nodes.iter().filter(|n|n.rect.contains(x,y)){
+            if let LayoutKind::PictureLink(action)=node.kind{
+                if picture_action.is_some_and(|prior|prior!=action){ambiguous=true;}
+                picture_action=Some(action);
+            }
+        }
         for node in self.nodes.iter().rev() {
             if !node.rect.contains(x, y) {
                 continue;
@@ -6660,7 +6683,7 @@ impl Layout {
                 }
                 // A control that is drawn as unavailable is not one, whatever
                 // action it still names.
-                LayoutKind::Button(_, ControlState::Disabled, _) => continue,
+                LayoutKind::Button(_, ControlState::Disabled, _) => return None,
                 // The scrim ends the search. Everything past it is underneath
                 // an overlay, and a control the reader cannot see is a control
                 // they cannot have meant to press. A popover treats the miss
@@ -6676,7 +6699,7 @@ impl Layout {
             };
             return Some(action);
         }
-        None
+        if ambiguous{None}else{picture_action}
     }
 
     /// Whether the tap landed on a control that exists but cannot act.
@@ -6692,7 +6715,7 @@ impl Layout {
                 node.kind,
                 LayoutKind::Button(_, ControlState::Disabled, _)
                     | LayoutKind::Tile(_, ControlState::Disabled)
-                    | LayoutKind::Scrim { .. }
+                    | LayoutKind::Scrim { .. } | LayoutKind::PictureLink(_)
             ) {
                 return true;
             }
@@ -9073,6 +9096,7 @@ fn layout_node(
             max_height_tenths_mm,
             framed,
             bleed,
+            links,
         } => {
             // Against the panel, not the column. Pulled up to the top edge
             // only when nothing has been placed above it: a picture that
@@ -9103,6 +9127,16 @@ fn layout_node(
                 },
                 text_lines: Vec::new(),
             });
+            if source.0>0&&source.1>0 {
+                let origin=x+(width-drawn_width)/2;
+                let scale=|n:u32,total:u32,drawn:i32|((u64::from(n)*drawn.max(0) as u64)/u64::from(total)) as i32;
+                for link in links.iter().take(MAX_PICTURE_LINKS){
+                    if layout.nodes.len()>=MAX_LAYOUT_NODES || link.width==0||link.height==0 || link.x.checked_add(link.width).is_none_or(|end|end>source.0) || link.y.checked_add(link.height).is_none_or(|end|end>source.1) {continue;}
+                    let left=scale(link.x,source.0,drawn_width);let top=scale(link.y,source.1,drawn_height);
+                    let rect=Rect{x:origin+left,y:y+top,width:scale(link.x+link.width,source.0,drawn_width)-left,height:scale(link.y+link.height,source.1,drawn_height)-top};
+                    if rect.width>0&&rect.height>0{layout.nodes.push(LayoutNode{id:*id,rect,kind:LayoutKind::PictureLink(link.action),text_lines:Vec::new()});}
+                }
+            }
             y.saturating_add(drawn_height)
         }
         Node::TileGrid { id, tiles, shape } => {
@@ -14345,7 +14379,7 @@ fn render_all_with_selected_font(
             // adding a dim later is a deliberate act and not an oversight: on
             // this panel, shading the whole screen costs a full refresh in and
             // a full refresh out.
-            LayoutKind::Scrim { .. } | LayoutKind::PlainRichBounds => {}
+            LayoutKind::Scrim { .. } | LayoutKind::PlainRichBounds | LayoutKind::PictureLink(_) => {}
             // Nothing either. A band is the extent of its columns, not a
             // surface: giving it a fill or a border would put a box around
             // every cover-and-metadata pair on the panel.
@@ -17700,6 +17734,7 @@ mod tests {
                     max_height_tenths_mm: 100,
                     framed,
                     bleed: false,
+                    links: Vec::new(),
                 }],
             )
             .layout()
@@ -17737,6 +17772,7 @@ mod tests {
                             max_height_tenths_mm: 5000,
                             framed: false,
                             bleed: false,
+                            links: Vec::new(),
                         },
                         Node::Grid {
                             id: NodeId(2),
@@ -17799,6 +17835,7 @@ mod tests {
                 max_height_tenths_mm: 100,
                 framed: true,
                 bleed: false,
+                links: Vec::new(),
             }],
         );
         let diagnostics = screen.diagnostics_with_pictures(
@@ -24932,5 +24969,31 @@ mod bounded_code_tests {
         assert!(layout.nodes.iter().any(|n|matches!(n.kind,LayoutKind::PlainRichBounds)));
         assert!(!layout.nodes.iter().any(|n|matches!(n.kind,LayoutKind::MonoRichText(_))));
         assert!(layout.nodes.iter().any(|n|n.id==NodeId(2)));
+    }
+}
+
+#[cfg(test)]
+mod picture_link_tests {
+    use super::*;
+    fn screen(links:Vec<PictureLink>)->Screen{
+        let mut screen=Screen::new(1,vec![Node::Picture{id:NodeId(1),handle:PictureHandle(1),source:(400,600),max_height_tenths_mm:1500,framed:false,bleed:false,links}]);
+        screen.page_turns=Some(PageTurns::new(ActionId(90),ActionId(91)));screen
+    }
+    #[test]
+    fn picture_regions_scale_and_tap_without_changing_pixels(){
+        let screen=screen(vec![PictureLink{action:ActionId(7),x:80,y:120,width:160,height:60}]);
+        let layout=screen.layout();let p=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::Picture(_))).unwrap();
+        let hit=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::PictureLink(_))).unwrap();
+        assert_eq!(hit.rect.x,p.rect.x+p.rect.width*80/400);assert_eq!(hit.rect.y,p.rect.y+p.rect.height*120/600);
+        assert_eq!(layout.hit_test(hit.rect.x+hit.rect.width/2,hit.rect.y+hit.rect.height/2),Some(ActionId(7)));
+        let plain=self::screen(Vec::new()).layout();assert_eq!(layout.flow_height,plain.flow_height);
+    }
+    #[test]
+    fn ambiguous_and_invalid_picture_regions_never_open_a_wrong_link(){
+        let region=PictureLink{action:ActionId(7),x:80,y:120,width:160,height:60};
+        let layout=screen(vec![region,PictureLink{action:ActionId(8),..region},PictureLink{x:u32::MAX,..region}]).layout();
+        let hit=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::PictureLink(_))).unwrap();
+        assert_eq!(layout.hit_test(hit.rect.x+2,hit.rect.y+2),None);
+        assert_eq!(layout.nodes.iter().filter(|n|matches!(n.kind,LayoutKind::PictureLink(_))).count(),2);
     }
 }

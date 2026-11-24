@@ -92,7 +92,9 @@ pub const COLOUR_ROW_VERSION:u8=20;
 pub const MONO_RICH_TEXT_VERSION:u8=21;
 /// Version carrying mixed mono/proportional runs in rich paragraphs.
 pub const INLINE_CODE_VERSION:u8=22;
-pub const VERSION: u8 = 22;
+/// Version carrying bounded source-pixel links on picture node tag 42.
+pub const PICTURE_LINK_VERSION:u8=23;
+pub const VERSION: u8 = 23;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -2002,7 +2004,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4518,7 +4520,11 @@ fn encoded_node_len(
             return Err(ProtocolError::InvalidValue("protocol 12 page rail"));
         }
         Node::PageRail { .. } => 9,
-        Node::Picture { .. } => 20,
+        Node::Picture {links,source,..} => {
+            if !links.is_empty()&&version<PICTURE_LINK_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            validate_picture_links(links,*source)?;
+            20+if links.is_empty(){0}else{2+20*links.len()}
+        },
         Node::Table { rows, weights, .. } => {
             if rows.len() > u8::MAX as usize || weights.len() > u8::MAX as usize {
                 return Err(ProtocolError::TooManyNodes);
@@ -4690,7 +4696,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5168,7 +5174,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | MONO_RICH_TEXT_VERSION | INLINE_CODE_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5416,6 +5422,12 @@ fn decode_bar_action(reader: &mut Reader<'_>) -> Result<BarAction, ProtocolError
 // One exhaustive match over every node kind. Splitting it would only move
 // arms out of reach of the compiler's exhaustiveness check, which is the one
 // thing making it impossible to add a node and forget the wire format.
+fn validate_picture_links(links:&[kobo_ui::PictureLink],source:(u32,u32))->Result<(),ProtocolError>{
+    if links.len()>kobo_ui::MAX_PICTURE_LINKS{return Err(ProtocolError::TooManyNodes);}
+    if links.iter().any(|l|l.width==0||l.height==0||l.x.checked_add(l.width).is_none_or(|end|end>source.0)||l.y.checked_add(l.height).is_none_or(|end|end>source.1)){return Err(ProtocolError::InvalidValue("picture link region"));}
+    Ok(())
+}
+
 fn text_presentation_byte(style: kobo_ui::TextPresentation) -> u8 {
     u8::from(style.strong)
         | (u8::from(style.emphasis) << 1)
@@ -5962,8 +5974,11 @@ fn encode_node(
             max_height_tenths_mm,
             framed,
             bleed,
+            links,
         } => {
-            output.push(17);
+            if !links.is_empty()&&version<PICTURE_LINK_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            validate_picture_links(links,*source)?;
+            output.push(if links.is_empty(){17}else{42});
             push_u32(output, id.0);
             push_u32(output, handle.0);
             push_u32(output, source.0);
@@ -5974,6 +5989,7 @@ fn encode_node(
             // changes shape. Only protocol 15 may set it.
             let bleeds = *bleed && version >= PICTURE_BLEED_VERSION;
             output.push(u8::from(*framed) | (u8::from(bleeds) << 1));
+            if !links.is_empty(){push_u16(output,links.len() as u16);for link in links{for value in [link.action.0,link.x,link.y,link.width,link.height]{push_u32(output,value);}}}
         }
         Node::Table { id, rows, weights } => {
             let coloured=rows.iter().any(|row|!row.spans.is_empty());
@@ -7126,7 +7142,7 @@ fn decode_node(
             page: reader.u16()?,
             of: reader.u16()?,
         }),
-        17 => {
+        tag @ (17|42) if tag==17||version>=PICTURE_LINK_VERSION => {
             let handle = PictureHandle(reader.u32()?);
             let source = (reader.u32()?, reader.u32()?);
             let max_height_tenths_mm = reader.u16()?;
@@ -7134,6 +7150,9 @@ fn decode_node(
             if flags & !0b11 != 0 || (flags & 0b10 != 0 && version < PICTURE_BLEED_VERSION) {
                 return Err(ProtocolError::InvalidValue("picture flags"));
             }
+            let mut links=Vec::new();
+            if tag==42{let count=usize::from(reader.u16()?);if count>kobo_ui::MAX_PICTURE_LINKS{return Err(ProtocolError::TooManyNodes);}for _ in 0..count{links.push(kobo_ui::PictureLink{action:ActionId(reader.u32()?),x:reader.u32()?,y:reader.u32()?,width:reader.u32()?,height:reader.u32()?});}}
+            validate_picture_links(&links,source)?;
             Ok(Node::Picture {
                 id,
                 handle,
@@ -7141,6 +7160,7 @@ fn decode_node(
                 max_height_tenths_mm,
                 framed: flags & 0b1 != 0,
                 bleed: flags & 0b10 != 0,
+                links,
             })
         }
         10 => {
@@ -10649,6 +10669,7 @@ mod picture_tests {
                     max_height_tenths_mm: 600,
                     framed: true,
                     bleed: false,
+                    links: Vec::new(),
                 },
             ],
         );
@@ -11418,5 +11439,28 @@ mod inline_code_tests {
         }
         assert!(text_presentation_from_byte(64).is_err());
         for n in 1..=8{assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
+    }
+}
+
+#[cfg(test)]
+mod picture_link_tests {
+    use super::*;
+    #[test]
+    fn picture_regions_are_bounded_versioned_and_roundtrip(){
+        let node=Node::Picture{id:NodeId(1),handle:PictureHandle(7),source:(400,600),max_height_tenths_mm:1000,framed:false,bleed:false,
+            links:vec![kobo_ui::PictureLink{action:ActionId(9),x:10,y:20,width:100,height:50}]};
+        let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();assert_eq!(bytes[0],42);
+        assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+        assert_eq!(encoded_node_len(&node,0,&mut 0,VERSION).unwrap(),bytes.len());
+        for version in LEGACY_VERSION..PICTURE_LINK_VERSION{
+            assert!(encoded_node_len(&node,0,&mut 0,version).is_err());assert!(encode_node(&mut Vec::new(),&node,0,&mut 0,version).is_err());assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,version).is_err());
+        }
+        for n in 1..=22{assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
+        let mut plain=node.clone();if let Node::Picture{links,..}=&mut plain{links.clear();}
+        let mut old=Vec::new();let mut current=Vec::new();
+        encode_node(&mut old,&plain,0,&mut 0,INLINE_CODE_VERSION).unwrap();encode_node(&mut current,&plain,0,&mut 0,VERSION).unwrap();
+        assert_eq!(old,current);assert_eq!(old[0],17);
+        assert_eq!(decode_node(&mut Reader::new(&old),0,&mut 0,INLINE_CODE_VERSION).unwrap(),plain);
+        if let Node::Picture{mut links,..}=node {links[0].x=u32::MAX;assert!(validate_picture_links(&links,(400,600)).is_err());links.resize(129,links[0]);assert!(validate_picture_links(&links,(400,600)).is_err());}
     }
 }

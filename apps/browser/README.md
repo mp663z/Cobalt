@@ -124,3 +124,13 @@ with `shot-colour` on a Colour profile. Ordinary `shot` is greyscale even on
 that profile. Colour captures are ideal RGB, not calibrated panel appearance.
 `drive-forms.kobo` covers explicit GET submit-button choices and POST's
 review-only refusal. Only the visible chosen GET button contributes its value.
+
+### Painted-link touch checkpoint
+
+Visible painted links now respond directly to a tap, including zoomed pages.
+A bounded source-pixel region list follows the uploaded raster; ambiguous
+clusters stay inert rather than opening the wrong destination. Use Navigate >
+Links for the full list. Protocol23 is required for interactive pictures, with
+older plain picture bytes unchanged. `drive-painted-touch.kobo` reproduces a
+Clara Colour link tap, article arrival and Back. This fixes interaction, not the
+remaining compact-chrome/scrolling or full-web compatibility gaps.

@@ -387,11 +387,28 @@ impl PageView {
     /// A tap map over the painted column: every command carrying a source
     /// action contributes its rect. Resolution expands each target to a
     /// minimum tap size and refuses ambiguous clusters. The app uses the
-    /// scoped Links list until the protocol supports coordinate taps.
+    /// scoped Links list for ambiguous targets.
     pub(crate) fn tap_map(&self) -> TapMap {
         TapMap {
             targets: self.targets.clone(),
         }
+    }
+
+    /// Visible link regions in source pixels of the uploaded picture. Clip
+    /// before scaling, matching the raster crop and keyboard preview exactly.
+    pub(crate) fn picture_links(&self,page:usize,width:u32,height:u32,full_height:u32)->Vec<(kobo_sdk::PictureLink,usize)>{
+        let page=page.min(self.pages().saturating_sub(1));
+        let top=self.cuts[page];let bottom=self.cuts.get(page+1).copied().unwrap_or(self.content_height);
+        let (sw,sh)=self.screen_device_px();
+        let sx=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(width)/u64::from(sw)) as u32;
+        let sy=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(full_height)/u64::from(sh)) as u32;
+        self.targets.iter().filter_map(|(r,index)|{
+            let x0=sx(i64::from(r.x).max(0)).min(width);
+            let x1=sx((i64::from(r.x)+i64::from(r.width)).min(i64::from(self.css_width))).min(width);
+            let y0=sy(i64::from(r.y).max(i64::from(top))-i64::from(top)).min(height);
+            let y1=sy((i64::from(r.y)+i64::from(r.height)).min(i64::from(bottom))-i64::from(top)).min(height);
+            (x1>x0&&y1>y0).then_some((kobo_sdk::PictureLink{action:kobo_sdk::ActionId(0),x:x0,y:y0,width:x1.saturating_sub(x0),height:y1.saturating_sub(y0)},*index))
+        }).take(128).collect()
     }
 
     /// Link actions with visible geometry on this screen, in paint order.
@@ -1451,5 +1468,17 @@ mod coverage_tests {
         assert_eq!(super::sample_coverage(&[0, 255], 2, 1, 64, 0), 64);
         assert_eq!(super::sample_coverage(&[0, 255], 2, 1, 192, 0), 191);
         assert_eq!(super::sample_coverage(&[255], 1, 1, 0, 0), 255);
+    }
+}
+
+#[cfg(test)]
+mod picture_region_tests {
+    use super::*;
+    #[test]
+    fn page_cuts_scale_and_keyboard_crop_keep_links_on_visible_pixels(){
+        let view=PageView{commands:Vec::new(),images:Default::default(),targets:vec![(Rect{x:10,y:90,width:30,height:30},0),(Rect{x:70,y:170,width:20,height:20},1)],links:Vec::new(),css_width:100,content_height:200,page_height_css:100,cuts:vec![0,100],scale:2,stats:Default::default()};
+        let regions=view.picture_links(1,400,200,400);
+        assert_eq!(regions.len(),1);let (r,index)=regions[0];assert_eq!(index,0);assert_eq!((r.x,r.y,r.width,r.height),(40,0,120,80));
+        let regions=view.picture_links(0,400,400,400);assert_eq!(regions.len(),1);assert_eq!((regions[0].0.y,regions[0].0.height),(360,40));
     }
 }

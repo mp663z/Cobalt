@@ -1,0 +1,10 @@
+wait-for Search the web
+tap-id samples
+wait-for Sample pages
+shot-colour touch-start
+tap-at 350 508
+wait-for Notes on reading
+shot-colour touch-destination
+tap-id back
+wait-for Sample pages
+shot-colour touch-restored
