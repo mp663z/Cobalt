@@ -245,6 +245,8 @@ impl Browser {
 
     fn open(&mut self, context: &mut Context, url: &Url) {
         self.zoom_panel=false;
+        self.browser_menu=false;
+        if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
         let same = self
             .loaded
             .as_ref()
@@ -1349,6 +1351,8 @@ impl Browser {
         } else if self.browser_menu && (action == action_id("back")||action==ActionId::BACK) {
             self.browser_menu = false;
         } else if action == action_id("go-home") {
+            if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
+            self.zoom_panel=false;
             self.browser_menu = false;
             if let Some(url) = self.home_page.clone() {
                 self.open(context, &url);
@@ -1589,8 +1593,10 @@ impl Browser {
                 self.save_library(context);
             }
         } else if action == action_id("bookmarks") {
+            if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
             self.view = View::Bookmarks(0);
         } else if action == action_id("recent") {
+            if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
             self.view = View::Recent(0);
         } else if action == action_id("places-next") || action == action_id("places-previous") {
             let next = action == action_id("places-next");
@@ -1975,6 +1981,8 @@ impl KoboApp for Browser {
             return;
         }
         if action == action_id("home") {
+            if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
+            self.zoom_panel=false;self.browser_menu=false;
             self.view = View::Start;
             self.address.close();
             self.show(context);
@@ -2064,6 +2072,8 @@ impl KoboApp for Browser {
             self.carry_out(context, go);
             return;
         } else if action == action_id("forward") {
+            if self.pending.is_some()||self.reading.is_some(){self.stop(context);}
+            self.zoom_panel=false;self.browser_menu=false;
             self.stepped_from = Some(self.history.position());
             let go = self.history.forward();
             self.carry_out(context, go);

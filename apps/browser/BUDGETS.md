@@ -997,3 +997,13 @@ attempted-URL editing/reload and retained page. Inspected unit-rendered timeout
 frame, not live-network evidence. Full browser236/0/2,SDK166/0,workspacecheck/
 scopedclippy pass; locked static stripped ARM5,268,476B,headroom1,223,784.
 Earlier device/core proofs unchanged. Hardware/latency/RSS/fullweb gates open.
+
+## Abandoned navigation race audit, November 24, 2026
+
+Local navigation or Home could leave an older network request alive and allow
+its late response to replace the chosen destination. Two new fixtures fail
+before and pass after. New navigation retires pending fetch/shelf wait before
+choosing a local destination; Home/library/Forward paths retire abandoned work
+too. The clock and transient panels retire with it. Full browser238/0/2 across
+four batches, workspacecheck/scopedclippy and locked ARM pass. ARM5,268,748B,
+headroom1,223,512. No new visual feature or hardware claim from this race fix.

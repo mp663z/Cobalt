@@ -2686,3 +2686,20 @@ fn failure_recovery_edits_and_reloads_the_failed_url_not_the_retained_document()
  let commands=r.action(action_id("reload"));let fetched=fetches(&commands);assert!(fetched.iter().any(|(_,url,_)|url=="https://example.com/"));
  assert!(matches!(r.app().view,View::Loading(_)));assert_eq!(title(&r),"Browse: sample pages");
 }
+
+#[test]
+fn local_navigation_retires_an_older_network_request(){
+ let mut r=runner(TextScale::Default);r.action(link_to(&r,"example.com"));let task=pending_task(&r);
+ let commands=r.action(action_id("samples"));
+ assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::Cancel(t) if *t==task)));
+ assert!(r.app().pending.is_none());assert!(!r.app().clock.is_running());
+ r.task_outcome(task,TaskOutcome::Completed(b"<title>Wrong late destination</title><p>Stale".to_vec()));
+ assert_eq!(title(&r),"Browse: sample pages");
+}
+
+#[test]
+fn home_without_a_saved_home_retires_pending_navigation(){
+ let mut r=runner(TextScale::Default);r.action(link_to(&r,"example.com"));let task=pending_task(&r);
+ r.action(action_id("go-home"));assert_eq!(r.app().view,View::Start);assert!(r.app().pending.is_none());
+ r.task_outcome(task,TaskOutcome::Completed(b"<title>Wrong late destination</title><p>Stale".to_vec()));assert_eq!(r.app().view,View::Start);
+}
