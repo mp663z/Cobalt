@@ -2716,3 +2716,14 @@ fn runtime_back_is_offered_to_native_subviews_and_returns_without_leaving_browse
  r.action(ActionId::BACK);assert!(!r.app().form_entry.is_open());assert!(matches!(r.app().view,View::Form(0,_)));
  r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page);
 }
+
+#[test]
+fn physical_page_keys_do_not_move_the_document_behind_an_open_panel(){
+ for panel in ["browser-zoom","browser-more"]{
+  let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+  r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+  let page=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().page;
+  r.action(action_id(panel));r.page_turn(true);
+  assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().page,page,"{panel}");
+ }
+}

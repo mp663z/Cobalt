@@ -2267,7 +2267,7 @@ impl KoboApp for Browser {
 
     fn on_page_turn(&mut self, context: &mut Context, forward: bool) {
         self.validate_css(context);
-        if self.address.is_open() {
+        if self.address.is_open() || self.form_entry.is_open() || self.zoom_panel || self.browser_menu {
             return;
         }
         let name = match (&self.view, forward) {

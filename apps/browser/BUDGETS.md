@@ -1024,3 +1024,11 @@ not. Mirrored the same prerequisite arrival in the disabled rig, keeping full
 Screen equality intact instead of ignoring a field. Full browser239/0/2 after
 all changes, workspacecheck/scopedclippy and locked ARM pass. ARM5,269,172B,
 headroom1,223,088. No new wire/unsafe/dependencies. Hardware/fullweb gates open.
+
+## Physical page keys respect panels, November 24, 2026
+
+Page keys no longer move the document behind Zoom/More or active form typing.
+The regression fixture failed before and passes after for both panels. Full
+browser240/0/2 across four batches, workspacecheck/scopedclippy and locked ARM
+pass. ARM5,269,204B,headroom1,223,056. This is input isolation, not physical
+hardware qualification or a new visual feature. Independent gates stay open.
