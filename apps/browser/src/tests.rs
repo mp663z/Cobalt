@@ -2508,3 +2508,17 @@ fn native_colour_uses_computed_css_font_treatments_and_normal_resets(){
     let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
     if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-css-fonts.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
 }
+
+#[test]
+fn native_pre_computed_font_treatments_preserve_raw_utf8_whitespace(){
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><pre style='font-weight:700;font-style:italic;color:red'>\n  café  x\n\n<span style='font-weight:normal;font-style:normal;color:blue'>    reset y</span>\n</pre><form><input name=q></form>");
+    let (text,spans)=runner.app().current_pieces().iter().find_map(|p|if let Piece::ColouredPreformatted{text,spans}=p{Some((text,spans))}else{None}).unwrap();
+    assert_eq!(text,"  café  x\n\n    reset y");
+    assert!(spans.iter().any(|s|s.start==0&&s.presentation.strong&&s.presentation.emphasis&&s.presentation.foreground==Some([255,0,0])));
+    assert!(spans.iter().any(|s|!s.presentation.strong&&!s.presentation.emphasis&&s.presentation.foreground==Some([0,0,255])));
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for rgb in [[255,0,0],[0,0,255]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
+    runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){use std::io::Write;let mut f=std::fs::File::create("/tmp/native-pre-fonts.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}}
+}

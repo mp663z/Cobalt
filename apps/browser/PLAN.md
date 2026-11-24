@@ -490,3 +490,10 @@ including normal resets overriding strong/em tags. Existing synthetic glyph
 routines remain; this is not true font variants or arbitrary families. Plain
 parser behavior stays stable. Incomplete style mappings retain semantic tags.
 BUDGETS.md records tests,failed mutation,restoration,raster and ARM size.
+
+#### November24 raw preformatted style follow-through
+
+Raw preformatted source traversal now retains computed font treatments while
+keeping UTF8 spacing/blank lines and normal resets. It still measures and paints
+in the existing mono face. See BUDGETS.md for fail/restore,full-raster and checks.
+No arbitrary font family,true-variant or hardware claim.

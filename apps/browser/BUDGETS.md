@@ -818,3 +818,18 @@ fails,restoration passes. Initial disk-full links were rerun after disposable
 build output cleanup. Full native raster inspected:6,831 non-grey pixels.
 Static stripped ARM EABI5:5,248,436B,delta3,999,056 over hello,headroom1,243,824
 under+5MiB. No physical panel/RSS/latency qualification.
+
+### Native preformatted computed font treatments, November24,2026
+
+The raw source traversal now retains computed bold/emphasis beside each raw
+UTF8 text slice before trimming only the existing block edges. It then wraps
+those slices in semantic strong/emphasis, preserving indentation, double spaces,
+blank rows and colour. Normal-reset children stay plain. Pre remains measured
+and painted in the same mono face; no code flag is added to old wire shapes.
+Browser226/0/2 ignored,engine1409/0/18 across148groups,layout34/0; workspace
+check green;clippy completes with existing warnings. Treatment-removed mutation
+fails;restoration passes. Full native raster inspected:2,531 non-grey pixels,
+including accented text,blank row and child reset. Not panel calibration.
+Static stripped ARM EABI5:5,248,876B,delta3,999,496 over hello,headroom1,243,384
+under+5MiB. No new crate,unsafe,allocator or protocol change. Arbitrary families,
+true font variants,complex controls and physical RSS/latency remain open.

@@ -368,39 +368,40 @@ impl Converter<'_> {
     }
 
     fn preformatted_runs(&self,handle:Handle)->Vec<Inline> {
+        // Raw whitespace is source text, never passed through HTML collapse.
+        // Keep treatment metadata beside each source slice until edge trimming
+        // is complete, then wrap it in the semantic inline representation.
         let mut runs=Vec::new();let mut stack=vec![handle];
         while let Some(node)=stack.pop(){
             match &self.nodes[node].data {
                 Data::Text(text)=>{
-                    if let Some(Some((foreground,background)))=self.colours.as_ref().and_then(|colours|colours.get(node)) {
-                        runs.push(Inline::ColouredText{text:text.clone(),foreground:*foreground,background:*background,code:true});
-                    }else{runs.push(Inline::Text(text.clone()));}
+                    let colour=self.colours.as_ref().and_then(|items|items.get(node)).copied().flatten();
+                    let treatment=self.font_treatments.as_ref().and_then(|items|items.get(node)).copied().flatten().unwrap_or_default();
+                    runs.push((text.clone(),colour,treatment));
                 }
                 Data::Element{..}=>{
                     if self.tag(node).is_some_and(|tag|DROPPED.contains(&tag)){continue;}
-                    if self.tag(node)==Some("br"){runs.push(Inline::Text("\n".into()));}
+                    if self.tag(node)==Some("br"){runs.push(("\n".into(),None,(false,false)));}
                     stack.extend(self.nodes[node].children.iter().rev());
                 }
                 _=>{}
             }
         }
-        let mut raw=String::new();flatten(&runs,&mut raw);
+        let raw:String=runs.iter().map(|(text,_,_)|text.as_str()).collect();
         let start=usize::from(raw.starts_with('\n'));
         let end=raw.trim_end().len().max(start);
         let mut offset=0;
-        runs.into_iter().filter_map(|run|{
-            let (text,colour)=match run {
-                Inline::Text(text)=>(text,None),
-                Inline::ColouredText{text,foreground,background,..}=>(text,Some((foreground,background))),
-                _=>return None,
-            };
+        runs.into_iter().filter_map(|(text,colour,(strong,emphasis))|{
             let from=start.max(offset);let to=end.min(offset+text.len());let at=offset;offset+=text.len();
             if from>=to{return None;}
             let text=text[from-at..to-at].to_owned();
-            Some(match colour {
+            let mut run=match colour {
                 Some((foreground,background))=>Inline::ColouredText{text,foreground,background,code:true},
                 None=>Inline::Text(text),
-            })
+            };
+            if emphasis{run=Inline::Emphasis(vec![run]);}
+            if strong{run=Inline::Strong(vec![run]);}
+            Some(run)
         }).collect()
     }
 
