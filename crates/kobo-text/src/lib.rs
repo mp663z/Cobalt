@@ -742,7 +742,7 @@ impl SystemFonts {
     fn face(&self, face: Face) -> &Typeface {
         match face {
             Face::Text => &self.text,
-            Face::Mono => &self.mono,
+            Face::Mono | Face::ReadingMono => &self.mono,
             Face::Reading => &self.reading,
         }
     }
@@ -778,6 +778,7 @@ impl SystemFonts {
         match face {
             Face::Text | Face::Reading => None,
             Face::Mono => Some(self.cell_width(size)),
+            Face::ReadingMono => self.mono.fixed_advance(size,face),
         }
     }
 
@@ -795,7 +796,7 @@ impl SystemFonts {
     const fn fallback(&self, face: Face) -> Option<&Typeface> {
         match face {
             Face::Text | Face::Reading => Some(&self.mono),
-            Face::Mono => None,
+            Face::Mono | Face::ReadingMono => None,
         }
     }
 }
@@ -826,7 +827,7 @@ impl Typesetter for SystemFonts {
             // again is the usual book measure and is what the reader's own
             // software is doing on the next screen over.
             Face::Reading => natural + natural / 5,
-            Face::Text | Face::Mono => natural,
+            Face::Text | Face::Mono | Face::ReadingMono => natural,
         }
     }
 
@@ -2121,5 +2122,18 @@ mod tests {
         });
         assert_eq!(measured, expected);
         assert!(!kobo_ui::legacy_typography(), "the v11 selection leaked");
+    }
+}
+
+#[cfg(test)]
+mod reading_mono_tests {
+    use super::*;
+    #[test]
+    fn document_mono_has_equal_cells_and_ignores_interface_size() {
+        let fonts=SystemFonts::discover(kobo_ui::CLARA_BW_METRICS).unwrap();
+        kobo_ui::with_text_scale(kobo_ui::TextScale::Smaller,||kobo_ui::with_reading_scale(kobo_ui::TextScale::ExtraLarge,||{
+            assert_eq!(fonts.measure("iiii",FontSize::Body,Face::ReadingMono).0,fonts.measure("WWWW",FontSize::Body,Face::ReadingMono).0);
+            assert!(fonts.measure("iiii",FontSize::Body,Face::ReadingMono).0>fonts.measure("iiii",FontSize::Body,Face::Mono).0);
+        }));
     }
 }

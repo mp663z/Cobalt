@@ -26,6 +26,7 @@ const JAPANESE_FONT_HANDLE: FontHandle = FontHandle(1);
 const PICTURE_HANDLE: PictureHandle = PictureHandle(1);
 const NOTICE: &str = "Flashcards reviews host-prepared Cobalt bundles offline. The device contains no linked study-engine code, requests no remote-network capability, and uses only Cobalt's required local runtime IPC. Applicable device licences are in Licences & about.";
 const CARD_PRESENTATION: ParagraphPresentation = ParagraphPresentation {
+    monospaced: false,
     alignment: ParagraphAlignment::Center,
     line_height_percent: 135,
     margin_before_em: 30,
@@ -33,6 +34,7 @@ const CARD_PRESENTATION: ParagraphPresentation = ParagraphPresentation {
     first_line_indent_em: 0,
 };
 const DECK_PRESENTATION: ParagraphPresentation = ParagraphPresentation {
+    monospaced: false,
     alignment: ParagraphAlignment::Center,
     line_height_percent: 110,
     margin_before_em: 0,

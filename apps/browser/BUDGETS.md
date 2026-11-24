@@ -732,3 +732,27 @@ headroom1,248,728 under +5 MiB. No new crate,unsafe,allocator or wire change.
 This is synthetic bold/slant,not arbitrary authored font families or true font
 variant selection. Inline code/pre mono fidelity,complex control styling and
 physical panel/RSS/latency remain unverified or incomplete.
+
+
+### Native fixed-pitch preformatted blocks, November 24, 2026
+
+Plain and coloured preformatted blocks use mono rich paragraphs. Measurement,
+wrapping, glyph paint, RGB backgrounds, link rectangles and text-selection
+rectangles share the document-mono face. It follows reading size without
+changing terminal/UI mono sizing. The emergency unbroken-token wrapper now
+measures its requested face instead of the interface face. Hard indentation
+and blank rows remain intact; soft continuations start flush. Protocol21 adds
+tag40, rejected by11-20, while existing non-mono tags retain byte shape.
+Plain rich paragraphs round-trip11-21 with identical node bytes.
+
+Browser222/0/2 ignored,UI295/0/2 ignored,font52/0,protocol117/0,layout31/0,
+SDK166/0/2 ignored,sim108/0,runtime156/0,reader82/0,frame-host7/0.
+Workspace check and clippy complete with existing warnings. Mutation disabling
+mono routing fails the fixture; restoration passes. Actual Clara Colour
+journey and both full frames inspected:31,674 non-grey page pixels and6,442
+form pixels. These are ideal simulator RGB, not panel calibration.
+Locked stripped static ARM EABI5:5,244,396 bytes,delta3,995,016 over hello
+1,249,380,headroom1,247,864 under +5MiB. No new crate,unsafe or allocator change.
+Inline code within prose remains proportional; arbitrary CSS font families,
+true variant selection, complex control styling, physical RSS and latency
+remain incomplete or unverified.

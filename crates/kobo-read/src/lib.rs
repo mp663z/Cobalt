@@ -3380,6 +3380,7 @@ fn block_formulae(
 
 fn paragraph_presentation(style: &kobo_doc::BlockStyle) -> kobo_ui::ParagraphPresentation {
     kobo_ui::ParagraphPresentation {
+        monospaced: false,
         alignment: match style.alignment {
             kobo_doc::TextAlignment::Start => kobo_ui::ParagraphAlignment::Start,
             kobo_doc::TextAlignment::Center => kobo_ui::ParagraphAlignment::Center,
@@ -5346,6 +5347,7 @@ mod tests {
     #[test]
     fn paragraph_fragments_only_keep_spacing_at_the_real_edges() {
         let whole = kobo_ui::ParagraphPresentation {
+            monospaced: false,
             alignment: kobo_ui::ParagraphAlignment::Justify,
             line_height_percent: 140,
             margin_before_em: 75,

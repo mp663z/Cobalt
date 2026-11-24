@@ -88,7 +88,9 @@ pub const COLOUR_QUOTE_VERSION: u8 = 18;
 pub const COLOUR_TABLE_VERSION:u8=19;
 /// Optional authored title colours on native rows.
 pub const COLOUR_ROW_VERSION:u8=20;
-pub const VERSION: u8 = 20;
+/// Version adding mono rich-text blocks measured in the mono face.
+pub const MONO_RICH_TEXT_VERSION:u8=21;
+pub const VERSION: u8 = 21;
 /// Version introducing server-bound account records.
 pub const SERVER_ACCOUNT_VERSION: u8 = 14;
 /// Beta wire version introducing explicit update tasks.
@@ -1998,7 +2000,7 @@ impl From<io::Error> for StreamError {
 pub fn encode(frame: &Frame) -> Result<Vec<u8>, ProtocolError> {
     if !matches!(
         frame.version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(frame.version));
     }
@@ -4258,12 +4260,14 @@ fn encoded_node_len(
             links,
             selection,
             formulae,
+            presentation,
             ..
         } => {
             if spans.len() > kobo_ui::MAX_RICH_TEXT_SPANS {
                 return Err(ProtocolError::TooManyNodes);
             }
-            let coloured = spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            if presentation.monospaced&&version<MONO_RICH_TEXT_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            let coloured = presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
             if coloured && version < COLOUR_RICH_TEXT_VERSION {
                 return Err(ProtocolError::UnsupportedVersion(version));
             }
@@ -4682,7 +4686,7 @@ pub fn decode(bytes: &[u8]) -> Result<Frame, ProtocolError> {
     let version = bytes[4];
     if !matches!(
         version,
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(bytes[4]));
     }
@@ -5160,7 +5164,7 @@ pub fn read_from<R: Read>(reader: &mut R) -> Result<Frame, StreamError> {
     }
     if !matches!(
         header[4],
-        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | VERSION
+        LEGACY_VERSION | FOLIO_VERSION | SELECTED_GRID_VERSION | SUSPEND_VERSION | PICTURE_BLEED_VERSION | COLOUR_RICH_TEXT_VERSION | COLOUR_HEADING_VERSION | COLOUR_QUOTE_VERSION | COLOUR_TABLE_VERSION | COLOUR_ROW_VERSION | VERSION
     ) {
         return Err(ProtocolError::UnsupportedVersion(header[4]).into());
     }
@@ -5495,11 +5499,12 @@ fn encode_node(
             if spans.len() > kobo_ui::MAX_RICH_TEXT_SPANS {
                 return Err(ProtocolError::TooManyNodes);
             }
-            let coloured = spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
+            if presentation.monospaced&&version<MONO_RICH_TEXT_VERSION{return Err(ProtocolError::UnsupportedVersion(version));}
+            let coloured = presentation.monospaced || spans.iter().any(|span| span.presentation.foreground.is_some() || span.presentation.background.is_some());
             if coloured && version < COLOUR_RICH_TEXT_VERSION {
                 return Err(ProtocolError::UnsupportedVersion(version));
             }
-            output.push(if coloured {35} else {28});
+            output.push(if presentation.monospaced{40}else if coloured {35} else {28});
             push_u32(output, id.0);
             push_string(output, text)?;
             push_u16(
@@ -6676,8 +6681,8 @@ fn decode_node(
             }
             Ok(Node::Text { id, text, links })
         }
-        tag @ (28 | 35) if tag == 28 || version >= COLOUR_RICH_TEXT_VERSION => {
-            let coloured = tag == 35;
+        tag @ (28 | 35 | 40) if tag==28 || (tag==35&&version>=COLOUR_RICH_TEXT_VERSION) || (tag==40&&version>=MONO_RICH_TEXT_VERSION) => {
+            let coloured = tag != 28;
             let text = reader.string()?;
             let span_count = usize::from(reader.u16()?);
             if span_count > kobo_ui::MAX_RICH_TEXT_SPANS {
@@ -6715,6 +6720,7 @@ fn decode_node(
                 _ => return Err(ProtocolError::InvalidValue("paragraph alignment")),
             };
             let presentation = kobo_ui::ParagraphPresentation {
+                monospaced:tag==40,
                 alignment,
                 line_height_percent: reader.u16()?.clamp(80, 250),
                 margin_before_em: reader.u16()?.min(2_000),
@@ -11191,10 +11197,12 @@ mod colour_rich_text_tests {
         let current=frame(true,VERSION);
         let bytes=encode(&current).unwrap();
         assert_eq!(decode(&bytes).unwrap(),current);
-        for version in LEGACY_VERSION..COLOUR_RICH_TEXT_VERSION {
-            assert!(matches!(encode(&frame(true,version)),Err(ProtocolError::UnsupportedVersion(v)) if v==version));
-            let mut older=bytes.clone(); older[4]=version;
-            assert!(decode(&older).is_err());
+        for version in LEGACY_VERSION..=VERSION {
+            if version<COLOUR_RICH_TEXT_VERSION {
+                assert!(matches!(encode(&frame(true,version)),Err(ProtocolError::UnsupportedVersion(v)) if v==version));
+                let mut older=bytes.clone(); older[4]=version;
+                assert!(decode(&older).is_err());
+            }
             let plain=encode(&frame(false,version)).unwrap();
             let newest=encode(&frame(false,VERSION)).unwrap();
             assert_eq!(&plain[HEADER_LEN..],&newest[HEADER_LEN..]);
@@ -11356,5 +11364,26 @@ mod row_rgb_wire_tests {
         for end in 0..bytes.len(){assert!(decode(&bytes[..end]).is_err());}
         let mut payload=Vec::new();let mut count=0;encode_node(&mut payload,&node(row.clone()),0,&mut count,VERSION).unwrap();let mut count=0;assert_eq!(payload.len(),encoded_node_len(&node(row),0,&mut count,VERSION).unwrap());
         payload[6]=2;let mut count=0;assert!(decode_node(&mut Reader::new(&payload),0,&mut count,VERSION).is_err());
+    }
+}
+
+#[cfg(test)]
+mod mono_rich_block_tests {
+    use super::*;
+    #[test]
+    fn mono_block_has_its_own_tag_and_never_silently_changes_old_peers() {
+        let node=Node::RichText{id:NodeId(3),text:"  ii WW\n\n    aligned".into(),
+            spans:vec![kobo_ui::RichTextSpan{start:2,end:7,presentation:kobo_ui::TextPresentation{foreground:Some([190,30,60]),..Default::default()}}],
+            links:vec![kobo_ui::TextLink{action:ActionId(9),start:2,end:7}],
+            presentation:kobo_ui::ParagraphPresentation{monospaced:true,..Default::default()},selection:None,formulae:Vec::new()};
+        let mut bytes=Vec::new();encode_node(&mut bytes,&node,0,&mut 0,VERSION).unwrap();
+        assert_eq!(bytes[0],40);
+        assert_eq!(decode_node(&mut Reader::new(&bytes),0,&mut 0,VERSION).unwrap(),node);
+        for version in LEGACY_VERSION..MONO_RICH_TEXT_VERSION {
+            assert!(matches!(encoded_node_len(&node,0,&mut 0,version),Err(ProtocolError::UnsupportedVersion(v)) if v==version));
+            assert!(encode_node(&mut Vec::new(),&node,0,&mut 0,version).is_err());
+            assert!(decode_node(&mut Reader::new(&bytes),0,&mut 0,version).is_err());
+        }
+        for n in 1..=8 {assert!(decode_node(&mut Reader::new(&bytes[..bytes.len()-n]),0,&mut 0,VERSION).is_err());}
     }
 }

@@ -445,13 +445,16 @@ fn code_panels() -> Vec<(DisplayMetrics, String)> {
 }
 
 fn code_nodes(screen: &Screen, metrics: &DisplayMetrics, marker: &str) -> Vec<Vec<String>> {
-    screen
-        .layout_with(metrics, &Chrome::measuring(true))
-        .nodes
-        .iter()
-        .filter(|node| node.text_lines.iter().any(|line| line.contains(marker)))
-        .map(|node| node.text_lines.clone())
-        .collect()
+    let layout=screen.layout_with(metrics,&Chrome::measuring(true));
+    let Some(first)=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(_))&&n.text_lines.iter().any(|line|line.contains(marker)))else{return Vec::new()};
+    let mut rows=Vec::<String>::new();
+    for n in layout.nodes.iter().filter(|n|n.id==first.id&&matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(_))&&!n.text_lines.is_empty()) {
+        let index=((n.rect.y-first.rect.y)/n.rect.height.max(1))as usize;
+        rows.resize(rows.len().max(index+1),String::new());
+        rows[index].push_str(&n.text_lines[0]);
+        assert_eq!(n.rect.width,kobo_ui::with_reading_scale(screen.text_scale.unwrap_or(metrics.text_scale),||kobo_ui::measure_text_in(&n.text_lines[0],kobo_ui::FontSize::Body,kobo_ui::Face::ReadingMono).0));
+    }
+    vec![rows]
 }
 
 #[test]
@@ -462,8 +465,8 @@ fn browser_code_retains_hard_line_indents_and_wraps_continuations_flush() {
             "fn turn() {\n    *page += 1;\n        deeper();\n}".into(),
         )];
         let screen = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
-        // One node per block: indentation lives in the text, not in extra
-        // paragraphs that would add spacing between code lines.
+        // Rich runs share one paragraph; recover blank rows from their y positions.
+        // Indentation is source text, never extra paragraph spacing.
         let nodes = code_nodes(&screen, &metrics, "fn turn()");
         assert_eq!(nodes.len(), 1, "{name}: one node for the block");
         assert_eq!(
@@ -518,7 +521,7 @@ fn browser_code_wrap_continuations_do_not_inherit_the_indent() {
 }
 
 #[test]
-fn browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame() {
+fn browser_code_has_exactly_one_mono_line_height_per_source_line() {
     kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
     let code = "fn main() {\n    let v = vec![1, 2, 3];\n    for x in &v {\n        println!(\"{x}\");\n    }\n\n}";
     for (metrics, name) in code_panels() {
@@ -526,7 +529,7 @@ fn browser_code_takes_no_more_height_than_the_same_text_on_the_same_page_frame()
         let browser = page_screen_with_metrics("Code", &pieces, 0, Some(1), None, &metrics).build();
         let plain = kobo_ui::with_reading_scale(metrics.text_scale, || {
             page_screen_with_metrics("Code", &[], 0, Some(1), None, &metrics)
-                .text(code)
+                .rich_text(code,Vec::new(),ParagraphPresentation{monospaced:true,..Default::default()})
                 .build()
         });
         let height = |screen: &Screen| {
@@ -759,5 +762,20 @@ fn excessive_colour_runs_keep_text_and_have_bounded_payloads(){
             Piece::Heading{spans,..}|Piece::Quote{spans,..}|Piece::ColouredPreformatted{spans,..}=>assert!(spans.len()<=kobo_ui::MAX_RICH_TEXT_SPANS),
             Piece::Table{rows,..}=>assert!(rows.iter().flat_map(|r|&r.spans).all(|s|s.len()<=kobo_ui::MAX_RICH_TEXT_SPANS)),_=>{}
         }}
+    }
+}
+
+#[test]
+fn mono_unbroken_tokens_wrap_inside_the_same_measured_page() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).unwrap();
+    for (metrics,name) in code_panels(){
+        let text="i".repeat(160);
+        let screen=page_screen_with_metrics("Code",&[Piece::Preformatted(text.clone())],0,Some(1),None,&metrics).build();
+        let layout=screen.layout_with(&metrics,&Chrome::measuring(true));
+        let runs:Vec<_>=layout.nodes.iter().filter(|n|matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(_))&&!n.text_lines.is_empty()).collect();
+        assert!(runs.len()>1,"{name}");
+        let boundary=layout.nodes.iter().find(|n|matches!(n.kind,kobo_ui::LayoutKind::MonoRichText(_))&&n.text_lines.is_empty()).unwrap();
+        assert!(runs.iter().all(|n|n.rect.x+n.rect.width<=boundary.rect.x+boundary.rect.width),"{name}: forced wrap escaped mono measure");
+        assert_eq!(runs.iter().map(|n|n.text_lines[0].as_str()).collect::<String>(),text,"{name}");
     }
 }

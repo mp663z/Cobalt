@@ -450,3 +450,16 @@ complex control styling,true variant selection and device measurements remain.
 Shared consumer audit after the protocol/toolkit additions: book reader82/0,
 flashcards binary14/0,frame-host7/0. This supplements whole-workspace compile,
 not a replacement for full workspace tests or any independent proof gate.
+
+
+#### November24 native preformatted follow-through
+
+Preformatted blocks now measure and paint with the embedded fixed-pitch face,
+including RGB runs. Dedicated document-mono scaling preserves independent
+reading size, while existing terminal/UI mono sizing is unchanged. Protocol21
+tag40 preserves ordinary tag bytes and rejects mono blocks on older peers.
+Long-token emergency wrapping also uses the selected face. Current full-frame
+Colour evidence is in screenshots/native-colour-blocks.png. See BUDGETS.md for
+checks and limits. Inline code inside prose, arbitrary authored font families,
+true font variants, complex control styles and physical panel/RSS/latency are
+still incomplete or unverified. This does not close the broad browser goal.

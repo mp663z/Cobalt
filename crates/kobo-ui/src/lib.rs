@@ -4430,6 +4430,8 @@ pub enum ParagraphAlignment {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ParagraphPresentation {
+    /// Fixed-pitch block text, measured and painted in the same mono face.
+    pub monospaced:bool,
     pub alignment: ParagraphAlignment,
     pub line_height_percent: u16,
     pub margin_before_em: u16,
@@ -4440,6 +4442,7 @@ pub struct ParagraphPresentation {
 impl Default for ParagraphPresentation {
     fn default() -> Self {
         Self {
+            monospaced:false,
             alignment: ParagraphAlignment::Start,
             line_height_percent: 100,
             margin_before_em: 0,
@@ -5954,6 +5957,7 @@ pub enum LayoutKind {
     ColouredHeading(u8,TextPresentation),
     Text,
     RichText(TextPresentation),
+    MonoRichText(TextPresentation),
     /// A run inside a paragraph that goes somewhere.
     ///
     /// Drawn as an underline under words the paragraph node has already set,
@@ -7289,6 +7293,8 @@ fn layout_node(
             selection,
             formulae,
         } => {
+            let prose=if presentation.monospaced{Face::ReadingMono}else{prose};
+            let kind=|style|if presentation.monospaced{LayoutKind::MonoRichText(style)}else{LayoutKind::RichText(style)};
             // Rich text is emitted as one node per styled run, so keep one
             // empty run carrying the paragraph's actual layout bounds. It
             // draws nothing, but lets diagnostics distinguish several runs
@@ -7420,7 +7426,7 @@ fn layout_node(
                             width: run_width,
                             height: line_height,
                         },
-                        kind: LayoutKind::RichText(styled),
+                        kind: kind(styled),
                         text_lines: vec![run.to_owned()],
                     });
                     run_x = run_x.saturating_add(run_width);
@@ -7535,7 +7541,7 @@ fn layout_node(
                     width,
                     height: end.saturating_sub(y),
                 },
-                kind: LayoutKind::RichText(TextPresentation::default()),
+                kind: kind(TextPresentation::default()),
                 text_lines: Vec::new(),
             });
             end
@@ -10035,6 +10041,8 @@ pub enum Face {
     /// a file size. Every glyph has the same advance, so `n` characters are
     /// always exactly `n` cells wide.
     Mono,
+    /// Fixed pitch document text, following the reading size rather than UI size.
+    ReadingMono,
     /// A book, read for an hour at a time.
     ///
     /// Distinct from [`Self::Text`] because the two jobs genuinely differ. The
@@ -10320,7 +10328,7 @@ pub fn reading_scale() -> TextScale {
 #[must_use]
 pub fn scale_percent(face: Face) -> i32 {
     match face {
-        Face::Reading => reading_scale().percent(),
+        Face::Reading | Face::ReadingMono => reading_scale().percent(),
         Face::Text | Face::Mono => text_scale().percent(),
     }
 }
@@ -11741,7 +11749,7 @@ fn wrap_ranges_with(
                 start = best_end;
             } else {
                 let forced_end =
-                    force_grapheme_break(text, start, visible_end, max_width, size, &graphemes);
+                    force_grapheme_break(text, start, visible_end, max_width, size, face, &graphemes);
                 lines.push((start, start + text[start..forced_end].trim_end().len()));
                 start = forced_end;
             }
@@ -11751,7 +11759,7 @@ fn wrap_ranges_with(
 
         if !emitted {
             let forced_end =
-                force_grapheme_break(text, start, text.len(), max_width, size, &graphemes);
+                force_grapheme_break(text, start, text.len(), max_width, size, face, &graphemes);
             lines.push((start, start + text[start..forced_end].trim_end().len()));
             start = forced_end;
         }
@@ -11795,13 +11803,14 @@ fn force_grapheme_break(
     limit: usize,
     max_width: i32,
     size: FontSize,
+    face: Face,
     graphemes: &[usize],
 ) -> usize {
     let mut first = None;
     let mut best = None;
     for &end in graphemes.iter().filter(|&&end| end > start && end <= limit) {
         first.get_or_insert(end);
-        if measure_text(&text[start..end], size).0 <= max_width {
+        if measure_text_in(&text[start..end], size, face).0 <= max_width {
             best = Some(end);
         } else {
             break;
@@ -12983,7 +12992,8 @@ fn validate_node(
 ) {
     let id = node.id();
     match node {
-        Node::Text { text, .. } | Node::RichText { text, .. } | Node::Quote { text, .. } => {
+        Node::RichText{text,presentation,..}=>check_text_coverage(id,text,if presentation.monospaced{Face::ReadingMono}else{prose_face},issues),
+        Node::Text { text, .. } | Node::Quote { text, .. } => {
             check_text_coverage(id, text, prose_face, issues);
         }
         Node::Heading { text, .. } | Node::Secondary { text, .. } | Node::Banner { text, .. } => {
@@ -13342,17 +13352,18 @@ fn validate_content_bounds(
             } = node
             {
                 if let Some(text_layout) = laid_out.iter().find(|laid_out| {
-                    matches!(laid_out.kind, LayoutKind::RichText(_))
+                    matches!(laid_out.kind, LayoutKind::RichText(_)|LayoutKind::MonoRichText(_))
                         && laid_out.text_lines.is_empty()
                 }) {
+                    let face=if presentation.monospaced{Face::ReadingMono}else{layout.prose_face};
                     let (line_height, before, after, indent) =
-                        rich_text_spacing(*presentation, layout.prose_face);
+                        rich_text_spacing(*presentation, face);
                     let measure = text_layout.rect.width.saturating_sub(indent.max(0)).max(1);
                     let required = wrap_ranges_with(
                         text,
                         measure,
                         FontSize::Body,
-                        layout.prose_face,
+                        face,
                         formulae,
                         line_height,
                     )
@@ -13685,6 +13696,7 @@ fn key_label_style(node: &LayoutNode) -> (FontSize, TextScale) {
 
 fn layout_text_style(node: &LayoutNode) -> Option<(FontSize, Face)> {
     let size = match node.kind {
+        LayoutKind::MonoRichText(_)=>return Some((FontSize::Body,Face::ReadingMono)),
         LayoutKind::Heading(level) | LayoutKind::ColouredHeading(level,_) => FontSize::for_heading_level(level),
         LayoutKind::CellLabel(true) => board_label_size(node),
         LayoutKind::PencilNumber(_) => pencil::label_style(node).0,
@@ -15116,7 +15128,8 @@ fn render_all_with_selected_font(
                 tone::INK,
                 clip,
             ),
-            LayoutKind::RichText(presentation) => {
+            LayoutKind::RichText(presentation)|LayoutKind::MonoRichText(presentation) => {
+                let prose=if matches!(node.kind,LayoutKind::MonoRichText(_)){Face::ReadingMono}else{prose};
                 if let Some(text) = node.text_lines.first() {
                     if let Some(background) = presentation.background {
                         fill_rgb_clipped(surface,node.rect,background,clip);
@@ -24811,5 +24824,35 @@ mod colour_fragment_budget_tests{
             let actual:String=layout.nodes.iter().filter(|n|n.id==NodeId(1)).flat_map(|n|n.text_lines.iter().map(String::as_str)).collect();
             assert_eq!(actual,text);assert!(layout.nodes.iter().any(|n|n.id==NodeId(2)));
         }
+    }
+}
+
+#[cfg(test)]
+mod mono_block_tests {
+    use super::*;
+    #[test]
+    fn forced_mono_wrap_is_measured_in_the_same_face_as_regular_wrap() {
+        let ends=vec![1,2,3,4,5];
+        let width=measure_text_in("ii",FontSize::Body,Face::ReadingMono).0;
+        let at=force_grapheme_break("iiiii",0,5,width,FontSize::Body,Face::ReadingMono,&ends);
+        assert_eq!(at,2);
+    }
+    #[test]
+    fn mono_block_measures_runs_links_and_selection_in_its_paint_face() {
+        let text="  ii WW\n\n    aligned";
+        let screen=Screen::new(1,vec![Node::RichText{id:NodeId(1),text:text.into(),
+            spans:vec![RichTextSpan{start:2,end:7,presentation:TextPresentation{foreground:Some([200,30,50]),..Default::default()}}],
+            links:vec![TextLink{action:ActionId(9),start:2,end:7}],
+            presentation:ParagraphPresentation{monospaced:true,..Default::default()},
+            selection:Some(TextSelection{context:1,offset:0}),formulae:Vec::new()}]);
+        let layout=screen.layout();
+        let runs:Vec<_>=layout.nodes.iter().filter(|n|matches!(n.kind,LayoutKind::MonoRichText(_))&&!n.text_lines.is_empty()).collect();
+        assert!(!runs.is_empty());
+        for run in &runs {assert_eq!(run.rect.width,measure_text_in(&run.text_lines[0],FontSize::Body,Face::ReadingMono).0);}
+        assert_eq!(runs[0].text_lines[0],"  ");
+        let linked=layout.nodes.iter().find(|n|matches!(n.kind,LayoutKind::InlineColourLink(ActionId(9),_))).unwrap();
+        assert_eq!(linked.rect.width,measure_text_in("ii WW",FontSize::Body,Face::ReadingMono).0);
+        assert_eq!(runs.last().unwrap().rect.y-runs[0].rect.y,2*FontSize::Body.line_height_in(Face::ReadingMono));
+        assert!(!layout.text_hits.is_empty());
     }
 }

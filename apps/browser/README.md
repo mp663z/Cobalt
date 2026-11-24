@@ -54,7 +54,10 @@ open in Page view to preserve authored RGB. BW keeps its Reader-first default.
 Forms, saved-copy notices and restored/fragment positions retain native Reader.
 On confirmed Colour profiles, native Reader carries supported same-DOM authored
 RGB foreground/background through prose, links, headings, quotes, preformatted
-text, table cells and explicit control titles. Late identity refresh retains
+text, table cells and explicit control titles. Preformatted blocks use the embedded
+fixed-pitch face, with reading-size measurement and painting, including long-token
+wrapping, indentation and blank lines. Inline code inside prose still uses the
+prose face. Late identity refresh retains
 edited form values, notices and native place when retained source is available.
 This is not a claim that all CSS, fonts or image formats are supported.
 External images, SVG, external stylesheets, painted form controls, saved

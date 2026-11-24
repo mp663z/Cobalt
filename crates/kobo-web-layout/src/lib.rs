@@ -402,8 +402,8 @@ fn append_at_reading_scale(
             Piece::Quote { depth, text, spans, .. } => {
                 if spans.is_empty(){builder.quote(*depth,text)}else{builder.coloured_quote(*depth,text,spans.clone())}
             },
-            Piece::Preformatted(text) => builder.text(text),
-            Piece::ColouredPreformatted{text,spans}=>builder.rich_text(text,spans.clone(),ParagraphPresentation::default()),
+            Piece::Preformatted(text) => builder.rich_text(text,Vec::new(),ParagraphPresentation{monospaced:true,..Default::default()}),
+            Piece::ColouredPreformatted{text,spans}=>builder.rich_text(text,spans.clone(),ParagraphPresentation{monospaced:true,..Default::default()}),
             Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
             Piece::Note(text) => builder.secondary(text),
             Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
