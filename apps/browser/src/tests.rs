@@ -2387,3 +2387,20 @@ fn native_quote_rgb_preserves_gutters_links_and_form() {
         for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
     }
 }
+
+#[test]
+fn native_pre_rgb_retains_spaces_blank_line_and_form() {
+    let mut runner=runner(TextScale::Default);runner.app_mut().pictures.set_colour(true);
+    open_web_page(&mut runner,"<!doctype html><pre>\n<span style='color:red'>  red  x\n\n</span><span style='color:blue'>    blue y</span>\n</pre><form><input name=q></form>");
+    assert!(runner.app().current_pieces().iter().any(|p|matches!(p,Piece::ColouredPreformatted{text,..} if text=="  red  x\n\n    blue y")));
+    let metrics=kobo_ui::CLARA_BW_METRICS;let screen=runner.app().screen(&metrics).build();
+    let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+    kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&(),&mut surface,None);
+    for rgb in [[255,0,0],[0,0,255]]{assert!((0..surface.pixels.len()).any(|i|surface.rgb_at(i)==Some(rgb)));}
+    runner.action(action_id("form-0"));assert!(matches!(runner.app().view,View::Form(0,0)));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+        use std::io::Write;let mut file=std::fs::File::create("/tmp/native-pre-rgb.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+}

@@ -19,6 +19,7 @@ fn text_of_piece(piece: &Piece) -> String {
         Piece::Heading { text, .. }
         | Piece::Quote { text, .. }
         | Piece::Preformatted(text)
+        | Piece::ColouredPreformatted{text,..}
         | Piece::Note(text) => text.clone(),
         Piece::Prose(runs) => runs.iter().map(|run| run.text.as_str()).collect(),
         Piece::Table { rows, .. } => rows
@@ -711,4 +712,22 @@ fn long_coloured_quote_pagination_keeps_rgb_and_words() {
         assert!(!spans.is_empty());assert_eq!(spans[0].start,0);assert_eq!(spans.last().unwrap().end,text.len());
         assert!(spans.iter().all(|s|s.presentation.foreground==Some([255,0,0])));
     }}
+}
+
+#[test]
+fn pre_colour_keeps_raw_spaces_blank_lines_and_split_ranges() {
+    let html=b"<pre>\n<span style='color:red'>  red  x\n\n</span><span style='color:blue'>    blue y</span>  \n</pre>";
+    let url=Url::parse("https://fixtures.example/").unwrap();
+    let plain=parse_document(html,&url,&Limits::DEFAULT);
+    let colour=kobo_web_document::parse_coloured_document(html,&url,&Limits::DEFAULT);
+    assert_eq!(plain.visible_text(),colour.visible_text());
+    let flat=pieces(&colour).0;
+    let Piece::ColouredPreformatted{text,spans}=&flat[0] else {panic!()};
+    assert_eq!(text,"  red  x\n\n    blue y");assert_eq!(spans.len(),2);
+    let (head,tail)=split_at(&flat[0],10);
+    let Piece::ColouredPreformatted{text:head,spans:hs}=head else{panic!()};
+    let Piece::ColouredPreformatted{text:tail,spans:ts}=tail else{panic!()};
+    assert_eq!(format!("{head}\n{tail}"),*text);
+    assert_eq!(hs.last().unwrap().end,head.len());assert_eq!(ts[0].start,0);
+    assert!(ts[0].presentation.foreground==Some([0,0,255]));
 }

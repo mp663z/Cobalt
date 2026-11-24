@@ -125,6 +125,8 @@ pub enum Block {
     },
     Quote(Vec<Block>),
     Preformatted(String),
+    /// Raw, whitespace-preserving source runs with same-DOM authored colours.
+    ColouredPreformatted(Vec<Inline>),
     Table(Table),
     Image(ImageRef),
     Form(Form),

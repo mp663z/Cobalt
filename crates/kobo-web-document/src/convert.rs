@@ -356,6 +356,43 @@ impl Converter<'_> {
         out
     }
 
+    fn preformatted_runs(&self,handle:Handle)->Vec<Inline> {
+        let mut runs=Vec::new();let mut stack=vec![handle];
+        while let Some(node)=stack.pop(){
+            match &self.nodes[node].data {
+                Data::Text(text)=>{
+                    if let Some(Some((foreground,background)))=self.colours.as_ref().and_then(|colours|colours.get(node)) {
+                        runs.push(Inline::ColouredText{text:text.clone(),foreground:*foreground,background:*background,code:true});
+                    }else{runs.push(Inline::Text(text.clone()));}
+                }
+                Data::Element{..}=>{
+                    if self.tag(node).is_some_and(|tag|DROPPED.contains(&tag)){continue;}
+                    if self.tag(node)==Some("br"){runs.push(Inline::Text("\n".into()));}
+                    stack.extend(self.nodes[node].children.iter().rev());
+                }
+                _=>{}
+            }
+        }
+        let mut raw=String::new();flatten(&runs,&mut raw);
+        let start=usize::from(raw.starts_with('\n'));
+        let end=raw.trim_end().len().max(start);
+        let mut offset=0;
+        runs.into_iter().filter_map(|run|{
+            let (text,colour)=match run {
+                Inline::Text(text)=>(text,None),
+                Inline::ColouredText{text,foreground,background,..}=>(text,Some((foreground,background))),
+                _=>return None,
+            };
+            let from=start.max(offset);let to=end.min(offset+text.len());let at=offset;offset+=text.len();
+            if from>=to{return None;}
+            let text=text[from-at..to-at].to_owned();
+            Some(match colour {
+                Some((foreground,background))=>Inline::ColouredText{text,foreground,background,code:true},
+                None=>Inline::Text(text),
+            })
+        }).collect()
+    }
+
     fn take_anchor(&mut self, handle: Handle) -> Option<String> {
         self.attr(handle, "id")
             .or_else(|| self.attr(handle, "name"))
@@ -607,7 +644,9 @@ impl Converter<'_> {
                     .trim_end()
                     .to_owned();
                 if !text.is_empty() {
-                    self.push_block(blocks, Block::Preformatted(text));
+                    if self.colours.is_some(){
+                        self.push_block(blocks,Block::ColouredPreformatted(self.preformatted_runs(handle)));
+                    }else{self.push_block(blocks, Block::Preformatted(text));}
                 }
             }
             "hr" => {
@@ -1285,6 +1324,7 @@ pub fn visible_text(blocks: &[Block], out: &mut String) {
                 out.push_str(text);
                 out.push('\n');
             }
+            Block::ColouredPreformatted(content)=>{flatten(content,out);out.push('\n');}
             Block::Table(table) => {
                 for row in &table.rows {
                     let cells: Vec<String> = row

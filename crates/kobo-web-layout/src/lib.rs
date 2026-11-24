@@ -90,6 +90,7 @@ pub enum Piece {
         links: Vec<usize>,
     },
     Preformatted(String),
+    ColouredPreformatted {text:String,spans:Vec<RichTextSpan>},
     /// `links` holds, for each row, the links its cells carry.
     Table {
         rows: Vec<TableRow>,
@@ -402,6 +403,7 @@ fn append_at_reading_scale(
                 if spans.is_empty(){builder.quote(*depth,text)}else{builder.coloured_quote(*depth,text,spans.clone())}
             },
             Piece::Preformatted(text) => builder.text(text),
+            Piece::ColouredPreformatted{text,spans}=>builder.rich_text(text,spans.clone(),ParagraphPresentation::default()),
             Piece::Table { rows, .. } => browser_table(builder, rows, metrics),
             Piece::Note(text) => builder.secondary(text),
             Piece::Form { index, label } => builder.button(format!("form-{index}"), label),
@@ -639,6 +641,11 @@ impl Flattener {
                 if !text.is_empty() {
                     self.out.push(Piece::Preformatted(drawable(text)));
                 }
+            }
+            Block::ColouredPreformatted(content)=>{
+                let mut runs=Vec::new();inline_runs(content,Style::default(),&mut runs);
+                let text:String=runs.iter().map(|run|run.text.as_str()).collect();
+                if !text.is_empty(){self.out.push(Piece::ColouredPreformatted{text,spans:spans_from_runs(&runs)});}
             }
             Block::Table(table) => self.table(table),
             Block::Image(image) => {
@@ -1278,7 +1285,7 @@ fn cut(
 fn text_of(piece: &Piece) -> Option<String> {
     match piece {
         Piece::Prose(runs) => Some(runs.iter().map(|run| run.text.as_str()).collect()),
-        Piece::Quote { text, .. } | Piece::Preformatted(text) => Some(text.clone()),
+        Piece::Quote { text, .. } | Piece::Preformatted(text) | Piece::ColouredPreformatted{text,..} => Some(text.clone()),
         _ => None,
     }
 }
@@ -1291,7 +1298,7 @@ fn cut_points(piece: &Piece) -> Vec<usize> {
             let header = usize::from(rows.first().is_some_and(|row| row.header));
             (header + 1..rows.len()).collect()
         }
-        Piece::Preformatted(text) => text
+        Piece::Preformatted(text) | Piece::ColouredPreformatted{text,..} => text
             .match_indices('\n')
             .map(|(at, _)| at + 1)
             .filter(|&at| at < text.len())
@@ -1362,6 +1369,11 @@ fn split_at(piece: &Piece, at: usize) -> (Piece, Piece) {
             ),
             Piece::Preformatted(text[at..].to_owned()),
         ),
+        Piece::ColouredPreformatted{text,spans}=>{
+            let head=text[..at].strip_suffix('\n').unwrap_or(&text[..at]);
+            (Piece::ColouredPreformatted{text:head.to_owned(),spans:slice_spans(spans,0,head.len())},
+             Piece::ColouredPreformatted{text:text[at..].to_owned(),spans:slice_spans(spans,at,text.len())})
+        }
         // Both halves offer the quote's links: which half a link's words fell
         // in is not tracked, and a link offered twice is better than one lost.
         Piece::Quote { depth, text, spans, links } => (

@@ -611,3 +611,26 @@ ARM EABI5:5,218,356 bytes, delta3,968,976 over hello, headroom1,273,904 under
 +5 MiB. No new crate, unsafe or allocator change. Native tables, preformatted
 blocks and control labels remain plain paths. No full authored font-style,
 all-fonts, physical-panel, RSS or latency claim.
+
+
+### Native preformatted RGB, November 24, 2026
+
+The opt-in colour parse now retains raw preformatted source runs rather than
+collapsing them into prose. Leading spaces, repeated internal spaces, explicit
+blank lines and the old leading-newline/trailing-trim rule survive. Native
+preformatted pieces carry foreground/background spans into existing RGB rich
+text; line-based pagination clips and rebases those ranges. Plain/BW parsing
+stays on its previous variant. No new protocol shape. This does not add
+monospaced or full authored font-style fidelity; it preserves the existing face.
+Disabling the coloured-pre conversion fails the new browser regression, restored
+passes. Visible text matches the uncoloured parse. Split tests keep blank lines
+and exact ranges. Native form opens in test and Clara Colour simulator journey.
+Actual full frame inspected:28,189 non-grey pixels including headings/quotes,
+ideal RGB only, not calibrated panel appearance.
+
+Browser218/0/2 ignored; engine1,409/0/18 ignored across148 groups; layout28/0;
+whole-workspace check green. Clippy completes with existing warnings, not a
+warning-free build. Locked stripped static ARM EABI5:5,224,620 bytes,
+delta3,975,240 over hello, headroom1,267,640 under +5 MiB. No new crate, unsafe,
+allocator or wire change. Tables/control labels still have plain paths; physical
+panel/RSS/latency and complete authored CSS/font fidelity remain unverified.
