@@ -1270,11 +1270,24 @@ impl Browser {
                 .as_ref()
                 .is_some_and(|painted| painted.metrics != metrics)
             {
+                let anchor=loaded.painted.as_ref().filter(|p|p.scroll_position()>0)
+                    .and_then(|p|p.view.reading_anchor(p.scroll_position()));
                 loaded.painted = loaded
                     .page_source
                     .as_deref()
-                    .and_then(|bytes| page_mode::PageMode::build(bytes, &loaded.title, &metrics));
+                    .and_then(|bytes| page_mode::PageMode::build_zoom(bytes, &loaded.title, &metrics,self.zoom));
                 loaded.paint_refused = loaded.painted.is_none();
+                let key=loaded.url.to_string();self.scroll_places.remove(&key);
+                if let Some(painted)=loaded.painted.as_mut(){
+                    if let Some(top)=anchor.and_then(|a|painted.view.anchor_top(a)){
+                        painted.restore_scroll(top);
+                        if self.scroll_places.len()>=64 {
+                            if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}
+                        }
+                        self.scroll_places.insert(key,(self.zoom,painted.scroll_position()));
+                    }
+                } else {self.zoom=100;}
+
             }
         }
     }

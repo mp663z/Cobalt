@@ -2772,3 +2772,24 @@ fn zoom_at_document_start_keeps_the_top_margin(){
   assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),0);
  }
 }
+
+#[test]
+fn display_reflow_keeps_selected_zoom_and_source_reading_place(){
+ let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+ r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+ r.action(ActionId(page_mode::SCROLL_BASE.0+150));r.action(action_id("zoom-more"));
+ let before=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+ let anchor=before.view.reading_anchor(before.scroll_position()).unwrap();
+ let original=r.context().metrics();
+ for metrics in [DisplayMetrics{width:original.height,height:original.width,..original},original] {
+  let host=AppRunner::with_metrics(Browser::default(),metrics);let context=host.context();
+  r.app_mut().validate_css(&context);
+  let loaded=r.app().loaded.as_ref().unwrap();let p=loaded.painted.as_ref().unwrap();
+  let expected=page_mode::PageMode::build_zoom(loaded.page_source.as_deref().unwrap(),&loaded.title,&metrics,125).unwrap();
+  assert_eq!(p.view.screen_device_px(),expected.view.screen_device_px(),"selected zoom silently changed");
+  assert_eq!(r.app().zoom,125);
+  let top=p.view.anchor_top(anchor).unwrap().min(p.view.max_scroll());
+  assert!(p.scroll_position().abs_diff(top)<=2,"rotation lost reading place");
+  assert_eq!(r.app().scroll_places.get(&loaded.url.to_string()).copied(),Some((125,p.scroll_position())));
+ }
+}

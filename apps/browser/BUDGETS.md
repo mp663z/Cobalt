@@ -1078,3 +1078,26 @@ A separate /proc diagnostic sampled the host debug browser 902 times during
 the existing Colour zoom replay: peak RSS and VmHWM were both 66,512 KiB.
 This has no simple-app control and is not an ARM/release/hardware RSS result.
 The device +32 MiB, latency, panel and independent full-web gates remain open.
+
+
+## Display-metrics reflow, November 25, 2026
+
+The first event after a display-metrics change now rebuilds the painted page at
+the selected zoom and maps the source reading anchor into the new layout. It
+retires the old geometry's session offset and stores the new one, within the
+64-entry bound. If painting is refused, the zoom label returns to 100% rather
+than describing a nonexistent zoomed raster.
+
+The regression simulates portrait -> landscape -> portrait at 125% and checks
+actual raster dimensions against an independently rebuilt 125% page, the source
+anchor and the cached zoom/offset. It fails on the old handler, which rebuilt at
+100% while keeping a 125% label, and passes on the new handler. Full browser
+suite: 245 passed, 2 ignored in four batches. Scoped clippy correctness gate
+passes with existing warnings. Locked stripped ARM browser: 5,271,692 bytes,
++984 from the preceding commit, 1,220,568 bytes under the binary-size limit.
+
+This is callback/state and layout verification, not a physical rotation test.
+The simulator's hardware orientation command currently changes display
+composition without delivering new application metrics, so it cannot prove
+this path. Existing image-only anchoring, hardware memory/latency, panel and
+independent full-web qualification gaps remain unchanged.
