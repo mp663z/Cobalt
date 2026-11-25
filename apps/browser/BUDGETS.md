@@ -1156,3 +1156,22 @@ Colour and BW-profile reachable-control article replays both pass at 100%,
 150%, reset. Full 150% frames and reset were inspected, source-byte-zoom holds
 images/sidecars, and drive-zoom-place-bw.kobo includes the explicit native
 More/Navigate route. These are simulator frames, not physical panel evidence.
+
+
+## Fuzz-runner failure propagation, November 26, 2026
+
+The smoke runner previously piped each cargo/fuzzer result through a text
+filter with an unconditional success fallback. Build failures or fuzz crashes
+could therefore return success from the overall script. The runner now captures
+the command status before filtering, prints full diagnostics on failure, runs
+all six targets, and exits nonzero if any target failed.
+
+Four isolated fake-cargo tests cover all-success, first-target build failure,
+last-target crash and middle-target failure with later targets still attempted.
+Three failure cases fail against the original runner; all four pass after the
+fix. Shell syntax check passes. These are harness-contract tests, not fuzzing.
+
+An actual smoke invocation on this recovered environment returns nonzero as it
+should: only Rust 1.85.1 is installed, with no nightly toolchain/cargo-fuzz. No
+fuzz target ran, and no fuzz/Kani/Miri/proptest or hardware gate is marked passed.
+No runtime source/binary changed; prior ARM measurement remains applicable.
