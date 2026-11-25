@@ -157,6 +157,7 @@ fn paint_backgrounds_inner(
         crate::display_list::Source {
             node: root_box.source,
             action: None,
+            text_range: None,
         },
     )
     .map_err(|_| BridgeError::Allocation)?;

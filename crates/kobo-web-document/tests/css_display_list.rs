@@ -13,6 +13,7 @@ fn complete_paint_lists_combine_in_order_without_partial_budget_failure() {
         Source {
             node: Some(4),
             action: None,
+            text_range: None,
         },
     )
     .unwrap();
@@ -89,6 +90,7 @@ fn overlap_nested_clip_and_mask_exact_pixels() {
     let source = Source {
         node: Some(9),
         action: Some(3),
+        text_range: None,
     };
     list.fill(rect(0, 0, 4, 3), Rgb(255, 0, 0), source).unwrap();
     list.push_clip(rect(1, 0, 2, 3)).unwrap();

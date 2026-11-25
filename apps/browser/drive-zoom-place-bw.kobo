@@ -1,0 +1,23 @@
+wait-for Search the web
+tap-id samples
+tap-id browser-more
+tap-id navigate
+tap-id links
+tap-id link-0
+tap-id browser-more
+tap-id navigate
+tap-id page-view
+wait-for-id browser-close
+input pointer down 700 1000
+input pointer move 700 700
+input pointer up 700 500
+shot-colour bw-place-before
+tap-id browser-zoom
+tap-id zoom-more
+tap-id zoom-more
+tap-id zoom-done
+shot-colour bw-place-150
+tap-id browser-zoom
+tap-id zoom-reset
+tap-id zoom-done
+shot-colour bw-place-reset

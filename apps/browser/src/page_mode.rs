@@ -12,6 +12,7 @@ pub(crate) struct PageMode {
     pub(crate) metrics: DisplayMetrics,
     viewport: (u32, u32),
     scroll_top:Option<u32>,
+    reading_anchor:Option<(usize,usize,u32)>,
 }
 
 fn frame(
@@ -91,6 +92,7 @@ impl PageMode {
             metrics: *metrics,
             viewport: (room_width, room_height),
             scroll_top:None,
+            reading_anchor:None,
         })
     }
 
@@ -99,7 +101,14 @@ impl PageMode {
     #[cfg(test)]
     pub(crate) fn is_window_for_test(&self)->bool{self.scroll_top.is_some()}
     pub(crate) fn scroll_position(&self)->u32{self.top()}
+    pub(crate) fn reading_anchor(&self)->Option<(usize,usize,u32)>{
+        self.reading_anchor.or_else(||self.view.reading_anchor(self.top()))
+    }
+    pub(crate) fn restore_anchor(&mut self,anchor:(usize,usize,u32)){
+        if let Some(top)=self.view.anchor_top(anchor){self.restore_scroll(top);self.reading_anchor=Some(anchor);}
+    }
     pub(crate) fn restore_scroll(&mut self,top:u32){
+        self.reading_anchor=None;
         let top=top.min(self.view.max_scroll());self.page=self.view.page_at(top);
         // A page-button boundary must use its complete-line pagination again,
         // rather than a continuous window exposing a clipped next line.
@@ -108,8 +117,9 @@ impl PageMode {
     fn top(&self)->u32{self.scroll_top.unwrap_or_else(||self.view.page_top(self.page))}
     fn bottom(&self)->u32{self.top().saturating_add(self.view.viewport_height())}
     pub(crate) fn visible_links(&self)->Vec<usize>{if self.scroll_top.is_some(){self.view.window_screen_links(self.top(),self.bottom())}else{self.view.screen_links(self.page)}}
-    pub(crate) fn turn_to(&mut self,page:usize){self.page=page.min(self.view.pages().saturating_sub(1));self.scroll_top=None;}
+    pub(crate) fn turn_to(&mut self,page:usize){self.page=page.min(self.view.pages().saturating_sub(1));self.scroll_top=None;self.reading_anchor=None;}
     pub(crate) fn scroll(&mut self,amount:i32){
+        self.reading_anchor=None;
         let delta=i64::from(amount)*i64::from(self.view.viewport_height())/100;
         let top=(i64::from(self.top())+delta).clamp(0,i64::from(self.view.max_scroll())) as u32;
         self.scroll_top=Some(top);self.page=self.view.page_at(top);

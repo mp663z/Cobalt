@@ -1125,3 +1125,34 @@ correctness gate passes with existing warnings. Locked stripped ARM browser:
 host/simulator and cross-build results, not hardware, RSS, latency, full-web
 or independent-proof qualification. Session place remains per URL and does not
 persist across app restart.
+
+
+## Source-byte zoom correction, November 25, 2026
+
+Correction to the earlier source-glyph description: basic text paint batches a
+source leaf's whole line into a command. Its ordinal is a reflowed line number,
+not a stable glyph identity. The earlier sample tests and screenshots proved
+nearby passage retention, not stable source-character retention.
+
+Basic text paint now supplies a UTF-8 byte range for each painted line fragment
+in its retained text run. Other display-list producers explicitly supply no
+range. The browser retains a source-node/byte anchor across consecutive zoom or
+metrics rebuilds, finds the new fragment containing that byte, and clears the
+anchor when the user scrolls or turns a page. No protocol/wire format changed.
+A long single-paragraph regression fails with the previous ordinal lookup and
+passes with byte lookup; it also checks repeated zoom does not drift its stored
+byte and user movement retires it. This is vertical line-fragment anchoring,
+not exact glyph positioning. Image-only anchors, bidi/ligature-specific anchor
+qualification, and persistence across navigation/restart remain limited.
+
+Browser: 247 passed, 2 ignored in four batches. Full kobo-web-document test run
+passed, including exact paint bridge/display-list assertions and WPT targets.
+Workspace check and scoped browser/document clippy correctness gate pass with
+existing warnings. Locked stripped ARM: 5,272,508 bytes, +40, leaving 1,219,752
+bytes under the binary limit. Hardware RSS/latency/panel and independent full-web
+gates remain open.
+
+Colour and BW-profile reachable-control article replays both pass at 100%,
+150%, reset. Full 150% frames and reset were inspected, source-byte-zoom holds
+images/sidecars, and drive-zoom-place-bw.kobo includes the explicit native
+More/Navigate route. These are simulator frames, not physical panel evidence.

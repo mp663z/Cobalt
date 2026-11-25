@@ -915,6 +915,7 @@ pub fn paint_direct_glyphs(
                         .ok_or(GlyphPaintError::InvalidMetrics)?,
                 ),
                 action: None,
+                text_range: None,
             },
         )
         .map_err(|error| match error {
@@ -1030,7 +1031,8 @@ mod tests {
                 },
                 source: Source {
                     node: Some(7),
-                    action: None
+                    action: None,
+                    text_range: None,
                 },
                 ..
             }

@@ -459,7 +459,7 @@ fn paint_rectangles(
                         height: u32::try_from(y1 - y0).map_err(|_| BridgeError::InvalidGeometry)?,
                     },
                     rgb,
-                    Source { node: node.source, action: None },
+                    Source { node: node.source, action: None, text_range: None,},
                 )
                 .map_err(|error| match error {
                     DisplayError::TooManyCommands => BridgeError::TooManyCommands,
@@ -484,6 +484,7 @@ fn paint_rectangles(
                     Source {
                         node: node.source,
                         action: None,
+                        text_range: None,
                     },
                 )
                 .map_err(|error| match error {
@@ -500,6 +501,7 @@ fn paint_rectangles(
                 Source {
                     node: node.source,
                     action: None,
+                    text_range: None,
                 },
                 tree.ext,
             )
@@ -549,7 +551,7 @@ fn paint_rectangles(
                         height: u32::try_from(rh).map_err(|_| BridgeError::InvalidGeometry)?,
                     },
                     colour,
-                    Source { node: node.source, action: None },
+                    Source { node: node.source, action: None, text_range: None,},
                 )
                 .map_err(|error| match error {
                     DisplayError::TooManyCommands => BridgeError::TooManyCommands,

@@ -1274,7 +1274,7 @@ impl Browser {
                 .is_some_and(|painted| painted.metrics != metrics)
             {
                 let anchor=loaded.painted.as_ref().filter(|p|p.scroll_position()>0)
-                    .and_then(|p|p.view.reading_anchor(p.scroll_position()));
+                    .and_then(|p|p.reading_anchor());
                 loaded.painted = loaded
                     .page_source
                     .as_deref()
@@ -1282,8 +1282,8 @@ impl Browser {
                 loaded.paint_refused = loaded.painted.is_none();
                 let key=loaded.url.to_string();self.scroll_places.remove(&key);
                 if let Some(painted)=loaded.painted.as_mut(){
-                    if let Some(top)=anchor.and_then(|a|painted.view.anchor_top(a)){
-                        painted.restore_scroll(top);
+                    if let Some(anchor)=anchor{
+                        painted.restore_anchor(anchor);
                         if self.scroll_places.len()>=64 {
                             if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}
                         }
@@ -1419,10 +1419,10 @@ impl Browser {
             || action == action_id("zoom-more")
             || action == action_id("zoom-reset")
         {
-            // Carry a source glyph through reflow, never a stale CSS offset.
+            // Carry a retained text byte through reflow, never a line ordinal or stale CSS offset.
             let anchor=self.loaded.as_ref().and_then(|l|l.painted.as_ref())
                 .filter(|p|p.scroll_position()>0)
-                .and_then(|p|p.view.reading_anchor(p.scroll_position()));
+                .and_then(|p|p.reading_anchor());
             if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             self.zoom = if action==action_id("zoom-reset"){100} else if let Some(value) = slider {
                 75 + (value * 125 / 100) as u16
@@ -1446,8 +1446,8 @@ impl Browser {
                     });
                 loaded.paint_refused = loaded.painted.is_none();
                 if let Some(painted)=loaded.painted.as_mut(){
-                    if let Some(top)=anchor.and_then(|a|painted.view.anchor_top(a)){
-                        painted.restore_scroll(top);
+                    if let Some(anchor)=anchor{
+                        painted.restore_anchor(anchor);
                         let key=loaded.url.to_string();
                         if self.scroll_places.len()>=64&&!self.scroll_places.contains_key(&key){
                             if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}

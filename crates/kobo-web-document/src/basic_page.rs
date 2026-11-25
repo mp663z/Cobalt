@@ -950,6 +950,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                 source: Source {
                                     node: self.tree.boxes[index].source,
                                     action: None,
+                                    text_range: None,
                                 },
                             },
                         );
@@ -1017,6 +1018,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                 source: Source {
                                     node: self.tree.boxes[index].source,
                                     action: None,
+                                    text_range: None,
                                 },
                             },
                         );
@@ -2437,6 +2439,7 @@ pub fn paint_basic_page_families<F: FontProvider>(
             source: Source {
                 node: tree.boxes[root].source,
                 action: None,
+                text_range: None,
             },
         });
     }
@@ -2494,6 +2497,7 @@ pub fn paint_basic_page(
             source: Source {
                 node: tree.boxes[root].source,
                 action: None,
+                text_range: None,
             },
         });
         painter.stats.fills += 1;

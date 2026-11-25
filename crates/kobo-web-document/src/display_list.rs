@@ -26,6 +26,8 @@ pub struct Source {
     pub node: Option<usize>,
     /// Index in the producer's action table, if any.
     pub action: Option<usize>,
+    /// UTF-8 byte range in the retained text run for this source node, when supplied.
+    pub text_range: Option<(usize,usize)>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

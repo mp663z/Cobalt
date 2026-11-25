@@ -2819,3 +2819,22 @@ fn painted_page_buttons_keep_the_reading_place_across_back_and_forward(){
   assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),0);
  }
 }
+
+#[test]
+fn zoom_anchor_is_a_source_byte_not_a_reflowed_line_number(){
+ let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+ let url=Url::parse("https://anchor.invalid/article").unwrap();
+ let mut html=String::from("<title>Source bytes</title><p>");
+ for n in 0..160 {write!(&mut html,"word{n} reading position stays with source text. ").unwrap();}
+ html.push_str("</p>");let mut context=r.context();r.app_mut().show_document(&mut context,&url,html.as_bytes());
+ r.action(action_id("page-view"));r.action(ActionId(page_mode::SCROLL_BASE.0+200));
+ let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();let a=p.reading_anchor().unwrap();
+ assert!(a.1>100,"anchor must be a UTF-8 byte, not a line ordinal: {a:?}");
+ for action in ["zoom-more","zoom-more","zoom-less","zoom-reset"] {
+  r.action(action_id(action));let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+  assert_eq!(p.reading_anchor(),Some(a),"repeated zoom drifted its retained source byte");
+  assert_eq!(p.scroll_position(),p.view.anchor_top(a).unwrap().min(p.view.max_scroll()));
+ }
+ r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+ assert_ne!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().reading_anchor(),Some(a));
+}

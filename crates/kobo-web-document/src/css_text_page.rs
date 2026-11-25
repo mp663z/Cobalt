@@ -717,6 +717,7 @@ fn paint_direct_text_blocks_core(
             Source {
                 node: tree.boxes[root].source,
                 action: None,
+                text_range: None,
             },
         )
         .map_err(PageError::Paint)?;
@@ -935,6 +936,7 @@ fn paint_direct_text_blocks_core(
                     Source {
                         node: node.source,
                         action: None,
+                        text_range: None,
                     },
                 )
                 .map_err(PageError::Paint)?;
@@ -974,6 +976,7 @@ fn paint_block_border(
         Source {
             node: node.source,
             action: None,
+            text_range: None,
         },
         false,
     )
@@ -1052,6 +1055,7 @@ fn paint_block_background(
         Source {
             node: node.source,
             action: None,
+            text_range: None,
         },
     )
     .map_err(PageError::Paint)

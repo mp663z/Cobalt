@@ -80,7 +80,8 @@ fn exact_order_content_boxes_and_source_ids() {
                 color: Rgb(2, 3, 4),
                 source: Source {
                     node: tree.boxes[article].source,
-                    action: None
+                    action: None,
+                    text_range: None,
                 }
             },
             Command::Fill {
@@ -93,7 +94,8 @@ fn exact_order_content_boxes_and_source_ids() {
                 color: Rgb(7, 8, 9),
                 source: Source {
                     node: tree.boxes[section].source,
-                    action: None
+                    action: None,
+                    text_range: None,
                 }
             },
         ]
@@ -130,7 +132,8 @@ fn auto_block_background_uses_child_flow_height() {
             color: Rgb(18, 52, 86),
             source: Source {
                 node: tree.boxes[body].source,
-                action: None
+                action: None,
+                text_range: None,
             },
         }]
     );

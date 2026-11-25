@@ -244,12 +244,14 @@ pub(crate) fn paint(
             TextAlign::Initial if style.direction == Direction::Rtl => available,
             _ => 0,
         };
+        let mut text_start=usize::MAX;let mut text_end=0;
         let bitmaps: Vec<_> = glyphs
             .iter()
             .enumerate()
             .map(|(local_index, g)| {
                 let byte =
                     next_occurrence(&runs[g.leaf].0, &mut paint_offsets[g.leaf], g.character);
+                text_start=text_start.min(byte);text_end=text_end.max(byte+g.character.len_utf8());
                 if mirrored[from + local_index] {
                     if let Some(ch) = unicode_bidi_mirroring::get_mirrored(g.character) {
                         if let Some(bitmap) = font.page_raster(ch, size, g.bold, runs[g.leaf].4) {
@@ -359,6 +361,7 @@ pub(crate) fn paint(
                 source: Source {
                     node: runs[first.leaf].6,
                     action: None,
+                    text_range: Some((text_start,text_end)),
                 },
             });
         }
@@ -388,6 +391,7 @@ pub(crate) fn paint(
                 source: Source {
                     node: runs[first.leaf].6,
                     action: None,
+                    text_range: None,
                 },
             });
         }

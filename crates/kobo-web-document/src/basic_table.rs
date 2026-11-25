@@ -726,7 +726,7 @@ fn table_fill(
                 height: u32::try_from(height).map_err(|_| "table-height")?,
             },
             color: rgb(color),
-            source: Source { node, action: None },
+            source: Source { node, action: None, text_range: None,},
         },
     );
     Ok(())
