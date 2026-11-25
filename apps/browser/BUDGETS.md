@@ -1176,3 +1176,38 @@ should: cargo-fuzz is missing. Rustup auto-installed nightly during that
 invocation, so nightly is now available, but none of the six targets ran. No
 fuzz/Kani/Miri/proptest or hardware gate is marked passed.
 No runtime source/binary changed; prior ARM measurement remains applicable.
+
+
+## Bounded development-ASan fuzz smoke, November 26, 2026
+
+Installed cargo-fuzz 0.13.2 as a host verification tool. Nightly is
+1.102.0-nightly (739adecd4, 2026-11-24). Optimized ASan compilation did not
+complete: initial attempt exceeded the execution window, then moxcms rustc was
+killed by SIGKILL. Development mode with one build job and 16 codegen units
+built all targets successfully, retaining default address sanitizer.
+
+Refreshed the standalone fuzz lock for current path dependencies. New path
+requirements use versions already in the runtime lock; unicode-properties and
+unicode-script were explicitly pinned back to runtime 0.1.4/0.5.8 rather than
+keeping newer resolver selections. No main workspace lock/runtime source changed.
+
+Each target ran via cargo +nightly fuzz run -D --codegen-units 16 with max total
+time 5s, RSS limit 512 MiB, input limit 262144 and per-input timeout 10s. Parse
+and sniff use saved document fixtures, image uses the existing image corpus,
+others existing target seeds, with retained generated local corpora.
+
+| Target | Executed units | Peak host RSS MiB | Exit |
+| --- | ---: | ---: | ---: |
+| parse_html | 439 | 132 | 0 |
+| paginate_document | 565 | 159 | 0 |
+| decode_image | 19 | 70 | 0 |
+| cache_metadata | 113257 | 109 | 0 |
+| resolve_url | 25185 | 122 | 0 |
+| sniff_body | 148921 | 84 | 0 |
+
+No crash was reported in this short development-ASan run. decode_image spent
+its budget on seed initialization (19 executions), so it is not evidence of a
+mutation campaign. This is not the optimized smoke.sh qualification, a long
+fuzz campaign, Kani/Miri/proptest completion or device memory/latency evidence.
+Runtime binary measurement and all remaining independent/full-web gates are
+unchanged. Local fuzz output logs are not committed as build artifacts.
