@@ -2793,3 +2793,29 @@ fn display_reflow_keeps_selected_zoom_and_source_reading_place(){
   assert_eq!(r.app().scroll_places.get(&loaded.url.to_string()).copied(),Some((125,p.scroll_position())));
  }
 }
+
+#[test]
+fn painted_page_buttons_keep_the_reading_place_across_back_and_forward(){
+ for physical in [false,true] {
+  let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+  r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+  r.action(action_id("zoom-more"));
+  if physical {r.page_turn(true);}else{r.action(action_id("next-page"));}
+  let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+  let top=p.scroll_position();assert!(top>0);assert_eq!(p.page,1);
+  let expected=p.view.raster_page_rgb(p.page);
+  assert!(!p.is_window_for_test());
+  r.action(action_id("samples"));r.action(action_id("back"));
+  let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+  assert_eq!(r.app().zoom,125);assert_eq!(p.scroll_position(),top,"Back lost painted page {physical}");
+  assert!(!p.is_window_for_test(),"restored page changed to continuous window");
+  let mut context=r.context();assert!(p.publish(&mut context,true,None));
+  assert_eq!(p.view.raster_page_rgb(p.page),expected);
+  r.action(action_id("forward"));r.action(action_id("back"));
+  assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),top);
+  r.action(action_id("previous-page"));
+  r.action(action_id("samples"));r.action(action_id("back"));
+  assert_eq!(r.app().zoom,125);
+  assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),0);
+ }
+}

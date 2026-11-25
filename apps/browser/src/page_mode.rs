@@ -96,8 +96,15 @@ impl PageMode {
 
     #[cfg(test)]
     pub(crate) fn top_for_test(&self)->u32{self.top()}
+    #[cfg(test)]
+    pub(crate) fn is_window_for_test(&self)->bool{self.scroll_top.is_some()}
     pub(crate) fn scroll_position(&self)->u32{self.top()}
-    pub(crate) fn restore_scroll(&mut self,top:u32){let top=top.min(self.view.max_scroll());self.scroll_top=Some(top);self.page=self.view.page_at(top);}
+    pub(crate) fn restore_scroll(&mut self,top:u32){
+        let top=top.min(self.view.max_scroll());self.page=self.view.page_at(top);
+        // A page-button boundary must use its complete-line pagination again,
+        // rather than a continuous window exposing a clipped next line.
+        self.scroll_top=(top!=self.view.page_top(self.page)).then_some(top);
+    }
     fn top(&self)->u32{self.scroll_top.unwrap_or_else(||self.view.page_top(self.page))}
     fn bottom(&self)->u32{self.top().saturating_add(self.view.viewport_height())}
     pub(crate) fn visible_links(&self)->Vec<usize>{if self.scroll_top.is_some(){self.view.window_screen_links(self.top(),self.bottom())}else{self.view.screen_links(self.page)}}

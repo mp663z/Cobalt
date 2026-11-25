@@ -853,13 +853,16 @@ impl Browser {
     }
 
     fn turn_to(&mut self, context: &mut Context, page: usize) {
-        if let Some(painted) = self
-            .loaded
-            .as_mut()
-            .and_then(|loaded| loaded.painted.as_mut())
-        {
-            painted.turn_to(page);
-            return;
+        if let Some(loaded)=self.loaded.as_mut(){
+            if let Some(painted)=loaded.painted.as_mut(){
+                painted.turn_to(page);
+                let key=loaded.url.to_string();let place=(self.zoom,painted.scroll_position());
+                if self.scroll_places.len()>=64&&!self.scroll_places.contains_key(&key){
+                    if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}
+                }
+                self.scroll_places.insert(key,place);
+                return;
+            }
         }
         self.make_pages(context, page);
         if self.pager.is_none() {
@@ -2072,7 +2075,6 @@ impl KoboApp for Browser {
             return;
         }
         if action == action_id("next-page") || action == action_id("previous-page") {
-            if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             if let Some(page) = self.loaded.as_ref().map(|loaded| {
                 loaded
                     .painted

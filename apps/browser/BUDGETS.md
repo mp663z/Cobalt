@@ -1101,3 +1101,27 @@ The simulator's hardware orientation command currently changes display
 composition without delivering new application metrics, so it cannot prove
 this path. Existing image-only anchoring, hardware memory/latency, panel and
 independent full-web qualification gaps remain unchanged.
+
+
+## Painted page-button history, November 25, 2026
+
+Page-button turns now store the selected painted reading position and zoom in
+the same bounded session map used for settled scrolling. Previously a turn
+removed that entry without updating native history, so Back/Forward could
+return to the start at 100%. Both physical page callbacks and named page
+buttons are covered by a regression that fails before the fix and passes after
+it, including returning to the first page while keeping 125% zoom.
+
+Restoring an exact pagination boundary uses complete-line pagination rather
+than a continuous raster window. The first inspected replay caught a clipped
+extra line at the bottom after restore; the corrected replay has pixel-equal
+before/Forward/repeated-Forward frames. The inspected full images and capture
+sidecars are in screenshots/page-history, with drive-page-history.kobo.
+The replay uses reachable Back/Forward controls, not internal sample actions.
+
+Final browser suite: 246 passed, 2 ignored in four batches. Scoped clippy
+correctness gate passes with existing warnings. Locked stripped ARM browser:
+5,272,468 bytes, +776, leaving 1,219,792 bytes below the size limit. These are
+host/simulator and cross-build results, not hardware, RSS, latency, full-web
+or independent-proof qualification. Session place remains per URL and does not
+persist across app restart.

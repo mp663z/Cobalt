@@ -1,0 +1,15 @@
+wait-for Search the web
+tap-id samples
+tap-at 350 378
+wait-for 1 of 3
+tap-id browser-zoom
+tap-id zoom-more
+tap-id zoom-done
+tap-id next-page
+shot-colour history-before
+tap-id back
+tap-id forward
+shot-colour history-forward
+tap-id back
+tap-id forward
+shot-colour history-forward-again
