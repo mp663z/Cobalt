@@ -1172,6 +1172,7 @@ Three failure cases fail against the original runner; all four pass after the
 fix. Shell syntax check passes. These are harness-contract tests, not fuzzing.
 
 An actual smoke invocation on this recovered environment returns nonzero as it
-should: only Rust 1.85.1 is installed, with no nightly toolchain/cargo-fuzz. No
-fuzz target ran, and no fuzz/Kani/Miri/proptest or hardware gate is marked passed.
+should: cargo-fuzz is missing. Rustup auto-installed nightly during that
+invocation, so nightly is now available, but none of the six targets ran. No
+fuzz/Kani/Miri/proptest or hardware gate is marked passed.
 No runtime source/binary changed; prior ARM measurement remains applicable.
