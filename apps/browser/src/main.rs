@@ -1403,8 +1403,10 @@ impl Browser {
             || action == action_id("zoom-more")
             || action == action_id("zoom-reset")
         {
-            // A new zoom rebuild starts at its first viewport. Retire the
-            // old session offset rather than resurrecting it on Back.
+            // Carry a source glyph through reflow, never a stale CSS offset.
+            let anchor=self.loaded.as_ref().and_then(|l|l.painted.as_ref())
+                .filter(|p|p.scroll_position()>0)
+                .and_then(|p|p.view.reading_anchor(p.scroll_position()));
             if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             self.zoom = if action==action_id("zoom-reset"){100} else if let Some(value) = slider {
                 75 + (value * 125 / 100) as u16
@@ -1427,6 +1429,16 @@ impl Browser {
                         )
                     });
                 loaded.paint_refused = loaded.painted.is_none();
+                if let Some(painted)=loaded.painted.as_mut(){
+                    if let Some(top)=anchor.and_then(|a|painted.view.anchor_top(a)){
+                        painted.restore_scroll(top);
+                        let key=loaded.url.to_string();
+                        if self.scroll_places.len()>=64&&!self.scroll_places.contains_key(&key){
+                            if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}
+                        }
+                        self.scroll_places.insert(key,(self.zoom,painted.scroll_position()));
+                    }
+                }
                 if loaded.painted.is_none() {
                     self.zoom = 100;
                 }

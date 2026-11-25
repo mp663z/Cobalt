@@ -2598,8 +2598,8 @@ fn scroll_place_returns_on_back_and_only_visible_scrolled_links_open(){
 }
 
 #[test]
-fn explicit_zoom_and_native_reader_retire_stored_scroll_offsets(){
- for action in ["zoom-more","native-reader"]{
+fn native_reader_retires_stored_scroll_offsets(){
+ for action in ["native-reader"]{
   let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
   r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
   r.action(ActionId(page_mode::SCROLL_BASE.0+150));
@@ -2743,5 +2743,32 @@ fn pending_page_panels_do_not_survive_into_a_failure_screen(){
   r.action(action_id(panel));r.task_outcome(task,TaskOutcome::Failed(TaskError::TimedOut));
   assert!(!r.app().zoom_panel&&!r.app().browser_menu,"{panel} survived failure");
   assert!(r.app().screen(&r.context().metrics()).build().overlay.is_none());
+ }
+}
+
+#[test]
+fn zoom_reflows_around_the_source_glyph_instead_of_jumping_to_top(){
+ let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+ r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+ r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+ let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+ assert!(p.scroll_position()>0);
+ let anchor=p.view.reading_anchor(p.scroll_position()).unwrap();
+ for action in ["zoom-more","zoom-more","zoom-less","zoom-reset"] {
+  r.action(action_id(action));
+  let l=r.app().loaded.as_ref().unwrap();let p=l.painted.as_ref().unwrap();
+  let expected=p.view.anchor_top(anchor).unwrap().min(p.view.max_scroll());
+  assert!(p.scroll_position().abs_diff(expected)<=2,"{action}: lost source position");
+  assert_eq!(r.app().scroll_places.get(&l.url.to_string()).copied(),Some((r.app().zoom,p.scroll_position())));
+ }
+}
+
+#[test]
+fn zoom_at_document_start_keeps_the_top_margin(){
+ let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+ r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+ for action in ["zoom-more","zoom-more","zoom-less","zoom-reset"] {
+  r.action(action_id(action));
+  assert_eq!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().scroll_position(),0);
  }
 }

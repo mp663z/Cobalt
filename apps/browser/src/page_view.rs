@@ -299,6 +299,37 @@ impl PageView {
     fn page_bottom(&self,page:usize)->u32{self.cuts.get(page+1).copied().unwrap_or(self.content_height)}
     pub(crate) fn viewport_height(&self)->u32{self.page_height_css}
     pub(crate) fn max_scroll(&self)->u32{self.content_height.saturating_sub(self.page_height_css)}
+    /// Stable source glyph, plus the fraction of its line above the viewport.
+    /// Reflow changes geometry, not source-node/cluster order.
+    pub(crate) fn reading_anchor(&self, top:u32)->Option<(usize,usize,u32)> {
+        let mut counts=std::collections::BTreeMap::new();
+        for c in &self.commands {
+            if let Command::GlyphRun{layout,source,..}=c {
+                let Some(node)=source.node else {continue};
+                let ordinal=counts.entry(node).or_insert(0usize);
+                let current=*ordinal;*ordinal+=1;
+                if i64::from(layout.y)+i64::from(layout.height)>i64::from(top) {
+                    let clipped=i64::from(top).saturating_sub(i64::from(layout.y)).max(0) as u32;
+                    return Some((node,current,clipped.saturating_mul(1000)/layout.height.max(1)));
+                }
+            }
+        }
+        None
+    }
+    pub(crate) fn anchor_top(&self, anchor:(usize,usize,u32))->Option<u32> {
+        let mut ordinal=0;
+        for c in &self.commands {
+            if let Command::GlyphRun{layout,source,..}=c {
+                if source.node!=Some(anchor.0){continue;}
+                if ordinal==anchor.1 {
+                    return Some((i64::from(layout.y)+i64::from(layout.height)*i64::from(anchor.2)/1000).max(0) as u32);
+                }
+                ordinal+=1;
+            }
+        }
+        None
+    }
+
     pub(crate) fn page_at(&self,top:u32)->usize{self.cuts.partition_point(|cut|*cut<=top).saturating_sub(1)}
     pub(crate) fn raster_window_rgb(&self,top:u32,bottom:u32)->Vec<u8>{
         let (width,height)=self.screen_device_px();

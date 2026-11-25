@@ -1049,3 +1049,32 @@ where the recovery row has no matching anchor and the stale panel could cover
 the error. Both failure-panel cases fail before and pass after. Full browser
 242/0/2,workspacecheck/scopedclippy/lockedARM pass. ARM5,269,204B,headroom
 1,223,056. No new visual feature/hardware claim; independent gates stay open.
+
+
+## Source-anchored zoom, November 25, 2026
+
+Zoom now maps the first visible source glyph and its clipped line fraction into
+its new layout, instead of returning to the document start. A zero offset stays
+at zero, including the document margin. Scroll history stores the new zoom and
+offset, not the old geometry. This is a reflow anchor, not pinch-to-zoom or a
+promise of exact pixel placement. Pages without a matching glyph use the first
+viewport; image-only pages do not yet have an image anchor.
+
+Regression: the reading-place test fails on the previous handler and passes on
+the source-anchor handler through 100 -> 125 -> 150 -> 125 -> 100 percent.
+Browser suite: all 244 passing plus 2 ignored on the final source (four batches),
+including the top-margin guard and cache bound check. Existing
+scoped clippy correctness gate passes (pre-existing warnings remain).
+Locked stripped ARM browser: 5,270,708 bytes, +1,504 over the previous build.
+This is 1,221,552 bytes below the +5 MiB-over-simple-app size limit.
+
+The committed drive-zoom-place.kobo replay scrolls the Colour sample article,
+changes to 150%, closes the panel and resets to 100%. Its inspected frames in
+screenshots/zoom-reading-place show the same paragraph near the viewport top
+before/after reflow, not the article title. Their sidecars retain the measured
+frame and source provenance. RGB simulator output is not physical panel proof.
+
+A separate /proc diagnostic sampled the host debug browser 902 times during
+the existing Colour zoom replay: peak RSS and VmHWM were both 66,512 KiB.
+This has no simple-app control and is not an ARM/release/hardware RSS result.
+The device +32 MiB, latency, panel and independent full-web gates remain open.
