@@ -1230,3 +1230,23 @@ reported diagnostic. It was terminated, not skipped as a pass. Thus browser-core
 Miri is 24/25 completed, NOT an overall pass. No test or production behavior was
 weakened to fit the time window. Kani, proptest, full-web and hardware gates
 remain open, and no runtime binary changed.
+
+
+## Bounded exhaustive history model, November 26, 2026
+
+Added an independent test-only history model over three fixed URLs (including a
+same-document fragment), Back, Forward, place update, valid rollback and invalid
+rollback. Every action sequence through depth six is checked: 299,592 transitions
+against effects, entry URLs/places, cursor and Back/Forward availability. A
+separate 300-navigation trace checks capacity, rollback to the oldest entry,
+forward-branch replacement and invalid positions.
+
+Both tests pass. Temporarily removing production forward-branch truncation
+makes both fail with concrete counterexample traces; production source was then
+restored and all 25 browser-core unit tests plus both model tests passed. Scoped
+core clippy correctness gate passes with existing dependency warnings. No runtime
+code, dependency or binary changed. This is bounded exhaustive model comparison,
+not proptest, Kani, an unbounded proof or completion of independent proof gates.
+The final full-cache Miri test remains unresolved; repeating short timeouts has
+stopped. No separate long-running lane is available. Remaining hardware,
+full-web, Kani/proptest and optimized-fuzz gates stay open.
