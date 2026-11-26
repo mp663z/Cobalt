@@ -26,3 +26,9 @@ roundtrips, rejected-insert stability and eviction results. Disabling byte-budge
 eviction fails and shrinks to two distinct inserts totaling over the budget.
 Production was restored and the artificial failure seed removed. These are
 cache invariant checks, not a full independent eviction-policy model.
+
+Structured damaged-index generation also runs 256 cases, retaining the real
+header and field separators so the decoder reaches its row checks. It mixes
+correct/wrong blob names, repeated keys, arbitrary counters/times and sizes
+biased toward the budget range plus full u64 values. Disabling decode's total
+byte guard fails and shrinks to one correctly named row of MAX_BYTES+1.

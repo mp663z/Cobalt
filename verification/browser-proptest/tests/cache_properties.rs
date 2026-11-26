@@ -47,3 +47,20 @@ proptest! {
         }
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+    #[test]
+    fn structured_damaged_indexes_stay_bounded(
+        reads in any::<u64>(),
+        rows in prop::collection::vec((0u16..240, prop_oneof![3 => 0u64..(MAX_BYTES+2), 1 => any::<u64>()], any::<u64>(), any::<u64>(), any::<bool>()), 0..260),
+    ) {
+        let mut stored=format!("kobo-browse-cache 1\n{reads}\n");
+        for (key,bytes,fetched,used,valid_name) in rows {
+            let url=format!("https://cache.invalid/{key}");
+            let name=if valid_name {blob_name(&url)} else {String::from("wrong-name")};
+            stored.push_str(&format!("{name}\t{bytes}\t{fetched}\t{used}\t{url}\n"));
+        }
+        invariant(&Index::decode(stored.as_bytes()));
+    }
+}

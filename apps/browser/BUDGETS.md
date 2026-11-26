@@ -1307,3 +1307,17 @@ sum exceeds the 24 MiB budget. Production is restored and artificial failure
 seed removed. All six isolated tests (four properties plus two bounded history
 model tests) then pass. Runtime source, main lock, test lock and binary unchanged.
 Other proof, hardware and full-web gaps stay open.
+
+## Structured cache-index generation, November 27, 2026
+
+Added 256 structured damaged-index cases to the isolated package. Unlike random
+bytes that usually fail the header, these retain the header and row separators,
+with correct/wrong blob names, repeated keys, full-width counters/timestamps and
+sizes biased toward the cache budget plus arbitrary u64 values. The standard
+cache invariants and serialization roundtrip must hold after decoding.
+
+Removing the production decode total-byte guard fails and shrinks to one
+correctly named row of 25,165,825 bytes (MAX_BYTES+1). The guard is restored,
+artificial mutant seed removed, all seven isolated tests pass with seed 6829501.
+No production, dependency/lock or binary change. This improves decoder branch
+coverage, not full corruption-policy verification or outstanding proof gates.
