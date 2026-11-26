@@ -1211,3 +1211,22 @@ mutation campaign. This is not the optimized smoke.sh qualification, a long
 fuzz campaign, Kani/Miri/proptest completion or device memory/latency evidence.
 Runtime binary measurement and all remaining independent/full-web gates are
 unchanged. Local fuzz output logs are not committed as build artifacts.
+
+
+## Image mutation smoke and partial Miri, November 26, 2026
+
+Extended decode_image development-ASan run with the same flags/limits and
+max_total_time=45: exit 0, 226 executions, 79 new corpus units, peak host RSS
+159 MiB. It got past seed initialization into mutation. This short smoke is
+still not a long campaign or optimized-build qualification.
+
+Installed the Miri component for the existing nightly. Browser-core Miri tests
+used default interpreter checks, --locked, no suppression flags. Completed
+scopes: address/fetch/history 14 tests, library 2, cache excluding full-index
+roundtrip 8. All 24 completed tests passed. The full suite was bounded at 105s
+while in cache::tests::the_index_survives_being_stored_and_a_full_one_fits_a_store_value.
+A separate exact run of that test also exceeded 105s with no completion or
+reported diagnostic. It was terminated, not skipped as a pass. Thus browser-core
+Miri is 24/25 completed, NOT an overall pass. No test or production behavior was
+weakened to fit the time window. Kani, proptest, full-web and hardware gates
+remain open, and no runtime binary changed.
