@@ -1291,3 +1291,19 @@ random property and shrinks to [0,1,3,1]. Production is restored; the mutation's
 artificial regression file was removed. All 25 core unit tests plus two model
 tests pass afterward. This is actual proptest coverage, narrowly for history,
 not full property/proof-gate completion. Kani and Miri limits remain unchanged.
+
+## Cache proptest coverage, November 27, 2026
+
+The isolated pinned package adds two cache properties, 256 cases each, over
+actual Index. Arbitrary stored bytes up to 4095 bytes must decode within bounds;
+random traces up to 99 insert/touch/remove actions check byte and entry budgets,
+unique blob names, URL-name agreement, encode/decode equality, rejected-insert
+stability and evicted names being absent. This is an invariant suite, not an
+independent full LRU-policy model or the unresolved full-cache Miri test.
+
+Both properties pass with seed 6829501. Removing byte-budget eviction produces
+a failure shrunk to two different URLs with 2,706,605 and 22,459,220 bytes, whose
+sum exceeds the 24 MiB budget. Production is restored and artificial failure
+seed removed. All six isolated tests (four properties plus two bounded history
+model tests) then pass. Runtime source, main lock, test lock and binary unchanged.
+Other proof, hardware and full-web gaps stay open.
