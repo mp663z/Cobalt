@@ -1,0 +1,13 @@
+[package]
+name = "cobalt-browser-properties"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Deliberately isolated: no runtime workspace dependency or lock change.
+[workspace]
+
+[dev-dependencies]
+proptest = "=1.12.0"
+kobo-browser-core = { path = "../../crates/kobo-browser" }
+kobo-web-document = { path = "../../crates/kobo-web-document" }

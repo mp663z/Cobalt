@@ -1272,3 +1272,22 @@ This verifies only the empty-history edge with arbitrary parameters. It does
 not cover populated navigation, parser behavior, the application, hardware or
 the full Kani gate. Proptest remains absent, Miri remains 24/25 complete, and
 other independent/full-web qualification gaps remain open.
+
+
+## Isolated proptest history package, November 26, 2026
+
+verification/browser-proptest is outside the runtime workspace with its own
+lockfile and exact proptest 1.12.0 test-only dependency. Actual browser-core is
+a path dependency; runtime Cargo.toml/Cargo.lock and behavior are unchanged.
+Two properties run 512 cases each: action traces up to 399 steps, and prefixes
+crossing history capacity followed by random actions. They compare effects,
+entry URLs/places, cursor and navigation availability to the separate test
+model. The two bounded model tests also run in that package.
+
+Recorded run: PROPTEST_RNG_SEED=6829501 cargo +nightly test --locked
+--manifest-path verification/browser-proptest/Cargo.toml. All four tests pass.
+A temporary production mutation removing forward-branch truncation fails the
+random property and shrinks to [0,1,3,1]. Production is restored; the mutation's
+artificial regression file was removed. All 25 core unit tests plus two model
+tests pass afterward. This is actual proptest coverage, narrowly for history,
+not full property/proof-gate completion. Kani and Miri limits remain unchanged.

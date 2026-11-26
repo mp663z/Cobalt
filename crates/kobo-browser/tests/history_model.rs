@@ -203,3 +203,19 @@ fn history_capacity_and_branch_replacement_match_the_model() {
         compare(&h, &m, &urls, &[action]);
     }
 }
+
+/// Shared with the isolated proptest package. Each action compares actual
+/// effects and state against this test-only model, without a runtime hook.
+pub fn check_trace(actions: &[usize]) {
+    let urls = urls();
+    let mut history = History::new();
+    let mut model = Model::default();
+    for (index, &action) in actions.iter().enumerate() {
+        assert_eq!(
+            actual(&mut history, action, &urls),
+            apply_model(&mut model, action),
+            "effect at {index} in {actions:?}"
+        );
+        compare(&history, &model, &urls, &actions[..=index]);
+    }
+}
