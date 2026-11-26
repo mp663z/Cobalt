@@ -1250,3 +1250,25 @@ not proptest, Kani, an unbounded proof or completion of independent proof gates.
 The final full-cache Miri test remains unresolved; repeating short timeouts has
 stopped. No separate long-running lane is available. Remaining hardware,
 full-web, Kani/proptest and optimized-fuzz gates stay open.
+
+
+## First narrow Kani harness, November 26, 2026
+
+Installed host verifier kani-verifier 0.68.0 and its pinned
+nightly-2026-08-21 toolchain through its setup command. No runtime dependency or
+Cargo lockfile changed. Added a cfg(kani)-only harness over actual History,
+not a reimplementation: arbitrary usize page/rollback and optional place are
+applied to an empty history, which must remain empty at position zero with
+Back/Forward returning Stay.
+
+cargo kani -p kobo-browser-core --harness
+empty_history_ignores_arbitrary_place_and_rollback completes successfully:
+0 of 554 checks failed, 8 unreachable. Temporarily removing the production
+rollback bounds guard makes the harness fail its position assertion; restoring
+the production guard returns success. All 25 core unit tests and two bounded
+history-model tests still pass. No runtime behavior/binary changed.
+
+This verifies only the empty-history edge with arbitrary parameters. It does
+not cover populated navigation, parser behavior, the application, hardware or
+the full Kani gate. Proptest remains absent, Miri remains 24/25 complete, and
+other independent/full-web qualification gaps remain open.

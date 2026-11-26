@@ -260,3 +260,6 @@ mod tests {
         assert_eq!(steps, MAX_HISTORY - 1);
     }
 }
+
+#[cfg(kani)]
+mod kani_checks;
