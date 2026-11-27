@@ -71,3 +71,12 @@ characters. This is not exhaustive URL classification or RFC conformance.
 Encoding spaces as underscores deliberately fails and shrinks to one space;
 production restored and artificial seed removed. All fourteen isolated tests
 pass with seed 6829501. No runtime or dependency change.
+
+URL normalization adds one 512-case property with structured HTTP(S) authority,
+arbitrary Unicode path/query/fragment and a relative reference. Successful
+parses and joins must reparse identically, retain rooted paths, remove fragments
+idempotently without changing document identity, and upgrade idempotently.
+This is internal consistency, not an independent standards oracle; rejected
+inputs are not classified. A deliberate failure to remove fragments fails and
+shrinks to an empty fragment at http://a.aa:0/?#. Production is restored and
+artificial seed removed. All fifteen isolated tests pass with seed 6829501.

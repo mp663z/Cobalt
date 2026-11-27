@@ -1379,3 +1379,15 @@ underscore fails, shrinking to one space. Production restored, artificial seed
 removed. All fourteen isolated tests pass with seed 6829501. No production bug
 found, no runtime/lock/dependency/binary change from eb56075, no visual claim or
 broader gate completion. Existing Miri/Kani/hardware/full-web limits remain.
+
+## URL normalization consistency, November 27, 2026
+
+A 512-case property generates structured HTTP(S) authorities with arbitrary
+Unicode path/query/fragment and relative references. Successful parses/joins
+must reparse identically, keep rooted paths, remove fragments idempotently
+without changing document identity, and upgrade idempotently. A deliberate
+fragment-removal mutant fails and shrinks to http://a.aa:0/?#. Production
+restored, artificial seed removed. All fifteen isolated tests pass with seed
+6829501. This is internal consistency, not an independent standards oracle or
+classification of rejected inputs. No production bug found. Runtime/locks/deps
+and binary unchanged from eb56075; no visual or broader-gate completion claim.
