@@ -320,8 +320,14 @@ fn parse_authority(authority: &str, scheme: Scheme) -> Result<(String, Option<u1
     };
     let (host, port) = authority.split_at(port_at);
     let host = crate::host::parse(host).ok_or(UrlError::InvalidHost)?;
+    let had_trailing_dot = host.ends_with('.');
     let host = host.trim_end_matches('.').to_owned();
     if host.is_empty() || host.len() > 253 {
+        return Err(UrlError::InvalidHost);
+    }
+    // Removing trailing dots must not turn a domain into a different or
+    // invalid numeric host when the serialized address is parsed again.
+    if had_trailing_dot && crate::host::parse(&host).as_deref() != Some(host.as_str()) {
         return Err(UrlError::InvalidHost);
     }
     let port = match port.strip_prefix(':') {
@@ -495,5 +501,20 @@ mod tests {
         let b = Url::parse("https://x.example/p#two").unwrap();
         assert!(a.same_document(&b));
         assert!(!a.same_document(&Url::parse("https://x.example/q").unwrap()));
+    }
+}
+
+#[cfg(test)]
+mod numeric_dot_regression {
+    use super::*;
+    #[test]
+    fn stripping_trailing_dots_cannot_change_numeric_host_meaning() {
+        for input in ["https://14886589259623../", "https://127../"] {
+            assert_eq!(Url::parse(input), Err(UrlError::InvalidHost));
+        }
+        for input in ["https://example.com../", "https://127.0.0.1./", "https://127/"] {
+            let url=Url::parse(input).unwrap();
+            assert_eq!(Url::parse(&url.to_string()),Ok(url));
+        }
     }
 }

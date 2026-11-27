@@ -1450,3 +1450,30 @@ clippy correctness passes with existing warnings. Locked stripped ARM 5,273,028
 bytes, +472, leaving 1,219,232 bytes headroom. No dependency/lock changes or
 visual change. Miri/Kani evidence does not cover this new regression. Other
 proof/hardware/full-web gaps remain open.
+
+## Fuzz-found numeric trailing-dot URL instability, November 28, 2026
+
+The typed-address fuzz oracle now checks URL reparse identity and search-query
+preservation. It found a real normalization bug: a numeric authority ending in
+two dots could pass as a domain, then lose its trailing dots on serialization
+and become a different or invalid IPv4 form on reparsing. A genuine failing
+input is retained as numeric-double-dot-regression. This is an assertion
+failure in the stronger oracle, not a memory-safety finding or demonstrated
+exploit. The URL parser now refuses trailing-dot normalization when reparsing
+the resulting host would change it or fail. Ordinary domains with trailing dots
+and stable IPv4 forms remain covered by direct unit regression.
+
+Document tests 447 passed, 3 ignored; core 27 plus 2 model tests pass; all 18
+isolated properties/model tests pass, seed 6829501. Scoped core/document clippy
+correctness passes with existing warnings. After the initial fix, dev-ASan URL
+smoke completed 41,869 executions in 21 reported seconds, 229 new corpus units,
+271 MiB peak host RSS, exit 0. Final optimization limits host rechecking to hosts
+with trailing dots and passed the stated unit/property checks. This remains
+short development-ASan coverage, not optimized qualification or a long campaign.
+
+Browser batches 2/3 completed: 123 passed, 1 ignored. Batches 0/1 were invoked,
+but their returned output was unavailable for review, so this milestone does
+not claim a newly verified complete browser suite. Locked stripped ARM:
+5,273,020 bytes, 8 bytes smaller, 1,219,240 bytes headroom. No dependency/lock
+change or visual change. The prior Unicode library regression also passed one
+exact Miri test; full-cache Miri and broader gates remain incomplete.
