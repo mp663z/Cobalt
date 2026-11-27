@@ -1404,3 +1404,20 @@ added after the earlier 24/25 run. Command:
 The skipped test is not passed, and the Miri gate remains incomplete. This run
 does not cover the separate proptest package, app, hardware or full web. No
 runtime, dependency, lock or binary change. Other proof-gate limits unchanged.
+
+## Stronger cache fuzz oracle, November 27, 2026
+
+Cache-metadata fuzzing now checks exact decoded Index equality after persistence,
+not only entry count, plus unique names and name/address agreement. Current
+source development-ASan smoke: 613,834 executions in 46 reported seconds,
+709 new corpus units, peak host RSS 275 MiB, exit 0. Same bounded settings:
+-D, codegen units 16, RSS 512 MiB, max input 262144, timeout 10 seconds.
+
+A deliberate encoder mutation discarding fetched timestamps fails immediately
+on the retained corpus, demonstrating detection of metadata loss that an
+entry-count oracle misses. Production restored and artificial crash artifact
+removed. Final restored-source smoke: 123,188 executions in 11 reported seconds,
+142 new units, host RSS 195 MiB, exit 0. No real production bug found. This is
+short development-ASan coverage, not optimized qualification or a long campaign.
+Runtime/locks/deps/binary unchanged from eb56075. Existing proof/hardware/full-web
+limits remain open; host RSS is not device RSS.
