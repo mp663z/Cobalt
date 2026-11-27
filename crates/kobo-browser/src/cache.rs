@@ -94,7 +94,7 @@ impl Index {
     /// nothing, for a page that is not worth keeping: too large on its own or
     /// with an address past [`MAX_URL`].
     pub fn insert(&mut self, url: &str, bytes: u64, fetched: u64) -> Option<(String, Vec<String>)> {
-        if url.len() > MAX_URL || bytes > MAX_BYTES || url.contains(['\t', '\n']) {
+        if url.len() > MAX_URL || bytes > MAX_BYTES || url.contains(['\t', '\n', '\r']) {
             return None;
         }
         let name = blob_name(url);
@@ -321,5 +321,22 @@ mod tests {
         let (kept, _) = index.insert("https://a.example/", 1, 0).unwrap();
         let orphans = index.orphans([kept.as_str(), "page-dead", "other-blob"]);
         assert_eq!(orphans, vec!["page-dead".to_owned()]);
+    }
+}
+
+
+#[cfg(test)]
+mod separator_regression {
+    use super::*;
+    #[test]
+    fn carriage_return_address_is_refused_without_changing_the_index() {
+        let mut index=Index::default();
+        index.insert("https://cache.invalid/kept",1,0).unwrap();
+        let before=index.clone();
+        for url in ["\r","https://cache.invalid/path\r","https://cache.invalid/\rnext"] {
+            assert!(index.insert(url,1,0).is_none());
+            assert_eq!(index,before);
+        }
+        assert_eq!(Index::decode(&index.encode()),index);
     }
 }

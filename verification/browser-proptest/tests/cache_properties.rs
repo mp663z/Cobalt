@@ -64,3 +64,12 @@ proptest! {
         invariant(&Index::decode(stored.as_bytes()));
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+    #[test]
+    fn accepted_address_strings_roundtrip(url in ".{0,80}") {
+        let mut index=Index::default();
+        if index.insert(&url,1,0).is_some() { invariant(&index); }
+    }
+}

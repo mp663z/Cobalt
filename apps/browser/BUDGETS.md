@@ -1321,3 +1321,22 @@ correctly named row of 25,165,825 bytes (MAX_BYTES+1). The guard is restored,
 artificial mutant seed removed, all seven isolated tests pass with seed 6829501.
 No production, dependency/lock or binary change. This improves decoder branch
 coverage, not full corruption-policy verification or outstanding proof gates.
+
+## Property-found carriage-return cache bug, November 27, 2026
+
+A new 512-case property over arbitrary accepted address strings found a real
+serialization failure, shrinking to a single carriage return. Index::insert
+rejected tab/newline but accepted carriage return; encode/decode then lost the
+entry because record parsing treated it as a line ending. Normal parsed URLs
+may not reach this input; no user-visible exploit is claimed.
+
+Insert now rejects carriage return alongside the existing separators, without
+changing the index. A direct unit regression covers bare/trailing/embedded CR,
+and the genuine proptest regression seed is retained. The property fails on
+original source and passes after the fix. All eight isolated tests pass with
+seed 6829501; all 26 core unit tests plus two model tests pass. Full browser
+suite 247 passed, 2 ignored in four completed batches. Scoped core clippy
+correctness passes with existing warnings. Locked stripped ARM: 5,272,556 bytes,
++48, leaving 1,219,704 bytes below the binary-size limit. No dependency change.
+No screenshot is needed for this storage-only fix. Other proof/hardware/full-web
+gaps remain unchanged; earlier Miri/Kani results do not cover this new regression.
