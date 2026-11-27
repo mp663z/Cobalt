@@ -32,3 +32,21 @@ header and field separators so the decoder reaches its row checks. It mixes
 correct/wrong blob names, repeated keys, arbitrary counters/times and sizes
 biased toward the budget range plus full u64 values. Disabling decode's total
 byte guard fails and shrinks to one correctly named row of MAX_BYTES+1.
+
+Accepted-address generation adds 512 cases and retains a genuine minimized
+carriage-return failure seed. See the production CR rejection regression.
+
+An independent cache-policy model adds two 512-case properties. It tracks
+addresses, byte sizes, fetch times and recency separately, sorting eviction
+candidates instead of sharing production's minimum scan. Random traces include
+insert/replace, touch (including absent keys), remove and persistence roundtrips;
+a separate 201..259-entry prefix forces entry-count eviction. It compares every
+entry's metadata and exact eviction order after every action. Keys are bounded,
+not arbitrary URLs; read-counter saturation and damaged-index recovery policy
+are not modeled here.
+
+Mutation sensitivity: evicting most-recent instead of least-recent fails,
+shrinking to three inserts: full budget, zero bytes, full budget at distinct
+addresses. Production is restored; the artificial seed is removed. All ten
+tests pass with seed 6829501. This is randomized policy coverage, not an
+unbounded proof or completion of any outstanding gate.

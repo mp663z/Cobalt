@@ -1340,3 +1340,18 @@ correctness passes with existing warnings. Locked stripped ARM: 5,272,556 bytes,
 +48, leaving 1,219,704 bytes below the binary-size limit. No dependency change.
 No screenshot is needed for this storage-only fix. Other proof/hardware/full-web
 gaps remain unchanged; earlier Miri/Kani results do not cover this new regression.
+
+## Independent cache-policy properties, November 27, 2026
+
+Added a separate cache model in the isolated verification package, with two
+512-case properties checking exact eviction order and entry metadata after
+insert/replace/touch/remove/persistence actions. One property forces 201..259
+initial distinct entries to cover count-based eviction, while another mixes
+zero/full/over-budget sizes with random traces. The model sorts candidates
+rather than using the production minimum scan. A deliberate most-recent-first
+mutant fails and shrinks to three distinct inserts: full budget, zero bytes,
+full budget. Production was restored and the artificial failure seed removed;
+all ten isolated tests pass with seed 6829501. Runtime source, dependencies,
+lockfiles and binary are unchanged from eb56075, so no new ARM measurement or
+visual claim. This bounded-key randomized model does not cover counter
+saturation or damaged-index recovery policy and does not close broader gates.
