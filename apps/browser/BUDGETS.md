@@ -1432,3 +1432,21 @@ artificial seed removed. All seventeen isolated tests pass with seed 6829501.
 No production bug found. This is bounds/canonical persistence coverage, not a
 full corruption-recovery policy oracle. Runtime/locks/deps/binary unchanged from
 eb56075; no visual or broader proof/hardware/full-web completion claim.
+
+## Property-found Unicode library storage bug, November 28, 2026
+
+A new 256-case structured Unicode stored-address property fails on original
+source and shrinks to 162 repeated accented characters for its fixed host.
+Decoder checked raw URL length <=1000 but normalization could expand beyond
+1000; encoder then skipped the accepted entry at next save. Decoder now checks
+normalized length too. Direct boundary regression keeps the nearby valid entry
+and rejects the oversized normalized entry. Genuine minimized seed retained.
+Normal visit/toggle already checks normalized length; malformed/hand-edited or
+legacy storage is the demonstrated boundary, not ordinary UI loss or an exploit.
+
+All 18 isolated tests pass with seed 6829501; core 27 plus 2 model tests pass.
+Browser suite 247 passed, 2 ignored in four completed batches. Scoped core
+clippy correctness passes with existing warnings. Locked stripped ARM 5,273,028
+bytes, +472, leaving 1,219,232 bytes headroom. No dependency/lock changes or
+visual change. Miri/Kani evidence does not cover this new regression. Other
+proof/hardware/full-web gaps remain open.

@@ -93,6 +93,11 @@ impl Library {
             let title = std::str::from_utf8(&rest[url_len..url_len + title_len]).ok();
             rest = &rest[url_len + title_len..];
             if let (Some(url), Some(title)) = (url, title) {
+                // Parsing may percent-encode Unicode and expand the address.
+                // Keep only entries that encode() can persist on the next save.
+                if url.to_string().len() > 1000 {
+                    continue;
+                }
                 match kind {
                     b'B' if library.bookmarks.len() < MAX_BOOKMARKS => {
                         library.bookmarks.push(Place {
@@ -164,5 +169,26 @@ mod tests {
             Library::default()
         );
         assert_eq!(Library::decode(b"garbage"), Library::default());
+    }
+}
+
+#[cfg(test)]
+mod unicode_storage_regression {
+    use super::*;
+    #[test]
+    fn decode_checks_normalized_address_length_and_keeps_other_records() {
+        let mut stored = MAGIC.to_vec();
+        for count in [161, 162] {
+            let raw = format!("https://library-storage.invalid/{}", "é".repeat(count));
+            assert!(raw.len() <= 1000);
+            stored.push(b'B');
+            stored.extend_from_slice(&(raw.len() as u32).to_le_bytes());
+            stored.extend_from_slice(&0u32.to_le_bytes());
+            stored.extend_from_slice(raw.as_bytes());
+        }
+        let library = Library::decode(&stored);
+        assert_eq!(library.bookmarks.len(), 1);
+        assert!(library.bookmarks[0].url.to_string().len() <= 1000);
+        assert_eq!(Library::decode(&library.encode()), library);
     }
 }

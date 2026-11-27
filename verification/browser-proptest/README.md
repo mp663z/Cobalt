@@ -88,3 +88,12 @@ exactly. Disabling the bookmark decode limit fails on the fixed prefix alone
 (rows empty, no truncation), as expected. Production restored and artificial
 seed removed. All seventeen isolated tests pass with seed 6829501. This checks
 bounds/canonical persistence, not a complete corruption-recovery policy oracle.
+
+Structured Unicode stored URLs found a genuine decoder/encoder mismatch:
+raw <=1000-byte addresses could normalize past 1000 bytes and be accepted on
+load but dropped at the next save. The 256-case property shrinks to 162 repeated
+accented characters for its fixed host. Decoder now rejects normalized addresses
+outside its persistence limit. A direct boundary regression retains the nearby
+valid entry; genuine seed retained. All eighteen isolated tests pass with seed
+6829501. Normal visit/toggle already checks normalized length, so this does not
+establish ordinary UI data loss or an exploit.
