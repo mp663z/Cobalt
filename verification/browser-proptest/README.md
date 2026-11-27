@@ -50,3 +50,15 @@ shrinking to three inserts: full budget, zero bytes, full budget at distinct
 addresses. Production is restored; the artificial seed is removed. All ten
 tests pass with seed 6829501. This is randomized policy coverage, not an
 unbounded proof or completion of any outstanding gate.
+
+Durable-library modeling adds two 256-case properties. Independent lists track
+recent visits and bookmark toggles, checking order, replacement, title UTF-8
+prefixes within 200 bytes, contains(), and persistence after every action. A
+101..149 distinct-key prefix forces both 100-item limits before random actions.
+Titles include arbitrary Unicode up to 239 characters, beyond the stored byte
+limit. The model builds the prefix from characters rather than trimming from
+the end as production does. Duplicate-visit removal disabled in production
+fails, shrinking to two visits to the same address with empty titles. Production
+is restored and the artificial seed removed. All twelve isolated tests pass
+with seed 6829501. This models valid bounded-key operations, not malformed
+storage or arbitrary externally constructed public Library fields.

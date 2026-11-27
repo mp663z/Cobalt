@@ -1355,3 +1355,16 @@ all ten isolated tests pass with seed 6829501. Runtime source, dependencies,
 lockfiles and binary are unchanged from eb56075, so no new ARM measurement or
 visual claim. This bounded-key randomized model does not cover counter
 saturation or damaged-index recovery policy and does not close broader gates.
+
+## Durable-library randomized model, November 27, 2026
+
+Two 256-case properties now compare recent visits and bookmark toggles against
+independent ordered lists, including Unicode title truncation at 200 UTF-8
+bytes, contains(), and persistence after every action. Capacity prefixes of
+101..149 distinct keys force both 100-entry limits. Duplicate-visit removal
+was deliberately disabled: the model failed and shrank to two identical empty-
+title visits. Production restored, artificial failure seed removed. All twelve
+isolated tests pass with seed 6829501. Runtime, dependencies, locks and binary
+are unchanged from eb56075. These valid bounded-key operation properties do not
+verify malformed storage or externally constructed public fields. No new bug,
+visual claim or broader proof/hardware gate completion is asserted.
