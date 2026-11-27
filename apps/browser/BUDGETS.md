@@ -1391,3 +1391,16 @@ restored, artificial seed removed. All fifteen isolated tests pass with seed
 6829501. This is internal consistency, not an independent standards oracle or
 classification of rejected inputs. No production bug found. Runtime/locks/deps
 and binary unchanged from eb56075; no visual or broader-gate completion claim.
+
+## Current-source partial Miri refresh, November 27, 2026
+
+Ran current browser-core library tests under nightly Miri with the known slow
+full-cache roundtrip explicitly filtered out. Result: 25 passed, zero failed,
+one filtered. This now includes the genuine carriage-return cache regression
+added after the earlier 24/25 run. Command:
+
+    cargo +nightly miri test --locked -p kobo-browser-core --lib -- --skip the_index_survives_being_stored_and_a_full_one_fits_a_store_value
+
+The skipped test is not passed, and the Miri gate remains incomplete. This run
+does not cover the separate proptest package, app, hardware or full web. No
+runtime, dependency, lock or binary change. Other proof-gate limits unchanged.
