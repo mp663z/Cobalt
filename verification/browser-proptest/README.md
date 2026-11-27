@@ -62,3 +62,12 @@ fails, shrinking to two visits to the same address with empty titles. Production
 is restored and the artificial seed removed. All twelve isolated tests pass
 with seed 6829501. This models valid bounded-key operations, not malformed
 storage or arbitrary externally constructed public Library fields.
+
+Address/query transport adds two 512-case properties. An independent form
+decoder checks that percent/plus encoding recovers arbitrary Unicode byte for
+byte. Typed resolution checks trimmed search-query preservation and rendered
+URL reparsing, using the fixed default search prefix and inputs up to 199
+characters. This is not exhaustive URL classification or RFC conformance.
+Encoding spaces as underscores deliberately fails and shrinks to one space;
+production restored and artificial seed removed. All fourteen isolated tests
+pass with seed 6829501. No runtime or dependency change.

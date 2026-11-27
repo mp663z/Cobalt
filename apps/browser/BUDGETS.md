@@ -1368,3 +1368,14 @@ isolated tests pass with seed 6829501. Runtime, dependencies, locks and binary
 are unchanged from eb56075. These valid bounded-key operation properties do not
 verify malformed storage or externally constructed public fields. No new bug,
 visual claim or broader proof/hardware gate completion is asserted.
+
+## Address/query transport properties, November 27, 2026
+
+Two new 512-case properties use an independent form decoder to recover original
+Unicode bytes and check typed search-query preservation plus URL reparse
+stability. Fixed default search prefix, bounded input lengths; not exhaustive
+URL classification or RFC conformance. Deliberately encoding space as an
+underscore fails, shrinking to one space. Production restored, artificial seed
+removed. All fourteen isolated tests pass with seed 6829501. No production bug
+found, no runtime/lock/dependency/binary change from eb56075, no visual claim or
+broader gate completion. Existing Miri/Kani/hardware/full-web limits remain.
