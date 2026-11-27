@@ -80,3 +80,11 @@ This is internal consistency, not an independent standards oracle; rejected
 inputs are not classified. A deliberate failure to remove fragments fails and
 shrinks to an empty fragment at http://a.aa:0/?#. Production is restored and
 artificial seed removed. All fifteen isolated tests pass with seed 6829501.
+
+Library storage adds two 256-case properties: arbitrary bytes and structurally
+valid B/R records after a fixed 110-bookmark prefix, with optional final-byte
+truncation. Decoded lists must stay within counts/field limits and roundtrip
+exactly. Disabling the bookmark decode limit fails on the fixed prefix alone
+(rows empty, no truncation), as expected. Production restored and artificial
+seed removed. All seventeen isolated tests pass with seed 6829501. This checks
+bounds/canonical persistence, not a complete corruption-recovery policy oracle.

@@ -1421,3 +1421,14 @@ removed. Final restored-source smoke: 123,188 executions in 11 reported seconds,
 short development-ASan coverage, not optimized qualification or a long campaign.
 Runtime/locks/deps/binary unchanged from eb56075. Existing proof/hardware/full-web
 limits remain open; host RSS is not device RSS.
+
+## Library storage properties, November 27, 2026
+
+Two 256-case properties add arbitrary stored bytes and structured B/R rows
+following a fixed 110-bookmark prefix, optionally truncated at the end. Decoded
+counts/field lengths and exact persistence are checked. Removing the bookmark
+decode count guard fails on the fixed prefix alone; production restored and
+artificial seed removed. All seventeen isolated tests pass with seed 6829501.
+No production bug found. This is bounds/canonical persistence coverage, not a
+full corruption-recovery policy oracle. Runtime/locks/deps/binary unchanged from
+eb56075; no visual or broader proof/hardware/full-web completion claim.
