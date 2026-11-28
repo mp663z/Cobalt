@@ -1725,3 +1725,12 @@ rc0, 5/5 and16/16 sheets. nav5 1.606/1.603/1.684s,nav16 1.668/0.728/0.701s.
 Not device timing or causal isolation. Logs under verification/browser-current-sheet-checks.
 Independent TLS16sheet via native Links also passes, changed frame required.
 CSSv4 worker fullsuite71421f45 reports150binaries/1428tests pass.
+
+CSSv5+v5b integrated together: stretch reaches item layout height and centres
+single24px hamburger bar. Measured subtree work now counts MAX_VISITS, cache
+key(box,width), depth8 limit top-aligns deeper rows with counted approximation.
+Own flex11 including12-deep bound test and preview5/all13censuses pass. Fresh
+composited top700px Rust/Python inspected: Python bar centred, Rust unchanged.
+ARM5,317,388B. v5 worker fullsuite1428pass; v5b fullsuite awaited. No claim of
+full flexbox correctness or constant-time layout. Current proofs/hardware gates
+remain open.
