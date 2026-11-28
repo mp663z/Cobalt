@@ -1710,3 +1710,11 @@ inspected. Two fresh completed runs; an earlier unchanged-frame observation
 motivated a short callback-delivery settle before idle/screenshots. Changed hash
 is still mandatory. Static controls remain previews, edit through Forms. Probe
 is debug loopback TLS only, not public-site connectivity/hardware qualification.
+
+CSS v4 integrated: fixed flex slots include item padding; decorated background
+cross-axis stretch and center alignment get a measured pass. Own 10 flex tests
+and 5 preview corpus tests pass, all 13 baseline censuses matched. Two fresh
+composited Rust/Python top-700px frames inspected: 24px single bar now, no other
+visible changes there. Three-bar generated content and full item-height stretch
+remain open. ARM release 5,310,828 B. Extra flex measurement can cost time;
+this is not a responsiveness qualification. Worker full-suite v4 still awaited.
