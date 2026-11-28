@@ -41,6 +41,8 @@ def main():
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
+    assert sum((args.sphinx, args.textarea, args.form_edges)) <= 1, 'choose one form fixture'
+    assert not (args.via_link and (args.textarea or args.form_edges)), 'form edge fixtures open directly'
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
@@ -197,9 +199,12 @@ def main():
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+        app_status = result['status']
+        result['app_status'] = app_status
+        result['status'] = 'unverified' if app_status == 'pass' else app_status
         result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
-        assert result['status'] == 'pass', result
+        assert app_status == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
         after = json.loads((out / 'browser-shots/after-sheet.json').read_text())
         assert before['frame']['sha256'] != after['frame']['sha256'], 'delayed CSS did not change the frame'
@@ -211,8 +216,6 @@ def main():
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
         result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        assert result['status'] == 'pass', result
         if args.sphinx or args.textarea or args.form_edges:
             if args.form_edges:
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
@@ -226,6 +229,8 @@ def main():
         else:
             assert sorted(r['path'] for r in requests) == sorted(expected_paths), requests
         assert all(r['authorization'] is None for r in requests), requests
+        result['status'] = 'pass'
+        (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result, indent=2))
 
 

@@ -286,3 +286,37 @@ are stale too: form-0 opens a Form overview (no submit-field-5), and the
 samples form has no textarea/"note". Staleness predates 02d80c6 (my 071bb0c
 probes already needed browser-more); introducing commit not bisected.
 Evidence: evidence/drive-forms-02d80c6/failed-line-4.png.
+
+## d9a8ab9 spot-checks (2026-11-28, host x86_64) - deltas vs 02d80c6
+
+Head d9a8ab95e63377bbe474e67df39db18163e79928 (css lane ::before/::after
+generated decoration: style_tree.rs +225, css.rs +82, box_tree.rs, basic_page.rs;
+lead repaired drive-forms.kobo in a975261 and retained my evidence in 17b0a1d).
+Same harness and labels as previous sections.
+
+### Sheet probe (3 reps)
+sheets5 painted 2.306/2.276/2.273 s, sheets16 painted 2.409/2.332/2.338 s
+(02d80c6: 2.269-2.301 / 2.328-2.331): flat within noise, rep1 sheets16 2.409 an
+outlier. 5/5 and 16/16 fetches all reps. The +12% regression vs 071bb0c from the
+02d80c6 flex-measurement change persists (no further shift from ::before/::after).
+
+### ARM size audit (release, stripped, musl)
+kobo-browser 5,319,052 B (+2,696 vs 02d80c6), kobo-hello 1,265,740, kobod
+5,125,300 (unchanged). Budget delta browser-hello 4,053,312 B, headroom
+1,189,568 B: WITHIN budget.
+
+### BW RSS journey / qemu-arm
+BW painted-article 63,112 kB VmHWM (-96, noise), form checkpoints flat.
+qemu painted 37,532 VmRSS / 75,424 VmHWM (flat, <=150 kB).
+
+### Sphinx fixture journey
+PASS. peak_app_rss_kib 76,496 (02d80c6: 74,600, +2.5%; 071bb0c: 76,232, +0.3%),
+journey 61.0 s, 5 requests.
+
+### drive-forms.kobo (repaired route, committed at d9a8ab9)
+PASSES rc=0: every step passed, shots form-submitter-choices/result/post-review
+taken. The repair adds tap-id browser-more before navigate and routes the
+textarea leg via browser-more > forms > form-1 > note. form-post-review.png
+inspected: POST form dialog "Review submission - Send form data to
+https://samples.browse.invalid? ... This browser cannot send POST yet." with
+Cancel. Evidence: evidence/drive-forms-d9a8ab9/.

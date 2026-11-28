@@ -1771,3 +1771,9 @@ number maxlength=1 permits42 as required. Exact parsed server query asserted.
 Readonly input now visibly labelled like textarea. Own forms-filter13pass and
 actual saved/readonly/number/result pixels inspected. This is debug TLS simulator
 evidence, not hardware or general HTML validation coverage.
+
+Fixture result guard: disk status stays unverified until screenshot/network/data
+assertions finish. Deliberate wrong amount expectation exits1 and leaves
+app_status=pass/status=unverified, not a false pass. Sphinx, textarea and combined
+form-edge positive live routes all pass after this change. Imported qualification
+v5 evidence only; d9a8ab95 ARM delta1168B between worker/own env unresolved.
