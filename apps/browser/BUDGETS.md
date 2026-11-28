@@ -1753,3 +1753,13 @@ replaces at cap, saves and GETs note=first%0D%0Aseconz. Editor/result pixels che
 Imported qualification evidence only (allocator crate excluded), d7a4c1f source,
 with corrected drive-form caveat. +240ms painted-time correlation on02d80c6 not
 causally isolated; ARM1032B build environment delta remains unreconciled.
+
+CSS item2 integrated: bounded empty ::before/::after decoration restores the
+Sphinx three-bar hamburger. Hook is specific to basic painter; unsupported pseudo
+declarations remain counted refusals. Default entry now admits the confined
+empty absolute decoration, not general generated text. Own lib449pass/3ignored,
+preview5pass covering13frozen pages. Fresh composites inspected: Rust identical,
+Python96changed pixels in24x18px hamburger bounds. Full live app TLS Sphinx route
+passes with3light sheets and native GET q=cobalt; painted and result pixels
+inspected. Peak whole-journey RSS76340KiB, not isolated painted RSS. ARM5320220B.
+Worker full suite still awaited. No fullCSS, hardware or broad proof claim.
