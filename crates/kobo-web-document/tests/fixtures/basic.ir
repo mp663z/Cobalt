@@ -352,6 +352,7 @@ blocks:
                     value: "",
                     label: "Search notes",
                     search: true,
+                    maxlength: None,
                 },
                 Hidden {
                     name: "src",

@@ -418,13 +418,13 @@ mod tests {
                     name: "tag".into(),
                     value: "one".into(),
                     label: "First".into(),
-                    search: false,
+                    search: false,maxlength:None,
                 },
                 Field::Text {
                     name: "tag".into(),
                     value: "two".into(),
                     label: "Second".into(),
-                    search: false,
+                    search: false,maxlength:None,
                 },
                 Field::Submit {
                     name: None,
@@ -458,7 +458,7 @@ mod tests {
                     name: "q".into(),
                     value: "e ink & café".into(),
                     label: "Search".into(),
-                    search: true,
+                    search: true,maxlength:None,
                 },
                 Field::Hidden {
                     name: "source".into(),
@@ -516,7 +516,7 @@ mod tests {
                 name: "q".into(),
                 value: "x".repeat(4096),
                 label: "Search".into(),
-                search: true,
+                search: true,maxlength:None,
             }],
         };
         assert!(get_url(&form, None).is_none());
@@ -532,7 +532,7 @@ mod tests {
                 name: "q".into(),
                 value: "x".into(),
                 label: "Search".into(),
-                search: true,
+                search: true,maxlength:None,
             }],
         };
         assert!(get_url(&form, None).is_none());

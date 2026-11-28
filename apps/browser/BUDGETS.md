@@ -1636,3 +1636,10 @@ fidelity gap accepted for this checkpoint. Body sample stays stable. Worker says
 no stretch backgrounds, currentColor hamburger unresolved; no Chrome parity
 check. Census remains nonzero. ARM 5,300,236 B, +11,848 from textarea-limit. Full
 document suite on worker still awaited, not claimed passed here.
+
+Single-line maxlength follow-up: retain and enforce input maxlength through the
+same UTF-16 insertion guard, preserve defaults and exact Save. Focused input and
+textarea limit checks pass; document golden 18 pass, form-scoped app tests pass,
+scoped app correctness clippy passes. Golden basic.ir adds only maxlength: None
+for its existing field. ARM 5,301,196 B, +960 from nested-flex. This adds no visual
+layout, protocol or dependency change. Full constraint validation remains open.

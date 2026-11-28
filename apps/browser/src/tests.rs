@@ -2452,7 +2452,7 @@ fn native_control_labels_take_their_own_source_colours_not_generated_names(){
 fn late_control_label_colour_keeps_edit_and_refreshes_source_style(){
     let mut runner=runner(TextScale::Default);
     open_web_page(&mut runner,"<!doctype html><form><label for=q style='color:red'>Search</label><input id=q name=q value=original></form>");
-    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::Text{name:"q".into(),label:"Search".into(),value:"edited".into(),search:false};
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::Text{name:"q".into(),label:"Search".into(),value:"edited".into(),search:false,maxlength:None};
     runner.app_mut().pictures.set_colour(true);let mut context=runner.context();runner.app_mut().refresh_native_colour(&mut context);
     let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];assert_eq!(form.field_colours[0],Some(([255,0,0],None)));assert!(matches!(&form.fields[0],Field::Text{value,..} if value=="edited"));
 }
@@ -3114,4 +3114,13 @@ fn textarea_limit_preserves_overlong_defaults_and_unicode(){
  r.action(action_id("kb.enter"));let l=r.app().loaded.as_ref().unwrap();assert!(matches!(&forms::forms(&l.document.blocks)[0].fields[0],Field::TextArea{value,maxlength:Some(1),..} if value=="éa"));
  r.action(action_id("field-0"));r.app_mut().form_entry.open_with("é");r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"é");
  let commands=r.action(action_id("kb.backspace"));let _=commands;assert_eq!(r.app().form_entry.text(),"");
+}
+
+#[test]
+fn single_line_maxlength_blocks_growth_but_allows_deletion_and_exact_save(){
+ let mut r=runner(TextScale::Default);r.app_mut().retry=Some(Url::parse("https://form.invalid/").unwrap());r.action(action_id("retry"));let task=pending_task(&r);
+ r.task_outcome(task,TaskOutcome::Completed(b"<!doctype html><title>Input limit</title><form><input name=q value=ab maxlength=2></form>".to_vec()));
+ r.action(action_id("form-0"));r.action(action_id("field-0"));r.action(action_id("kb.end"));r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"ab");
+ r.action(action_id("kb.backspace"));r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"aq");r.action(action_id("kb.enter"));
+ let l=r.app().loaded.as_ref().unwrap();assert_eq!(forms::body(forms::forms(&l.document.blocks)[0],None).unwrap(),"q=aq");
 }

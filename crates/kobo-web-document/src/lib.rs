@@ -207,6 +207,7 @@ pub enum Field {
         value: String,
         label: String,
         search: bool,
+        maxlength: Option<usize>,
     },
     Hidden {
         name: String,

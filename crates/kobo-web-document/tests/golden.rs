@@ -199,7 +199,7 @@ fn form_controls_keep_names_values_labels_and_defaults() {
     assert_eq!(form.action.to_string(), "https://fixtures.example/find");
     assert_eq!(form.method, Method::Get);
     assert!(
-        matches!(&form.fields[0], Field::Text { name, value, label, search: true } if name == "q" && value == "ink" && label == "Search terms")
+        matches!(&form.fields[0], Field::Text { name, value, label, search: true, .. } if name == "q" && value == "ink" && label == "Search terms")
     );
     assert!(
         matches!(&form.fields[1], Field::Hidden { name, value } if name == "source" && value == "reader")

@@ -1411,7 +1411,7 @@ impl Browser {
     fn editing_maxlength(&self)->Option<usize>{
         let (index,field)=self.editing?;
         match forms::forms(&self.loaded.as_ref()?.document.blocks).get(index)?.fields.get(field)?{
-            Field::TextArea{maxlength,..}=>*maxlength,
+            Field::TextArea{maxlength,..}|Field::Text{maxlength,..}=>*maxlength,
             _=>None,
         }
     }
