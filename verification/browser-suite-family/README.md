@@ -1,1 +1,2 @@
 Integrated family/bold/5chiptests plus production Mono adapter: webdocument1443pass18ignored152groups. Browser277names/274pass3ignored exact-name boundedbatches, nofailure, noomission. Workspace doctests before family integration39groups17pass3ignored, nofailure. Corpus13match, all5Python composites and actualLiveSphinxpixels inspected, boldmono visible. ARM6003644B. Production had sameAtkinson in all3family slots; nowMono usesrealDejaVu regular/bold. Hardware gate OPEN.
+Post-family workspace doctest rerun:39groups17pass3ignored0fail, rc0.

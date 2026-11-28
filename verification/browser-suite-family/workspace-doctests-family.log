@@ -1,0 +1,398 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-document)
+   Compiling kobo-catalog v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-catalog)
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+   Compiling kobo-sim v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-sim)
+warning: unused attribute
+    --> crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> crates/kobo-web-document/src/basic_page.rs:1042:13
+     |
+1042 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:682:25
+    |
+682 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+   Compiling kobo-browser-core v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-browser)
+warning: unexpected `cfg` condition name: `kani`
+   --> crates/kobo-browser/src/lib.rs:264:7
+    |
+264 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `clippy`, `debug_assertions`, `doc`, `docsrs`, `doctest`, `feature`, `fmt_debug`, `miri`, `overflow_checks`, `panic`, `proc_macro`, `relocation_model`, `rustfmt`, `sanitize`, `sanitizer_cfi_generalize_pointers`, `sanitizer_cfi_normalize_integers`, `target_abi`, `target_arch`, `target_endian`, `target_env`, `target_family`, `target_feature`, `target_has_atomic`, `target_has_atomic_equal_alignment`, `target_has_atomic_load_store`, `target_os`, `target_pointer_width`, `target_thread_local`, `target_vendor`, `test`, `ub_checks`, `unix`, and `windows`
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: `kobo-browser-core` (lib) generated 1 warning
+   Compiling kobo-web-layout v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-layout)
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.43s
+   Doc-tests fsrs
+
+running 15 tests
+test third_party/fsrs/src/dataset.rs - dataset::filter_outlier (line 303) ... ok
+test third_party/fsrs/src/dataset.rs - dataset::FSRSItem::long_term_review_cnt (line 72) ... ok
+test third_party/fsrs/src/lib.rs - (line 24) ... ignored
+test third_party/fsrs/src/inference.rs - inference::FSRS::next_states (line 334) ... ok
+test third_party/fsrs/src/model.rs - model::FSRS (line 65) ... ok
+test third_party/fsrs/src/model.rs - model::FSRS (line 71) ... ok
+test third_party/fsrs/src/model.rs - model::FSRS::new (line 110) ... ok
+test third_party/fsrs/src/model.rs - model::FSRS::new (line 99) ... ok
+test third_party/fsrs/src/model.rs - model::check_and_fill_parameters (line 330) ... ok
+test third_party/fsrs/src/simulation.rs - simulation::CMRRTargetFn::new (line 191) ... ok
+test third_party/fsrs/src/simulation.rs - simulation::PostSchedulingFn::new (line 100) ... ok
+test third_party/fsrs/src/simulation.rs - simulation::ReviewPriorityFn::new (line 145) ... ok
+test third_party/fsrs/src/simulation.rs - simulation::SimulatorConfig::with_post_scheduling (line 312) ... ok
+test third_party/fsrs/src/simulation.rs - simulation::SimulatorConfig::with_review_priority (line 296) ... ok
+test third_party/fsrs/src/training.rs - training::compute_parameters (line 271) ... ok
+
+test result: ok. 14 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 1 test
+test third_party/fsrs/src/training.rs - training::benchmark (line 422) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests kobo_abi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_app_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_bookview
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_browser_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_catalog
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_comic
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_dict
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_doc
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_flashcards_format
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_frame_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_hal
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_html
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_image
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_json
+
+running 2 tests
+test crates/kobo-json/src/lib.rs - ObjectBuilder (line 404) ... ok
+test crates/kobo-json/src/lib.rs - (line 38) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+   Doc-tests kobo_music_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_net
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_opds
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_opml
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_policy
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_profile
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_read
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_sdk
+
+running 2 tests
+test crates/kobo-sdk/src/builder.rs - builder::ScreenBuilder::band (line 384) ... ignored
+test crates/kobo-sdk/src/builder.rs - builder::ScreenBuilder::tile_grid (line 1584) ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_shell
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_sim
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_state
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_stream
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_term
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_text
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_ui
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_vault_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_web_document
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_web_layout
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_wifi_trace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_xml
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_zstory
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobod
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
