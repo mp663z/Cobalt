@@ -582,3 +582,24 @@ fn switching_automatic_page_to_native_reader_starts_visible_picture_work() {
     assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
     assert!(runner.app().pictures.state(0).is_some(), "native Reader must request its visible image");
 }
+
+#[test]
+fn automatic_page_sheet_failure_keeps_native_picture_fallback() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let mut runner = AppRunner::with_metrics(Browser::default(), DisplayMetrics {
+        width: 930, height: 1236, pixels_per_inch: 300, text_scale: TextScale::Default,
+    });
+    runner.start();
+    runner.app_mut().pictures.set_colour(true);
+    runner.app_mut().view = View::Page;
+    let mut context = runner.context();
+    let url = Url::parse("https://img.example.test/refused.html").unwrap();
+    runner.app_mut().show_document(&mut context, &url,
+        b"<!doctype html><title>Fallback</title><link rel=stylesheet href=/bad.css><p>Before</p><img src=/native.png width=200 height=100 alt=Picture><p>After</p>");
+    let tasks = spawned(&context.take_commands());
+    let sheet = tasks.iter().find(|(_, work)| matches!(work, Task::Fetch {url,..} if url.ends_with("/bad.css"))).unwrap().0;
+    assert_eq!(runner.app().pictures.state(0), None, "no native prefetch while Page waits for CSS");
+    runner.app_mut().on_task(&mut context, sheet, TaskOutcome::Failed(kobo_sdk::TaskError::NotFound));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    assert!(runner.app().pictures.state(0).is_some(), "failed CSS must leave native image work available");
+}

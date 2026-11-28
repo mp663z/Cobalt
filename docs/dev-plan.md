@@ -19,9 +19,21 @@ it does not grant permission for account actions, publication or purchases.
   complete glyph coverage and real weights. See `vendor/fontdue/COBALT-CHANGES.md`.
 - Parser: html5ever 0.40 / string_cache 0.11 integrated. The 13-page frozen
   corpus has unchanged census and byte-identical full composited pixels.
-- Current parser checkpoint: web-document 1451 passed / 18 ignored; browser
-  275 passed / 5 ignored; preview 47 passed / 1 ignored. These are scoped
-  tests, not whole-web or device qualification.
+- External images: HTTPS PNG and sequential JPEG load in painted Page view,
+  with 16 sources, 1 MiB per source and 4 MiB aggregate limits. Initial Colour
+  Page selection no longer starts a duplicate native prefetch. Explicit Reader
+  selection starts its own visible image work.
+- Image decoder: progressive/non-sequential JPEG is refused before shared
+  size/decode entry points until entropy work has a real bound. This is a
+  deliberate compatibility reduction, not a general image CPU deadline.
+- Latest full browser checkpoint: 293 passed / 6 ignored (299 tests).
+  Web-document 1451 passed / 18 ignored; preview 47 passed / 1 ignored.
+  These are scoped tests, not whole-web or device qualification.
+- e2aac735 ARM release browser: 6,037,132 bytes, headroom 476,352 bytes.
+  qemu article RSS 39,140 KiB / HWM 77,184 KiB; image-session peak 78,912 KiB
+  without growth. qemu image pixels not visually verified. These measurements
+  predate the later native-prefetch ordering change. Host multi-document
+  explicit-Page navigation and revisits paint images in inspected screenshots.
 
 ## Done
 
@@ -34,9 +46,9 @@ it does not grant permission for account actions, publication or purchases.
 ## Current order of work
 
 1. Keep standalone workspaces buildable against the vendored font dependency.
-2. Review and integrate bounded external-image loading with network/security
-   tests when the implementation is ready.
-3. Add the pending CSS/parser fuzz targets and inspect any failures.
+2. Keep image supply, mode transitions and native fallback covered while
+   broader rendering work continues.
+3. Integrate the pending CSS/parser fuzz-target bundle and inspect any failures.
 4. Keep release measurements, docs, fmt/clippy and full-suite checks current.
 
 POST stays review-only. Physical-device input, display, memory and latency
@@ -57,5 +69,5 @@ port/adoption is separate work, not part of the current integration.
   then remove only regenerable build artifacts before rerunning.
 - Host and qemu RSS are not device RSS. No physical-device route is available.
 - Broad Miri/Kani completion is not established by the scoped passing checks.
-- External images, SVG and unsupported layout remain visible compatibility gaps.
+- SVG, progressive JPEG and unsupported layout remain visible compatibility gaps.
 - Browser clippy completes with existing warnings; it is not warning-clean.
