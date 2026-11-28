@@ -688,7 +688,8 @@ impl Browser {
             (None, _) if restore == 0 && lead == 0 => self.main_page(context).unwrap_or(0),
             _ => restore,
         };
-        self.turn_to(context, page);
+        // Choose the initial presentation before starting native image work.
+        self.turn_to_with_native_fetch(context, page, false);
         // Colour panels should not silently discard authored text/image RGB.
         // Keep native forms, fragment/history positions and saved-copy notices
         // until those semantics have a matching painted presentation.
@@ -720,6 +721,7 @@ impl Browser {
             }}}
         }
         self.refresh_painted_sheets(context);
+        self.fetch_pictures(context);
         if let Some(loaded) = &self.loaded {
             let title = loaded
                 .document
@@ -963,6 +965,10 @@ impl Browser {
     }
 
     fn turn_to(&mut self, context: &mut Context, page: usize) {
+        self.turn_to_with_native_fetch(context, page, true);
+    }
+
+    fn turn_to_with_native_fetch(&mut self, context: &mut Context, page: usize, fetch_native: bool) {
         if let Some(loaded)=self.loaded.as_mut(){
             if let Some(painted)=loaded.painted.as_mut(){
                 painted.turn_to(page);
@@ -991,7 +997,9 @@ impl Browser {
                 self.history.set_position(loaded.page, place);
             }
         }
-        self.fetch_pictures(context);
+        if fetch_native {
+            self.fetch_pictures(context);
+        }
     }
 
     /// Asks for the pictures on the screen being read. The sample pages are
@@ -1038,7 +1046,10 @@ impl Browser {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
         };
-        if sample(&loaded.url).is_some() {
+        let waiting_for_paint = loaded.paint_requested
+            && self.sheet_owner.is_some()
+            && self.sheets.outcome().is_none();
+        if sample(&loaded.url).is_some() || loaded.painted.is_some() || waiting_for_paint {
             return;
         }
         let wanted: Vec<usize> = self
@@ -2333,6 +2344,7 @@ impl KoboApp for Browser {
         if self.sheets.on_task(context, task, &outcome) {
             self.settle_painted_sheets(context);
             self.begin_painted_images(context);
+            self.fetch_pictures(context);
             self.show(context);
             return;
         }

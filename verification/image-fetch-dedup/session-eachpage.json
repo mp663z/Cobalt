@@ -1,0 +1,537 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-session-t7kkmgvu/session.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "profile": "clara-bw-391",
+  "pages": 3,
+  "render_scope": "mixed-mode; screenshots are not a painted-mode assertion",
+  "requests": [
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 26244,
+          "hwm_kib": 26416
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 63960,
+          "hwm_kib": 64600
+        }
+      ]
+    },
+    {
+      "path": "/page/1",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67452,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66248,
+          "hwm_kib": 67452
+        }
+      ]
+    },
+    {
+      "path": "/page/2",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67564,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/page/1",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67396,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66740,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/page/2",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67528,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 65196,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67304,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/baseline.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey8.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/progressive.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/interlaced.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/grey.jpg",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    },
+    {
+      "path": "/img/palette.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 66872,
+          "hwm_kib": 67564
+        }
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "shot": "first-run.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 26244,
+          "hwm_kib": 26416
+        }
+      ],
+      "elapsed_seconds": 7.79
+    },
+    {
+      "shot": "session-00.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67452,
+          "hwm_kib": 67452
+        }
+      ],
+      "elapsed_seconds": 13.819
+    },
+    {
+      "shot": "session-01.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67564,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 18.97
+    },
+    {
+      "shot": "session-01-late.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67564,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 22.579
+    },
+    {
+      "shot": "session-02.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67396,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 27.959
+    },
+    {
+      "shot": "session-back.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67528,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 32.081
+    },
+    {
+      "shot": "session-forward.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67304,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 36.199
+    },
+    {
+      "shot": "session-history.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67304,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 38.061
+    },
+    {
+      "shot": "session-final.png",
+      "rss": [
+        {
+          "pid": 140460,
+          "rss_kib": 67396,
+          "hwm_kib": 67564
+        }
+      ],
+      "elapsed_seconds": 42.097
+    }
+  ],
+  "peak_rss_kib": 67564,
+  "source_sha": "ab2946f7ba57753f6ae9279ad604ac7c03e6d311",
+  "dirty": true
+}

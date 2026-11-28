@@ -534,3 +534,31 @@ fn unrelated_task_completion_starts_waiting_image_supply() {
     );
     assert_eq!(url_of(&followup[0].1), "https://cdn.example.test/img/0.png");
 }
+
+#[test]
+fn automatic_colour_page_starts_one_image_get_without_native_prefetch() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let mut runner = AppRunner::with_metrics(Browser::default(), DisplayMetrics {
+        width: 930, height: 1236, pixels_per_inch: 300, text_scale: TextScale::Default,
+    });
+    runner.start();
+    runner.app_mut().pictures.set_colour(true);
+    runner.app_mut().view = View::Page;
+    let mut context = runner.context();
+    let url = Url::parse("https://img.example.test/one.html").unwrap();
+    runner.app_mut().show_document(&mut context, &url,
+        b"<!doctype html><title>One picture</title><link rel='stylesheet' href='/sheet.css'><h1>External image journey</h1><p>Readable before delayed styles.</p><img src=/p.png width=200 height=100 alt=Photo><img src=/unused.svg alt=SVG><a href=/next>Next page</a>");
+    let mut commands = context.take_commands();
+    let sheets: Vec<_> = spawned(&commands).into_iter().filter(|(_, work)| {
+        matches!(work, Task::Fetch { url, .. } if url.ends_with("/sheet.css"))
+    }).collect();
+    assert_eq!(sheets.len(), 1);
+    for (task, _) in sheets {
+        runner.app_mut().on_task(&mut context, task, TaskOutcome::Completed(b"p{color:blue}".to_vec()));
+        commands.extend(context.take_commands());
+    }
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+    let fetched: Vec<_> = spawned(&commands).into_iter()
+        .filter(|(_, work)| matches!(work, Task::Fetch { url, .. } if url == "https://img.example.test/p.png")).collect();
+    assert_eq!(fetched.len(), 1, "only the painted-page supply should request this image");
+}
