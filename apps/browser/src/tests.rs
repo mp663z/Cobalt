@@ -1671,14 +1671,20 @@ fn save_painted_journey_frame(
 }
 
 #[test]
-fn painted_forms_keep_native_controls_and_census_refusal_is_visible() {
+fn painted_forms_offer_native_controls_without_discarding_authored_page() {
     let mut runner = form_runner(TextScale::Default);
     runner.action(action_id("page-view"));
     let loaded = runner.app().loaded.as_ref().unwrap();
-    assert!(loaded.painted.is_none());
-    assert!(loaded.paint_refused);
+    assert!(loaded.painted.is_some());
+    assert!(!loaded.paint_refused);
+    runner.action(action_id("navigate"));
+    runner.action(action_id("forms"));
+    assert_eq!(runner.app().view,View::Forms(0));
     runner.action(action_id("form-0"));
     assert_eq!(runner.app().view, View::Form(0, 0));
+    runner.action(ActionId::BACK);
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+    assert_eq!(runner.app().view,View::Page);
 
     let mut context = runner.context();
     runner.app_mut().show_document(&mut context, &Url::parse("https://journey.invalid/refuse").unwrap(),
@@ -3154,4 +3160,48 @@ fn readonly_single_line_is_successful_but_never_opens_editor(){
  r.task_outcome(task,TaskOutcome::Completed(b"<!doctype html><title>Readonly</title><form><input name=q value=fixed readonly></form>".to_vec()));
  r.action(action_id("form-0"));r.action(action_id("field-0"));assert!(!r.app().form_entry.is_open());
  let l=r.app().loaded.as_ref().unwrap();assert_eq!(forms::body(forms::forms(&l.document.blocks)[0],None).unwrap(),"q=fixed");
+}
+
+
+#[test]
+fn painted_form_list_is_bounded_and_returns_with_current_values(){
+    let mut r=runner(TextScale::Default);
+    let mut html=String::from("<title>Authored controls</title><h1>Search the guide</h1><p>Keep the authored page while editing.</p>");
+    for i in 0..24{html.push_str(&format!("<form action='/search{i}'><label>Search {i}<input name=q value=original></label><button>Find</button></form>"));}
+    let mut context=r.context();r.app_mut().show_document(&mut context,&Url::parse("https://forms.invalid/guide").unwrap(),html.as_bytes());
+    r.app_mut().view=View::Page;
+    let commands=r.action(action_id("page-view"));
+    assert!(r.app().loaded.as_ref().unwrap().painted.is_some());
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){save_painted_journey_frame(&r,&commands,"form-page");}
+    r.action(action_id("browser-more"));
+    r.action(action_id("forms"));
+    if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+        struct Empty;impl kobo_ui::Pictures for Empty{fn get(&self,_:kobo_sdk::PictureHandle)->Option<kobo_ui::PicturePixels<'_>>{None}}
+        let m=kobo_ui::CLARA_BW_METRICS;let screen=r.app().screen(&m).build();
+        let errors:Vec<_>=screen.diagnostics(&m,&Chrome::measuring(true)).issues.into_iter().filter(|i|i.severity==DiagnosticSeverity::Error).collect();assert!(errors.is_empty(),"{errors:?}");
+        let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&Empty,&mut surface,None);
+        use std::io::Write;let mut f=std::fs::File::create("/tmp/forms-list.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",m.width,m.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+    let loaded=r.app().loaded.as_ref().unwrap();let pages=forms::index_pages(loaded,&kobo_ui::CLARA_BW_METRICS);
+    assert!(pages.len()>1);assert_eq!(pages.iter().flatten().copied().collect::<Vec<_>>(),(0..16).collect::<Vec<_>>());
+    let last=*pages.last().unwrap().last().unwrap();
+    r.action(action_id(&format!("form-{last}")));assert_eq!(r.app().view,View::Forms(0),"off-page actions are inert");
+    for _ in 1..pages.len(){r.page_turn(true);}
+    r.action(action_id(&format!("form-{last}")));assert_eq!(r.app().view,View::Form(last,0));
+    r.action(action_id("field-0"));assert!(r.app().form_entry.is_open());
+    r.action(action_id("kb.end"));r.action(action_id("kb.r0c0"));r.action(action_id("kb.enter"));
+    assert!(matches!(&forms::forms(&r.app().loaded.as_ref().unwrap().document.blocks)[last].fields[0],Field::Text{value,..} if value=="originalq"));
+    r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page);assert!(r.app().loaded.as_ref().unwrap().painted.is_some());
+}
+
+#[test]
+fn delayed_sheet_keeps_form_editor_and_updates_only_page_preview(){
+    let mut r=runner(TextScale::Default);r.app_mut().retry=Some(Url::parse("https://forms.invalid/guide").unwrap());r.action(action_id("retry"));let task=pending_task(&r);
+    r.task_outcome(task,TaskOutcome::Completed(b"<!doctype html><title>Guide</title><link rel=stylesheet href=/theme.css><h1>Guide</h1><form><input name=q value=original></form>".to_vec()));
+    let commands=r.action(action_id("page-view"));
+    let sheet=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url.ends_with("theme.css")=>Some(*task),_=>None}).expect("form page CSS fetched");
+    r.action(action_id("forms"));r.action(action_id("form-0"));r.action(action_id("field-0"));r.action(action_id("kb.end"));r.action(action_id("kb.r0c0"));
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red}".to_vec()));assert!(r.app().form_entry.is_open());assert_eq!(r.app().form_entry.text(),"originalq");assert!(r.app().loaded.as_ref().unwrap().painted.is_some());
+    r.action(action_id("kb.enter"));r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page);
+    assert_eq!(forms::body(forms::forms(&r.app().loaded.as_ref().unwrap().document.blocks)[0],None).unwrap(),"q=originalq");
 }

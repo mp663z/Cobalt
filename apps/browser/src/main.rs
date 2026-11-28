@@ -111,6 +111,7 @@ enum View {
     Recent(usize),
     /// One form, at this screen of its controls.
     Form(usize, usize),
+    Forms(usize),
     /// Choices for one select or radio field.
     Options(usize, usize, usize),
     /// A page on its way.
@@ -722,7 +723,7 @@ impl Browser {
     fn refresh_painted_sheets(&mut self, context: &mut Context) {
         if self.pending.is_some() || self.reading.is_some() || matches!(self.view,View::Loading(_)|View::Start|View::Failed(..)|View::Unsupported(..)){return;}
         let Some(loaded)=self.loaded.as_ref() else{return;};
-        if !loaded.paint_requested || loaded.note.is_some() || loaded.full.is_some() || loaded.url.fragment().is_some() || !forms::forms(&loaded.document.blocks).is_empty(){return;}
+        if !loaded.paint_requested || loaded.note.is_some() || loaded.full.is_some() || loaded.url.fragment().is_some(){return;}
         let Some(bytes)=loaded.page_source.as_deref() else{return;};
         let Some(width)=page_mode::PageMode::css_width(&context.metrics(),self.zoom) else{return;};
         let key=(loaded.url.to_string(),width);
@@ -742,7 +743,7 @@ impl Browser {
             Some(sheet_supply::Outcome::Ready(bodies))=>{
                 loaded.linked_sheets=bodies.clone();
                 // Reader/form/menu/keyboard choice stays untouched. Never force a page-mode switch.
-                if loaded.paint_requested && loaded.url.fragment().is_none() && loaded.note.is_none() && loaded.full.is_none() && forms::forms(&loaded.document.blocks).is_empty(){
+                if loaded.paint_requested && loaded.url.fragment().is_none() && loaded.note.is_none() && loaded.full.is_none(){
                     let anchor=loaded.style_anchor.take().or_else(||loaded.style_scroll.is_none().then(||loaded.painted.as_ref().and_then(|p|p.reading_anchor())).flatten());
                     if let Some(mut styled)=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom_with_sheets(bytes,bodies,&loaded.title,&context.metrics(),self.zoom)){
                         if let Some(anchor)=anchor{styled.restore_anchor(anchor);}else if let Some(top)=loaded.style_scroll.take(){styled.restore_scroll(top);}
@@ -1077,6 +1078,19 @@ impl Browser {
 
     fn form_action(&mut self, context: &Context, action: ActionId) -> bool {
         match self.view {
+            View::Forms(page) => {
+                if action==action_id("forms-next") || action==action_id("forms-previous") {
+                    self.view=View::Forms(if action==action_id("forms-next"){page.saturating_add(1)}else{page.saturating_sub(1)});
+                    return true;
+                }
+                if let Some(loaded)=self.loaded.as_ref(){
+                    let pages=forms::index_pages(loaded,&context.metrics());
+                    if let Some(index)=pages.get(page.min(pages.len().saturating_sub(1))).into_iter().flatten()
+                        .find(|&&index|action==action_id(&format!("form-{index}"))).copied(){
+                        self.view=View::Form(index,0);return true;
+                    }
+                }
+            }
             View::Page => {
                 let selected = self.current_pieces().iter().find_map(|piece| {
                     if let Piece::Form { index, .. } = piece {
@@ -1267,21 +1281,11 @@ impl Browser {
             }
             if let Some(loaded) = self.loaded.as_mut() {
                 loaded.paint_requested=true;
-                // Forms need the native controls until the protocol supports painted hit regions.
-                let forms = !forms::forms(&loaded.document.blocks).is_empty();
-                loaded.painted = (!forms)
-                    .then(|| {
-                        loaded.page_source.as_deref().and_then(|bytes| {
-                            page_mode::PageMode::build_zoom_with_sheets(
-                                bytes,
-                                &loaded.linked_sheets,
-                                &loaded.title,
-                                &context.metrics(),
-                                self.zoom,
-                            )
-                        })
-                    })
-                    .flatten();
+                // Controls stay editable in Navigate > Forms; painted controls are previews.
+                loaded.painted = loaded.page_source.as_deref().and_then(|bytes| {
+                    page_mode::PageMode::build_zoom_with_sheets(bytes,&loaded.linked_sheets,
+                        &loaded.title,&context.metrics(),self.zoom)
+                });
                 loaded.paint_refused = loaded.painted.is_none();
             }
         } else if action == action_id("native-reader") {
@@ -1560,7 +1564,6 @@ impl Browser {
                 loaded.painted = loaded
                     .page_source
                     .as_deref()
-                    .filter(|_| forms::forms(&loaded.document.blocks).is_empty())
                     .and_then(|bytes| {
                         page_mode::PageMode::build_zoom_with_sheets(
                             bytes,
@@ -1692,6 +1695,7 @@ impl Browser {
                     "Paint this page, or keep Reader if unsupported",
                     Glyph::Note,
                 ),
+                ("forms", "Forms", "Edit and submit controls. Page view shows previews only.", Glyph::Terminal),
                 ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
                 ("links", "Links", "Links on this page", Glyph::Bookmark),
                 (
@@ -1901,7 +1905,8 @@ impl Browser {
             } else if self.browser_menu {
                 builder.popover("browser-more", |menu| {
                     menu.rows([
-                        ("navigate", "Navigate", "Links, sections and page modes", Glyph::Note),
+                        ("navigate", "Navigate", "Links, forms, sections and page modes", Glyph::Note),
+                        ("forms", "Forms", "Edit controls; page shows previews", Glyph::Terminal),
                         ("edit-address", "Keyboard", "", Glyph::Keyboard),
                         ("go-home", "Go Home", "", Glyph::Home),
                         ("bookmarks", "Favourites", "", Glyph::Star),
@@ -2029,6 +2034,7 @@ impl Browser {
                     builder
                 }
             }
+            (View::Forms(page),Some(loaded))=>forms::index_screen(loaded,*page,metrics),
             (View::Form(index, page), Some(loaded)) => {
                 forms::form_screen(loaded, *index, *page, metrics)
             }
@@ -2135,7 +2141,7 @@ impl KoboApp for Browser {
             self.form_entry.close();self.editing=None;self.show(context);return;
         }
         let action=if action==ActionId::BACK{action_id("back")}else{action};
-        if ["navigate","links","sections","bookmarks","recent"].into_iter().any(|name|action==action_id(name)){
+        if ["navigate","links","sections","forms","bookmarks","recent"].into_iter().any(|name|action==action_id(name)){
             self.browser_menu=false;self.zoom_panel=false;
         }
         if let Some(value)=action.0.checked_sub(page_mode::SCROLL_BASE.0).filter(|value|*value<=200){
@@ -2228,6 +2234,7 @@ impl KoboApp for Browser {
                 self.view,
                 View::Links(_)
                     | View::Sections(_)
+                    | View::Forms(_)
                     | View::Navigate
                     | View::Bookmarks(_)
                     | View::Recent(_)
@@ -2253,6 +2260,8 @@ impl KoboApp for Browser {
         } else if action == action_id("navigate") {
             self.browser_menu=false;self.zoom_panel=false;
             self.view = View::Navigate;
+        } else if action == action_id("forms") {
+            self.view=View::Forms(0);
         } else if action == action_id("links") {
             self.view = View::Links(0);
         } else if action == action_id("sections") {
@@ -2436,6 +2445,8 @@ impl KoboApp for Browser {
         let name = match (&self.view, forward) {
             (View::Links(_), true) => "links-next",
             (View::Links(_), false) => "links-previous",
+            (View::Forms(_), true)=>"forms-next",
+            (View::Forms(_), false)=>"forms-previous",
             (View::Form(_, _), true) => "form-next",
             (View::Form(_, _), false) => "form-previous",
             (View::Options(_, _, _), true) => "option-next",

@@ -1672,3 +1672,15 @@ Readonly input follow-up: readonly single-line fields remain successful controls
 but cannot open the editor, matching textarea handling. Both readonly checks,
 26 form-scoped checks and document golden 19 pass. Golden diff inspected, only
 readonly:false for the existing text field. No layout or protocol change.
+
+Explicit Page view now permits forms without throwing away authored layout.
+More > Forms (also Navigate > Forms) opens a paginated native list, preserving
+current values, supported GET submission and POST review gates. Page controls
+remain static previews, not live hit regions; preview disclosure is on the form
+entry routes. Automatic form-page opening stays native, avoiding silent switch
+to static controls. 28 form-scoped tests pass, including delayed CSS while an
+editor is open, paginated list action scoping, editing and runtime Back. Form
+list pixels checked (no error diagnostics); page preview pixels checked. Source
+values in the static preview are not updated after native edits. No POST gate
+change. Browser-core 27 + 2 tests pass for safe Kani v3 integration; broad Kani
+coverage remains open and narrow proof claims remain worker-reported.

@@ -573,3 +573,24 @@ mod tests {
         assert_eq!(body(found[0], None).as_deref(), Some("allowed=yes"));
     }
 }
+
+
+fn index_rows(loaded:&Loaded,entries:&[usize],page:usize,of:usize)->ScreenBuilder{
+    let all=forms(&loaded.document.blocks);
+    ScreenBuilder::new("browser-forms").top_bar("Forms").top_bar_action("return","Done")
+        .secondary("Page view shows previews. Edit current values here.")
+        .page_turns("forms-previous","forms-next").page_position((page+1).min(u16::MAX as usize) as u16,of.max(1).min(u16::MAX as usize) as u16)
+        .rows(entries.iter().filter_map(|&i|{
+            let form=all.get(i)?;
+            Some((format!("form-{i}"),format!("Form {}",i+1),format!("{} to {}",form.method_label(),form.action.host()),Glyph::Terminal))
+        }))
+}
+pub fn index_pages(loaded:&Loaded,metrics:&DisplayMetrics)->Vec<Vec<usize>>{
+    let entries:Vec<_>=(0..forms(&loaded.document.blocks).len()).collect();
+    fit_pages(&entries,metrics,|e|index_rows(loaded,e,998,999))
+}
+pub fn index_screen(loaded:&Loaded,page:usize,metrics:&DisplayMetrics)->ScreenBuilder{
+    let pages=index_pages(loaded,metrics);let page=page.min(pages.len().saturating_sub(1));
+    let screen=index_rows(loaded,pages.get(page).map_or(&[],Vec::as_slice),page,pages.len());
+    if forms(&loaded.document.blocks).is_empty(){screen.text("No supported forms on this page.")}else{screen}
+}
