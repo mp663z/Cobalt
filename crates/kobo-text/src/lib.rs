@@ -58,6 +58,8 @@ use unicode_segmentation::UnicodeSegmentation;
 ///
 /// See `fonts/LICENSE-DejaVu.txt`, which travels with it.
 pub const MONO_FONT: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
+/// The true bold mono cut, shared by Page font admission and construction.
+pub static MONO_BOLD_FONT: &[u8] = include_bytes!("../fonts/DejaVuSansMono-Bold.ttf");
 
 
 /// Share only the exact embedded mono regular face. A weak slot never keeps the

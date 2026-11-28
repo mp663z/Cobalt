@@ -1,0 +1,13 @@
+Kobo app simulator: http://127.0.0.1:42827
+page-font-paint-us=402207
+shot /tmp/lazy-boldload-b2/browser-shots/before-sheet.png (ideal color; panel appearance uncalibrated)
+page-font-paint-us=8313074
+shot /tmp/lazy-boldload-b2/browser-shots/after-sheet.png (ideal color; panel appearance uncalibrated)
+shot /tmp/lazy-boldload-b2/browser-shots/address-edit.png (ideal color; panel appearance uncalibrated)
+shot /tmp/lazy-boldload-b2/browser-shots/address-cancel.png (ideal color; panel appearance uncalibrated)
+shot /tmp/lazy-boldload-b2/browser-shots/address-back.png (ideal color; panel appearance uncalibrated)
+shot /tmp/lazy-boldload-b2/browser-shots/form-list.png (ideal color; panel appearance uncalibrated)
+shot /tmp/lazy-boldload-b2/browser-shots/form-edited.png (ideal color; panel appearance uncalibrated)
+page-font-paint-us=224760
+shot /tmp/lazy-boldload-b2/browser-shots/search-result.png (ideal color; panel appearance uncalibrated)
+drive: every step passed; screenshots in /tmp/lazy-boldload-b2/browser-shots

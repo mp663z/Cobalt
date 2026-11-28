@@ -256,16 +256,17 @@ fn convert_name(face: &Face) -> Option<String> {
 impl Font {
     /// Constructs a font from an array of bytes.
     pub fn from_bytes<Data: Deref<Target = [u8]>>(data: Data, settings: FontSettings) -> FontResult<Font> {
-        Self::from_bytes_impl(data, settings, false)
+        Self::from_bytes_impl(&data, settings, false)
     }
 
     /// Cobalt opt-in, full-coverage bounded lazy outline geometry.
     #[cfg(feature = "std")]
     pub fn from_bytes_lazy<Data: Deref<Target = [u8]>>(data: Data, settings: FontSettings) -> FontResult<Font> {
-        Self::from_bytes_impl(data, settings, true)
+        Self::from_bytes_impl(&data, settings, true)
     }
 
-    fn from_bytes_impl<Data: Deref<Target = [u8]>>(data: Data, settings: FontSettings, lazy: bool) -> FontResult<Font> {
+    #[inline(never)]
+    fn from_bytes_impl(data: &[u8], settings: FontSettings, lazy: bool) -> FontResult<Font> {
         #[cfg(not(feature = "std"))]
         let lazy = { let _ = lazy; false };
         let hash = crate::hash::hash(&data);
