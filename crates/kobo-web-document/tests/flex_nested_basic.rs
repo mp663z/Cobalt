@@ -302,7 +302,7 @@ fn stretch_extends_item_backgrounds() {
         r#"<div style="display:flex"><div style="width:60px;height:40px;background:#123456"></div><div style="width:60px;background:#abcdef"><span style="display:block;height:10px"></span></div><div style="width:60px;height:20px;background:#fedcba"></div></div>"#,
     );
     assert_eq!(
-        stats.approximations.get("flex-row-stretch-bg"),
+        stats.approximations.get("flex-row-stretch-height"),
         Some(&1),
         "{:?}",
         stats.approximations

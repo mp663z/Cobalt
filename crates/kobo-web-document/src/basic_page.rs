@@ -981,23 +981,23 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             let kids = &self.tree.boxes[index].children;
             let align = style.align_items;
             // Cross-axis alignment needs the row height before painting:
-            // stretch (the initial value) extends an item background to
-            // the row height, center shifts an item down by half the
-            // slack. Measure into the real list, roll back, then paint
-            // for keeps (the same snapshot pattern the table fallback
-            // above uses); the measured heights drive both alignment
-            // adjustments below.
-            let needs_measure = matches!(align, crate::computed_style::AlignItems::Center)
-                || (matches!(align, crate::computed_style::AlignItems::Stretch)
-                    && kids.iter().any(|&c| {
-                        let cs = self.tree.boxes[c].style;
-                        !matches!(cs.height, Length::Px(_))
-                            && (cs.used_background_color().is_some()
-                                || cs.decor.has_painted_border())
-                    }));
+            // stretch (the initial value) grows an auto-height item to
+            // the line's cross size, center shifts an item down by half
+            // the slack. Measure into the real list, roll back, then
+            // paint for keeps (the same snapshot pattern the table
+            // fallback above uses); the measured heights drive both
+            // adjustments below. The line's cross size is the larger of
+            // the tallest measured item and this container's own
+            // stretched content height, so a stretched container (the
+            // hamburger label) centres its children across the stretched
+            // height, not the tallest child's.
+            let own_floor = flex_stretch_bg
+                .filter(|_| !matches!(style.height, Length::Px(_)))
+                .map(|t| t - pad_top - pad_bot)
+                .unwrap_or(0);
             let mut measured: Vec<Option<i64>> = vec![None; kids.len()];
             let mut measured_row_h = 0i64;
-            if needs_measure {
+            {
                 let entry = list.len();
                 let before = self.stats.clone();
                 let before_visits = self.visits;
@@ -1022,6 +1022,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 self.stats = before;
                 self.visits = before_visits;
             }
+            let cross = measured_row_h.max(own_floor);
             let mut x = content_x + pad_left;
             let mut row_h = 0i64;
             for (k, &c) in kids
@@ -1040,21 +1041,21 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     matches!(align, crate::computed_style::AlignItems::Center),
                     measured[k],
                 ) {
-                    let dy = ((measured_row_h - h0) / 2).max(0);
+                    let dy = ((cross - h0) / 2).max(0);
                     if dy > 0 {
                         self.stats.approx("flex-row-item-centered");
                         item_top += dy;
                     }
                 }
-                // The stretch hint is consumed by the item's own
-                // background below; it never leaks to descendants.
+                // The stretch hint is consumed by the item itself below
+                // (layout height, then background); it never leaks to
+                // descendants. Vertical margins are ignored, disclosed
+                // approximation.
                 if matches!(align, crate::computed_style::AlignItems::Stretch)
                     && measured[k].is_some()
                     && !matches!(cs.height, Length::Px(_))
-                    && (cs.used_background_color().is_some()
-                        || cs.decor.has_painted_border())
                 {
-                    self.flex_stretch_bg = Some(measured_row_h);
+                    self.flex_stretch_bg = Some(cross);
                 }
                 let h = self.layout_block(c, x, item_top, cw, list, child_abs_origin);
                 self.flex_stretch_bg = None;
@@ -1169,6 +1170,19 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 content_height = i64::from(h);
             }
         }
+        // align-items:stretch grows an auto-height flex item's used
+        // height to the line's cross size (CSS Flexbox 1 sec 9.4), so
+        // the item's own cross-axis alignment and background see the
+        // stretched height. Definite px heights keep their size.
+        if let Some(target) = flex_stretch_bg {
+            if !matches!(style.height, Length::Px(_)) {
+                let floor = target - pad_top - pad_bot;
+                if floor > content_height {
+                    self.stats.approx("flex-row-stretch-height");
+                    content_height = floor;
+                }
+            }
+        }
         // Background: padding box, inserted behind everything this subtree
         // emitted. The root's background is the canvas fill (already first).
         if Some(index) != self.tree.roots.first().copied() {
@@ -1178,17 +1192,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 } else {
                     pad_left + i64::from(width) + pad_right
                 };
-                // align-items:stretch (the initial value): a row item
-                // with an auto height paints its background across the
-                // full row height (CSS Flexbox 1 sec 9.4). Borders stay
-                // at content height, disclosed approximation.
-                let mut bh = pad_top + content_height + pad_bot;
-                if let Some(target) = flex_stretch_bg {
-                    if !matches!(style.height, Length::Px(_)) && target > bh {
-                        self.stats.approx("flex-row-stretch-bg");
-                        bh = target;
-                    }
-                }
+                // align-items:stretch already grew this item's content
+                // height to the line's cross size above, so the
+                // background follows it here. Borders stay at the same
+                // height via pb_h below.
+                let bh = pad_top + content_height + pad_bot;
                 if bw > 0 && bh > 0 {
                     if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
                         i32::try_from(content_x),
