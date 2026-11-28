@@ -3,6 +3,8 @@ use crate::page_view::{PageFontAdapter, PageView};
 use kobo_sdk::keyboard::Keyboard;
 use kobo_sdk::{Context, DisplayMetrics, PictureHandle, ScreenBuilder, TilePicture};
 
+/// Bounded app profile: enough slots for common documentation themes, with an independent total cap.
+pub(crate) const SHEET_BUDGET:kobo_web_document::SupplyBudget=kobo_web_document::SupplyBudget{max_linked_sheets:16,max_sheet_bytes:512*1024,max_aggregate_bytes:4*1024*1024};
 pub(crate) const SCROLL_BASE:kobo_sdk::ActionId=kobo_sdk::ActionId(0x7ffd_0000);
 pub(crate) const HANDLE: PictureHandle = PictureHandle(0x7fff_0001);
 

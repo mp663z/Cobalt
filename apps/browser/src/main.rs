@@ -729,7 +729,7 @@ impl Browser {
         if self.sheet_owner.as_ref()==Some(&key){return;}
         let Some(census)=page_mode::PageMode::sheet_census(bytes,&loaded.url,&context.metrics(),self.zoom) else{return;};
         self.sheet_owner=Some(key);
-        self.sheets.begin(context,&census);
+        self.sheets.begin_with_budget(context,&census,page_mode::SHEET_BUDGET);
         if let Some(loaded)=self.loaded.as_mut(){loaded.linked_sheets.clear();loaded.styling_limited=false;}
         if !census.links.is_empty() || matches!(self.sheets.outcome(),Some(sheet_supply::Outcome::Failed(_))){self.settle_painted_sheets(context);}
     }
@@ -2292,6 +2292,7 @@ impl KoboApp for Browser {
     fn on_task(&mut self, context: &mut Context, task: TaskId, outcome: TaskOutcome) {
         self.validate_css(context);
         self.refresh_painted_sheets(context);
+        self.sheets.pump(context);
         if self.pager == Some(task) {
             self.pager = None;
             if !matches!(outcome, TaskOutcome::Cancelled) {

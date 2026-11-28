@@ -285,7 +285,7 @@ fn a_page_without_external_sheets_is_ready_with_none() {
 }
 
 #[test]
-fn a_partial_spawn_failure_cancels_what_it_started() {
+fn shared_task_pressure_queues_without_cancelling_started_work() {
     let runner = rig(true);
     let mut context = runner.context();
     let mut n = 0;
@@ -306,11 +306,11 @@ fn a_partial_spawn_failure_cancels_what_it_started() {
     let commands = context.take_commands();
     let started = spawned(&commands);
     assert_eq!(started.len(), 1);
-    assert_eq!(cancels(&commands), vec![started[0].0]);
-    assert_eq!(supply.outcome(), Some(&Outcome::Failed(Why::NoSlot)));
-    assert_eq!(supply.in_flight(), 0);
+    assert!(cancels(&commands).is_empty());
+    assert_eq!(supply.outcome(), None);
+    assert_eq!(supply.in_flight(), 1);
     let mut again = runner.context();
-    assert!(!supply.on_task(
+    assert!(supply.on_task(
         &mut again,
         started[0].0,
         &TaskOutcome::Completed(Vec::new())
@@ -386,4 +386,23 @@ fn an_eligible_page_without_links_has_no_supply_and_no_traffic() {
     let (spawns, supply, _) = real_seam_spawns(true, &page(""));
     assert_eq!(spawns, 0);
     assert_eq!(supply, Some(Outcome::Ready(Vec::new())));
+}
+
+#[test]
+fn explicit_budget_rejects_aggregate_bytes_and_cancels_pending_work(){
+ let runner=rig(true);let mut c=runner.context();let mut supply=crate::sheet_supply::SheetSupply::default();
+ let budget=kobo_web_document::SupplyBudget{max_linked_sheets:16,max_sheet_bytes:8,max_aggregate_bytes:10};
+ supply.begin_with_budget(&mut c,&census(&page(TWO)),budget);
+ let tasks=spawned(&c.take_commands());assert_eq!(tasks.len(),2);
+ assert!(supply.on_task(&mut c,tasks[0].0,&TaskOutcome::Completed(vec![b'a';6])));
+ assert!(supply.on_task(&mut c,tasks[1].0,&TaskOutcome::Completed(vec![b'b';6])));
+ assert_eq!(supply.outcome(),Some(&Outcome::Failed(Why::AggregateTooLarge)));
+}
+
+#[test]
+fn explicit_budget_refuses_seventeenth_sheet_before_traffic(){
+ let runner=rig(true);let mut c=runner.context();let mut supply=crate::sheet_supply::SheetSupply::default();
+ let links=(0..17).map(|i|format!("<link rel=stylesheet href=/{i}.css>")).collect::<String>();
+ supply.begin_with_budget(&mut c,&census(&page(&links)),crate::page_mode::SHEET_BUDGET);
+ assert!(spawned(&c.take_commands()).is_empty());assert_eq!(supply.outcome(),Some(&Outcome::Failed(Why::TooManyLinks)));
 }

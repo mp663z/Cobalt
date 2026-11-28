@@ -20,7 +20,9 @@ use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageClus
 use kobo_web_document::display_list::{Command, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::style_tree::StyleTree;
-use kobo_web_document::{parse_basic_style_tree, Limits, MediaContext, SupplyBudget};
+use kobo_web_document::{parse_basic_style_tree, Limits, MediaContext};
+#[cfg(test)]
+use kobo_web_document::SupplyBudget;
 
 /// Device pixels per CSS pixel for the first profiles (Clara BW: 536 CSS px
 /// across a 1072 px panel).
@@ -204,11 +206,7 @@ impl PageView {
             return Err("viewport");
         }
         let ((bytes, _prefilter), _rows, _chrome) = normalize_for_basic_full(bytes);
-        let budget = SupplyBudget {
-            max_linked_sheets: 48,
-            max_sheet_bytes: 2 * 1024 * 1024,
-            max_aggregate_bytes: 16 * 1024 * 1024,
-        };
+        let budget = crate::page_mode::SHEET_BUDGET;
         let limits = Limits {
             max_input_bytes: 8 * 1024 * 1024,
             ..Limits::DEFAULT

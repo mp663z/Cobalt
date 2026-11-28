@@ -2,12 +2,12 @@
 //!
 //! The document parse indexes `sheets` by the external `<link rel=stylesheet>` links it walks; the host must
 //! supply exactly that many, in that order. This module owns the fetch half: it asks the library for the census
-//! ([`kobo_web_document::host_stylesheet_links`]), spawns one bounded `Task::Fetch` per link, gathers the bodies in
+//! ([`kobo_web_document::host_stylesheet_links`]), queues bounded fetches behind the runtime task ceiling, gathers bodies in
 //! link order, and settles to [`Outcome::Ready`] or [`Outcome::Failed`]. It never parses, admits or paints, and it
 //! does not paint. The browser owns URL/media freshness and preserves the first readable frame.
 //!
-//! Bounds are the existing ones, not new ones: the link ceiling and per-sheet bytes are
-//! `SupplyBudget::CANONICAL`; the fetch is https-only with at most five redirects and no truncation (a body past
+//! The caller supplies a named bounded profile; legacy entry uses `SupplyBudget::CANONICAL`.
+//! App PageMode uses 16 links, 512 KiB per sheet and 4 MiB total; the fetch is https-only with at most five redirects and no truncation (a body past
 //! `max_bytes` is a `TooLarge` failure) because that is the net layer's contract; no credential is sent. A page
 //! that the parse is certain to refuse (too many links, unknown media, an unfetchable link, an incomplete census)
 //! is settled `Failed` BEFORE any network traffic.
@@ -19,7 +19,7 @@
 //! census evaluates must equal the eventual paint width, supplied by PageMode::sheet_census; (4)
 //! redirect limits come from the net layer and are source-verified, not tested at this seam.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap,VecDeque};
 
 use kobo_sdk::{Context, Header, Task, TaskError, TaskId, TaskOutcome};
 use kobo_web_document::style_tree::HostSheetLinks;
@@ -43,6 +43,7 @@ pub enum Why {
     Fetch(TaskError),
     /// A fetch was cancelled by someone other than `clear`.
     Cancelled,
+    AggregateTooLarge,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -63,6 +64,9 @@ pub struct SheetSupply {
     slots: Vec<Slot>,
     by_task: BTreeMap<TaskId, usize>,
     settled: Option<Outcome>,
+    pending: VecDeque<(usize,String)>,
+    budget: Option<SupplyBudget>,
+    received: usize,
 }
 
 impl SheetSupply {
@@ -72,6 +76,9 @@ impl SheetSupply {
             context.cancel(task);
         }
         self.slots.clear();
+        self.pending.clear();
+        self.budget=None;
+        self.received=0;
         self.settled = None;
     }
 
@@ -87,8 +94,12 @@ impl SheetSupply {
 
     /// Starts supply for one document. Replaces any earlier supply.
     pub fn begin(&mut self, context: &mut Context, census: &HostSheetLinks) {
+        self.begin_with_budget(context,census,SupplyBudget::CANONICAL);
+    }
+
+    pub fn begin_with_budget(&mut self,context:&mut Context,census:&HostSheetLinks,budget:SupplyBudget){
         self.clear(context);
-        let budget = SupplyBudget::CANONICAL;
+        self.budget=Some(budget);
         let refusal = if !census.complete {
             Some(Why::IncompleteCensus)
         } else if census.unknown_media > 0 {
@@ -113,27 +124,21 @@ impl SheetSupply {
             self.settled = Some(Outcome::Ready(Vec::new()));
             return;
         }
-        let max_bytes = u32::try_from(budget.max_sheet_bytes).unwrap_or(u32::MAX);
-        for (index, link) in census.links.iter().enumerate() {
-            let url = link
-                .as_ref()
-                .expect("checked above")
-                .without_fragment()
-                .to_string();
-            let task = context.spawn(Task::Fetch {
-                url,
-                offset: 0,
-                max_bytes,
-                credential: None,
-                headers: vec![Header::new("Accept", ACCEPT)],
-            });
-            let Some(task) = task else {
-                self.clear(context);
-                self.settled = Some(Outcome::Failed(Why::NoSlot));
-                return;
-            };
-            self.by_task.insert(task, index);
+        for (index,link) in census.links.iter().enumerate(){
+            self.pending.push_back((index,link.as_ref().expect("checked above").without_fragment().to_string()));
             self.slots.push(Slot::Waiting);
+        }
+        self.pump(context);
+    }
+
+    /// Queue beyond the runtime's shared four-task ceiling instead of failing a valid page.
+    pub fn pump(&mut self,context:&mut Context){
+        if self.settled.is_some(){return;}
+        let max_bytes=self.budget.map_or(0,|b|b.max_sheet_bytes).min(u32::MAX as usize) as u32;
+        while context.tasks_in_flight()<kobo_sdk::MAX_TASKS_IN_FLIGHT{
+            let Some((index,url))=self.pending.pop_front() else{break;};
+            let Some(task)=context.spawn(Task::Fetch{url,offset:0,max_bytes,credential:None,headers:vec![Header::new("Accept",ACCEPT)]}) else{self.fail(context,Why::NoSlot);return;};
+            self.by_task.insert(task,index);
         }
     }
 
@@ -144,8 +149,11 @@ impl SheetSupply {
         };
         match outcome {
             TaskOutcome::Completed(body) => {
+                self.received=self.received.saturating_add(body.len());
+                if self.budget.is_some_and(|b|body.len()>b.max_sheet_bytes || self.received>b.max_aggregate_bytes){self.fail(context,Why::AggregateTooLarge);return true;}
                 self.slots[index] = Slot::Got(body.clone());
-                if self.by_task.is_empty() && self.settled.is_none() {
+                self.pump(context);
+                if self.pending.is_empty() && self.by_task.is_empty() && self.settled.is_none() {
                     let bodies = std::mem::take(&mut self.slots)
                         .into_iter()
                         .map(|slot| match slot {
@@ -170,6 +178,7 @@ impl SheetSupply {
             context.cancel(task);
         }
         self.slots.clear();
+        self.pending.clear();
         self.settled = Some(Outcome::Failed(why));
     }
 }

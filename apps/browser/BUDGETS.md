@@ -1592,3 +1592,24 @@ and sent no Authorization header. Inspected before/after pixels show readable
 initial text, then large red heading and blue paragraph. Address typing succeeds
 afterward. Capture hashes differ and the request inventory is asserted. This is
 local fixture transport qualification, not public-site or physical-panel proof.
+
+### Larger bounded supply and runtime task queue
+
+App PageMode and host supply now share a 16-link, 512 KiB-per-sheet, 4 MiB-total
+profile. Library canonical stays unchanged. Queue work behind the runtime's four
+shared task slots, pump on later callbacks, keep source-order bodies despite
+out-of-order completions, and refuse aggregate overflow before retaining it.
+Seventeen supply/plumbing tests, a 16-sheet exact-order app regression and all
+six live-sheet app checks pass; scoped clippy correctness passes. Real TLS
+fixture with five delayed sheets passes and actual output pixels inspected.
+Dark-only sheet remains unfetched; no credentials. ARM 5,286,588 B, +1,232.
+
+Host debug process RSS sampled via /proc every 20 ms, one-off fixture runs:
+pre-change 2 sheets 67,428 KiB peak / 24.708 s whole journey; queued 2 sheets
+71,624 KiB / 20.471 s; queued 5 sheets 61,696 KiB / 26.660 s. Whole-journey times
+include startup/build, deliberate 2 s responses, screenshots and keyboard work,
+not isolated CSS latency. These noisy samples do not prove a causal delta or a
+device budget. Fixture script records exact source revision and dirty state.
+Previous two-sheet-only and NoSlot-on-pressure notes describe old checkpoints.
+Beyond 16 sheets, 512 KiB each or 4 MiB total still keeps readable simplified
+content; resource limits and no JS remain, not full-web completion.

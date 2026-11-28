@@ -31,7 +31,9 @@ def module(path, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--sheets', type=int, default=5)
     args = parser.parse_args()
+    assert 2 <= args.sheets <= 16
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
@@ -39,12 +41,28 @@ def main():
     runner = module(ROOT / 'scripts/check-apps-sim.py', 'sim_runner')
     cert = module(ROOT / 'scripts/quality/check-audiobook-sim.py', 'tls_fixture')
     requests = []
-    page = b'''<!doctype html><title>Delayed styles</title>
-<link rel=stylesheet href=/first.css>
-<link rel=stylesheet media="(prefers-color-scheme: dark)" href=/dark.css>
-<link rel=stylesheet href=/second.css>
-<h1>External stylesheet journey</h1><p>Readable before delayed styles.</p>
-<a href=/next>Next page</a>'''
+    page = ('<!doctype html><title>Delayed styles</title>'
+            + ''.join(f'<link rel=stylesheet href=/sheet{i}.css>' for i in range(args.sheets))
+            + '<link rel=stylesheet media="(prefers-color-scheme: dark)" href=/dark.css>'
+              '<h1>External stylesheet journey</h1><p>Readable before delayed styles.</p>'
+              '<a href=/next>Next page</a>').encode()
+    peak_rss_kib = 0
+    monitoring = True
+
+    def monitor():
+        nonlocal peak_rss_kib
+        while monitoring:
+            for entry in Path('/proc').iterdir():
+                if not entry.name.isdigit():
+                    continue
+                try:
+                    if (entry / 'exe').resolve().name == 'kobo-browser':
+                        for line in (entry / 'status').read_text().splitlines():
+                            if line.startswith('VmRSS:'):
+                                peak_rss_kib = max(peak_rss_kib, int(line.split()[1]))
+                except (OSError, ValueError):
+                    pass
+            time.sleep(.02)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -53,8 +71,12 @@ def main():
         def do_GET(self):
             requests.append({'path': self.path, 'authorization': self.headers.get('Authorization'),
                              'accept': self.headers.get('Accept')})
-            body = {'/': page, '/first.css': b'h1{color:red;font-size:36px}',
-                    '/second.css': b'p{color:blue;margin-top:70px}'}.get(self.path)
+            body = page if self.path == '/' else None
+            if self.path.startswith('/sheet') and self.path.endswith('.css'):
+                i = int(self.path[6:-4])
+                body = (b'h1{color:red;font-size:36px}' if i == 0 else
+                        b'p{color:blue;margin-top:70px}' if i == 1 else
+                        f'h1{{margin-bottom:{i}px}}'.encode())
             if self.path.endswith('.css'):
                 time.sleep(2)
             if body is None:
@@ -90,22 +112,31 @@ def main():
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
                    KOBO_SIM_TRUST_DIR=str(trust))
         env.pop('KOBO_SIM_OFFLINE', None)
+        watcher = threading.Thread(target=monitor, daemon=True)
+        watcher.start()
+        started = time.monotonic()
         try:
             result = runner.run_app('browser', target / 'debug/kobo', out, env, 90,
                                     route_override=route, seed_root=private / 'seed')
         finally:
+            monitoring = False
+            watcher.join(timeout=5)
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
         after = json.loads((out / 'browser-shots/after-sheet.json').read_text())
         assert before['frame']['sha256'] != after['frame']['sha256'], 'delayed CSS did not change the frame'
+        result['peak_app_rss_kib'] = peak_rss_kib
+        result['whole_journey_seconds'] = round(time.monotonic() - started, 3)
+        result['sheet_count'] = args.sheets
         result['requests'] = requests
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
+        result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         assert result['status'] == 'pass', result
-        assert sorted(r['path'] for r in requests) == ['/', '/first.css', '/second.css'], requests
+        assert sorted(r['path'] for r in requests) == sorted(['/'] + [f'/sheet{i}.css' for i in range(args.sheets)]), requests
         assert all(r['authorization'] is None for r in requests), requests
         print(json.dumps(result, indent=2))
 

@@ -3055,3 +3055,24 @@ fn live_sheets_history_restores_selected_zoom_after_supply(){
     let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
     assert_eq!(r.app().zoom,150);assert_eq!(p.scroll_position(),120.min(p.view.max_scroll()));
 }
+
+#[test]
+fn sixteen_sheet_queue_preserves_order_and_bounds_total_bytes(){
+    let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+    r.app_mut().retry=Some(Url::parse("https://style.invalid/many").unwrap());r.action(action_id("retry"));
+    let mut html=String::from("<!doctype html><title>Many sheets</title>");
+    for i in 0..16{write!(html,"<link rel=stylesheet href=/{i}.css>").unwrap();}
+    html.push_str("<h1>Many sheet page</h1><p>readable text</p>");
+    let task=pending_task(&r);let mut commands=r.task_outcome(task,TaskOutcome::Completed(html.into_bytes()));
+    let mut total=0;
+    for _ in 0..20{
+        let work:Vec<_>=commands.iter().filter_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,max_bytes,credential,..}} if url.ends_with(".css")=>{assert!(credential.is_none());assert_eq!(*max_bytes,512*1024);Some((*task,url.clone()))},_=>None}).collect();
+        if work.is_empty(){break;}commands=Vec::new();
+        for (task,url) in work.into_iter().rev(){
+            total+=1;let n=url.rsplit('/').next().unwrap().trim_end_matches(".css").parse::<usize>().unwrap();
+            commands.extend(r.task_outcome(task,TaskOutcome::Completed(format!("h1{{margin-top:{n}px}}").into_bytes())));
+        }
+    }
+    assert_eq!(total,16);let l=r.app().loaded.as_ref().unwrap();assert!(l.painted.is_some());assert_eq!(l.linked_sheets.len(),16);
+    for (i,body) in l.linked_sheets.iter().enumerate(){assert_eq!(body,format!("h1{{margin-top:{i}px}}").as_bytes());}
+}
