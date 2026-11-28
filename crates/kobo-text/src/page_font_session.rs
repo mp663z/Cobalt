@@ -662,6 +662,7 @@ mod lazy_geometry_parity {
             for id in 0..eager.glyph_count() {
                 for px in [12.0,18.0,24.0,32.0] {
                     assert_eq!(eager.rasterize_indexed(id, px), lazy.rasterize_indexed(id, px), "glyph {id} at {px}");
+                    assert_eq!(eager.rasterize_indexed_subpixel(id, px), lazy.rasterize_indexed_subpixel(id, px), "subpixel glyph {id} at {px}");
                     let (count, bytes) = lazy.lazy_geometry_usage().unwrap();
                     assert!(count <= 256 && bytes <= 1_048_576);
                 }

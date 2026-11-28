@@ -1,0 +1,78 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling fontdue v0.9.3 (/home/sandbox/cb/measure-basic/vendor/fontdue)
+   Compiling kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.83s
+     Running unittests src/lib.rs (target/debug/deps/kobo_text-b9d2c1dbbd42b9d8)
+
+running 54 tests
+test page_font_session::shared_mono_tests::shared_mono_identity_and_all_mapped_glyphs_match_uncached ... ok
+test page_font_session::tests::a_missing_glyph_is_not_transliterated ... ok
+test page_font_session::tests::arabic_and_hebrew_bold_use_distinct_real_cuts ... ok
+test page_font_session::tests::arabic_and_hebrew_shape_to_logical_clusters_with_full_coverage ... ok
+test page_font_session::tests::bold_uses_a_real_different_cut ... ok
+test page_font_session::tests::bundled_fallbacks_cover_russian_and_devanagari_but_not_japanese ... ok
+test page_font_session::lazy_geometry_parity::every_regular_and_bold_glyph_matches_eager_at_four_sizes ... ok
+test page_font_session::tests::fallback_weight_and_slant_select_actual_cuts ... ok
+test page_font_session::tests::indic_shaping_clusters_cover_the_input_without_byte_splits ... ok
+test page_font_session::tests::missing_scripts_draw_boxes_without_poisoning_later_text ... ok
+test page_font_session::tests::punctuation_does_not_disable_joining_script_shaping ... ok
+test reading_mono_tests::document_mono_has_equal_cells_and_ignores_interface_size ... ok
+test page_font_session::tests::unused_fallback_never_inflates_latin_line_metrics ... ok
+test tests::a_book_is_set_on_more_open_lines_than_an_interface ... ok
+test tests::a_caption_grid_is_wide_enough_to_be_a_terminal ... ok
+test tests::a_borrowed_letter_is_measured_in_the_face_that_draws_it ... ok
+test tests::a_file_that_is_not_a_font_is_rejected ... ok
+test tests::a_grid_gives_every_character_a_column_even_an_invisible_one ... ok
+test tests::a_hyphen_the_face_lacks_is_drawn_as_the_hyphen_it_is ... ok
+test tests::a_larger_size_draws_larger_text ... ok
+test tests::a_letter_missing_from_one_face_is_drawn_from_another ... ok
+test tests::a_clock_starts_its_digits_in_the_same_place_at_every_minute ... ok
+test tests::a_missing_display_serif_cut_falls_back_without_loading_or_vendoring_one ... ok
+test tests::a_missing_font_is_an_error_rather_than_a_panic ... ok
+test tests::a_monospace_run_is_exactly_its_length_in_cells ... ok
+test tests::a_long_bar_title_leaves_no_ink_outside_its_own_rect ... ok
+test tests::a_paginated_page_of_rows_never_reaches_the_page_position_under_it ... ok
+test tests::a_shelf_of_tiles_never_reaches_the_page_position_under_it ... ok
+test tests::a_rank_leaves_no_ink_in_the_column_the_title_was_given ... ok
+test tests::accessibility_scale_changes_real_glyph_metrics ... ok
+test tests::an_invisible_character_takes_no_room_and_leaves_no_mark ... ok
+test tests::body_text_is_a_readable_physical_size ... ok
+test tests::an_unreadable_prose_face_still_leaves_the_interface_with_a_real_one ... ok
+test tests::drawing_produces_coverage ... ok
+test tests::every_monospace_glyph_has_the_same_advance ... ok
+test tests::every_named_font_candidate_is_actually_an_outline_font ... ok
+test tests::every_substitute_is_a_character_the_face_carries ... ok
+test tests::edges_are_antialiased_rather_than_binary ... ok
+test tests::legacy_screens_select_atkinson_display_metrics_inside_their_scope ... ok
+test tests::glyphs_land_inside_the_measured_box ... ok
+test tests::lowercase_is_distinct_from_uppercase ... ok
+test tests::measuring_does_not_drift_across_a_long_line ... ok
+test tests::production_wrapper_never_exceeds_the_measured_width ... ok
+test tests::measuring_is_additive_across_a_string ... ok
+test tests::sizes_increase_with_prominence ... ok
+test tests::the_face_reports_what_it_cannot_draw ... ok
+test tests::the_monospace_face_is_always_available ... ok
+test tests::proportional_widths_differ_between_characters ... ok
+test tests::the_prose_face_is_a_real_face_rather_than_a_missing_one ... ok
+test tests::the_proportional_face_is_not_reported_as_fixed_pitch ... ok
+test tests::the_punctuation_of_ordinary_web_text_is_all_drawable ... ok
+test tests::the_two_faces_are_addressed_separately ... ok
+test tests::the_two_sizes_that_head_a_screen_are_set_in_the_heavier_cut ... ok
+test tests::unicode_breaks_and_graphemes_are_not_ascii_approximations ... ok
+
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.44s
+
+   Doc-tests kobo_text
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

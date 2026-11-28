@@ -1,0 +1,18 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.16s
+     Running unittests src/lib.rs (target/debug/deps/kobo_text-b9d2c1dbbd42b9d8)
+
+running 1 test
+test page_font_session::lazy_geometry_parity::every_regular_and_bold_glyph_matches_eager_at_four_sizes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 3.39s
+

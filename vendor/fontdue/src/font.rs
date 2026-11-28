@@ -307,6 +307,11 @@ impl Font {
             load_gsub(&face, &mut indices_to_load);
         }
 
+        // Lazy construction must preserve eager validation before deferring work.
+        if indices_to_load.iter().any(|index| *index >= glyph_count) {
+            return Err("Attempted to map a codepoint out of bounds.");
+        }
+
         let units_per_em = face.units_per_em() as f32;
 
         #[cfg(feature = "std")]
