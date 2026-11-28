@@ -1551,3 +1551,29 @@ scroll routes now pass, and actual pixels show the destination, changed scroll
 position and keyboard crop. App touch-across-zooms and bounded-scroll regressions
 pass. No pointer dispatch or form code change was needed. Scroll windows may
 clip an edge line, unlike page-button pagination. No hardware or complete-web claim.
+
+### Painted-page linked stylesheet supply
+
+Painted pages now request the painter's exact normalized light-profile sheet
+census, then rebuild when bounded HTTPS sheet bodies arrive in source order.
+The initial readable screen is not held waiting for the network. A URL plus CSS
+width owner guards supply; zoom refetches at its new media width. Rebuild keeps
+the source-byte reading anchor, inline address edits, keyboard and open menu.
+Explicit Reader, forms, fragments and saved-copy notices are not replaced by
+an asynchronous mode switch. Fetch/parse failure leaves readable content and
+adds a styling-limit explanation in Navigate. Canonical two-sheet/per-sheet
+budgets remain, no credentials or net-policy/protocol changes. Task-slot
+exhaustion is a surfaced styling-limit outcome, not a retry loop.
+
+Five new app integration regressions pass, including delayed external color
+reaching the raster, first screen before sheet completion, stale outcomes,
+Reader choice, failure, new-width refetch, menu and source-anchor retention.
+Supply/plumbing 15 pass; selected reflow/anchor 4 pass; textarea/readonly 2 pass.
+Scoped browser clippy correctness passes. Controlled disabled-wiring regression
+fails at external stylesheet fetch, restored wiring passes. Host pixels inspected:
+external red heading, live address edit and keyboard retained in the same frame.
+Locked stripped ARM 5,284,852 B, +4,712 from 547761ba. No new crate/lock/unsafe.
+This is actual app task-result seam coverage, not live-site transport or device
+qualification; callback timing warnings, full HTML/CSS, physical panel/RSS and
+independent proof gates remain open. The separate qualification allocator stays
+unmerged.

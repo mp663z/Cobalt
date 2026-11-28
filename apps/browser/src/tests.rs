@@ -2947,3 +2947,93 @@ fn readonly_textarea_is_submitted_but_cannot_be_edited() {
     let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
     assert_eq!(forms::body(form,None).unwrap(),"note=unchanged");
 }
+
+fn styled_supply_runner() -> (AppRunner<Browser>, TaskId) {
+    let mut r=runner(TextScale::Default);
+    r.app_mut().pictures.set_colour(true);
+    r.app_mut().retry=Some(Url::parse("https://style.invalid/page").unwrap());
+    r.action(action_id("retry"));
+    let task=pending_task(&r);
+    let commands=r.task_outcome(task,TaskOutcome::Completed(br#"<!doctype html><title>Styled</title><link rel=stylesheet href="/page.css"><h1>Styled heading</h1><p>Readable first paint</p><a href="/next">Next page</a>"#.to_vec()));
+    let sheet=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url=="https://style.invalid/page.css"=>Some(*task),_=>None}).expect("external stylesheet fetched");
+    assert!(commands.iter().any(|c|matches!(c,kobo_sdk::Command::SetScreen(_))),"readable first screen before stylesheet arrives");
+    (r,sheet)
+}
+
+#[test]
+fn live_sheets_rebuild_without_overwriting_inline_address_or_view(){
+    let (mut r,sheet)=styled_supply_runner();
+    r.action(action_id("edit-address"));
+    r.action(action_id("kb.end"));r.action(action_id("kb.r0c0"));
+    let value=r.app().address.text().to_owned();
+    let commands=r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red;font-size:36px}p{margin:40px 0}".to_vec()));
+    save_painted_journey_frame(&r,&commands,"linked-sheet-address-retained");
+    assert!(r.app().address.is_open());assert_eq!(r.app().address.text(),value);
+    assert_eq!(r.app().view,View::Page);
+    let loaded=r.app().loaded.as_ref().unwrap();assert_eq!(loaded.linked_sheets.len(),1);assert!(loaded.painted.is_some());assert!(!loaded.styling_limited);
+    let p=loaded.painted.as_ref().unwrap();
+    let rgb=p.view.raster_page_rgb(0);assert!(rgb.chunks_exact(3).any(|p|p[0]>p[1]&&p[0]>p[2]),"external red rule painted");
+}
+
+#[test]
+fn live_sheets_respect_reader_choice_and_ignore_stale_arrivals(){
+    let (mut r,sheet)=styled_supply_runner();
+    r.action(action_id("native-reader"));
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red}".to_vec()));
+    assert!(r.app().loaded.as_ref().unwrap().painted.is_none());
+    let (mut r,sheet)=styled_supply_runner();
+    r.action(action_id("samples"));
+    r.task_outcome(sheet,TaskOutcome::Completed(b"body{color:red}".to_vec()));
+    assert_eq!(r.app().loaded.as_ref().unwrap().url.to_string(),SAMPLES);
+    assert!(r.app().loaded.as_ref().unwrap().linked_sheets.is_empty());
+}
+
+#[test]
+fn live_sheet_failure_keeps_readable_page_and_reports_limit(){
+    let (mut r,sheet)=styled_supply_runner();
+    let title=title(&r);
+    r.task_outcome(sheet,TaskOutcome::Failed(TaskError::Offline));
+    assert_eq!(title,r.app().loaded.as_ref().unwrap().title);
+    assert!(r.app().loaded.as_ref().unwrap().styling_limited);
+    assert_eq!(r.app().view,View::Page);
+    r.action(action_id("navigate"));
+    let s=r.app().screen(&r.context().metrics()).build();
+    assert!(format!("{s:?}").contains("Styling limited"));
+}
+
+#[test]
+fn live_sheet_zoom_refetches_at_new_media_width_and_restores_paint(){
+    let (mut r,sheet)=styled_supply_runner();
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red}".to_vec()));
+    let before=r.app().sheet_owner.clone();
+    let commands=r.action(action_id("zoom-more"));
+    assert_ne!(r.app().sheet_owner,before);assert_eq!(r.app().zoom,125);
+    let sheet=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url.ends_with("page.css")=>Some(*task),_=>None}).expect("media-width refetch");
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:blue}".to_vec()));
+    assert!(r.app().loaded.as_ref().unwrap().painted.is_some());assert_eq!(r.app().zoom,125);
+}
+
+#[test]
+fn live_sheet_reflow_keeps_source_anchor_menu_and_cancelled_request_ownership(){
+    let (mut r,sheet)=styled_supply_runner();
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red}".to_vec()));
+    // Replace with a long document, retaining a nonzero source anchor while the sheet is delayed.
+    let mut html=String::from("<!doctype html><title>Long styled</title><link rel=stylesheet href=/long.css>");
+    for i in 0..70{write!(html,"<p>Paragraph {i}: enough readable prose to retain the source position across a styled rebuild of this long page.</p>").unwrap();}
+    r.app_mut().retry=Some(Url::parse("https://style.invalid/long").unwrap());r.action(action_id("retry"));
+    let task=pending_task(&r);let commands=r.task_outcome(task,TaskOutcome::Completed(html.into_bytes()));
+    let sheet2=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url.ends_with("long.css")=>Some(*task),_=>None}).unwrap_or_else(||panic!("owner={:?}, outcome={:?}",r.app().sheet_owner,r.app().sheets.outcome()));
+    // A bounded first paint is native when the engine requires external sheets. Use a successful sheet,
+    // then change media width to start a second delayed supply while retaining the source position.
+    r.task_outcome(sheet2,TaskOutcome::Completed(b"p{margin:12px 0}".to_vec()));
+    r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+    let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();let anchor=p.reading_anchor().unwrap();assert!(p.scroll_position()>0);
+    let commands=r.action(action_id("zoom-more"));
+    let sheet3=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url.ends_with("long.css")=>Some(*task),_=>None}).unwrap();
+    r.action(action_id("browser-more"));assert!(r.app().browser_menu);
+    r.task_outcome(sheet3,TaskOutcome::Completed(b"p{margin:30px 0}".to_vec()));
+    assert!(r.app().browser_menu);
+    let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();let expected=p.view.anchor_top(anchor).unwrap().min(p.view.max_scroll());assert!(p.scroll_position().abs_diff(expected)<=2);
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:purple}".to_vec()));
+    assert_eq!(r.app().loaded.as_ref().unwrap().url.to_string(),"https://style.invalid/long");
+}

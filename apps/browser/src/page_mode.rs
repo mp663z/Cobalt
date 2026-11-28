@@ -57,6 +57,41 @@ impl PageMode {
         metrics: &DisplayMetrics,
         zoom: u16,
     ) -> Option<Self> {
+        Self::build_zoom_with_sheets(bytes, &[], title, metrics, zoom)
+    }
+
+    /// CSS pixel width the painter uses at `zoom`; the sheet census must be evaluated at exactly this width.
+    pub(crate) fn css_width(metrics: &DisplayMetrics, zoom: u16) -> Option<u32> {
+        let room_width = u32::try_from(metrics.width - 2 * metrics.screen_margin()).ok()?;
+        (zoom != 0).then(|| room_width * 100 / u32::from(zoom) / 2)
+    }
+
+    /// The external stylesheet links the painter will index for `bytes` at `zoom`: same normalised document, same
+    /// light-scheme profile and same width as [`Self::build_zoom_with_sheets`]. Feed this to `SheetSupply::begin`
+    /// and pass the Ready bodies back, unchanged and in order.
+    pub(crate) fn sheet_census(
+        bytes: &[u8],
+        url: &kobo_web_document::Url,
+        metrics: &DisplayMetrics,
+        zoom: u16,
+    ) -> Option<kobo_web_document::style_tree::HostSheetLinks> {
+        let width = Self::css_width(metrics, zoom)?;
+        let media = kobo_web_document::MediaContext::new(width).map(kobo_web_document::MediaContext::with_light_scheme);
+        let ((normalised, _), _, _) = kobo_web_document::basic_page::normalize_for_basic_full(bytes);
+        let limits = kobo_web_document::Limits {
+            max_input_bytes: 8 * 1024 * 1024,
+            ..kobo_web_document::Limits::DEFAULT
+        };
+        Some(kobo_web_document::host_stylesheet_links(&normalised, url, &limits, media))
+    }
+
+    pub(crate) fn build_zoom_with_sheets(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        title: &str,
+        metrics: &DisplayMetrics,
+        zoom: u16,
+    ) -> Option<Self> {
         let width = u32::try_from(metrics.width).ok()?;
         let height = u32::try_from(metrics.height).ok()?;
         // Measure actual chrome, never subtract remembered toolbar dimensions.
@@ -73,8 +108,9 @@ impl PageMode {
             return None;
         }
         let face = PageFontAdapter::bundled()?;
-        let view = PageView::paint(
+        let view = PageView::paint_with_sheets(
             bytes,
+            sheets,
             room_width * 100 / u32::from(zoom) / 2,
             room_height * 100 / u32::from(zoom) / 2,
             2,
@@ -254,5 +290,60 @@ mod sampling_tests {
         assert_eq!(sample_rgb(&pixels, 2, 1, 1, 0, 2, 1), [255; 3]);
         assert_eq!(sample_rgb(&pixels, 2, 1, 1, 0, 4, 1), [64; 3]);
         assert_eq!(sample_rgb(&pixels, 2, 1, 2, 0, 4, 1), [191; 3]);
+    }
+}
+
+#[cfg(test)]
+mod sheet_supply_plumbing_tests {
+    use super::*;
+    use kobo_web_document::Url;
+
+    const PAGE: &[u8] = b"<!DOCTYPE html><html><head><title>t</title>\
+<link rel=\"stylesheet\" href=\"https://example.test/a.css\">\
+<link rel=\"stylesheet\" media=\"(prefers-color-scheme: dark)\" href=\"https://example.test/dark.css\">\
+<link rel=\"stylesheet\" href=\"https://example.test/b.css\"></head>\
+<body><h1>Head</h1><p>one two three</p></body></html>";
+
+    fn metrics() -> DisplayMetrics {
+        kobo_ui::CLARA_BW_METRICS
+    }
+
+    #[test]
+    fn census_matches_the_painter_width_and_skips_dark_scheme_links() {
+        let url = Url::parse("https://example.test/p.html").unwrap();
+        let census = PageMode::sheet_census(PAGE, &url, &metrics(), 100).expect("census");
+        assert!(census.complete);
+        assert_eq!(census.unknown_media, 0);
+        let hosts: Vec<String> = census.links.iter().map(|l| l.as_ref().unwrap().to_string()).collect();
+        assert_eq!(hosts, ["https://example.test/a.css", "https://example.test/b.css"]);
+        assert_eq!(census.link_takes_host_slot, [true, false, true]);
+        assert!(PageMode::css_width(&metrics(), 0).is_none());
+        let (half, full) = (
+            PageMode::css_width(&metrics(), 200).unwrap() * 2,
+            PageMode::css_width(&metrics(), 100).unwrap(),
+        );
+        assert!(half.abs_diff(full) <= 1, "{half} vs {full}");
+    }
+
+    #[test]
+    fn supplied_sheets_change_the_painted_page_and_mismatched_counts_do_not_panic() {
+        kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+        let face = PageFontAdapter::bundled().expect("bundled font");
+        let plain = PageView::paint(PAGE, 400, 100, 2, &face, &face, &face).expect("plain");
+        let tall = b"h1{margin-top:200px;font-size:40px} p{margin:80px 0}".to_vec();
+        let styled = PageView::paint_with_sheets(
+            PAGE,
+            &[tall.clone(), b"p{color:red}".to_vec()],
+            400,
+            100,
+            2,
+            &face,
+            &face,
+            &face,
+        )
+        .expect("styled");
+        assert!(styled.max_scroll() > plain.max_scroll(), "{} vs {}", styled.max_scroll(), plain.max_scroll());
+        // The host owes exactly census.links.len() bodies; a wrong count is refused by the engine, never a panic.
+        let _ = PageView::paint_with_sheets(PAGE, &[tall], 400, 100, 2, &face, &face, &face);
     }
 }

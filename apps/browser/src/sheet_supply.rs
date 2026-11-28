@@ -1,10 +1,10 @@
-//! Host supply of linked stylesheets for the (production-disabled) CSS stage.
+//! Host supply of linked stylesheets for painted pages and the isolated CSS stage.
 //!
 //! The document parse indexes `sheets` by the external `<link rel=stylesheet>` links it walks; the host must
 //! supply exactly that many, in that order. This module owns the fetch half: it asks the library for the census
 //! ([`kobo_web_document::host_stylesheet_links`]), spawns one bounded `Task::Fetch` per link, gathers the bodies in
 //! link order, and settles to [`Outcome::Ready`] or [`Outcome::Failed`]. It never parses, admits or paints, and it
-//! does not make CSS preparation asynchronous: that needs a freshness contract that does not exist yet.
+//! does not paint. The browser owns URL/media freshness and preserves the first readable frame.
 //!
 //! Bounds are the existing ones, not new ones: the link ceiling and per-sheet bytes are
 //! `SupplyBudget::CANONICAL`; the fetch is https-only with at most five redirects and no truncation (a body past
@@ -16,9 +16,8 @@
 //! settled `Unfetchable` here because the net layer is https-only (fail closed, no upgrade, no net-policy change);
 //! (2) a body that is not UTF-8 is fetched and then refused by the parse, so supply can be `Ready` for a page the
 //! parse still refuses: `Ready` means "bytes delivered in order", not "parse admitted"; (3) the media width the
-//! census evaluates must equal the eventual paint width, and the caller passes the panel width today (open); (4)
+//! census evaluates must equal the eventual paint width, supplied by PageMode::sheet_census; (4)
 //! redirect limits come from the net layer and are source-verified, not tested at this seam.
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::collections::BTreeMap;
 

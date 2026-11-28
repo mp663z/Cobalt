@@ -183,6 +183,23 @@ impl PageView {
         sans: &F,
         mono: &F,
     ) -> Result<Self, &'static str> {
+        Self::paint_with_sheets(bytes, &[], css_width, page_height_css, scale, serif, sans, mono)
+    }
+
+    /// Like [`Self::paint`], with the page's external stylesheets. `sheets` must be exactly the bodies of
+    /// `page_mode::sheet_census(..).links`, in that order (the host supply contract); a count mismatch makes the
+    /// engine refuse the style tree, so pass `&[]` only for a page without external sheets.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn paint_with_sheets<F: FontProvider>(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        css_width: u32,
+        page_height_css: u32,
+        scale: u32,
+        serif: &F,
+        sans: &F,
+        mono: &F,
+    ) -> Result<Self, &'static str> {
         if css_width == 0 || page_height_css == 0 || scale == 0 {
             return Err("viewport");
         }
@@ -197,7 +214,8 @@ impl PageView {
             ..Limits::DEFAULT
         };
         let media = MediaContext::new(css_width).ok_or("viewport")?.with_light_scheme();
-        let tree = parse_basic_style_tree(&bytes, &[], &limits, Some(media), budget, None);
+        let sheets: Vec<Vec<u8>> = sheets.iter().map(|sheet| kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0).collect();
+        let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), budget, None);
         let mut boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
         // covers it, the same two passes the research harness runs.
