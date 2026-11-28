@@ -80,7 +80,38 @@ pub fn prepare(
     let ((bytes, _), _, _) = normalize_for_basic_full(html);
     // Sheets pass through RAW: `:link`/`:visited` are resolved by the
     // state-aware entry below and `pt` by the length parser.
-    let sheets: Vec<Vec<u8>> = sheets.to_vec();
+    let media = MediaContext::new(width)
+        .ok_or("invalid media width")?
+        // Static capture is a light-scheme profile, so `prefers-color-scheme: dark` links and rules are skipped
+        // instead of refusing the page.
+        .with_light_scheme();
+    // The caller keeps one file per `rel=stylesheet` link, in link order. Links the engine skips by media
+    // (for example the dark-scheme sheets) take no host slot, so their files must not be supplied.
+    let sheets: Vec<Vec<u8>> = {
+        let census_limits = Limits {
+            max_input_bytes: 8 * 1024 * 1024,
+            ..Limits::DEFAULT
+        };
+        let page_url = kobo_web_document::url::Url::parse("https://example.invalid/")
+            .map_err(|_| "page url")?;
+        let census = kobo_web_document::host_stylesheet_links(&bytes, &page_url, &census_limits, Some(media));
+        if census.complete && census.link_takes_host_slot.len() == sheets.len() {
+            sheets
+                .iter()
+                .zip(&census.link_takes_host_slot)
+                .filter(|(_, keep)| **keep)
+                .map(|(sheet, _)| sheet.clone())
+                .collect()
+        } else {
+            sheets.to_vec()
+        }
+    };
+    // Static-state prefilter: off-canvas drawers, screen-reader-only text and false @media blocks are folded
+    // before the cascade, because the engine has no transform or clipping support.
+    let sheets: Vec<Vec<u8>> = sheets
+        .iter()
+        .map(|sheet| kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0)
+        .collect();
     let budget = SupplyBudget {
         max_linked_sheets: 48,
         max_sheet_bytes: 2 * 1024 * 1024,
@@ -90,7 +121,6 @@ pub fn prepare(
         max_input_bytes: 8 * 1024 * 1024,
         ..Limits::DEFAULT
     };
-    let media = MediaContext::new(width).ok_or("invalid media width")?;
     // Static capture contract: a fresh profile with no prior navigation, so
     // every href-present hyperlink is unvisited (`:link` matches) and none is
     // visited (`:visited` never matches). No hover/active/focus/target

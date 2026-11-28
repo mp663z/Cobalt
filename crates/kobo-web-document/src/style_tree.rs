@@ -1589,6 +1589,10 @@ pub struct HostSheetLinks {
     pub data_links: usize,
     /// Links whose `media` the parse refuses as unknown (`StylesheetMedia`); the parse is already doomed.
     pub unknown_media: usize,
+    /// One entry per enabled `rel=stylesheet` link in document order, including links skipped by `media`:
+    /// true only when the link consumes a host slot (screen-fit and external). A host that keeps one file per
+    /// link, in link order, keeps exactly the entries where this is true.
+    pub link_takes_host_slot: Vec<bool>,
     /// False when the input or the DOM was cut short or attributes were dropped, so the census is not an inventory.
     pub complete: bool,
 }
@@ -1621,6 +1625,7 @@ pub(crate) fn host_sheet_links_in(
         links: Vec::new(),
         data_links: 0,
         unknown_media: 0,
+        link_takes_host_slot: Vec::new(),
         complete,
     };
     let mut stack = vec![DOCUMENT];
@@ -1642,9 +1647,13 @@ pub(crate) fn host_sheet_links_in(
         }
         match stylesheet_media(css::attribute(nodes, handle, "media"), media) {
             MediaFit::Screen => {}
-            MediaFit::Skip => continue,
+            MediaFit::Skip => {
+                out.link_takes_host_slot.push(false);
+                continue;
+            }
             MediaFit::Unknown => {
                 out.unknown_media += 1;
+                out.link_takes_host_slot.push(false);
                 continue;
             }
         }
@@ -1655,8 +1664,10 @@ pub(crate) fn host_sheet_links_in(
                 .is_some_and(|p| p.eq_ignore_ascii_case(b"data:"))
         }) {
             out.data_links += 1;
+            out.link_takes_host_slot.push(false);
             continue;
         }
+        out.link_takes_host_slot.push(true);
         out.links.push(href.and_then(|h| base.join(h).ok()));
     }
     out

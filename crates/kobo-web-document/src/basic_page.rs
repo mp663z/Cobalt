@@ -1356,36 +1356,75 @@ fn census_of(html: &[u8]) -> Census {
     c
 }
 
-/// Collect quoted attribute values (class splits on whitespace, id whole).
+/// Collect attribute values (class splits on whitespace, id whole). Attribute names match case-insensitively,
+/// whitespace is allowed around `=`, and quoted and unquoted values both count: missing a key here would let the
+/// prefilter drop a rule that does match, so every form HTML allows is read.
 fn collect_attr_tokens(span: &[u8], attr: &[u8], set: &mut BTreeSet<Vec<u8>>) {
     let n = attr.len();
     let mut i = 0usize;
-    while i + n + 2 < span.len() {
-        let boundary = i == 0 || matches!(span[i - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/');
-        if boundary
-            && span[i..].starts_with(attr)
-            && span[i + n] == b'='
-            && matches!(span[i + n + 1], b'"' | b'\'')
-        {
-            let q = span[i + n + 1];
-            let mut j = i + n + 2;
-            while j < span.len() && span[j] != q {
+    while i + n < span.len() {
+        let boundary = i == 0 || matches!(span[i - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'"' | b'\'');
+        if boundary && span[i..i + n].eq_ignore_ascii_case(attr) {
+            let mut j = i + n;
+            while j < span.len() && span[j].is_ascii_whitespace() {
                 j += 1;
             }
-            let value = &span[i + n + 2..j];
-            if attr == b"class" {
-                for tok in value.split(|b| b.is_ascii_whitespace()) {
-                    if !tok.is_empty() {
-                        set.insert(tok.to_vec());
-                    }
+            if j < span.len() && span[j] == b'=' {
+                j += 1;
+                while j < span.len() && span[j].is_ascii_whitespace() {
+                    j += 1;
                 }
-            } else if !value.is_empty() {
-                set.insert(value.to_vec());
+                let (start, end) = match span.get(j) {
+                    Some(&q) if q == b'"' || q == b'\'' => {
+                        let mut e = j + 1;
+                        while e < span.len() && span[e] != q {
+                            e += 1;
+                        }
+                        (j + 1, e)
+                    }
+                    Some(_) => {
+                        let mut e = j;
+                        while e < span.len() && !span[e].is_ascii_whitespace() {
+                            e += 1;
+                        }
+                        (j, e)
+                    }
+                    None => (j, j),
+                };
+                let value = &span[start..end];
+                if attr == b"class" {
+                    for tok in value.split(|b| b.is_ascii_whitespace()) {
+                        if !tok.is_empty() {
+                            set.insert(tok.to_vec());
+                        }
+                    }
+                } else if !value.is_empty() {
+                    set.insert(value.to_vec());
+                }
+                i = end.max(i + 1);
+                continue;
             }
-            i = j;
         }
         i += 1;
     }
+}
+
+/// The same static-state prefilter for one externally linked stylesheet: `html` is the (normalised) document
+/// whose tag/class/id census decides which rules are provably unmatchable. Folds off-canvas drawers and
+/// screen-reader-only text to `display:none` and drops false `@media` blocks, exactly as the data-sheet path does.
+#[must_use]
+pub fn prefilter_linked_sheet_for_basic(html: &[u8], css: &[u8]) -> (Vec<u8>, PrefilterStats) {
+    let census = census_of(html);
+    let (out, kept, dropped, offcanvas, vishidden, media_dropped) = prefilter_css(css, &census);
+    let stats = PrefilterStats {
+        sheets_touched: 1,
+        rules_kept: kept,
+        rules_dropped: dropped,
+        offcanvas_static: offcanvas,
+        visually_hidden_folded: vishidden,
+        media_blocks_dropped: media_dropped,
+    };
+    (out, stats)
 }
 
 /// Prefilter `data:text/css;base64,` sheets embedded in the document:
