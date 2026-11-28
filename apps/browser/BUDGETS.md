@@ -1815,3 +1815,8 @@ Pager follow-up at5ca0d7f6: all23driver tests pass. LibraColour paged-form repea
 also passes (same30options/24fields, exact fullquery and dismissal-frame checks),
 saved-control pixels inspected. Current app suite coverage remains273pass3ignored
 at73360e4f, with later changes limited to fixture/driver/evidence.
+
+Paged-form state guard ClaraBW: editf0 then page options forward and dismiss via
+runtime Back, then repeat via Done. Both retain original selected option0 and
+editedf0; later choose29, traverse form pages and GET asserts f0=v0edited plus
+allother25pairs. Livepass and saved-control pixels inspected. Test-only.

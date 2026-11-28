@@ -36,6 +36,11 @@ def form_route(args):
     if args.paged_form:
         return (
             'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
+            'tap-id field-1\ntype edited\ntap-id kb.enter\n'
+            'tap-id field-0\ntap-id option-next\ntap Back\n'
+            'expect Choice number 0\nexpect v0edited\n'
+            'tap-id field-0\ntap-id option-next\ntap-id return-to-form\n'
+            'expect Choice number 0\nexpect v0edited\n'
             'tap-id field-0\ntap-paged Choice number 29\n'
             'shot-colour long-choice-saved\ntap-paged Send last\n'
             'wait-idle 30000\nshot-colour search-result\n'
@@ -316,6 +321,7 @@ def main():
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
                              for r in requests if r['path'].startswith('/search.html?')]
                 expected = {'item': ['29'], **{f'f{i}': [f'v{i}'] for i in range(24)}, 'go': ['Send last']}
+                expected['f0'] = ['v0edited']
                 assert submitted == [expected], submitted
             elif args.form_edges:
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
