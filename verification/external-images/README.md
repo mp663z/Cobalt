@@ -11,3 +11,5 @@ Own current-source verification:
 - Real TLS actual app: two external stylesheets plus external PNG painted, SVG URL not requested; address Cancel and Back preserve painted frame. app.png inspected as actual simulator pixels. The circular black image is the transparent test PNG, not a missing-image marker.
 
 Known caveats: native picture prefetch and painted-page supply both request the same PNG in the test journey. No request dedup claim. ARM binary size and live-image RSS qualification pending. This does not close broad HTML/CSS, hardware, Miri, Kani or POST release gates.
+
+Post-checkpoint hardening: hidden ancestor images excluded with linear parent-state census. The image queue is pumped on every task completion, including an unrelated task freeing a slot. Both regression tests failed before their narrow fixes and pass after. Full browser rerun on updated binary: 296 tests, 290 passed, 6 ignored, zero failures. Webdoc/net/corpus implementation unchanged from the results above.

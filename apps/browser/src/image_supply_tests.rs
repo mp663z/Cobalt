@@ -484,3 +484,44 @@ fn svg_paths_are_not_requested_even_with_queries_fragments_or_mixed_case() {
         ["/image.svg.png", "/photo.jpg"]
     );
 }
+
+#[test]
+fn hidden_ancestor_images_do_not_consume_fetch_budget() {
+    let found = census("<!doctype html><style>.gone{display:none}</style><div class='gone'><section><img src='/hidden.png'></section></div><img src='/shown.png'>");
+    assert_eq!(
+        found
+            .iter()
+            .map(|(src, _)| src.as_str())
+            .collect::<Vec<_>>(),
+        ["/shown.png"]
+    );
+}
+
+#[test]
+fn unrelated_task_completion_starts_waiting_image_supply() {
+    struct Busy(Browser);
+    impl KoboApp for Busy {
+        fn on_start(&mut self, context: &mut Context) {
+            for _ in 0..kobo_sdk::MAX_TASKS_IN_FLIGHT {
+                context.spawn(Task::Sleep { seconds: 1 }).unwrap();
+            }
+            self.0.images.begin(context, &sources(1));
+            assert_eq!(self.0.images.in_flight(), 0);
+            assert!(self.0.images.outcome().is_none());
+        }
+        fn on_action(&mut self, _: &mut Context, _: ActionId) {}
+        fn on_task(&mut self, context: &mut Context, task: TaskId, outcome: TaskOutcome) {
+            self.0.on_task(context, task, outcome);
+        }
+    }
+    let mut runner = AppRunner::with_metrics(Busy(Browser::default()), METRICS);
+    let started = spawned(&runner.start());
+    assert_eq!(started.len(), kobo_sdk::MAX_TASKS_IN_FLIGHT);
+    let followup = spawned(&runner.task_outcome(started[0].0, TaskOutcome::Completed(Vec::new())));
+    assert_eq!(
+        followup.len(),
+        1,
+        "released slot must start the queued image"
+    );
+    assert_eq!(url_of(&followup[0].1), "https://cdn.example.test/img/0.png");
+}

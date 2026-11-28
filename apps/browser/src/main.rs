@@ -2322,6 +2322,7 @@ impl KoboApp for Browser {
         self.validate_css(context);
         self.refresh_painted_sheets(context);
         self.sheets.pump(context);
+        self.images.pump(context);
         if self.pager == Some(task) {
             self.pager = None;
             if !matches!(outcome, TaskOutcome::Cancelled) {

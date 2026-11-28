@@ -33,7 +33,7 @@ pub struct Counts {
     pub kept: usize,
     /// Over the per-page source cap, so never requested.
     pub not_requested: usize,
-    /// The fetch failed (network, status, oversize body, plain-http redirect, cancel).
+    /// The fetch failed (network, status, oversize body, cancel).
     pub failed: usize,
     /// Body is not a PNG or JPEG by signature.
     pub wrong_type: usize,

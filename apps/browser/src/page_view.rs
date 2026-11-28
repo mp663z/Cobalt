@@ -282,11 +282,17 @@ impl PageView {
         let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), crate::page_mode::SHEET_BUDGET, None);
         let mut seen = std::collections::BTreeSet::new();
         let mut out = Vec::new();
+        // StyleTree parents precede their children. Keep inherited display:none
+        // state so hidden subtrees never use the image fetch budget.
+        let mut hidden = Vec::with_capacity(tree.nodes.len());
         for node in &tree.nodes {
             if out.len() >= limit {
                 break;
             }
-            if node.style.display == kobo_web_document::computed_style::Display::None {
+            let is_hidden = node.style.display == kobo_web_document::computed_style::Display::None
+                || node.parent.and_then(|parent| hidden.get(parent)).copied().unwrap_or(false);
+            hidden.push(is_hidden);
+            if is_hidden {
                 continue;
             }
             let Some(src) = node.image.as_ref().and_then(|f| f.src_external.as_ref()) else {
