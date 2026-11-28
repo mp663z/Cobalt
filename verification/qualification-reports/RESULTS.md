@@ -602,3 +602,41 @@ Evidence: evidence/qemu-arm-173cc996/.
 Pairwise painted deltas (B-A): +71/+75, -4/+37, 0/-6 ms. Means: sheets5
 B 1305 / A 1283; sheets16 B 1355 / A 1320; pair 3 identical (1307/1333 vs
 1307/1339). Within the noise band. Evidence: evidence/ab-173cc996-vs-5114f722/.
+
+## f19c4535 vs 173cc996 (2026-11-29, host x86_64 + qemu-arm) - html5ever 0.40 / string_cache 0.11
+
+Head f19c4535eafcce5b82f904281196d28a161783f8 (html5ever 0.40, string_cache
+0.11, PageView geometry casts, lazy font validation). Sandbox restarted before
+this pass; all timing/RSS numbers interleaved same-session.
+
+### Paint time (sheets, interleaved, 3 pairs): FLAT
+sheets5 painted: A(173cc996) mean 1294 ms vs B(f19c4535) mean 1272 ms (-22);
+sheets16: A mean 1307 ms vs B mean 1291 ms (-16). Within noise.
+Evidence: evidence/ab-f19c4535-vs-173cc996/.
+
+### RSS (painted-only 12-page session, alternating): FLAT
+A flat 64,228 KiB; B flat 64,608 KiB => +380 KiB (noise band). The lazy-bold
+-8 MB win holds through the parser upgrade.
+Evidence: evidence/session-painted-ab-f19c4535/.
+
+### ARM sizes (release, stripped, musl)
+kobo-browser 6,013,428 B (+2,384 vs 173cc996); kobo-hello 1,270,604 (+464);
+kobod 5,130,444 (+512). Budget (hello + 5 MiB = 6,513,484): headroom
+500,056 B (was 501,976; -1,920). WITHIN budget.
+
+### BW / qemu / sphinx at f19c4535
+BW painted-article 65,008 VmRSS / 65,568 VmHWM (5114f722: 64,792/65,604; flat).
+qemu-arm painted 38,904 VmRSS / 77,044 VmHWM (173cc996: 39,016/77,080; flat).
+Sphinx PASS peak_app_rss_kib 77,704 (5114f722: 78,920; -1,216), journey 38.1 s.
+Evidence: evidence/bw-journey-f19c4535/, evidence/qemu-arm-f19c4535/,
+evidence/sphinx-f19c4535/.
+
+## e2aac735 vs f19c4535 (2026-11-29, host x86_64 + qemu-arm) - external images + progressive JPEG preflight
+
+Sheets interleaved (2 pairs, slow box regime ~2.27 s): A(f19c4535) 2.272/2.276 vs B(e2aac735) 2.271/2.270 s; sheets16 2.334/2.342 vs 2.335/2.332: flat.
+Host session RSS (standard 12 pages): A 64,940 vs B 64,508 KiB: flat (-432 KiB).
+ARM: kobo-browser 6,037,132 (+23,704 vs f19c4535 6,013,428); hello 1,270,604 unchanged; kobod 5,130,828 (+384). Headroom (hello+5MiB=6,513,484) 476,352 B WITHIN.
+qemu-arm painted article: 39,140 RSS / 77,184 HWM (f19c4535 38,904/77,044): flat.
+qemu-arm image session (6 images/page, 12 pages): peak 78,912 KiB, per-page RSS 38.8-40.1 MB flat. Image painting under qemu NOT visually verified.
+Host image session (d7818313, not e2aac735): page 0 paints images (screenshot), later pages show alt placeholders in captured shots; RSS 66.9-67.7 MB flat. UNVERIFIED at e2aac735.
+decode_budget_probe (qemu-arm release): progressive-timeout.jpg refused 312 us grey / 142 us colour; valid-progressive.jpg and old progressive-valid.jpg also refused (363/65, 371/65 us); baseline.jpg decodes OK 43,939/36,673 us.

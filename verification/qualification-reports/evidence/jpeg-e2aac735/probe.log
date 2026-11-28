@@ -1,0 +1,9 @@
+== progressive-timeout.jpg
+colour=false elapsed_us=305 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+colour=true elapsed_us=139 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+== valid-progressive.jpg
+colour=false elapsed_us=365 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+colour=true elapsed_us=62 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+== progressive-valid.jpg
+colour=false elapsed_us=351 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+colour=true elapsed_us=63 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))

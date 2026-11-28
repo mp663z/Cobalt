@@ -1,0 +1,38 @@
+[
+  {
+    "label": "start-page",
+    "qemu": {
+      "pid": 45597,
+      "VmHWM": 29628,
+      "VmRSS": 25652,
+      "RssAnon": 19604
+    }
+  },
+  {
+    "label": "samples-index",
+    "qemu": {
+      "pid": 45597,
+      "VmHWM": 29628,
+      "VmRSS": 29092,
+      "RssAnon": 21988
+    }
+  },
+  {
+    "label": "native-article",
+    "qemu": {
+      "pid": 45597,
+      "VmHWM": 31464,
+      "VmRSS": 31464,
+      "RssAnon": 24196
+    }
+  },
+  {
+    "label": "painted-article",
+    "qemu": {
+      "pid": 45597,
+      "VmHWM": 77184,
+      "VmRSS": 39140,
+      "RssAnon": 29440
+    }
+  }
+]
