@@ -1783,3 +1783,9 @@ checkbox Off omitted, radio Large, hidden a&b retained, disabled omitted, explic
 second submitter only. GET replaces stale action query and drops its fragment.
 Exact parsed query equals secret=a&b/colour=blue/size=large/go=Second. Native
 choices and GET result pixels inspected. Test-only change, ARM unchanged.
+
+Address dismissal guard in every live TLS route: edit then Cancel and edit then
+runtime Back both restore exact painted-frame hash. Form-edge typed-address,
+Sphinx, and Links5sheet routes pass; restored app pixels inspected. Form routes
+now compare complete request multiset with expected page/sheets/single GET,
+rejecting unexpected fetches or duplicate submissions. Test-only, ARM unchanged.

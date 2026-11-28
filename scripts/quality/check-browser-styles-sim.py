@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 from urllib.parse import parse_qs, urlsplit
+from collections import Counter
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = 'styles.example.test'
@@ -163,7 +164,9 @@ def main():
                          'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
                          'shot-colour after-sheet\ntap-id edit-address\n'
                          'tap-id kb.end\ntap-id kb.r0c0\nshot-colour address-edit\n'
-                         'tap-id kb.cancel\n' + (
+                         'tap-id kb.cancel\nshot-colour address-cancel\n'
+                         'tap-id edit-address\ntap-id kb.end\ntap-id kb.r0c1\ntap Back\n'
+                         'shot-colour address-back\n' + (
                          'tap-id browser-more\ntap-id forms\nshot-colour form-list\n'
                          'tap-id form-0\ntap-id field-0\ntype cobalt\ntap-id kb.enter\n'
                          'shot-colour form-edited\ntap-id submit-field-1\nwait-idle 30000\nshot-colour search-result\n'
@@ -220,6 +223,10 @@ def main():
         after = json.loads((out / 'browser-shots/after-sheet.json').read_text())
         assert before['frame']['sha256'] != after['frame']['sha256'], 'delayed CSS did not change the frame'
         result['styled_frame_changed'] = before['frame']['sha256'] != after['frame']['sha256']
+        for name in ['address-cancel', 'address-back']:
+            restored = json.loads((out / f'browser-shots/{name}.json').read_text())
+            assert restored['frame']['sha256'] == after['frame']['sha256'], f'{name} did not restore page'
+        result['address_dismissals_restore_frame'] = True
         result['peak_app_rss_kib'] = peak_rss_kib
         result['whole_journey_seconds'] = round(time.monotonic() - started, 3)
         result['sheet_count'] = sum(p.endswith('.css') for p in expected_paths)
@@ -240,8 +247,9 @@ def main():
                                       'size': ['large'], 'go': ['Second']}], submitted
             else:
                 assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
-            actual_sheets = [r['path'] for r in requests if r['path'].endswith('.css')]
-            assert sorted(actual_sheets) == sorted(expected_paths[1:]), requests
+            submissions = [r['path'] for r in requests if r['path'].startswith('/search.html?')]
+            assert len(submissions) == 1, requests
+            assert Counter(r['path'] for r in requests) == Counter(expected_paths + submissions), requests
         else:
             assert sorted(r['path'] for r in requests) == sorted(expected_paths), requests
         assert all(r['authorization'] is None for r in requests), requests
