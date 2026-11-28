@@ -1744,3 +1744,12 @@ actual Default/ExtraLarge pixels inspected. drive-forms corrected for More menu
 and off-screen second form; live route GET submitter and POST review/cancel pass.
 No textarea-editing claim from that route. Full app suite has NOT finished; its
 known failure is corrected, remaining suite pending. v5b workerfull1429pass.
+
+App-suite coverage at a9752618 reconciled against all275 names:272pass,3ignored,
+across bounded runs (broad run266pass before120s cutoff; remaining5zoom separately,
+installed-font list matrix and8destination test separately). Not one uninterrupted
+suite. Textarea TLS fixture now edits newline, enforces12UTF16 units, deletes and
+replaces at cap, saves and GETs note=first%0D%0Aseconz. Editor/result pixels checked.
+Imported qualification evidence only (allocator crate excluded), d7a4c1f source,
+with corrected drive-form caveat. +240ms painted-time correlation on02d80c6 not
+causally isolated; ARM1032B build environment delta remains unreconciled.

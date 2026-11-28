@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--textarea', action='store_true', help='test multiline edit, maxlength and GET CRLF encoding')
     parser.add_argument('--via-link', action='store_true', help='open target through the native Links list')
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
@@ -70,6 +71,11 @@ def main():
             return re.sub(r'href=[\"\'][^\"\']*[\"\']', f'href="/sheet{index}.css"', tag)
         page = re.sub(r'<link\b[^>]*>', local_sheet, html, flags=re.I).encode()
         assert sheet_index == len(fixture_sheets)
+    if args.textarea:
+        assert not args.sphinx and not args.via_link
+        args.sheets=2
+        expected_paths=['/','/sheet0.css','/sheet1.css']
+        page=b'<!doctype html><title>Multiline form</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Multiline form</h1><form action=/search.html><label>Note<textarea name=note maxlength=12>first</textarea></label><button>Send</button></form>'
     peak_rss_kib = 0
     monitoring = True
 
@@ -98,7 +104,7 @@ def main():
             body = page if self.path == ('/target' if args.via_link else '/') else None
             if args.via_link and self.path=='/':
                 body=b'<!doctype html><title>Fixture index</title><h1>Fixture index</h1><a href=/target>Open styled page</a>'
-            if self.path.startswith('/search.html?') and args.sphinx:
+            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea):
                 body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
                 i = int(self.path[6:-4])
@@ -137,7 +143,7 @@ def main():
         if args.via_link:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id links\ntap-id link-0\n'
             expected_paths.append('/target')
-        if args.sphinx:
+        if args.sphinx or args.textarea:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
                          'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
@@ -147,7 +153,12 @@ def main():
                          'tap-id browser-more\ntap-id forms\nshot-colour form-list\n'
                          'tap-id form-0\ntap-id field-0\ntype cobalt\ntap-id kb.enter\n'
                          'shot-colour form-edited\ntap-id submit-field-1\nwait-idle 30000\nshot-colour search-result\n'
-                         if args.sphinx else ''))
+                         if args.sphinx else (
+                         'tap-id browser-more\ntap-id forms\ntap-id form-0\ntap-id field-0\n'
+                         'tap-id form-newline\ntype secondx\nshot-colour textarea-limit\n'
+                         'tap-id kb.backspace\ntype z\ntap-id kb.enter\nshot-colour textarea-saved\n'
+                         'tap-id submit-form\nwait-idle 30000\nshot-colour search-result\n'
+                         if args.textarea else '')))
         env = dict(os.environ, CARGO_TARGET_DIR=str(target),
                    KOBO_SIM_PROFILE='libra-colour-390',
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
@@ -165,7 +176,7 @@ def main():
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
-        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
         assert result['status'] == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
@@ -181,8 +192,8 @@ def main():
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         assert result['status'] == 'pass', result
-        if args.sphinx:
-            assert any(r['path'].startswith('/search.html?') and 'cobalt' in r['path'] for r in requests), requests
+        if args.sphinx or args.textarea:
+            assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
             actual_sheets = [r['path'] for r in requests if r['path'].endswith('.css')]
             assert sorted(actual_sheets) == sorted(expected_paths[1:]), requests
         else:
