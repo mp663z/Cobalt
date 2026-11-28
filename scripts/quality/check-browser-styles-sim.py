@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--via-link', action='store_true', help='open target through the native Links list')
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
@@ -94,7 +95,9 @@ def main():
         def do_GET(self):
             requests.append({'path': self.path, 'authorization': self.headers.get('Authorization'),
                              'accept': self.headers.get('Accept')})
-            body = page if self.path == '/' else None
+            body = page if self.path == ('/target' if args.via_link else '/') else None
+            if args.via_link and self.path=='/':
+                body=b'<!doctype html><title>Fixture index</title><h1>Fixture index</h1><a href=/target>Open styled page</a>'
             if self.path.startswith('/search.html?') and args.sphinx:
                 body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
@@ -131,6 +134,9 @@ def main():
                    'tap-id kb.enter\nwait-for styles.example.test\n' if args.typed_address else
                    'wait-for Search the web\ntap-id samples\ntap-id browser-more\n'
                    'tap-id go-home\nwait-for styles.example.test\n')
+        if args.via_link:
+            opening += 'tap-id browser-more\ntap-id navigate\ntap-id links\ntap-id link-0\n'
+            expected_paths.append('/target')
         if args.sphinx:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
@@ -168,7 +174,7 @@ def main():
         result['styled_frame_changed'] = before['frame']['sha256'] != after['frame']['sha256']
         result['peak_app_rss_kib'] = peak_rss_kib
         result['whole_journey_seconds'] = round(time.monotonic() - started, 3)
-        result['sheet_count'] = len(expected_paths)-1
+        result['sheet_count'] = sum(p.endswith('.css') for p in expected_paths)
         result['requests'] = requests
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
         result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())

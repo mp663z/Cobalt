@@ -1718,3 +1718,10 @@ composited Rust/Python top-700px frames inspected: 24px single bar now, no other
 visible changes there. Three-bar generated content and full item-height stretch
 remain open. ARM release 5,310,828 B. Extra flex measurement can cost time;
 this is not a responsiveness qualification. Worker full-suite v4 still awaited.
+
+Current4f223544 exact qualification probe rerun: three reps, all link callbacks
+rc0, 5/5 and16/16 sheets. nav5 1.606/1.603/1.684s,nav16 1.668/0.728/0.701s.
+16-sheet VmHWM72744/72788/72944KiB, checkpointRSS64332/64392/64300KiB.
+Not device timing or causal isolation. Logs under verification/browser-current-sheet-checks.
+Independent TLS16sheet via native Links also passes, changed frame required.
+CSSv4 worker fullsuite71421f45 reports150binaries/1428tests pass.
