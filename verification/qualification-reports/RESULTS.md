@@ -578,3 +578,27 @@ RSS, -9.0 MB HWM).
 Sphinx PASS peak_app_rss_kib 78,920 (d18e898: 87,216; -8.3 MB), journey 39.0 s.
 Evidence: evidence/bw-journey-5114f722/, evidence/qemu-arm-5114f722/,
 evidence/sphinx-5114f722/.
+
+
+## 173cc996 vs 5114f722 (2026-11-29, host x86_64 + qemu-arm) - bold font dedup
+
+Head 173cc996189d49093a85eff44ca3ef373eb3c03e (one shared MONO_BOLD_FONT
+copy + erased parser monomorphs). Priority pass: ARM sizes, qemu RSS, paint
+sanity.
+
+### ARM sizes (release, stripped, musl): vendored-fontdue cost fully recovered
+kobo-browser 6,011,044 B: -338,296 vs 5114f722 (6,349,340), +3,104 vs d18e898
+(6,007,940). kobo-hello 1,270,140 (-5,560 vs 5114f722, +3,128 vs d18e898).
+kobod 5,129,932 (-5,416, +3,168). Budget (hello + 5 MiB = 6,513,020):
+headroom 501,976 B - back to the d18e898 level (501,952). WITHIN budget.
+
+### qemu-arm painted: FLAT vs 5114f722
+39,016 VmRSS / 77,080 VmHWM (5114f722: 39,236/77,320). The -8-10 MB lazy-bold
+win is intact. First wrapper run returned null snapshots (known intermittent
+spawn race); identical rerun clean.
+Evidence: evidence/qemu-arm-173cc996/.
+
+### Paint sanity (sheets, interleaved, 3 pairs): FLAT
+Pairwise painted deltas (B-A): +71/+75, -4/+37, 0/-6 ms. Means: sheets5
+B 1305 / A 1283; sheets16 B 1355 / A 1320; pair 3 identical (1307/1333 vs
+1307/1339). Within the noise band. Evidence: evidence/ab-173cc996-vs-5114f722/.

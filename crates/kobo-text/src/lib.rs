@@ -61,7 +61,6 @@ pub const MONO_FONT: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
 /// The true bold mono cut, shared by Page font admission and construction.
 pub static MONO_BOLD_FONT: &[u8] = include_bytes!("../fonts/DejaVuSansMono-Bold.ttf");
 
-
 /// Share only the exact embedded mono regular face. A weak slot never keeps the
 /// geometry alive after its last owner is dropped. Other font bytes stay private.
 fn shared_font(bytes: &[u8]) -> Result<Arc<Font>, &'static str> {
@@ -71,9 +70,13 @@ fn shared_font(bytes: &[u8]) -> Result<Arc<Font>, &'static str> {
         return Font::from_bytes(bytes, FontSettings::default()).map(Arc::new);
     }
     if bytes == MONO_FONT {
-        let mut slot = MONO.get_or_init(|| Mutex::new(Weak::new())).lock()
+        let mut slot = MONO
+            .get_or_init(|| Mutex::new(Weak::new()))
+            .lock()
             .map_err(|_| "mono shared face lock poisoned")?;
-        if let Some(font) = slot.upgrade() { return Ok(font); }
+        if let Some(font) = slot.upgrade() {
+            return Ok(font);
+        }
         let font = Arc::new(Font::from_bytes(bytes, FontSettings::default())?);
         *slot = Arc::downgrade(&font);
         Ok(font)
@@ -801,7 +804,7 @@ impl SystemFonts {
         match face {
             Face::Text | Face::Reading => None,
             Face::Mono => Some(self.cell_width(size)),
-            Face::ReadingMono => self.mono.fixed_advance(size,face),
+            Face::ReadingMono => self.mono.fixed_advance(size, face),
         }
     }
 
@@ -2153,10 +2156,18 @@ mod reading_mono_tests {
     use super::*;
     #[test]
     fn document_mono_has_equal_cells_and_ignores_interface_size() {
-        let fonts=SystemFonts::discover(kobo_ui::CLARA_BW_METRICS).unwrap();
-        kobo_ui::with_text_scale(kobo_ui::TextScale::Smaller,||kobo_ui::with_reading_scale(kobo_ui::TextScale::ExtraLarge,||{
-            assert_eq!(fonts.measure("iiii",FontSize::Body,Face::ReadingMono).0,fonts.measure("WWWW",FontSize::Body,Face::ReadingMono).0);
-            assert!(fonts.measure("iiii",FontSize::Body,Face::ReadingMono).0>fonts.measure("iiii",FontSize::Body,Face::Mono).0);
-        }));
+        let fonts = SystemFonts::discover(kobo_ui::CLARA_BW_METRICS).unwrap();
+        kobo_ui::with_text_scale(kobo_ui::TextScale::Smaller, || {
+            kobo_ui::with_reading_scale(kobo_ui::TextScale::ExtraLarge, || {
+                assert_eq!(
+                    fonts.measure("iiii", FontSize::Body, Face::ReadingMono).0,
+                    fonts.measure("WWWW", FontSize::Body, Face::ReadingMono).0
+                );
+                assert!(
+                    fonts.measure("iiii", FontSize::Body, Face::ReadingMono).0
+                        > fonts.measure("iiii", FontSize::Body, Face::Mono).0
+                );
+            });
+        });
     }
 }

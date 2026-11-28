@@ -45,10 +45,10 @@ Reader returns to the native reader at its previous place. The count is in
 the title bar so it cannot cover page ink. Page view uses the measured
 picture slot inside the toolbars, not a full-panel picture behind them.
 
-Links are listed under Navigate > Links for the painted screen only. The
-current SDK reports named actions, not coordinates inside pictures, so a
-painted link cannot yet be tapped directly. Form documents stay in the
-native reader, where controls work. Truncated or substantially skipped
+Links are listed under Navigate > Links for the painted screen only. Visible
+painted links also respond to taps, including after zooming or settled scrolling.
+Ambiguous hit regions remain inert. Form controls open native form screens,
+including forms discovered while reading Page view. Truncated or substantially skipped
 paint also keeps Reader. Supported fresh pages on confirmed Colour panels
 open in Page view to preserve authored RGB. BW keeps its Reader-first default.
 Forms, saved-copy notices and restored/fragment positions retain native Reader.
@@ -63,8 +63,10 @@ maps computed bold/italic treatments and normal resets onto synthetic glyph
 styles, not authored font-file selection. Late identity refresh retains
 edited form values, notices and native place when retained source is available.
 This is not a claim that all CSS, fonts or image formats are supported.
-External images, SVG, external stylesheets, painted form controls, saved
-painted-page positions, and device memory measurements remain follow-up work.
+Bounded external stylesheets load over the network and can update the painted
+page after its first render. External images, SVG, painted form controls,
+positions across app restarts, and physical-device memory measurements remain
+follow-up work.
 Data-image preparation caps each page at 4 MiB compressed bytes and 1,048,576
 decoded pixels, with separate lower DOM resource-attribute retention limits.
 Image geometry remains a counted approximation, with nearest sampling.
@@ -90,8 +92,9 @@ Older peers refuse colour payloads they cannot read instead of misreading them.
 - Text colour is tied to the same parsed DOM source, not matched by words.
 - Native headings, quotes and table cells retain inline bold/slant treatments;
   these are synthetic treatments on installed type, not arbitrary CSS families.
-- Preformatted text keeps spaces and blank lines, using the existing native
-  face. Inline code and preformatted text do not yet select a monospaced face.
+- Preformatted text keeps spaces and blank lines in the embedded monospaced
+  face. Inline code in native prose also uses that face. Code inside headings,
+  quotes and table cells retains the block face.
 - Control colours apply to the actual authored title source. Generated labels
   and details stay neutral. Nested multicolour labels, per-option and editable
   value styling are not complete authored-control styling.
@@ -164,3 +167,15 @@ outside or Back to close it. Address editing and navigation close the panel.
 The track is a real shared runtime slider, not a set of disguised buttons.
 Protocol26 is required for the compact row and standalone slider. The replay
 `drive-zoom-panel.kobo` includes an actual drag, reset and inline typing.
+
+### Page fonts and memory, November 29, 2026
+
+Page view uses real DejaVu Sans Mono regular and bold cuts for code. The UI
+and Page view share the regular outline geometry. The bold cut builds outlines
+on demand, with a 256-glyph, 1 MiB accounted-outline cache; cache metadata and
+source font bytes are additional. This does not remove glyphs or fake bold.
+Full regular/bold glyph raster parity is tested at four sizes. The vendored
+fontdue 0.9.3 changes and its original licenses are in `vendor/fontdue`.
+Host and ARM emulation checks are recorded in `verification/qualification-reports`.
+They do not replace device RSS, latency or physical-panel qualification.
+POST remains review-only and cannot send a request.

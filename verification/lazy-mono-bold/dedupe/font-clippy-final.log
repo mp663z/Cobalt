@@ -1,0 +1,11 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+    Checking kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s

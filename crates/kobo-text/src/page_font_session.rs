@@ -95,10 +95,14 @@ impl PageFontSession {
     pub fn from_bytes(regular: &[u8], bold: &[u8]) -> Result<Self, &'static str> {
         Ok(Self {
             regular: crate::shared_font(regular)?,
-            bold: if bold == crate::MONO_BOLD_FONT &&
-                !(cfg!(debug_assertions) && std::env::var("KOBO_SIM_EAGER_MONO_BOLD").as_deref() == Ok("1")) {
+            bold: if bold == crate::MONO_BOLD_FONT
+                && !(cfg!(debug_assertions)
+                    && std::env::var("KOBO_SIM_EAGER_MONO_BOLD").as_deref() == Ok("1"))
+            {
                 Font::from_bytes_lazy(bold, FontSettings::default())?
-            } else { Font::from_bytes(bold, FontSettings::default())? },
+            } else {
+                Font::from_bytes(bold, FontSettings::default())?
+            },
             italic: None,
             bold_italic: None,
             fallback: Vec::new(),
@@ -629,8 +633,7 @@ mod shared_mono_tests {
     #[test]
     fn shared_mono_identity_and_all_mapped_glyphs_match_uncached() {
         let ui = crate::shared_font(crate::MONO_FONT).unwrap();
-        let page = PageFontSession::from_bytes(crate::MONO_FONT,
-            crate::MONO_BOLD_FONT).unwrap();
+        let page = PageFontSession::from_bytes(crate::MONO_FONT, crate::MONO_BOLD_FONT).unwrap();
         assert!(std::sync::Arc::ptr_eq(&ui, &page.regular));
         let fresh = Font::from_bytes(crate::MONO_FONT, FontSettings::default()).unwrap();
         let face = rustybuzz::ttf_parser::Face::parse(crate::MONO_FONT, 0).unwrap();
@@ -660,9 +663,17 @@ mod lazy_geometry_parity {
             let lazy = Font::from_bytes_lazy(bytes, FontSettings::default()).unwrap();
             assert_eq!(eager.glyph_count(), lazy.glyph_count());
             for id in 0..eager.glyph_count() {
-                for px in [12.0,18.0,24.0,32.0] {
-                    assert_eq!(eager.rasterize_indexed(id, px), lazy.rasterize_indexed(id, px), "glyph {id} at {px}");
-                    assert_eq!(eager.rasterize_indexed_subpixel(id, px), lazy.rasterize_indexed_subpixel(id, px), "subpixel glyph {id} at {px}");
+                for px in [12.0, 18.0, 24.0, 32.0] {
+                    assert_eq!(
+                        eager.rasterize_indexed(id, px),
+                        lazy.rasterize_indexed(id, px),
+                        "glyph {id} at {px}"
+                    );
+                    assert_eq!(
+                        eager.rasterize_indexed_subpixel(id, px),
+                        lazy.rasterize_indexed_subpixel(id, px),
+                        "subpixel glyph {id} at {px}"
+                    );
                     let (count, bytes) = lazy.lazy_geometry_usage().unwrap();
                     assert!(count <= 256 && bytes <= 1_048_576);
                 }

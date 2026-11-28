@@ -1,0 +1,42 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+    Checking fontdue v0.9.3 (/home/sandbox/cb/measure-basic/vendor/fontdue)
+    Checking kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+warning: consider adding a `;` to the last statement for consistent formatting
+    --> crates/kobo-text/src/lib.rs:2161:13
+     |
+2161 | /             kobo_ui::with_reading_scale(kobo_ui::TextScale::ExtraLarge, || {
+2162 | |                 assert_eq!(
+2163 | |                     fonts.measure("iiii", FontSize::Body, Face::ReadingMono).0,
+2164 | |                     fonts.measure("WWWW", FontSize::Body, Face::ReadingMono).0
+...    |
+2169 | |                 );
+2170 | |             })
+     | |______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#semicolon_if_nothing_returned
+     = note: `-W clippy::semicolon-if-nothing-returned` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::semicolon_if_nothing_returned)]`
+help: add a `;` here
+     |
+2161 ~             kobo_ui::with_reading_scale(kobo_ui::TextScale::ExtraLarge, || {
+2162 +                 assert_eq!(
+2163 +                     fonts.measure("iiii", FontSize::Body, Face::ReadingMono).0,
+2164 +                     fonts.measure("WWWW", FontSize::Body, Face::ReadingMono).0
+2165 +                 );
+2166 +                 assert!(
+2167 +                     fonts.measure("iiii", FontSize::Body, Face::ReadingMono).0
+2168 +                         > fonts.measure("iiii", FontSize::Body, Face::Mono).0
+2169 +                 );
+2170 +             });
+     |
+
+warning: `kobo-text` (lib test) generated 1 warning (run `cargo clippy --fix --lib -p kobo-text --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.60s

@@ -207,11 +207,16 @@ pub struct Font {
 struct LazyGeometry {
     bytes: Vec<u8>,
     loaded: Vec<bool>,
-    cache: std::sync::Mutex<(std::collections::VecDeque<(u16, std::sync::Arc<Glyph>, usize)>, usize)>,
+    cache: std::sync::Mutex<(
+        std::collections::VecDeque<(u16, std::sync::Arc<Glyph>, usize)>,
+        usize,
+    )>,
 }
 #[cfg(feature = "std")]
 impl core::fmt::Debug for LazyGeometry {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { f.write_str("LazyGeometry") }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("LazyGeometry")
+    }
 }
 
 impl Hash for Font {
@@ -236,7 +241,9 @@ fn convert_error(error: FaceParsingError) -> &'static str {
     use FaceParsingError::*;
     match error {
         MalformedFont => "An attempt to read out of bounds detected.",
-        UnknownMagic => "Face data must start with 0x00010000, 0x74727565, 0x4F54544F or 0x74746366.",
+        UnknownMagic => {
+            "Face data must start with 0x00010000, 0x74727565, 0x4F54544F or 0x74746366."
+        }
         FaceIndexOutOfBounds => "The face index is larger than the number of faces in the font.",
         NoHeadTable => "The head table is missing or malformed.",
         NoHheaTable => "The hhea table is missing or malformed.",
@@ -255,20 +262,29 @@ fn convert_name(face: &Face) -> Option<String> {
 
 impl Font {
     /// Constructs a font from an array of bytes.
-    pub fn from_bytes<Data: Deref<Target = [u8]>>(data: Data, settings: FontSettings) -> FontResult<Font> {
+    pub fn from_bytes<Data: Deref<Target = [u8]>>(
+        data: Data,
+        settings: FontSettings,
+    ) -> FontResult<Font> {
         Self::from_bytes_impl(&data, settings, false)
     }
 
     /// Cobalt opt-in, full-coverage bounded lazy outline geometry.
     #[cfg(feature = "std")]
-    pub fn from_bytes_lazy<Data: Deref<Target = [u8]>>(data: Data, settings: FontSettings) -> FontResult<Font> {
+    pub fn from_bytes_lazy<Data: Deref<Target = [u8]>>(
+        data: Data,
+        settings: FontSettings,
+    ) -> FontResult<Font> {
         Self::from_bytes_impl(&data, settings, true)
     }
 
     #[inline(never)]
     fn from_bytes_impl(data: &[u8], settings: FontSettings, lazy: bool) -> FontResult<Font> {
         #[cfg(not(feature = "std"))]
-        let lazy = { let _ = lazy; false };
+        let lazy = {
+            let _ = lazy;
+            false
+        };
         let hash = crate::hash::hash(&data);
 
         let face = match Face::parse(&data, settings.collection_index) {
@@ -295,7 +311,8 @@ impl Font {
                     if let Some(mapping) = subtable.glyph_index(codepoint) {
                         if let Some(mapping) = NonZeroU16::new(mapping.0) {
                             indices_to_load.insert(mapping.get());
-                            char_to_glyph.insert(unsafe { mem::transmute::<u32, char>(codepoint) }, mapping);
+                            char_to_glyph
+                                .insert(unsafe { mem::transmute::<u32, char>(codepoint) }, mapping);
                         }
                     }
                 })
@@ -315,7 +332,9 @@ impl Font {
         let units_per_em = face.units_per_em() as f32;
 
         #[cfg(feature = "std")]
-        let loaded: Vec<bool> = (0..glyph_count).map(|id| indices_to_load.contains(&id)).collect();
+        let loaded: Vec<bool> = (0..glyph_count)
+            .map(|id| indices_to_load.contains(&id))
+            .collect();
         // Parse and store all unique codepoints.
         let mut glyphs: Vec<Glyph> = vec::from_elem(Glyph::default(), glyph_count as usize);
 
@@ -347,7 +366,8 @@ impl Font {
         #[cfg(feature = "parallel")]
         {
             let generated: Vec<(u16, Glyph)> = indices_to_load
-                .into_par_iter().filter(|_| !lazy)
+                .into_par_iter()
+                .filter(|_| !lazy)
                 .map(|index| Ok((index, generate_glyph(index)?)))
                 .collect::<Result<_, _>>()?;
             for (index, glyph) in generated {
@@ -356,8 +376,11 @@ impl Font {
         }
 
         // New line metrics.
-        let horizontal_line_metrics =
-            Some(LineMetrics::new(face.ascender(), face.descender(), face.line_gap()));
+        let horizontal_line_metrics = Some(LineMetrics::new(
+            face.ascender(),
+            face.descender(),
+            face.line_gap(),
+        ));
         let vertical_line_metrics = if let Some(ascender) = face.vertical_ascender() {
             Some(LineMetrics::new(
                 ascender,
@@ -370,11 +393,15 @@ impl Font {
 
         Ok(Font {
             #[cfg(feature = "std")]
-            lazy: if lazy { Some(std::sync::Arc::new(LazyGeometry {
-                bytes: data.to_vec(),
-                loaded,
-                cache: std::sync::Mutex::new((std::collections::VecDeque::new(), 0)),
-            })) } else { None },
+            lazy: if lazy {
+                Some(std::sync::Arc::new(LazyGeometry {
+                    bytes: data.to_vec(),
+                    loaded,
+                    cache: std::sync::Mutex::new((std::collections::VecDeque::new(), 0)),
+                }))
+            } else {
+                None
+            },
             name,
             glyphs,
             char_to_glyph,
@@ -455,7 +482,11 @@ impl Font {
     /// given left and right pair, None otherwise.
     #[inline(always)]
     pub fn horizontal_kern(&self, left: char, right: char, px: f32) -> Option<f32> {
-        self.horizontal_kern_indexed(self.lookup_glyph_index(left), self.lookup_glyph_index(right), px)
+        self.horizontal_kern_indexed(
+            self.lookup_glyph_index(left),
+            self.lookup_glyph_index(right),
+            px,
+        )
     }
 
     /// Retrieves the horizontal scaled kerning value for two adjacent glyph indicies.
@@ -690,13 +721,20 @@ impl Font {
     #[inline]
     pub fn lookup_glyph_index(&self, character: char) -> u16 {
         // This is safe, Option<NonZeroU16> is documented to have the same layout as u16.
-        unsafe { mem::transmute::<Option<NonZeroU16>, u16>(self.char_to_glyph.get(&character).copied()) }
+        unsafe {
+            mem::transmute::<Option<NonZeroU16>, u16>(self.char_to_glyph.get(&character).copied())
+        }
     }
 
     /// Cobalt diagnostic: retained outline count and accounted storage bytes.
     #[cfg(feature = "std")]
     pub fn lazy_geometry_usage(&self) -> Option<(usize, usize)> {
-        let cache = self.lazy.as_ref()?.cache.lock().unwrap_or_else(|p| p.into_inner());
+        let cache = self
+            .lazy
+            .as_ref()?
+            .cache
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         Some((cache.0.len(), cache.1))
     }
 
@@ -704,12 +742,18 @@ impl Font {
     fn lazy_glyph(&self, index: u16) -> Option<std::sync::Arc<Glyph>> {
         let lazy = self.lazy.as_ref()?;
         assert!((index as usize) < self.glyphs.len());
-        if !lazy.loaded[index as usize] { return None; }
-        let mut cache = lazy.cache.lock().unwrap_or_else(|poison| poison.into_inner());
+        if !lazy.loaded[index as usize] {
+            return None;
+        }
+        let mut cache = lazy
+            .cache
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         if let Some((_, glyph, _)) = cache.0.iter().find(|(id, _, _)| *id == index) {
             return Some(std::sync::Arc::clone(glyph));
         }
-        let face = Face::parse(&lazy.bytes, self.settings.collection_index).expect("validated font bytes");
+        let face =
+            Face::parse(&lazy.bytes, self.settings.collection_index).expect("validated font bytes");
         let id = GlyphId(index);
         let mut glyph = Glyph::default();
         glyph.advance_width = face.glyph_hor_advance(id).unwrap_or(0) as f32;
@@ -717,16 +761,22 @@ impl Font {
         let mut geometry = Geometry::new(self.settings.scale, self.units_per_em);
         face.outline_glyph(id, &mut geometry);
         geometry.finalize(&mut glyph);
-        let bytes = core::mem::size_of::<Glyph>() +
-            (glyph.v_lines.capacity() + glyph.m_lines.capacity()) * core::mem::size_of::<Line>();
+        let bytes = core::mem::size_of::<Glyph>()
+            + (glyph.v_lines.capacity() + glyph.m_lines.capacity()) * core::mem::size_of::<Line>();
         let glyph = std::sync::Arc::new(glyph);
         const MAX_BYTES: usize = 1_048_576;
         if bytes <= MAX_BYTES {
             while cache.0.len() >= 256 || cache.1 + bytes > MAX_BYTES {
-                if let Some((_, _, old)) = cache.0.pop_front() { cache.1 -= old; } else { break; }
+                if let Some((_, _, old)) = cache.0.pop_front() {
+                    cache.1 -= old;
+                } else {
+                    break;
+                }
             }
             cache.1 += bytes;
-            cache.0.push_back((index, std::sync::Arc::clone(&glyph), bytes));
+            cache
+                .0
+                .push_back((index, std::sync::Arc::clone(&glyph), bytes));
         }
         Some(glyph)
     }
