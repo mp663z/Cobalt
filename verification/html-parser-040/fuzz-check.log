@@ -1,0 +1,253 @@
+ Downloading crates ...
+  Downloaded crc32fast v1.5.2
+  Downloaded libfuzzer-sys v0.4.13
+  Downloaded jobserver v0.1.35
+  Downloaded zlib-rs v0.6.8
+  Downloaded arbitrary v1.4.2
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.5
+   Compiling find-msvc-tools v0.1.13
+   Compiling shlex v2.0.1
+    Checking smallvec v1.16.1
+   Compiling jobserver v0.1.35
+   Compiling siphasher v1.0.3
+   Compiling proc-macro2 v1.0.107
+   Compiling cc v1.4.7
+   Compiling phf_shared v0.14.0
+    Checking simd-adler32 v0.3.10
+   Compiling fastrand v2.5.0
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling phf_generator v0.14.0
+   Compiling parking_lot_core v0.9.12
+    Checking adler2 v2.0.1
+   Compiling ring v0.17.14
+    Checking scopeguard v1.2.0
+    Checking bitflags v2.13.2
+    Checking lock_api v0.4.14
+   Compiling string_cache_codegen v0.11.2
+    Checking miniz_oxide v0.9.1
+   Compiling phf_codegen v0.14.0
+    Checking foldhash v0.1.5
+    Checking allocator-api2 v0.2.21
+    Checking log v0.4.34
+    Checking equivalent v1.0.2
+   Compiling libm v0.2.16
+    Checking new_debug_unreachable v1.0.6
+    Checking zeroize v1.9.0
+    Checking rustls-pki-types v1.15.1
+    Checking hashbrown v0.15.5
+   Compiling web_atoms v0.3.0
+    Checking parking_lot v0.12.5
+    Checking getrandom v0.2.17
+    Checking unicode-segmentation v1.13.3
+    Checking precomputed-hash v0.1.1
+    Checking unicode-width v0.2.2
+   Compiling pkg-config v0.3.34
+    Checking untrusted v0.9.0
+   Compiling vcpkg v0.2.15
+   Compiling libsqlite3-sys v0.35.0
+    Checking kobo-ui v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-ui)
+warning: function `draw_fallback_text` is never used
+     --> /home/sandbox/cb/measure-basic/crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+    Checking string_cache v0.11.0
+    Checking phf v0.14.0
+   Compiling httparse v1.10.1
+    Checking bytemuck v1.25.2
+   Compiling autocfg v1.5.1
+    Checking unicode-bidi-mirroring v0.4.0
+   Compiling rustls v0.23.45
+   Compiling crc32fast v1.5.2
+   Compiling num-traits v0.2.19
+    Checking core_maths v0.1.1
+    Checking rustls-webpki v0.103.15
+    Checking tendril v0.5.1
+    Checking bytes v1.12.1
+    Checking tinyvec v1.13.3
+    Checking once_cell v1.21.4
+    Checking subtle v2.6.1
+    Checking itoa v1.0.18
+    Checking http v1.5.0
+    Checking unicode-normalization v0.1.25
+    Checking markup5ever v0.40.0
+    Checking ttf-parser v0.25.1
+    Checking kobo-protocol v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-protocol)
+    Checking hashlink v0.10.0
+    Checking webpki-roots v1.0.9
+    Checking httpdate v1.0.3
+    Checking unicode-ccc v0.4.0
+    Checking unicode-properties v0.1.4
+    Checking memchr v2.8.3
+    Checking fallible-iterator v0.3.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking unicode-script v0.5.8
+    Checking kobo-json v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-json)
+    Checking ttf-parser v0.21.1
+    Checking rustybuzz v0.20.1
+    Checking fontdue v0.9.3 (/home/sandbox/cb/measure-basic/vendor/fontdue)
+    Checking rusqlite v0.37.0
+    Checking html5ever v0.40.0
+    Checking kobo-net v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-net)
+    Checking flate2 v1.1.10
+    Checking kobo-dict v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-dict)
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+    Checking kobo-abi v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-abi)
+    Checking unicode-bidi v0.3.18
+    Checking zune-core v0.4.12
+    Checking unicode-linebreak v0.1.5
+    Checking pxfm v0.1.30
+    Checking kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+    Checking kobo-web-document v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-document)
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:1064:13
+     |
+1064 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:704:25
+    |
+704 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+    Checking moxcms v0.7.11
+warning: method `flex_units_shadow` is never used
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+    Checking zune-jpeg v0.4.21
+    Checking kobo-policy v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-policy)
+    Checking png v0.18.1
+    Checking kobo-state v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-state)
+   Compiling libfuzzer-sys v0.4.13
+    Checking byteorder-lite v0.1.0
+    Checking image v0.25.8
+    Checking kobo-sdk v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-sdk)
+    Checking arbitrary v1.4.2
+    Checking kobo-web-layout v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-layout)
+    Checking kobo-image v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-image)
+    Checking kobo-browser-core v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-browser)
+warning: unexpected `cfg` condition name: `kani`
+   --> /home/sandbox/cb/measure-basic/crates/kobo-browser/src/lib.rs:264:7
+    |
+264 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `clippy`, `debug_assertions`, `doc`, `docsrs`, `doctest`, `feature`, `fmt_debug`, `miri`, `overflow_checks`, `panic`, `proc_macro`, `relocation_model`, `rustfmt`, `sanitize`, `sanitizer_cfi_generalize_pointers`, `sanitizer_cfi_normalize_integers`, `target_abi`, `target_arch`, `target_endian`, `target_env`, `target_family`, `target_feature`, `target_has_atomic`, `target_has_atomic_equal_alignment`, `target_has_atomic_load_store`, `target_os`, `target_pointer_width`, `target_thread_local`, `target_vendor`, `test`, `ub_checks`, `unix`, and `windows`
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: `kobo-browser-core` (lib) generated 1 warning
+    Checking kobo-browser-fuzz v0.0.0 (/home/sandbox/cb/measure-basic/crates/kobo-browser/fuzz)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.29s

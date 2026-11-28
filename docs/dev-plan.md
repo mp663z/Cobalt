@@ -6,12 +6,22 @@ Status: living document, updated as phases land. Owner: integration branch `agen
 
 A basic working browser for Cobalt, at least as good as the existing preview path and lightweight. We are building a real browser: real CSS parsing, real box tree, real inline layout with real shaping. No heuristics that fake behavior, no per-site special cases, no JS.
 
-## How we work
+## Current checkpoint, November 29
 
-- Reviewer rules: no site names in code; every fix ships with a fixture that fails before and passes after; no new exact-parity gates or evidence dirs; crops only from blitted output; per step run tests + fmt/clippy on touched files, commit, push, report the hash and crops immediately.
-- Three lanes: A (corpus/CI/harness hygiene), B (Unicode text engine, owns paint_text_block replacement), C (Page view). Lanes deliver bundles; integration cherry-picks or reverts, runs the suites, pushes, reports hashes. Lanes never push.
-- Frozen corpus: five captured pages, re-blessed via regen_corpus after every census-changing fix, diffs inspected first. Census counters travel with every visual claim.
-- Standing orders (owner-approved): dependency changes only with crates already in Cargo.lock at pinned versions; OFL Noto subsets allowed if measured against BUDGETS.md; R6 transforms in the same commit as their gate updates with tests proving them. Everything else (unsafe_code, new crates, allocator changes, public posts) waits for an explicit ask.
+The integration branch is `agent/browser-basic`. This document describes work;
+it does not grant permission for account actions, publication or purchases.
+
+- Browser UI: inline address editing, unified header, painted-link taps,
+  settled scrolling, compact zoom panel, Back/Forward and native forms.
+- Rendering: bounded external CSS, true mono regular/bold code fonts, CSS
+  fractional line-height rounding, collapsed-whitespace and pre newline fixes.
+- Font memory: shared regular geometry and bounded lazy bold outlines retain
+  complete glyph coverage and real weights. See `vendor/fontdue/COBALT-CHANGES.md`.
+- Parser: html5ever 0.40 / string_cache 0.11 integrated. The 13-page frozen
+  corpus has unchanged census and byte-identical full composited pixels.
+- Current parser checkpoint: web-document 1451 passed / 18 ignored; browser
+  275 passed / 5 ignored; preview 47 passed / 1 ignored. These are scoped
+  tests, not whole-web or device qualification.
 
 ## Done
 
@@ -23,26 +33,15 @@ A basic working browser for Cobalt, at least as good as the existing preview pat
 
 ## Current order of work
 
-### Bugs 4 + 5 (next)
-- State-aware CSS entry: replace the :link/:visited byte folds with a FreshNoHistory state-aware entry point; update the basic_preview caller per lane A's note.
-- pt (and remaining absolute units) in the length parser instead of byte-level rewrites.
-- Exit: new fixtures fail before/pass after; fold counters stay zero; corpus re-blessed if census moves.
+1. Keep standalone workspaces buildable against the vendored font dependency.
+2. Review and integrate bounded external-image loading with network/security
+   tests when the implementation is ready.
+3. Add the pending CSS/parser fuzz targets and inspect any failures.
+4. Keep release measurements, docs, fmt/clippy and full-suite checks current.
 
-### Phase 0 hygiene (parallel with above)
-- Viewport plumbed end to end (harness --width already exists; engine must take it as a parameter everywhere).
-- Harness args documented; corpus regen path reproducible from a fresh clone.
-- fmt/clippy green on toolchain 1.85.1 for the touched crates (whole-engine freeze is a separately scheduled coordinated step).
-
-### Phase 1: real box kinds
-- Tables, images, form controls as real box kinds in the tree (not paint-time special cases).
-- Delete the byte rewrites and the sentinel paste path once the box kinds cover them.
-- Exit: corpus pages render with table/image/form counters replacing approximation counters; crops verified against the frozen pages.
-
-### Rebase port (after bugs 4+5, before Phase 1 grows)
-- Port onto upstream beta 3a8377b6 on NEW branch agent/browser-rebased. Branch root ecdae512 is a parentless snapshot, so this is a port via diff, not a git rebase. agent/browser-basic and bundle backups stay untouched. Push and share the link.
-
-### Retire the exact painter (after Page view is wired)
-- Remove the old exact painter by deletion in a separate commit. Parser, cascade and selectors stay.
+POST stays review-only. Physical-device input, display, memory and latency
+remain unverified. Complete HTML/CSS compatibility is not finished. Upstream
+port/adoption is separate work, not part of the current integration.
 
 ## Verification ladder (every step)
 1. Focused fixture fails before, passes after.
@@ -53,6 +52,10 @@ A basic working browser for Cobalt, at least as good as the existing preview pat
 6. Commit body records what, why, and any standing-order clearance used; push; report hash.
 
 ## Open risks
-- Fresh-clone cold build exceeds the 120s shell cap; verification runs in pieces.
-- text-layout-bounded:30 skip class on the frozen encyclopedia page needs a look (Phase 1 candidate).
-- Vertical Em margins stay zeroed (resolving them exploded page height 3.5x earlier); root cause open.
+
+- Large test executables can exhaust local build storage. Preserve results,
+  then remove only regenerable build artifacts before rerunning.
+- Host and qemu RSS are not device RSS. No physical-device route is available.
+- Broad Miri/Kani completion is not established by the scoped passing checks.
+- External images, SVG and unsupported layout remain visible compatibility gaps.
+- Browser clippy completes with existing warnings; it is not warning-clean.
