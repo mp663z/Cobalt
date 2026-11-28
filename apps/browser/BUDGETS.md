@@ -1684,3 +1684,11 @@ list pixels checked (no error diagnostics); page preview pixels checked. Source
 values in the static preview are not updated after native edits. No POST gate
 change. Browser-core 27 + 2 tests pass for safe Kani v3 integration; broad Kani
 coverage remains open and narrow proof claims remain worker-reported.
+
+CSS v3 integration: own flex_nested_basic 8 pass; preview basic_corpus 5 pass;
+all 13 freshly rendered frozen pages match census baselines, no skips/truncation
+in the reviewed Rust/Python pages. Actual composited top-700px Rust/Python
+before/after inspected. Rust title centers; Sphinx gets one short top-aligned
+bar, not a full three-bar 24px hamburger. Approximation counters remain.
+ARM release 5,307,372 B. Worker reports full document suite on b61e426e:
+150 binaries, 1425 tests pass, not independently rerun here.
