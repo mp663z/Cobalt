@@ -332,3 +332,32 @@ fn center_shifts_items_vertically() {
     assert_eq!(centered.len(), 1, "{centered:?}");
     assert_eq!(centered[0].y, 15, "{centered:?}");
 }
+
+/// Alignment measurement stays bounded at any nesting depth: each box
+/// is measured at most once per width (cache) and rows deeper than
+/// MAX_FLEX_MEASURE_DEPTH skip measurement entirely (counted), so
+/// depth-12 nesting neither truncates the page nor multiplies work.
+#[test]
+fn deeply_nested_rows_stay_bounded() {
+    let depth = 12;
+    let mut html = String::new();
+    for _ in 0..depth {
+        html.push_str("<div style=\"display:flex;align-items:center\">");
+    }
+    html.push_str("<div style=\"width:10px;height:10px;background:#112233\"></div>");
+    for _ in 0..depth {
+        html.push_str("</div>");
+    }
+    let (commands, stats, _) = paint(&html);
+    assert!(!stats.output_truncated, "{:?}", stats.approximations);
+    // Levels 0..8 measure; levels 8..12 skip, one skip per row.
+    assert_eq!(
+        stats.approximations.get("flex-row-measure-depth-skipped"),
+        Some(&4),
+        "{:?}",
+        stats.approximations
+    );
+    let bar = fills(&commands, 0x112233);
+    assert_eq!(bar.len(), 1, "{bar:?}");
+    assert_eq!((bar[0].width, bar[0].height), (10, 10), "{bar:?}");
+}

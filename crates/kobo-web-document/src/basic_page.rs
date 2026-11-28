@@ -33,6 +33,10 @@ use crate::display_list::{Command, Rect, Rgb, Source};
 mod table;
 
 const MAX_VISITS: usize = 200_000;
+/// Deepest flex-row nesting that still measures its items for cross-axis
+/// alignment. Beyond it rows paint top-aligned without stretch or
+/// centring (counted), keeping alignment work bounded at any depth.
+const MAX_FLEX_MEASURE_DEPTH: usize = 8;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PartialStats {
@@ -84,6 +88,19 @@ struct Painter<'a, F: FontProvider> {
     /// Cross-axis stretch hint for the next flex item laid out: the row's
     /// measured height. Consumed by that item's own background only.
     flex_stretch_bg: Option<i64>,
+    /// Flex rows currently inside an alignment measurement pass.
+    flex_measure_depth: usize,
+    /// Rows that skipped alignment measurement for nesting too deep,
+    /// as box indices (deduplicated: a deep row is visited by several
+    /// measurement passes but skips once). Kept outside PartialStats
+    /// because the skips happen inside rolled-back measurement passes;
+    /// folded into the stats once, at the top level after layout.
+    measure_depth_skips: std::collections::HashSet<usize>,
+    /// Measured flex item heights keyed by (box, content width): one box
+    /// is measured at most once per width per page, so alignment
+    /// measurement stays linear in page size instead of multiplying
+    /// down nested rows.
+    measure_cache: std::collections::HashMap<(usize, u32), i64>,
 }
 
 impl<'a, F: FontProvider> Painter<'a, F> {
@@ -997,10 +1014,15 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 .unwrap_or(0);
             let mut measured: Vec<Option<i64>> = vec![None; kids.len()];
             let mut measured_row_h = 0i64;
-            {
-                let entry = list.len();
-                let before = self.stats.clone();
-                let before_visits = self.visits;
+            // Measurement cost is bounded three ways: a (box, width)
+            // pair is measured at most once per page (cache), every
+            // measurement visit counts against the global MAX_VISITS
+            // budget (only paint output and stats roll back, visits do
+            // not), and rows nested deeper than MAX_FLEX_MEASURE_DEPTH
+            // skip measurement entirely (counted), painting top-aligned
+            // without stretch or centring.
+            if self.flex_measure_depth < MAX_FLEX_MEASURE_DEPTH {
+                self.flex_measure_depth += 1;
                 let mut x = content_x + pad_left;
                 for (k, &c) in kids
                     .iter()
@@ -1013,14 +1035,26 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let slot = if slots[k] >= 0 { slots[k] } else { share };
                     let cw = (slot - ml - mr).max(0) as u32;
                     x += ml;
-                    let h = self.layout_block(c, x, content_top, cw, list, child_abs_origin);
+                    let h = match self.measure_cache.get(&(c, cw)) {
+                        Some(&h) => h,
+                        None => {
+                            let entry = list.len();
+                            let before = self.stats.clone();
+                            let h =
+                                self.layout_block(c, x, content_top, cw, list, child_abs_origin);
+                            list.truncate(entry);
+                            self.stats = before;
+                            self.measure_cache.insert((c, cw), h);
+                            h
+                        }
+                    };
                     measured[k] = Some(h);
                     measured_row_h = measured_row_h.max(h);
                     x += i64::from(cw) + mr;
                 }
-                list.truncate(entry);
-                self.stats = before;
-                self.visits = before_visits;
+                self.flex_measure_depth -= 1;
+            } else {
+                self.measure_depth_skips.insert(index);
             }
             let cross = measured_row_h.max(own_floor);
             let mut x = content_x + pad_left;
@@ -2725,6 +2759,9 @@ pub fn paint_basic_page_families<F: FontProvider>(
         table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
         flex_stretch_bg: None,
+        flex_measure_depth: 0,
+        measure_depth_skips: std::collections::HashSet::new(),
+        measure_cache: std::collections::HashMap::new(),
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
@@ -2756,6 +2793,9 @@ pub fn paint_basic_page_families<F: FontProvider>(
     } else {
         i64::from(viewport_height)
     };
+    for _ in 0..painter.measure_depth_skips.len() {
+        painter.stats.approx("flex-row-measure-depth-skipped");
+    }
     Ok((list, painter.stats, h))
 }
 
@@ -2783,6 +2823,9 @@ pub fn paint_basic_page(
         table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
         flex_stretch_bg: None,
+        flex_measure_depth: 0,
+        measure_depth_skips: std::collections::HashSet::new(),
+        measure_cache: std::collections::HashMap::new(),
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
@@ -2819,6 +2862,9 @@ pub fn paint_basic_page(
     };
     for top_index in start {
         cursor += painter.layout_block(top_index, 0, cursor, root_width, &mut list, (0, 0));
+    }
+    for _ in 0..painter.measure_depth_skips.len() {
+        painter.stats.approx("flex-row-measure-depth-skipped");
     }
     Ok((list, painter.stats, cursor))
 }
