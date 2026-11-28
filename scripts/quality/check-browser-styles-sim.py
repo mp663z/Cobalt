@@ -133,8 +133,9 @@ def form_route(args):
             'tap-id field-2\n'
             'tap-id field-3\n'
             'tap-id option-1\n'
+            'tap-id field-5\ntap-id kb.backspace\ntap-id kb.enter\n'
             'shot-colour choice-values\n'
-            'tap-id submit-field-5\n'
+            'tap-id submit-field-7\n'
             'wait-idle 30000\n'
             'shot-colour search-result\n'
         )
@@ -203,7 +204,7 @@ def main():
     if args.choices:
         args.sheets = 2
         expected_paths = ['/', '/sheet0.css', '/sheet1.css']
-        page = b'<!doctype html><title>Choice form</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Choice form</h1><form action="/search.html?old=stale#fragment"><input type=hidden name=secret value="a&amp;b"><input disabled name=excluded value=no><label>Colour<select name=colour><option value=red>Red</option><option value=blue>Blue</option></select></label><label><input type=checkbox name=stock checked>Stock</label><label><input type=radio name=size value=small checked>Small</label><label><input type=radio name=size value=large>Large</label><input type=submit name=go value=First><input type=submit name=go value=Second></form>'
+        page = b'<!doctype html><title>Choice form</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Choice form</h1><form action="/search.html?old=stale#fragment"><input type=hidden name=secret value="a&amp;b"><input disabled name=excluded value=no><label>Colour<select name=colour><option value=red>Red</option><option value=blue>Blue</option></select></label><label><input type=checkbox name=stock checked>Stock</label><label><input type=radio name=size value=small checked>Small</label><label><input type=radio name=size value=large>Large</label><fieldset disabled><legend><label>Legend<input name=legend value=keep></label></legend><input name=fieldset_excluded value=no><legend><input name=later_legend value=no></legend></fieldset><label>Empty<input name=empty value=x></label><input type=submit name=go value=First><input type=submit name=go value=Second></form>'
     if args.paged_form:
         args.sheets = 2
         expected_paths = ['/', '/sheet0.css', '/sheet1.css']
@@ -352,7 +353,7 @@ def main():
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
                              for r in requests if r['path'].startswith('/search.html?')]
                 assert submitted == [{'secret': ['a&b'], 'colour': ['blue'],
-                                      'size': ['large'], 'go': ['Second']}], submitted
+                                      'size': ['large'], 'legend': ['keep'], 'empty': [''], 'go': ['Second']}], submitted
             else:
                 assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
             submissions = [r['path'] for r in requests if r['path'].startswith('/search.html?')]

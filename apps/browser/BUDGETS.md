@@ -1827,3 +1827,8 @@ New --post-review fixture passes on ClaraBW: edit note, review then Cancel,
 review then runtime Back, saved note preserved. Server records noPOST/noaction
 GET; complete requestmultiset contains only page/2CSS. Review/returned-form
 pixels inspected. This tests existing refusal gate, does not enablePOST.
+
+Expanded ClaraBW choices fixture passes disabled-fieldset first-legend exception:
+legend=keep survives, disabled sibling/laterlegend fields omitted. Clearx toempty
+submits empty= explicitly. Exact fullGETquery checked and actual empty/legend
+control pixels inspected. Test-only, no runtimechange.
