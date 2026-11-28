@@ -1,0 +1,30 @@
+
+running 13 tests
+test tests::a_tab_remembers_which_of_its_pages_was_open ... ok
+test tests::every_glyph_is_on_the_panel_somewhere ... ok
+test tests::every_control_the_toolkit_draws_is_somewhere_in_this_gallery ... FAILED
+test tests::every_node_the_system_has_is_drawn_somewhere ... ok
+test tests::every_page_lays_out_without_an_error ... ok
+test tests::every_warning_this_reference_provokes_is_one_it_means_to ... ok
+test tests::tapping_away_from_the_menu_closes_it ... ok
+test tests::the_answer_already_given_is_marked_on_the_row_that_gave_it ... ok
+test tests::the_free_text_row_raises_the_keyboard_rather_than_answering_for_the_reader ... ok
+test tests::the_generated_pictures_are_exactly_the_size_they_claim ... ok
+test tests::the_pictures_are_handed_over_once_and_then_drawn_by_handle ... ok
+test tests::what_was_typed_becomes_the_answer ... ok
+test tests::every_page_fits_every_supported_panel_at_every_text_size ... ok
+
+failures:
+
+---- tests::every_control_the_toolkit_draws_is_somewhere_in_this_gallery stdout ----
+
+thread 'tests::every_control_the_toolkit_draws_is_somewhere_in_this_gallery' panicked at examples/gallery/src/main.rs:2478:9:
+11 controls are not shown anywhere in the gallery: coloured_heading_at_level, coloured_quote, browser_bar, compact_browser_bar, loading_browser_bar, recovery_browser_bar, slider, unified_browser_header, picture_scroll, picture_links, rows_with_colours
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::every_control_the_toolkit_draws_is_somewhere_in_this_gallery
+
+test result: FAILED. 12 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.93s
+

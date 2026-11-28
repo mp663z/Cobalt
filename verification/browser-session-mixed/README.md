@@ -1,0 +1,1 @@
+Fresh-state12page realTLS ClaraBW host session, native links/back/forward/history reopen. Own pixels reviewed first/page11/history/final. Mixed native/painted presentation, NOT a painted-only lane. HostRSS firstarticle63012KiB/final63088KiB/peak63144KiB, singlePID. Not hardwareRSS or a leak-free claim.

@@ -1,0 +1,832 @@
+{
+  "target/debug/deps/icon_import-a9fa09f91bc75a24": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/icon_import-a9fa09f91bc75a24.log"
+  },
+  "target/debug/deps/kobo_abi-01870945b85c4f0f": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+    ],
+    "log": "/tmp/workspace-results/kobo_abi-01870945b85c4f0f.log"
+  },
+  "target/debug/deps/kobo_app_store-69eb342a776204b3": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    ],
+    "log": "/tmp/workspace-results/kobo_app_store-69eb342a776204b3.log"
+  },
+  "target/debug/deps/kobo_arxiv-d7eb841d5de6e66e": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.95s"
+    ],
+    "log": "/tmp/workspace-results/kobo_arxiv-d7eb841d5de6e66e.log"
+  },
+  "target/debug/deps/kobo_audiobook-d1e82d33d12eec5f": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_audiobook-d1e82d33d12eec5f.log"
+  },
+  "target/debug/deps/kobo_backgammon-3098e347a26c68d6": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.60s"
+    ],
+    "log": "/tmp/workspace-results/kobo_backgammon-3098e347a26c68d6.log"
+  },
+  "target/debug/deps/kobo_birds-9a222eba2e944b88": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.69s"
+    ],
+    "log": "/tmp/workspace-results/kobo_birds-9a222eba2e944b88.log"
+  },
+  "target/debug/deps/kobo_books-bdf5f5d6c82a2b7b": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s"
+    ],
+    "log": "/tmp/workspace-results/kobo_books-bdf5f5d6c82a2b7b.log"
+  },
+  "target/debug/deps/kobo_bookview-673903e78fa302bb": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.06s"
+    ],
+    "log": "/tmp/workspace-results/kobo_bookview-673903e78fa302bb.log"
+  },
+  "target/debug/deps/kobo_brief-1310bcefd36bfd3a": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.28s"
+    ],
+    "log": "/tmp/workspace-results/kobo_brief-1310bcefd36bfd3a.log"
+  },
+  "target/debug/deps/kobo_browser_core-23e39cfaf69b6803": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_browser_core-23e39cfaf69b6803.log"
+  },
+  "target/debug/deps/history_model-3afb3c561597691d": {
+    "label": "tests/history_model.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s"
+    ],
+    "log": "/tmp/workspace-results/history_model-3afb3c561597691d.log"
+  },
+  "target/debug/deps/kobo_calibre_web-1a1626b54bdffef9": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.82s"
+    ],
+    "log": "/tmp/workspace-results/kobo_calibre_web-1a1626b54bdffef9.log"
+  },
+  "target/debug/deps/kobo_catalog-5848214398a23b55": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_catalog-5848214398a23b55.log"
+  },
+  "target/debug/deps/kobo_chat-5356a4bf122acc6c": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.20s"
+    ],
+    "log": "/tmp/workspace-results/kobo_chat-5356a4bf122acc6c.log"
+  },
+  "target/debug/deps/kobo-f95a0cbba52a0236": {
+    "label": "unittests src/main.rs",
+    "exit": 101,
+    "summary": [
+      "FAILED. 436 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s"
+    ],
+    "log": "/tmp/workspace-results/kobo-f95a0cbba52a0236.log"
+  },
+  "target/debug/deps/kobo_comic-b1459c4ddff00312": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_comic-b1459c4ddff00312.log"
+  },
+  "target/debug/deps/kobo_crossword-905e7f9ed65fddbf": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.50s"
+    ],
+    "log": "/tmp/workspace-results/kobo_crossword-905e7f9ed65fddbf.log"
+  },
+  "target/debug/deps/kobo_deck-dbf215a22510ff4d": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.99s"
+    ],
+    "log": "/tmp/workspace-results/kobo_deck-dbf215a22510ff4d.log"
+  },
+  "target/debug/deps/app-be85c73b78c41db8": {
+    "label": "tests/app.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/app-be85c73b78c41db8.log"
+  },
+  "target/debug/deps/screenshot-248e69cf0c6c9cac": {
+    "label": "tests/screenshot.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s"
+    ],
+    "log": "/tmp/workspace-results/screenshot-248e69cf0c6c9cac.log"
+  },
+  "target/debug/deps/kobo_dict-0bec41320a3dfb42": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_dict-0bec41320a3dfb42.log"
+  },
+  "target/debug/deps/kobo_doc-a1215c9088e483fc": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 168 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+    ],
+    "log": "/tmp/workspace-results/kobo_doc-a1215c9088e483fc.log"
+  },
+  "target/debug/deps/kobo_doctor-7792c8ed9c35ba36": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_doctor-7792c8ed9c35ba36.log"
+  },
+  "target/debug/deps/kobo_fanshelf-2a05af010e0e3ada": {
+    "label": "unittests src/main.rs",
+    "exit": "timeout45s",
+    "summary": [],
+    "log": "/tmp/workspace-results/kobo_fanshelf-2a05af010e0e3ada.log"
+  },
+  "target/debug/deps/kobo_fieldbook-985e90205456191f": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.88s"
+    ],
+    "log": "/tmp/workspace-results/kobo_fieldbook-985e90205456191f.log"
+  },
+  "target/debug/deps/kobo_flashcards-6541fe484b53120c": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.16s"
+    ],
+    "log": "/tmp/workspace-results/kobo_flashcards-6541fe484b53120c.log"
+  },
+  "target/debug/deps/kobo_flashcards_format-6b86511cb520bc2c": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    ],
+    "log": "/tmp/workspace-results/kobo_flashcards_format-6b86511cb520bc2c.log"
+  },
+  "target/debug/deps/kobo_frame-1a7e5a67d33df2b4": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s"
+    ],
+    "log": "/tmp/workspace-results/kobo_frame-1a7e5a67d33df2b4.log"
+  },
+  "target/debug/deps/kobo_frame_host-14d3518cb8def940": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s"
+    ],
+    "log": "/tmp/workspace-results/kobo_frame_host-14d3518cb8def940.log"
+  },
+  "target/debug/deps/kobo_gallery-6e2f29295c6b4560": {
+    "label": "unittests src/main.rs",
+    "exit": 101,
+    "summary": [
+      "FAILED. 12 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.93s"
+    ],
+    "log": "/tmp/workspace-results/kobo_gallery-6e2f29295c6b4560.log"
+  },
+  "target/debug/deps/kobo_grimoire-595ba7070fdacc4a": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.35s"
+    ],
+    "log": "/tmp/workspace-results/kobo_grimoire-595ba7070fdacc4a.log"
+  },
+  "target/debug/deps/kobo_gutenbird-2cb504890066c0f6": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 103 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.25s"
+    ],
+    "log": "/tmp/workspace-results/kobo_gutenbird-2cb504890066c0f6.log"
+  },
+  "target/debug/deps/kobo_habits-ddb0680103d5d7f2": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.21s"
+    ],
+    "log": "/tmp/workspace-results/kobo_habits-ddb0680103d5d7f2.log"
+  },
+  "target/debug/deps/app-92ac81fd5ab66ac0": {
+    "label": "tests/app.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+    ],
+    "log": "/tmp/workspace-results/app-92ac81fd5ab66ac0.log"
+  },
+  "target/debug/deps/screenshot-a55297e4e3e5df04": {
+    "label": "tests/screenshot.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+    ],
+    "log": "/tmp/workspace-results/screenshot-a55297e4e3e5df04.log"
+  },
+  "target/debug/deps/kobo_hal-53b323cd473ef169": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_hal-53b323cd473ef169.log"
+  },
+  "target/debug/deps/kobo_hello-6559b4eddf22fc6d": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_hello-6559b4eddf22fc6d.log"
+  },
+  "target/debug/deps/kobo_hn-05fc91ddfc41d4d3": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.87s"
+    ],
+    "log": "/tmp/workspace-results/kobo_hn-05fc91ddfc41d4d3.log"
+  },
+  "target/debug/deps/kobo_homepanel-948170023211e11e": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.85s"
+    ],
+    "log": "/tmp/workspace-results/kobo_homepanel-948170023211e11e.log"
+  },
+  "target/debug/deps/kobo_html-e9eca7e01addc83e": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+    ],
+    "log": "/tmp/workspace-results/kobo_html-e9eca7e01addc83e.log"
+  },
+  "target/debug/deps/kobo_image-788c2212a980f023": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s"
+    ],
+    "log": "/tmp/workspace-results/kobo_image-788c2212a980f023.log"
+  },
+  "target/debug/deps/kobo_inkling-87f25d1b7b325db0": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.91s"
+    ],
+    "log": "/tmp/workspace-results/kobo_inkling-87f25d1b7b325db0.log"
+  },
+  "target/debug/deps/kobo_json-577caa55b86771ba": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    ],
+    "log": "/tmp/workspace-results/kobo_json-577caa55b86771ba.log"
+  },
+  "target/debug/deps/kobo_kitchencard-85e3cfac5cac51af": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s"
+    ],
+    "log": "/tmp/workspace-results/kobo_kitchencard-85e3cfac5cac51af.log"
+  },
+  "target/debug/deps/kobo_launcher-59d45fa7bc1df23d": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.49s"
+    ],
+    "log": "/tmp/workspace-results/kobo_launcher-59d45fa7bc1df23d.log"
+  },
+  "target/debug/deps/kobo_lichess-40b08ae50a729a3b": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 111 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.55s"
+    ],
+    "log": "/tmp/workspace-results/kobo_lichess-40b08ae50a729a3b.log"
+  },
+  "target/debug/deps/kobo_logicpack-43373d8a5333e745": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.30s"
+    ],
+    "log": "/tmp/workspace-results/kobo_logicpack-43373d8a5333e745.log"
+  },
+  "target/debug/deps/kobo_magnet-d0b2185b747d9f0b": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s"
+    ],
+    "log": "/tmp/workspace-results/kobo_magnet-d0b2185b747d9f0b.log"
+  },
+  "target/debug/deps/kobo_morse-19803781367a0835": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s"
+    ],
+    "log": "/tmp/workspace-results/kobo_morse-19803781367a0835.log"
+  },
+  "target/debug/deps/kobo_music_host-53b7651a03163d4a": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.69s"
+    ],
+    "log": "/tmp/workspace-results/kobo_music_host-53b7651a03163d4a.log"
+  },
+  "target/debug/deps/kobo_musicstand-92c7b3e32d354ae3": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.88s"
+    ],
+    "log": "/tmp/workspace-results/kobo_musicstand-92c7b3e32d354ae3.log"
+  },
+  "target/debug/deps/kobo_needles-f4cd1dcaf7213549": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.54s"
+    ],
+    "log": "/tmp/workspace-results/kobo_needles-f4cd1dcaf7213549.log"
+  },
+  "target/debug/deps/kobo_net-99665be6572e7a21": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 93 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s"
+    ],
+    "log": "/tmp/workspace-results/kobo_net-99665be6572e7a21.log"
+  },
+  "target/debug/deps/fixture_endpoint-1262499ccb516066": {
+    "label": "tests/fixture_endpoint.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/fixture_endpoint-1262499ccb516066.log"
+  },
+  "target/debug/deps/lichess_stream_mock-23d50b1cd5b53d76": {
+    "label": "tests/lichess_stream_mock.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s"
+    ],
+    "log": "/tmp/workspace-results/lichess_stream_mock-23d50b1cd5b53d76.log"
+  },
+  "target/debug/deps/kobo_nonograms-088338183318796e": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.72s"
+    ],
+    "log": "/tmp/workspace-results/kobo_nonograms-088338183318796e.log"
+  },
+  "target/debug/deps/kobo_opds-aa96e598c6eade51": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_opds-aa96e598c6eade51.log"
+  },
+  "target/debug/deps/parity-e871b8b940153f78": {
+    "label": "tests/parity.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/parity-e871b8b940153f78.log"
+  },
+  "target/debug/deps/kobo_opml-55b3453e1b5c8680": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_opml-55b3453e1b5c8680.log"
+  },
+  "target/debug/deps/kobo_panels-4b6ee2d97b73371b": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.10s"
+    ],
+    "log": "/tmp/workspace-results/kobo_panels-4b6ee2d97b73371b.log"
+  },
+  "target/debug/deps/kobo_paperterm-852ad3b31ef0c07f": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.58s"
+    ],
+    "log": "/tmp/workspace-results/kobo_paperterm-852ad3b31ef0c07f.log"
+  },
+  "target/debug/deps/kobo_parlor-e97510ca9080b6bc": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.68s"
+    ],
+    "log": "/tmp/workspace-results/kobo_parlor-e97510ca9080b6bc.log"
+  },
+  "target/debug/deps/kobo_parser-f9920725fb29abaf": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.38s"
+    ],
+    "log": "/tmp/workspace-results/kobo_parser-f9920725fb29abaf.log"
+  },
+  "target/debug/deps/kobo_policy-7322f1f32f3ea63d": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 152 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s"
+    ],
+    "log": "/tmp/workspace-results/kobo_policy-7322f1f32f3ea63d.log"
+  },
+  "target/debug/deps/kobo_post-98b45366663bf460": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.09s"
+    ],
+    "log": "/tmp/workspace-results/kobo_post-98b45366663bf460.log"
+  },
+  "target/debug/deps/kobo_profile-1d33a94a177cceaf": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_profile-1d33a94a177cceaf.log"
+  },
+  "target/debug/deps/kobo_protocol-20ca6cfe147e7f27": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 123 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_protocol-20ca6cfe147e7f27.log"
+  },
+  "target/debug/deps/kobo_pubquiz-a915a4138587cafa": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.65s"
+    ],
+    "log": "/tmp/workspace-results/kobo_pubquiz-a915a4138587cafa.log"
+  },
+  "target/debug/deps/kobo_read-65e707108c341f0f": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s"
+    ],
+    "log": "/tmp/workspace-results/kobo_read-65e707108c341f0f.log"
+  },
+  "target/debug/deps/kobo_readlater-2a9ee30ad8f5b0aa": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.08s"
+    ],
+    "log": "/tmp/workspace-results/kobo_readlater-2a9ee30ad8f5b0aa.log"
+  },
+  "target/debug/deps/kobo_rss-2707c9dabe8a84f4": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 90 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.58s"
+    ],
+    "log": "/tmp/workspace-results/kobo_rss-2707c9dabe8a84f4.log"
+  },
+  "target/debug/deps/kobo_rss_miniflux-a03586f8d3758fed": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.23s"
+    ],
+    "log": "/tmp/workspace-results/kobo_rss_miniflux-a03586f8d3758fed.log"
+  },
+  "target/debug/deps/kobo_sdk-b7f4d4616c27350e": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 166 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.36s"
+    ],
+    "log": "/tmp/workspace-results/kobo_sdk-b7f4d4616c27350e.log"
+  },
+  "target/debug/deps/kobo_settings-9d902fd4f95ee2e6": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.88s"
+    ],
+    "log": "/tmp/workspace-results/kobo_settings-9d902fd4f95ee2e6.log"
+  },
+  "target/debug/deps/kobo_shell-690640ab54623bbd": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+    ],
+    "log": "/tmp/workspace-results/kobo_shell-690640ab54623bbd.log"
+  },
+  "target/debug/deps/kobo_sidekick-248e46df923cd218": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 36.85s"
+    ],
+    "log": "/tmp/workspace-results/kobo_sidekick-248e46df923cd218.log"
+  },
+  "target/debug/deps/kobo_sidekickd-cd5adec3284a2c27": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s"
+    ],
+    "log": "/tmp/workspace-results/kobo_sidekickd-cd5adec3284a2c27.log"
+  },
+  "target/debug/deps/kobo_sim-2ecff4910c8f4010": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 110 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s"
+    ],
+    "log": "/tmp/workspace-results/kobo_sim-2ecff4910c8f4010.log"
+  },
+  "target/debug/deps/kobo_state-d49e46c9debb63b8": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    ],
+    "log": "/tmp/workspace-results/kobo_state-d49e46c9debb63b8.log"
+  },
+  "target/debug/deps/persistence-7f999e159151441b": {
+    "label": "tests/persistence.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/persistence-7f999e159151441b.log"
+  },
+  "target/debug/deps/kobo_store-6603e7c84cfb4db3": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.87s"
+    ],
+    "log": "/tmp/workspace-results/kobo_store-6603e7c84cfb4db3.log"
+  },
+  "target/debug/deps/kobo_stream-80b6ace7d0d17ada": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.52s"
+    ],
+    "log": "/tmp/workspace-results/kobo_stream-80b6ace7d0d17ada.log"
+  },
+  "target/debug/deps/kobo_sudoku-0250a3c9fff7cb58": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.64s"
+    ],
+    "log": "/tmp/workspace-results/kobo_sudoku-0250a3c9fff7cb58.log"
+  },
+  "target/debug/deps/kobo_syncthing-ee2b1aae9538c4b1": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s"
+    ],
+    "log": "/tmp/workspace-results/kobo_syncthing-ee2b1aae9538c4b1.log"
+  },
+  "target/debug/deps/kobo_term-e4adf1c5c387ee87": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_term-e4adf1c5c387ee87.log"
+  },
+  "target/debug/deps/kobo_terminal-25686b685770431d": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s"
+    ],
+    "log": "/tmp/workspace-results/kobo_terminal-25686b685770431d.log"
+  },
+  "target/debug/deps/kobo_text-d12075f712fbbccd": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.58s"
+    ],
+    "log": "/tmp/workspace-results/kobo_text-d12075f712fbbccd.log"
+  },
+  "target/debug/deps/kobo_tictactoe-86c67eda0a5422be": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s"
+    ],
+    "log": "/tmp/workspace-results/kobo_tictactoe-86c67eda0a5422be.log"
+  },
+  "target/debug/deps/kobo_todo-fb1192b68b1700e9": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.96s"
+    ],
+    "log": "/tmp/workspace-results/kobo_todo-fb1192b68b1700e9.log"
+  },
+  "target/debug/deps/kobo_ui-b370d853430c0ba1": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 302 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.35s"
+    ],
+    "log": "/tmp/workspace-results/kobo_ui-b370d853430c0ba1.log"
+  },
+  "target/debug/deps/kobo_vault-4d9bd1b8014e9dd4": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.50s"
+    ],
+    "log": "/tmp/workspace-results/kobo_vault-4d9bd1b8014e9dd4.log"
+  },
+  "target/debug/deps/app-ad4a915e31bbc1a7": {
+    "label": "tests/app.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/app-ad4a915e31bbc1a7.log"
+  },
+  "target/debug/deps/screenshot-2b590771c6b46010": {
+    "label": "tests/screenshot.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+    ],
+    "log": "/tmp/workspace-results/screenshot-2b590771c6b46010.log"
+  },
+  "target/debug/deps/kobo_vault_host-7238d0ed5c249bfc": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_vault_host-7238d0ed5c249bfc.log"
+  },
+  "target/debug/deps/kobo_verses-d6298ff427acb8db": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.85s"
+    ],
+    "log": "/tmp/workspace-results/kobo_verses-d6298ff427acb8db.log"
+  },
+  "target/debug/deps/kobo_web_layout-99e9841d5a77edb0": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.98s"
+    ],
+    "log": "/tmp/workspace-results/kobo_web_layout-99e9841d5a77edb0.log"
+  },
+  "target/debug/deps/kobo_wifi_trace-3f1add95d2998052": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    ],
+    "log": "/tmp/workspace-results/kobo_wifi_trace-3f1add95d2998052.log"
+  },
+  "target/debug/deps/kobo_wifi_trace-a77c11fc7990619b": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_wifi_trace-a77c11fc7990619b.log"
+  },
+  "target/debug/deps/kobo_xml-b6791580ba9d9112": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_xml-b6791580ba9d9112.log"
+  },
+  "target/debug/deps/kobo_zotero_reader-c60b92e911a76923": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.34s"
+    ],
+    "log": "/tmp/workspace-results/kobo_zotero_reader-c60b92e911a76923.log"
+  },
+  "target/debug/deps/kobo_zstory-dd71564f6e6031ba": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log": "/tmp/workspace-results/kobo_zstory-dd71564f6e6031ba.log"
+  },
+  "target/debug/deps/kobod-73a1484ba3f9547c": {
+    "label": "unittests src/lib.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s"
+    ],
+    "log": "/tmp/workspace-results/kobod-73a1484ba3f9547c.log"
+  },
+  "target/debug/deps/kobod-1b683ea4b9118a63": {
+    "label": "unittests src/main.rs",
+    "exit": 0,
+    "summary": [
+      "ok. 130 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s"
+    ],
+    "log": "/tmp/workspace-results/kobod-1b683ea4b9118a63.log"
+  }
+}
