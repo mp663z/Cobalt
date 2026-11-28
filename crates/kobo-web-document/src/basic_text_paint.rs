@@ -73,6 +73,13 @@ fn placeholder(size: u32) -> GlyphBitmap {
 /// scan can miss an occurrence that lies BEHIND the cursor; fall back to
 /// scanning the prefix so the cursor always lands on a real occurrence. A
 /// byte offset inside a multi-byte character would panic the next slice.
+/// The line breaker collapses every ASCII whitespace character (newline, tab,
+/// carriage return, form feed) to one `' '` glyph, so a `' '` glyph can come
+/// from any of them in the source run.
+fn same_char(source: char, glyph: char) -> bool {
+    source == glyph || (glyph == ' ' && source.is_ascii_whitespace())
+}
+
 fn next_occurrence(text: &str, offset: &mut usize, ch: char) -> usize {
     *offset = (*offset).min(text.len());
     while !text.is_char_boundary(*offset) {
@@ -80,12 +87,12 @@ fn next_occurrence(text: &str, offset: &mut usize, ch: char) -> usize {
     }
     let found = text[*offset..]
         .char_indices()
-        .find(|(_, c)| *c == ch)
+        .find(|(_, c)| same_char(*c, ch))
         .map(|(i, _)| *offset + i)
         .or_else(|| {
             text[..*offset]
                 .char_indices()
-                .find(|(_, c)| *c == ch)
+                .find(|(_, c)| same_char(*c, ch))
                 .map(|(i, _)| i)
         });
     let Some(byte) = found else {
@@ -185,7 +192,10 @@ pub(crate) fn paint<F: FontProvider>(
     let glyph_width = |ch: char, leaf: usize| {
         let size = size_of(leaf);
         let byte = next_occurrence(&runs[leaf].0, &mut measure_offsets[leaf], ch);
-        if let Some(clusters) = &shaped[leaf] {
+        // A space collapsed from a newline or tab is measured and painted as
+        // a real space, never as the shaped control-character cluster.
+        let collapsed_space = ch == ' ' && runs[leaf].0[byte..].chars().next().is_some_and(|c| c != ' ');
+        if let Some(clusters) = collapsed_space.then_some(&None).unwrap_or(&shaped[leaf]) {
             if let Some(cluster) = clusters
                 .get(clusters.partition_point(|c| c.end <= byte))
                 .filter(|c| c.start <= byte && c.end > byte)
@@ -282,6 +292,12 @@ pub(crate) fn paint<F: FontProvider>(
                             return bitmap;
                         }
                     }
+                }
+                if g.character == ' '
+                    && runs[g.leaf].0[byte..].chars().next().is_some_and(|c| c != ' ')
+                {
+                    // Collapsed newline or tab: a space has no ink.
+                    return GlyphBitmap { left: 0, top: 0, width: 0, height: 0, coverage: Vec::new() };
                 }
                 if let Some(clusters) = &shaped[g.leaf] {
                     if let Some(cluster) = clusters
@@ -490,6 +506,20 @@ mod tests {
         assert_eq!(cursor, 1);
         assert_eq!(super::next_occurrence(text, &mut cursor, 'ब'), 4);
         assert_eq!(cursor, text.len());
+    }
+
+    #[test]
+    fn collapsed_space_maps_back_to_the_source_whitespace_character() {
+        for (text, at) in [("x;\ny", 2), ("x;\ty", 2), ("x; y", 2), ("x;\r\ny", 2)] {
+            let mut cursor = 0;
+            assert_eq!(super::next_occurrence(text, &mut cursor, 'x'), 0);
+            assert_eq!(super::next_occurrence(text, &mut cursor, ';'), 1);
+            assert_eq!(super::next_occurrence(text, &mut cursor, ' '), at);
+        }
+        assert!(super::same_char('\n', ' ') && super::same_char('\u{c}', ' '));
+        // NBSP is not collapsed whitespace and a letter never matches a space.
+        assert!(!super::same_char('\u{a0}', ' ') && !super::same_char('a', ' '));
+        assert!(!super::same_char('\n', 'a'));
     }
 
     #[test]

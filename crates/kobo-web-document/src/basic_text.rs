@@ -90,7 +90,12 @@ pub fn place(
         if pre {
             let mut g = measured[pos];
             if g.character == '\n' {
-                new_line(&mut x, &mut line)?;
+                // A segment break that ends the block ends its last line; it
+                // does not open an empty one (CSS Text 3, 4.1.1 and the
+                // `<pre>` rendering of a final newline).
+                if pos + 1 < measured.len() {
+                    new_line(&mut x, &mut line)?;
+                }
             } else {
                 if g.character == '\t' {
                     let tab = g
@@ -178,6 +183,22 @@ fn new_line(x: &mut u32, line: &mut u32) -> Result<(), LineError> {
 #[cfg(test)]
 mod tests {
     use super::place;
+
+    fn pre_count(text: &str) -> u32 {
+        place(&[(text, false)], 100, true, |_, _| Some(1)).unwrap().count
+    }
+
+    #[test]
+    fn pre_final_newline_does_not_add_an_empty_line() {
+        assert_eq!(pre_count("a\nb"), 2);
+        assert_eq!(pre_count("a\nb\n"), 2);
+        assert_eq!(pre_count("a\n"), 1);
+        assert_eq!(pre_count("a\r\n"), 1);
+        // Interior and doubled newlines still make empty lines.
+        assert_eq!(pre_count("a\n\nb"), 3);
+        assert_eq!(pre_count("a\n\n"), 2);
+        assert_eq!(pre_count("\n"), 1);
+    }
 
     fn lines(text: &str, width: u32) -> Vec<String> {
         let placed = place(&[(text, false)], width, false, |_, _| Some(1)).unwrap();
