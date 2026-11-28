@@ -518,25 +518,39 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             // they are row items measured by content below, not a reason
             // to stack. A bare non-whitespace Text child would need an
             // anonymous item this walker cannot paint, so it still stacks.
+            // An all-pure-inline row whose only paint is a decoration
+            // (the hamburger span: empty, background:currentColor) is
+            // still a row: the decorated child paints through its own
+            // background/border below instead of vanishing in a text run.
+            let decorated = |c: usize| -> bool {
+                let cs = self.tree.boxes[c].style;
+                cs.used_background_color().is_some() || cs.decor.has_painted_border()
+            };
             let row_eligible = !kids.is_empty()
-                && !self.deep_pure_inline(kids)
+                && (!self.deep_pure_inline(kids) || kids.iter().any(|&c| decorated(c)))
                 && kids.iter().all(|&c| {
                     let ck = self.tree.boxes[c].kind;
                     !matches!(ck, BoxKind::Text) || ws_text(c)
                 });
             // Children with no text, no image marker, no background and no
             // border paint nothing; giving them a column squeezes the
-            // visible siblings, so they are skipped (counted).
+            // visible siblings, so they are skipped (counted). A real
+            // element descendant with its own painted decoration (the
+            // hamburger span: empty, background:currentColor) makes its
+            // ancestor visible too; anonymous boxes carry the parent's
+            // full computed style, so only DOM-sourced boxes count here.
             let visible = |c: usize| -> bool {
-                let cs = self.tree.boxes[c].style;
-                if cs.used_background_color().is_some() || cs.decor.has_painted_border() {
-                    return true;
-                }
                 let mut stack = vec![c];
                 while let Some(n) = stack.pop() {
                     let b = &self.tree.boxes[n];
                     if matches!(b.kind, BoxKind::Text)
                         && b.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+                    {
+                        return true;
+                    }
+                    if b.source.is_some()
+                        && (b.style.used_background_color().is_some()
+                            || b.style.decor.has_painted_border())
                     {
                         return true;
                     }
@@ -655,7 +669,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                 None
                             };
                             match nat {
-                                Some(nw) => {
+                                Some(nw) if cs.flex_grow == 0 => {
                                     // The child keeps its own horizontal
                                     // padding inside the slot (blog nav
                                     // li.ph4-ns = 32px/side), so the
@@ -669,6 +683,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                     slots.push(v);
                                     fixed_total += v;
                                     self.stats.approx("flex-row-natural-width");
+                                }
+                                Some(_) => {
+                                    // A growing pure-inline child
+                                    // (flex:1 like mdBook's .menu-title)
+                                    // takes a share of what is left so
+                                    // its text-align:center centres
+                                    // across the row, as flex-basis:0 +
+                                    // growth does in a real engine.
+                                    slots.push(-1);
+                                    flex_count += 1;
+                                    self.stats.approx("flex-row-inline-grow");
                                 }
                                 None => {
                                     // A nested flex child keeps its
@@ -714,8 +739,28 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 // equal-share columns; content-measured and fixed slots
                 // are exempt (a 40px "Talk" tab is fine). A row whose
                 // measured widths exceed the container would paint off
-                // the right edge, so it refuses too.
-                let share_narrow = flex_count > 0 && share < 64;
+                // the right edge, so it refuses too. The refusal guards
+                // readable text: a share child with no text at all (the
+                // hamburger span, decoration only) paints its background
+                // at any width, so it does not trip the guard.
+                let share_carries_text = kids.iter().enumerate().any(|(k, &c)| {
+                    slots[k] == -1 && {
+                        let mut stack = vec![c];
+                        let mut found = false;
+                        while let Some(n) = stack.pop() {
+                            let b = &self.tree.boxes[n];
+                            if matches!(b.kind, BoxKind::Text)
+                                && b.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+                            {
+                                found = true;
+                                break;
+                            }
+                            stack.extend_from_slice(&b.children);
+                        }
+                        found
+                    }
+                });
+                let share_narrow = flex_count > 0 && share < 64 && share_carries_text;
                 // Slots lay out starting at the left padding edge, so a
                 // row may reach into the container's right padding (which
                 // paints nothing) but never past the border box.
