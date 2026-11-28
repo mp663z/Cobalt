@@ -1,6 +1,14 @@
 wait-for Search the web
 tap-id samples
+wait-for samples.browse.invalid
+tap-id browser-more
+tap-id navigate
+tap-id page-view
 tap-at 350 378
+wait-for samples.browse.invalid/…
+tap-id browser-more
+tap-id navigate
+tap-id page-view
 wait-for 1 of 3
 shot-colour scroll-before
 input pointer down 700 1000

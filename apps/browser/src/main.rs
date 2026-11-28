@@ -641,7 +641,8 @@ impl Browser {
         if self.css.is_enabled() && self.css.candidate_held() {
             let media = u32::try_from(metrics.width)
                 .ok()
-                .and_then(kobo_web_document::MediaContext::new);
+                .and_then(kobo_web_document::MediaContext::new)
+                .map(kobo_web_document::MediaContext::with_light_scheme);
             let census =
                 kobo_web_document::host_stylesheet_links(bytes, url, &Limits::DEFAULT, media);
             self.sheets.begin(context, &census);

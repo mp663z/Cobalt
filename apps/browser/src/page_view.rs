@@ -196,7 +196,7 @@ impl PageView {
             max_input_bytes: 8 * 1024 * 1024,
             ..Limits::DEFAULT
         };
-        let media = MediaContext::new(css_width).ok_or("viewport")?;
+        let media = MediaContext::new(css_width).ok_or("viewport")?.with_light_scheme();
         let tree = parse_basic_style_tree(&bytes, &[], &limits, Some(media), budget, None);
         let mut boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
@@ -1497,5 +1497,17 @@ mod picture_region_tests {
         let regions=view.picture_links(1,400,200,400);
         assert_eq!(regions.len(),1);let (r,index)=regions[0];assert_eq!(index,0);assert_eq!((r.x,r.y,r.width,r.height),(40,0,120,80));
         let regions=view.picture_links(0,400,400,400);assert_eq!(regions.len(),1);assert_eq!((regions[0].0.y,regions[0].0.height),(360,40));
+    }
+}
+
+#[cfg(test)]
+mod light_scheme_regression {
+    use super::*;
+    #[test]
+    fn page_view_uses_light_scheme_for_embedded_media_rules() {
+        let face=PageFontAdapter::bundled().unwrap();
+        let view=PageView::paint(b"<!doctype html><style>p{color:red}@media(prefers-color-scheme:dark){p{color:blue}}</style><p>Light page</p>",400,600,1,&face,&face,&face).unwrap();
+        assert!(view.commands.iter().any(|command| matches!(command,Command::GlyphRun{color:Rgb(255,0,0),..})));
+        assert!(!view.commands.iter().any(|command| matches!(command,Command::GlyphRun{color:Rgb(0,0,255),..})));
     }
 }

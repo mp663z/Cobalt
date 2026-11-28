@@ -1527,3 +1527,27 @@ is unchanged. Textarea journey, parser regression, three-profile editor-fit and
 scoped browser clippy correctness checks pass. Locked stripped ARM 5,279,444 B,
 +1,288, headroom 1,212,816 B. Maxlength remains unmodeled. No protocol/dependency/
 lock change, hardware or full-web completion claim.
+
+### Light stylesheet profile and explicit painted simulator routes
+
+Integrated linked-sheet slot-mask/static-prefilter work from the CSS lane. The
+preview corpus now skips dark-only sheets and uses the light media profile;
+PageView embedded rules and staged host census also use that profile. Ten full
+before/after top/middle/end triptychs inspected: Python columns are much more
+readable; Rust sampled bodies remain stable with headings restored. Approximation
+census is still nonzero, and mobile fixed-header overlap remains. Actual PageView
+still supplies no external sheets at this checkpoint; live supply wiring follows.
+
+Focused host-slot-mask 4, sheet-supply 13, app light-rule regression 1 pass;
+document library 447 pass, 3 ignored. Scoped browser/document clippy correctness
+passes. Full document integration rerun was interrupted by command timeout and
+is not counted. Locked stripped ARM 5,280,140 B, +696 from a76bbff5.
+
+Qualification reproduced two stale painted simulator routes on default Clara BW:
+BW opens native Reader, while colour panels auto-enter PageView. The old routes
+assumed painted geometry and directly exposed Navigate. Repaired both to open
+More > Navigate > Page view on index and destination. Real simulator touch and
+scroll routes now pass, and actual pixels show the destination, changed scroll
+position and keyboard crop. App touch-across-zooms and bounded-scroll regressions
+pass. No pointer dispatch or form code change was needed. Scroll windows may
+clip an edge line, unlike page-button pagination. No hardware or complete-web claim.

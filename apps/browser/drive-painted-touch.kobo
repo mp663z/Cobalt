@@ -1,8 +1,16 @@
 wait-for Search the web
 tap-id samples
 wait-for samples.browse.invalid
+tap-id browser-more
+tap-id navigate
+tap-id page-view
+wait-for samples.browse.invalid
 shot-colour touch-start
 tap-at 350 378
+wait-for samples.browse.invalid/…
+tap-id browser-more
+tap-id navigate
+tap-id page-view
 wait-for 1 of 3
 shot-colour touch-destination
 tap-id back
