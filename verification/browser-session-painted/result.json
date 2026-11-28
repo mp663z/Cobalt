@@ -1,0 +1,5698 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-session-j88c1h_d/session.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "profile": "clara-bw-391",
+  "pages": 12,
+  "render_scope": "painted-only for all sequential page checkpoints; history navigation is separate",
+  "requests": [
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 36396,
+          "hwm_kib": 36396
+        }
+      ]
+    },
+    {
+      "path": "/page/1",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82336,
+          "hwm_kib": 82876
+        }
+      ]
+    },
+    {
+      "path": "/page/2",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ]
+    },
+    {
+      "path": "/page/3",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ]
+    },
+    {
+      "path": "/page/4",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ]
+    },
+    {
+      "path": "/page/5",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/6",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/7",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/8",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/9",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/10",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/11",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/10",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/11",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    },
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "shot": "first-run.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 36396,
+          "hwm_kib": 36396
+        }
+      ],
+      "elapsed_seconds": 5.807,
+      "layout": {
+        "paints": 1,
+        "content": {
+          "x": 0,
+          "y": 175,
+          "width": 1072,
+          "height": 1131
+        },
+        "pageTurns": null,
+        "nodes": [
+          {
+            "kind": "StatusBand",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 59,
+            "centre": {
+              "x": 536,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusClock",
+            "x": 47,
+            "y": 0,
+            "width": 78,
+            "height": 59,
+            "centre": {
+              "x": 86,
+              "y": 29
+            },
+            "action": null,
+            "lines": [
+              "18:46"
+            ]
+          },
+          {
+            "kind": "StatusBattery(Some(Percent(72)), false)",
+            "x": 955,
+            "y": 12,
+            "width": 70,
+            "height": 35,
+            "centre": {
+              "x": 990,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusSignal(Strong)",
+            "x": 896,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 913,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusBluetooth",
+            "x": 837,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 854,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 59,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 109
+            },
+            "action": 745154899,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 59,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 109
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 59,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 109
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 159,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 161
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(745154899))",
+            "x": 171,
+            "y": 67,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 108
+            },
+            "action": 745154899,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(true, false)",
+            "x": 242,
+            "y": 85,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 108
+            },
+            "action": 745154899,
+            "lines": [
+              "Search or enter address"
+            ]
+          },
+          {
+            "kind": "Heading(1)",
+            "x": 47,
+            "y": 175,
+            "width": 978,
+            "height": 80,
+            "centre": {
+              "x": 536,
+              "y": 215
+            },
+            "action": null,
+            "lines": [
+              "Search the web"
+            ]
+          },
+          {
+            "kind": "Secondary",
+            "x": 47,
+            "y": 267,
+            "width": 978,
+            "height": 35,
+            "centre": {
+              "x": 536,
+              "y": 284
+            },
+            "action": null,
+            "lines": [
+              "Your bookmarks and recent pages, one tap away."
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 47,
+            "y": 326,
+            "width": 978,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 328
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(2030121182))",
+            "x": 47,
+            "y": 354,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 418
+            },
+            "action": 2030121182,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 379,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 401
+            },
+            "action": 2030121182,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 378,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 401
+            },
+            "action": 2030121182,
+            "lines": [
+              "Bookmarks"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 424,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 441
+            },
+            "action": 2030121182,
+            "lines": [
+              "Saved for later"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 495,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 497
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(181735134))",
+            "x": 47,
+            "y": 507,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 571
+            },
+            "action": 181735134,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Clock))",
+            "x": 47,
+            "y": 532,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 554
+            },
+            "action": 181735134,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 531,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 554
+            },
+            "action": 181735134,
+            "lines": [
+              "History"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 577,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 594
+            },
+            "action": 181735134,
+            "lines": [
+              "Pick up where you left off"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 47,
+            "y": 1137,
+            "width": 978,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1139
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(1546056636))",
+            "x": 47,
+            "y": 1165,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 1229
+            },
+            "action": 1546056636,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Note))",
+            "x": 47,
+            "y": 1190,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 1212
+            },
+            "action": 1546056636,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 1189,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 1212
+            },
+            "action": 1546056636,
+            "lines": [
+              "Sample pages"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 1235,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 1252
+            },
+            "action": 1546056636,
+            "lines": [
+              "Explore offline"
+            ]
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-00.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82336,
+          "hwm_kib": 82876
+        }
+      ],
+      "elapsed_seconds": 11.484,
+      "layout": {
+        "paints": 9,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/0"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-01.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ],
+      "elapsed_seconds": 17.959,
+      "layout": {
+        "paints": 18,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/1"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-02.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ],
+      "elapsed_seconds": 24.514,
+      "layout": {
+        "paints": 27,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/2"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-03.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82920,
+          "hwm_kib": 82920
+        }
+      ],
+      "elapsed_seconds": 30.955,
+      "layout": {
+        "paints": 36,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/3"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-04.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 37.437,
+      "layout": {
+        "paints": 45,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/4"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-05.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 43.92,
+      "layout": {
+        "paints": 54,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/5"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-06.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 50.408,
+      "layout": {
+        "paints": 63,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/6"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-07.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 56.835,
+      "layout": {
+        "paints": 72,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/7"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-08.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 63.324,
+      "layout": {
+        "paints": 81,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/8"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-09.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 69.763,
+      "layout": {
+        "paints": 90,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/9"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-10.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 76.325,
+      "layout": {
+        "paints": 99,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/10"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-11.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 82.757,
+      "layout": {
+        "paints": 108,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/11"
+            ]
+          },
+          {
+            "kind": "Picture(PictureHandle(2147418113))",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 1048,
+            "centre": {
+              "x": 536,
+              "y": 640
+            },
+            "action": 1112806980,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 180,
+            "width": 260,
+            "height": 32,
+            "centre": {
+              "x": 193,
+              "y": 196
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "PictureLink(ActionId(1683637620))",
+            "x": 63,
+            "y": 206,
+            "width": 260,
+            "height": 2,
+            "centre": {
+              "x": 193,
+              "y": 207
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 4"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-back.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 85.024,
+      "layout": {
+        "paints": 112,
+        "content": {
+          "x": 0,
+          "y": 175,
+          "width": 1072,
+          "height": 1131
+        },
+        "pageTurns": null,
+        "nodes": [
+          {
+            "kind": "StatusBand",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 59,
+            "centre": {
+              "x": 536,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusClock",
+            "x": 47,
+            "y": 0,
+            "width": 78,
+            "height": 59,
+            "centre": {
+              "x": 86,
+              "y": 29
+            },
+            "action": null,
+            "lines": [
+              "18:47"
+            ]
+          },
+          {
+            "kind": "StatusBattery(Some(Percent(72)), false)",
+            "x": 955,
+            "y": 12,
+            "width": 70,
+            "height": 35,
+            "centre": {
+              "x": 990,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusSignal(Strong)",
+            "x": 896,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 913,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusBluetooth",
+            "x": 837,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 854,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 59,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 109
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 59,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 109
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 59,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 109
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 159,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 161
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 67,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 108
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 85,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 108
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/11"
+            ]
+          },
+          {
+            "kind": "ActivityLabel",
+            "x": 47,
+            "y": 175,
+            "width": 978,
+            "height": 46,
+            "centre": {
+              "x": 536,
+              "y": 198
+            },
+            "action": null,
+            "lines": [
+              "Loading the page"
+            ]
+          },
+          {
+            "kind": "Secondary",
+            "x": 47,
+            "y": 233,
+            "width": 978,
+            "height": 35,
+            "centre": {
+              "x": 536,
+              "y": 250
+            },
+            "action": null,
+            "lines": [
+              ""
+            ]
+          },
+          {
+            "kind": "Secondary",
+            "x": 47,
+            "y": 280,
+            "width": 978,
+            "height": 35,
+            "centre": {
+              "x": 536,
+              "y": 297
+            },
+            "action": null,
+            "lines": [
+              "https://session.example.test/page/11"
+            ]
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 2998451226,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 2998451226,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2998451226), Close)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 2998451226,
+            "lines": [
+              "Stop"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-forward.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 86.554,
+      "layout": {
+        "paints": 114,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/11"
+            ]
+          },
+          {
+            "kind": "Heading(1)",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 80,
+            "centre": {
+              "x": 536,
+              "y": 156
+            },
+            "action": 1112806980,
+            "lines": [
+              "Session page 11"
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 208,
+            "width": 978,
+            "height": 55,
+            "centre": {
+              "x": 536,
+              "y": 235
+            },
+            "action": 1112806980,
+            "lines": [
+              "Next session page"
+            ]
+          },
+          {
+            "kind": "InlineLink(ActionId(1683637620))",
+            "x": 47,
+            "y": 208,
+            "width": 299,
+            "height": 55,
+            "centre": {
+              "x": 196,
+              "y": 235
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 275,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 330
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 0. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 397,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 452
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 1. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 519,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 574
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 2. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 641,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 696
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 3. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 763,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 818
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 4. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 885,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 940
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 5. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 1007,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 1062
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 11 paragraph 6. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 5"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-history.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 88.375,
+      "layout": {
+        "paints": 118,
+        "content": {
+          "x": 0,
+          "y": 175,
+          "width": 1072,
+          "height": 1143
+        },
+        "pageTurns": {
+          "previous": 840720213,
+          "next": 2081794785
+        },
+        "nodes": [
+          {
+            "kind": "StatusBand",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 59,
+            "centre": {
+              "x": 536,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusClock",
+            "x": 47,
+            "y": 0,
+            "width": 78,
+            "height": 59,
+            "centre": {
+              "x": 86,
+              "y": 29
+            },
+            "action": null,
+            "lines": [
+              "18:47"
+            ]
+          },
+          {
+            "kind": "StatusBattery(Some(Percent(72)), false)",
+            "x": 955,
+            "y": 12,
+            "width": 70,
+            "height": 35,
+            "centre": {
+              "x": 990,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusSignal(Strong)",
+            "x": 896,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 913,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "StatusBluetooth",
+            "x": 837,
+            "y": 12,
+            "width": 35,
+            "height": 35,
+            "centre": {
+              "x": 854,
+              "y": 29
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 59,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 109
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 59,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 109
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarAction(ActionId(2246981567))",
+            "x": 893,
+            "y": 59,
+            "width": 132,
+            "height": 100,
+            "centre": {
+              "x": 959,
+              "y": 109
+            },
+            "action": 2246981567,
+            "lines": [
+              "Done"
+            ]
+          },
+          {
+            "kind": "TopBarTitle",
+            "x": 171,
+            "y": 86,
+            "width": 698,
+            "height": 46,
+            "centre": {
+              "x": 520,
+              "y": 109
+            },
+            "action": null,
+            "lines": [
+              "History"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 159,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 161
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Secondary",
+            "x": 47,
+            "y": 175,
+            "width": 978,
+            "height": 35,
+            "centre": {
+              "x": 536,
+              "y": 192
+            },
+            "action": 2081794785,
+            "lines": [
+              "13 pages"
+            ]
+          },
+          {
+            "kind": "Row(ActionId(263503177))",
+            "x": 47,
+            "y": 222,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 286
+            },
+            "action": 263503177,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 247,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 269
+            },
+            "action": 263503177,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 246,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 269
+            },
+            "action": 263503177,
+            "lines": [
+              "Session page 4"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 292,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 309
+            },
+            "action": 263503177,
+            "lines": [
+              "https://session.example.test/page/4"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 363,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 365
+            },
+            "action": 2081794785,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(246725558))",
+            "x": 47,
+            "y": 375,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 439
+            },
+            "action": 246725558,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 400,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 422
+            },
+            "action": 246725558,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 399,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 422
+            },
+            "action": 246725558,
+            "lines": [
+              "Session page 3"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 445,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 462
+            },
+            "action": 246725558,
+            "lines": [
+              "https://session.example.test/page/3"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 516,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 518
+            },
+            "action": 2081794785,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(229947939))",
+            "x": 47,
+            "y": 528,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 592
+            },
+            "action": 229947939,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 553,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 575
+            },
+            "action": 229947939,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 552,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 575
+            },
+            "action": 229947939,
+            "lines": [
+              "Session page 2"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 598,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 615
+            },
+            "action": 229947939,
+            "lines": [
+              "https://session.example.test/page/2"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 669,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 671
+            },
+            "action": 2081794785,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(213170320))",
+            "x": 47,
+            "y": 681,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 745
+            },
+            "action": 213170320,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 706,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 728
+            },
+            "action": 213170320,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 705,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 728
+            },
+            "action": 213170320,
+            "lines": [
+              "Session page 1"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 751,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 768
+            },
+            "action": 213170320,
+            "lines": [
+              "https://session.example.test/page/1"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 822,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 824
+            },
+            "action": 2081794785,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(330613653))",
+            "x": 47,
+            "y": 834,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 898
+            },
+            "action": 330613653,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 859,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 881
+            },
+            "action": 330613653,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 858,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 881
+            },
+            "action": 330613653,
+            "lines": [
+              "Session page 0"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 904,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 921
+            },
+            "action": 330613653,
+            "lines": [
+              "https://session.example.test/page/0"
+            ]
+          },
+          {
+            "kind": "RowRule",
+            "x": 115,
+            "y": 975,
+            "width": 910,
+            "height": 4,
+            "centre": {
+              "x": 570,
+              "y": 977
+            },
+            "action": 2081794785,
+            "lines": []
+          },
+          {
+            "kind": "Row(ActionId(313836034))",
+            "x": 47,
+            "y": 987,
+            "width": 978,
+            "height": 129,
+            "centre": {
+              "x": 536,
+              "y": 1051
+            },
+            "action": 313836034,
+            "lines": []
+          },
+          {
+            "kind": "RowLead(Icon(Bookmark))",
+            "x": 47,
+            "y": 1012,
+            "width": 44,
+            "height": 44,
+            "centre": {
+              "x": 69,
+              "y": 1034
+            },
+            "action": 313836034,
+            "lines": []
+          },
+          {
+            "kind": "RowTitle",
+            "x": 115,
+            "y": 1011,
+            "width": 886,
+            "height": 46,
+            "centre": {
+              "x": 558,
+              "y": 1034
+            },
+            "action": 313836034,
+            "lines": [
+              "Browse: sample pages"
+            ]
+          },
+          {
+            "kind": "RowSummary",
+            "x": 115,
+            "y": 1057,
+            "width": 886,
+            "height": 35,
+            "centre": {
+              "x": 558,
+              "y": 1074
+            },
+            "action": 313836034,
+            "lines": [
+              "https://samples.browse.invalid/"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1318,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1359
+            },
+            "action": null,
+            "lines": [
+              "2 of 2"
+            ]
+          },
+          {
+            "kind": "PagePrevious(ActionId(840720213))",
+            "x": 47,
+            "y": 1318,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 106,
+              "y": 1359
+            },
+            "action": 840720213,
+            "lines": []
+          }
+        ]
+      }
+    },
+    {
+      "shot": "session-final.png",
+      "rss": [
+        {
+          "pid": 70295,
+          "rss_kib": 82948,
+          "hwm_kib": 82948
+        }
+      ],
+      "elapsed_seconds": 89.995,
+      "layout": {
+        "paints": 121,
+        "content": {
+          "x": 0,
+          "y": 116,
+          "width": 1072,
+          "height": 1107
+        },
+        "pageTurns": {
+          "previous": 50142212,
+          "next": 1112806980
+        },
+        "nodes": [
+          {
+            "kind": "TopBar",
+            "x": 0,
+            "y": 0,
+            "width": 1072,
+            "height": 100,
+            "centre": {
+              "x": 536,
+              "y": 50
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "Back",
+            "x": 47,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 97,
+              "y": 50
+            },
+            "action": 4294967295,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1314088002), Close)",
+            "x": 925,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+            "centre": {
+              "x": 975,
+              "y": 50
+            },
+            "action": 1314088002,
+            "lines": [
+              "Close browser"
+            ]
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 100,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 102
+            },
+            "action": null,
+            "lines": []
+          },
+          {
+            "kind": "Address(ActionId(206024020))",
+            "x": 171,
+            "y": 8,
+            "width": 730,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": []
+          },
+          {
+            "kind": "AddressValue(false, false)",
+            "x": 242,
+            "y": 26,
+            "width": 635,
+            "height": 46,
+            "centre": {
+              "x": 559,
+              "y": 49
+            },
+            "action": 206024020,
+            "lines": [
+              "https://session.example.test/page/0"
+            ]
+          },
+          {
+            "kind": "Heading(1)",
+            "x": 47,
+            "y": 116,
+            "width": 978,
+            "height": 80,
+            "centre": {
+              "x": 536,
+              "y": 156
+            },
+            "action": 1112806980,
+            "lines": [
+              "Session page 0"
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 208,
+            "width": 978,
+            "height": 55,
+            "centre": {
+              "x": 536,
+              "y": 235
+            },
+            "action": 1112806980,
+            "lines": [
+              "Next session page"
+            ]
+          },
+          {
+            "kind": "InlineLink(ActionId(1683637620))",
+            "x": 47,
+            "y": 208,
+            "width": 299,
+            "height": 55,
+            "centre": {
+              "x": 196,
+              "y": 235
+            },
+            "action": 1683637620,
+            "lines": []
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 275,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 330
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 0. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 397,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 452
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 1. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 519,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 574
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 2. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 641,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 696
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 3. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 763,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 818
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 4. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 885,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 940
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 5. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "Text",
+            "x": 47,
+            "y": 1007,
+            "width": 978,
+            "height": 110,
+            "centre": {
+              "x": 536,
+              "y": 1062
+            },
+            "action": 1112806980,
+            "lines": [
+              "Page 0 paragraph 6. A reader keeps moving through the",
+              "document and returns to previous pages."
+            ]
+          },
+          {
+            "kind": "NavBar",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 142,
+            "centre": {
+              "x": 536,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "Divider",
+            "x": 0,
+            "y": 1306,
+            "width": 1072,
+            "height": 4,
+            "centre": {
+              "x": 536,
+              "y": 1308
+            },
+            "action": 3984383372,
+            "lines": []
+          },
+          {
+            "kind": "BarGlyph(ActionId(1538531746), Previous)",
+            "x": 0,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 107,
+              "y": 1377
+            },
+            "action": 1538531746,
+            "lines": [
+              "Back"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3026167834), Next)",
+            "x": 214,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 321,
+              "y": 1377
+            },
+            "action": 3026167834,
+            "lines": [
+              "Forward"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(3984383372), Refresh)",
+            "x": 428,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 535,
+              "y": 1377
+            },
+            "action": 3984383372,
+            "lines": [
+              "Reload"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2526032133), Search)",
+            "x": 642,
+            "y": 1306,
+            "width": 214,
+            "height": 142,
+            "centre": {
+              "x": 749,
+              "y": 1377
+            },
+            "action": 2526032133,
+            "lines": [
+              "Zoom"
+            ]
+          },
+          {
+            "kind": "BarGlyph(ActionId(2013317127), More)",
+            "x": 856,
+            "y": 1306,
+            "width": 216,
+            "height": 142,
+            "centre": {
+              "x": 964,
+              "y": 1377
+            },
+            "action": 2013317127,
+            "lines": [
+              "More"
+            ]
+          },
+          {
+            "kind": "PagePosition",
+            "x": 47,
+            "y": 1223,
+            "width": 978,
+            "height": 83,
+            "centre": {
+              "x": 536,
+              "y": 1264
+            },
+            "action": null,
+            "lines": [
+              "1 of 5"
+            ]
+          },
+          {
+            "kind": "PageNext(ActionId(1112806980))",
+            "x": 907,
+            "y": 1223,
+            "width": 118,
+            "height": 83,
+            "centre": {
+              "x": 966,
+              "y": 1264
+            },
+            "action": 1112806980,
+            "lines": []
+          }
+        ]
+      }
+    }
+  ],
+  "peak_rss_kib": 82948,
+  "source_sha": "57e7ad7ef13fd882e891d5eb0541f91b10f19916",
+  "dirty": true
+}
