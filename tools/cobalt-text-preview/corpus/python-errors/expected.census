@@ -1,4 +1,4 @@
-width=800 height=11903 height_clamped=false blocks=358 text_blocks=118 glyph_runs=1573 fills=176 output_truncated=false intake_truncated=false
+width=800 height=11903 height_clamped=false blocks=356 text_blocks=118 glyph_runs=1573 fills=175 output_truncated=false intake_truncated=false
 skips={}
-approximations={"abs-auto-to-origin": 2, "border-side": 118, "flex-as-block": 4, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-refused-nested-flex": 1, "margin-collapse-adjacent": 1, "margin-zeroed": 21, "padding-unrepresentable-zeroed": 2, "positioned-basic": 2, "relative-as-static": 3}
+approximations={"abs-auto-to-origin": 2, "border-side": 118, "flex-row-basic": 4, "flex-row-empty-child-skipped": 4, "flex-row-natural-width": 3, "flex-row-shrunk": 1, "margin-zeroed": 17, "padding-unrepresentable-zeroed": 2, "positioned-basic": 2, "relative-as-static": 2}
 images=0

@@ -505,13 +505,24 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut flex_slots: Option<(Vec<i64>, i64)> = None;
         if matches!(node_kind, BoxKind::Flex) {
             let kids = &self.tree.boxes[index].children;
+            // Whitespace-only text children of a flex container wrap into
+            // anonymous flex items that are not rendered (CSS Flexbox 1
+            // sec 4), so they neither disqualify the row nor take a slot.
+            let ws_text = |c: usize| -> bool {
+                let b = &self.tree.boxes[c];
+                matches!(b.kind, BoxKind::Text)
+                    && b.text.as_deref().is_some_and(|t| t.trim().is_empty())
+            };
+            // Pure-inline inline children (a nav-logo link, an empty
+            // wrapper span) blockify as flex items in a real engine, so
+            // they are row items measured by content below, not a reason
+            // to stack. A bare non-whitespace Text child would need an
+            // anonymous item this walker cannot paint, so it still stacks.
             let row_eligible = !kids.is_empty()
                 && !self.deep_pure_inline(kids)
                 && kids.iter().all(|&c| {
                     let ck = self.tree.boxes[c].kind;
-                    !(matches!(ck, BoxKind::Text)
-                        || (matches!(ck, BoxKind::Inline)
-                            && self.pure_inline_children(&self.tree.boxes[c].children)))
+                    !matches!(ck, BoxKind::Text) || ws_text(c)
                 });
             // Children with no text, no image marker, no background and no
             // border paint nothing; giving them a column squeezes the
@@ -524,7 +535,9 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let mut stack = vec![c];
                 while let Some(n) = stack.pop() {
                     let b = &self.tree.boxes[n];
-                    if matches!(b.kind, BoxKind::Text) {
+                    if matches!(b.kind, BoxKind::Text)
+                        && b.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+                    {
                         return true;
                     }
                     stack.extend_from_slice(&b.children);
@@ -542,13 +555,19 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 - pad_or_zero(style.padding_left)
                 - pad_or_zero(style.padding_right))
             .max(0);
-            // A nested flex child whose own items need more than an equal
-            // share requires real row wrapping, which this single-row
-            // approximation cannot do. Stack instead so the nested
-            // container gets the full width for its own row. A nested
-            // flex child that fits its share keeps the row (wiki's
-            // right-aligned tool tabs).
+            // A nested flex child is a real row item, not a reason to
+            // stack: its measured content width is its basis (CSS flex
+            // basis auto), a growing child (flex:auto / flex-grow) takes
+            // a share of what is left, and a shrinkable child wider than
+            // the container shrinks into its share and runs its own row
+            // admission at that width. Only an UNSHRINKABLE nested row
+            // wider than the container still stacks, because painting it
+            // would spill past the border box. Never-painted sub items
+            // (whitespace anonymous items, empty wrappers) and out-of-flow
+            // sub items (the search icon's absolute svg) take no row
+            // space, so they stay out of the measurement.
             let mut refuse_nested = false;
+            let mut nested_basis: Vec<(usize, i64)> = Vec::new();
             if row_eligible {
                 for &c in kids {
                     if !matches!(self.tree.boxes[c].kind, BoxKind::Flex) {
@@ -558,6 +577,20 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let mut sub_total = 0i64;
                     let mut measurable = true;
                     for &k in &sub {
+                        // Whitespace anonymous items are not rendered;
+                        // the parent's own border/background does not
+                        // make them visible (text boxes carry the
+                        // element's computed style here).
+                        if ws_text(k) || !visible(k) {
+                            continue;
+                        }
+                        if matches!(
+                            self.tree.boxes[k].style.positioned.position,
+                            crate::computed_style::Position::Absolute
+                                | crate::computed_style::Position::Fixed
+                        ) {
+                            continue;
+                        }
                         let ks = self.tree.boxes[k].style;
                         let nw = match self.natural_inline_width(k) {
                             Some(nw) => nw,
@@ -578,7 +611,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                             + self.margin_px(ks.margin_left, width)
                             + self.margin_px(ks.margin_right, width);
                     }
-                    if !measurable || sub_total > avail {
+                    nested_basis.push((c, sub_total));
+                    if !measurable
+                        || (sub_total > avail && self.tree.boxes[c].style.flex_shrink == 0)
+                    {
                         refuse_nested = true;
                     }
                 }
@@ -591,6 +627,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let mut fixed_total = 0i64;
                 let mut flex_count = 0i64;
                 for &c in kids {
+                    if ws_text(c) {
+                        slots.push(i64::MIN);
+                        continue;
+                    }
                     if !visible(c) {
                         slots.push(i64::MIN);
                         continue;
@@ -631,8 +671,32 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                     self.stats.approx("flex-row-natural-width");
                                 }
                                 None => {
-                                    slots.push(-1);
-                                    flex_count += 1;
+                                    // A nested flex child keeps its
+                                    // measured content width as a fixed
+                                    // slot when it does not grow and that
+                                    // width fits; a growing or too-wide
+                                    // (but shrinkable) child takes a
+                                    // share and runs its own admission at
+                                    // that width below.
+                                    let basis =
+                                        nested_basis.iter().find(|(b, _)| *b == c).map(|(_, n)| *n);
+                                    match basis {
+                                        Some(b) if cs.flex_grow == 0 && b <= avail => {
+                                            let v = b + ml + mr;
+                                            slots.push(v);
+                                            fixed_total += v;
+                                            self.stats.approx("flex-row-nested-natural");
+                                        }
+                                        Some(_) => {
+                                            slots.push(-1);
+                                            flex_count += 1;
+                                            self.stats.approx("flex-row-nested-share");
+                                        }
+                                        None => {
+                                            slots.push(-1);
+                                            flex_count += 1;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -657,9 +721,63 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 // paints nothing) but never past the border box.
                 let full = (i64::from(width) - pad_or_zero(style.padding_left)).max(0);
                 let overflow = fixed_total > full;
-                if !share_narrow && !overflow {
+                // Measured items slightly wider than the container shrink
+                // to fit (CSS Flexbox 1 sec 9.7): each shrinkable fixed
+                // slot (flex-shrink > 0, the initial value) gives up space
+                // in proportion to its scaled shrink factor (base size x
+                // flex-shrink), never below zero. flex-shrink:0 items keep
+                // their size; when even shrinking every shrinkable slot to
+                // zero cannot fit, the row keeps the overflow fallback
+                // below. Only attempted when no child waits on a grow
+                // share: negative free space grows nothing.
+                let shrunk_slots: Option<Vec<i64>> = if overflow && flex_count == 0 {
+                    let weights: Vec<i64> = slots
+                        .iter()
+                        .enumerate()
+                        .map(|(k, &v)| {
+                            if v > 0 {
+                                v * i64::from(self.tree.boxes[kids[k]].style.flex_shrink)
+                            } else {
+                                0
+                            }
+                        })
+                        .collect();
+                    let weight_sum: i64 = weights.iter().sum();
+                    let shrinkable_total: i64 = slots
+                        .iter()
+                        .enumerate()
+                        .filter(|(k, _)| weights[*k] > 0)
+                        .map(|(_, &v)| v)
+                        .sum();
+                    let excess = fixed_total - full;
+                    if weight_sum > 0 && excess <= shrinkable_total {
+                        let mut next = slots.clone();
+                        let mut order: Vec<usize> =
+                            (0..slots.len()).filter(|&k| weights[k] > 0).collect();
+                        order.sort_by(|&a, &b| weights[b].cmp(&weights[a]).then(a.cmp(&b)));
+                        let mut remaining = excess;
+                        for (pos, &k) in order.iter().enumerate() {
+                            let cut = if pos + 1 == order.len() {
+                                remaining.min(next[k])
+                            } else {
+                                (excess * weights[k] / weight_sum).min(next[k])
+                            };
+                            next[k] -= cut;
+                            remaining -= cut;
+                        }
+                        (remaining == 0).then_some(next)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if !share_narrow && (!overflow || shrunk_slots.is_some()) {
                     flex_row = true;
-                    flex_slots = Some((slots, share));
+                    if shrunk_slots.is_some() {
+                        self.stats.approx("flex-row-shrunk");
+                    }
+                    flex_slots = Some((shrunk_slots.unwrap_or(slots), share));
                     self.stats.approx("flex-row-basic");
                 } else {
                     // Content widths exceed the container, or nothing is
