@@ -1,0 +1,9 @@
+=== crates/kobo-image/tests/fixtures/progressive-invalid-marker.jpg ===
+colour=false elapsed_us=188 result=Err(Undecodable("invalid or over-budget JPEG marker stream"))
+colour=true elapsed_us=43 result=Err(Undecodable("invalid or over-budget JPEG marker stream"))
+=== crates/kobo-image/tests/fixtures/progressive-valid.jpg ===
+colour=false elapsed_us=6555 result=Ok((32, 24))
+colour=true elapsed_us=742 result=Ok((32, 24))
+=== apps/browser/tests/images/truncated.jpg ===
+colour=false elapsed_us=21883 result=Ok((320, 240))
+colour=true elapsed_us=18062 result=Ok((320, 240))

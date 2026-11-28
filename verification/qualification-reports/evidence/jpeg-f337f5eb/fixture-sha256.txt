@@ -1,0 +1,1 @@
+02ebba946ffd33d43dcc65fc51508321fdb742516c2d28b3a92463a0929a0fe8  crates/kobo-image/tests/fixtures/progressive-invalid-marker.jpg

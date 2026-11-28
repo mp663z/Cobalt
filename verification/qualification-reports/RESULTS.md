@@ -392,3 +392,55 @@ qemu painted 37,416 VmRSS / 75,368 VmHWM (flat).
 ### Sphinx fixture journey
 PASS. peak_app_rss_kib 76,256 (f1c616b: 76,636; -380, noise), journey 40.3 s
 (faster box; f1c616b was 70.7 s on the old box).
+
+
+## Font heads: 57e7ad7 / c77ab594 / f337f5eb (2026-11-29, host x86_64)
+
+57e7ad7: real DejaVu Sans Mono regular+bold in app Page view. c77ab594: JPEG
+marker-stream guard. f337f5eb: unitless line-height rounding + JPEG best-effort
+entropy EOF. All interleaved A/Bs same box, same session.
+
+### Sheets: 57e7ad7 vs 2fdfdea (interleaved, 3+3) - FONTS COST +18%
+sheets5 painted: A(2fdfdea) 1.304/1.341/1.273 (mean 1306 ms), B(57e7ad7)
+1.545/1.550/1.546 (mean 1547 ms) => +241 ms (+18.5%). sheets16: A 1334 ms mean,
+B 1579 ms mean => +245 ms (+18.4%). REAL regression (interleaved, not drift).
+Evidence: evidence/ab-57e7ad7-vs-2fdfdea/.
+
+### Sheets: f337f5eb vs 57e7ad7 (interleaved, 3+3) - LINE-HEIGHT COST ~flat
+sheets5 painted: B(f337f5eb) 1.581/1.576/1.515 (mean 1557), A(57e7ad7)
+1.545/1.515/1.545 (mean 1535) => +22 ms. sheets16: B mean 1577, A mean 1566 =>
++11 ms. Within spread: line-height rounding adds no significant cost over fonts.
+c77ab594 single rep (1.546/1.575) confirms JPEG guard is sheet-timing-neutral.
+Evidence: evidence/ab-f337f5eb-vs-57e7ad7/, evidence/sheets-c77ab594/.
+
+### Painted-only 12-page session RSS A/B (probe: evidence/session-painted-ab/)
+2fdfdea: flat 63,072 / 63,204 KiB across pages (2 reps). 57e7ad7: flat 82,336 /
+82,412 KiB (2 reps). => +19.2 MiB RSS fully attributable to the font head change
+(font data + shaping caches). Reproduces the lead's painted-only 82,336 first
+article exactly; the earlier 63,012 mixed-mode number matches 2fdfdea painted.
+No growth across 12 pages at either head (flat, not a leak pattern).
+
+### JPEG decode probes under qemu-arm (example decode_budget_probe)
+At c77ab594: progressive-invalid-marker.jpg (13,290 B, sha256 02ebba94...0fe8,
+exact match) REFUSED grey 208 us / colour 52 us, Err(Undecodable("invalid or
+over-budget JPEG marker stream")) - no hang. progressive-valid.jpg OK 32x24
+(grey 8,216 us / colour 987 us).
+At f337f5eb: invalid marker refused (181/43 us), valid progressive OK 32x24
+(6,416/755 us), truncated.jpg (6,287 B best-effort EOF) OK 320x240
+(grey 21,722 us / colour 17,733 us). Evidence: evidence/jpeg-f337f5eb/.
+
+### ARM sizes (release, stripped, musl)
+2fdfdea 5,321,108 | 57e7ad7 6,003,644 (+682,536 fonts; byte-identical to lead's
+report) | c77ab594 6,003,156 (-488) | f337f5eb 6,003,364 (+208 vs c77ab594).
+kobo-hello 1,265,740 and kobod 5,125,300 unchanged throughout.
+Budget (browser-hello vs 5 MiB): 57e7ad7 headroom 504,976 B; f337f5eb headroom
+505,256 B. WITHIN budget; fonts consumed ~667 KiB of the previous 1.19 MB
+headroom.
+
+### RSS journeys at f337f5eb (fonts era)
+BW painted-article 82,364 VmRSS / 82,800 VmHWM (was ~63.1 MB pre-fonts;
++19.6 MB, consistent with session probe). qemu-arm painted 38,140 VmRSS /
+97,016 VmHWM (HWM +21.6 MB vs pre-fonts 75.4 MB). Sphinx PASS peak_app_rss_kib
+96,372 (was 76,256-76,636 pre-fonts; +19.3 MiB), journey 39.0 s.
+Evidence: evidence/bw-journey-c77ab594/, evidence/bw-journey-f337f5eb/,
+evidence/qemu-arm-f337f5eb/, evidence/sphinx-f337f5eb/.
