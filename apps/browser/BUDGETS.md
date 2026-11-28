@@ -1624,3 +1624,15 @@ Actual editor pixels inspected: limit explanation, New line, Save and Cancel
 visible. ARM 5,288,388 B, +1,800. Single-line input maxlength and full browser
 constraint validation remain gaps. The existing 512-character editor ceiling
 still applies. No protocol or runtime dependency change.
+
+### Nested flex row integration
+
+Integrated CSS lane c5409e64 as 43386d9f. Six new nested-flex geometry regressions,
+five preview corpus tests (13 frozen page census/height inventory) and scoped
+document clippy correctness pass. Own rebuilt Python introduction and Rust Hello
+pixels inspected side-by-side: Python logo/search/Go row no longer overlaps
+navigation; Rust title shifts from centered to left-aligned, a visible remaining
+fidelity gap accepted for this checkpoint. Body sample stays stable. Worker says
+no stretch backgrounds, currentColor hamburger unresolved; no Chrome parity
+check. Census remains nonzero. ARM 5,300,236 B, +11,848 from textarea-limit. Full
+document suite on worker still awaited, not claimed passed here.
