@@ -338,3 +338,28 @@ and their +0.5-1.3 ms prepare() microbench. Also note this box's absolute
 times drift between sessions: first 071bb0c session 2.03/2.09 s, A/B session
 2.30/2.39 s for the same commit. Cross-session comparisons on this box are not
 valid; only interleaved A/B is. Evidence: evidence/ab-071bb0c-vs-02d80c6/.
+
+
+## f1c616b spot-checks (2026-11-28, host x86_64) - deltas vs 73360e4
+
+Head f1c616b4a3a65f5887e2001e431a07bc76f79180 (inline-element background chips:
+basic_text_paint.rs +59/-, basic_page.rs +53; also retracts the drift timing
+claim in BUDGETS.md). Same box session as the 73360e4 run (~25 min apart).
+
+### Sheet probe (3 reps)
+sheets5 painted 2.267/2.270/2.267 s (73360e4: 2.305-2.308): -38 ms on all 3
+reps. sheets16 painted 2.331/2.333/2.330 s (73360e4: 2.333-2.371): flat.
+5/5 and 16/16 fetches all reps. sheets5 shift is consistent but small; not
+interleaved, so reported as measured, no causal claim.
+
+### ARM size audit (release, stripped, musl)
+kobo-browser 5,321,140 B (+2,096 vs 73360e4), kobo-hello 1,265,740, kobod
+5,125,300 (unchanged). Budget delta browser-hello 4,055,400 B, headroom
+1,187,480 B: WITHIN budget.
+
+### BW RSS journey / qemu-arm
+BW painted-article 63,228 kB VmHWM (+148, noise), form checkpoints flat.
+qemu painted 37,364 VmRSS / 75,400 VmHWM (flat).
+
+### Sphinx fixture journey
+PASS. peak_app_rss_kib 76,636 (73360e4: 76,348; +288, noise), journey 70.7 s.

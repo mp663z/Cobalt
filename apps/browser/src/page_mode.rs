@@ -110,6 +110,7 @@ impl PageMode {
             return None;
         }
         let face = PageFontAdapter::bundled()?;
+        let mono = PageFontAdapter::monospace()?;
         let view = PageView::paint_with_sheets(
             bytes,
             sheets,
@@ -118,7 +119,7 @@ impl PageMode {
             2,
             &face,
             &face,
-            &face,
+            &mono,
         )
         .ok()?;
         if view.falls_back_to_reader() {

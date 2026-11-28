@@ -1843,3 +1843,12 @@ Inline-background chips91ba8a15 integrated: own fullweb-document1431pass18ignore
 Inline chip approximation counts retained; bordered/nested skips remain counted,
 padding not painted. Actual liveSphinx TLS3sheets/GET/dismissalhash pass, apppixels
 inspected. ARM5322180B. Not fullCSS/hardware qualification.
+
+Family/bold integration plus production Mono adapter: webdocument1443pass18ignored
+152groups; currentbrowser277names/274pass3ignored acrossboundedexact-namebatches;
+no omissions/failures. Corpus13match,5Python actualcomposites inspected, boldmono
+visible. LiveSphinx3sheets/nativeGET/dismissal passes; actualapp pixels inspected.
+App previously passed one Atkinson adapter to all3families, now Mono uses genuine
+DejaVuSansMono regular+bold. ARM6003644B, up681464B vs5322180beforefamilyfonts;
+not a same-revision envcomparison. Qualification61dd70e evidence importedonly,
+f1c616b ARM5321140 retainedwith provenance, devicegateOPEN.

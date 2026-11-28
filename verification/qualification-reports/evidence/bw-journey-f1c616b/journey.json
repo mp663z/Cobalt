@@ -1,0 +1,132 @@
+{
+  "checkpoints": [
+    {
+      "label": "start-page",
+      "t": 0.0,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 26400,
+        "VmRSS": 26400,
+        "RssAnon": 19412
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 32416,
+        "RssAnon": 17356
+      }
+    },
+    {
+      "label": "samples-index",
+      "t": 0.9,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 37568,
+        "VmRSS": 37568,
+        "RssAnon": 27124
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 40600,
+        "RssAnon": 24804
+      }
+    },
+    {
+      "label": "native-article",
+      "t": 1.7,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 37552,
+        "VmRSS": 33844,
+        "RssAnon": 23400
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 42524,
+        "RssAnon": 26344
+      }
+    },
+    {
+      "label": "painted-article",
+      "t": 4.5,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 63228,
+        "VmRSS": 63228,
+        "RssAnon": 50316
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 44056,
+        "RssAnon": 27876
+      }
+    },
+    {
+      "label": "form-page",
+      "t": 7.1,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 63228,
+        "VmRSS": 63228,
+        "RssAnon": 50316
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 44056,
+        "RssAnon": 27876
+      }
+    },
+    {
+      "label": "form-links-list",
+      "t": 8.3,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 63228,
+        "VmRSS": 63228,
+        "RssAnon": 50316
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 44056,
+        "RssAnon": 27876
+      }
+    },
+    {
+      "label": "form-overview",
+      "t": 9.5,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 63228,
+        "VmRSS": 63228,
+        "RssAnon": 50316
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 42524,
+        "RssAnon": 26344
+      }
+    },
+    {
+      "label": "field-editor",
+      "t": 10.9,
+      "app": {
+        "pid": 3048,
+        "VmHWM": 63228,
+        "VmRSS": 63228,
+        "RssAnon": 50316
+      },
+      "dev_server": {
+        "pid": 3034,
+        "VmHWM": 147296,
+        "VmRSS": 42524,
+        "RssAnon": 26344
+      }
+    }
+  ]
+}

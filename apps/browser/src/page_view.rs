@@ -58,6 +58,13 @@ impl PageFontAdapter {
             .map(|session| Self { session })
     }
 
+    pub(crate) fn monospace() -> Option<Self> {
+        PageFontSession::from_bytes(
+            include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono.ttf"),
+            include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono-Bold.ttf"),
+        ).ok().map(|session| Self { session })
+    }
+
     fn bitmap(&self, character: char, size: u32, bold: bool, italic: bool) -> Option<GlyphBitmap> {
         let glyph = self.session.raster(character, size, bold, italic)?;
         Some(GlyphBitmap {
@@ -1050,6 +1057,17 @@ mod tests {
         assert_eq!(clusters.last().expect("last").end, text.len());
         assert!(clusters.len() < text.chars().count());
         assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
+    }
+
+    #[test]
+    fn production_mono_adapter_has_fixed_advance_and_real_bold_ink() {
+        let face = PageFontAdapter::monospace().expect("mono faces");
+        let advance = face.page_advance('i', 20, false, false);
+        assert_eq!(advance, face.page_advance('W', 20, false, false));
+        assert_eq!(advance, face.page_advance('W', 20, true, false));
+        let regular = face.bitmap('W', 20, false, false).expect("regular");
+        let bold = face.bitmap('W', 20, true, false).expect("bold");
+        assert_ne!(regular.coverage, bold.coverage);
     }
 
     #[test]
