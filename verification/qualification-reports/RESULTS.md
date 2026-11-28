@@ -444,3 +444,30 @@ BW painted-article 82,364 VmRSS / 82,800 VmHWM (was ~63.1 MB pre-fonts;
 96,372 (was 76,256-76,636 pre-fonts; +19.3 MiB), journey 39.0 s.
 Evidence: evidence/bw-journey-c77ab594/, evidence/bw-journey-f337f5eb/,
 evidence/qemu-arm-f337f5eb/, evidence/sphinx-f337f5eb/.
+
+
+## 77677c6f vs f337f5eb (2026-11-29, host x86_64) - mono face cache A/B
+
+Head 77677c6f2ddef2cc074b4fc50c9381e3457785ef (immutable mono face cache +
+typed-URL resolve_url round-trip refusal). Interleaved, same box, same session.
+
+### Paint time (sheets, interleaved, 3 pairs)
+sheets5 painted: A(f337f5eb) 1.546/1.546 (mean 1546 ms) vs B(77677c6f)
+1.394/1.304/1.305 (steady 1305 ms) => -241 ms (-15.6%). sheets16: A mean
+1576 ms vs B 1.458/1.339/1.335 (steady 1337 ms) => -239 ms (-15.2%).
+B1 was a first-run warmup outlier; steady state from B2/B3. The face cache
+recovers nearly all of the +18% font-era regression (back to the pre-font
+2fdfdea levels 1306/1334 ms). Evidence: evidence/ab-77677c6f-vs-f337f5eb/.
+
+### RSS (painted-only 12-page session, alternating)
+A(f337f5eb): flat 82,356 KiB. B(77677c6f): flat 82,956 KiB => +600 KiB resident
+for the cache. Flat across 12 pages at both heads.
+Evidence: evidence/session-painted-ab-77677c6f/.
+
+### ARM / BW / qemu / sphinx at 77677c6f
+ARM kobo-browser 6,004,988 B (+1,624 vs f337f5eb); hello/kobod unchanged;
+budget headroom 503,632 B: WITHIN budget.
+BW painted-article 82,956 VmRSS/VmHWM (matches session B exactly).
+qemu-arm painted 57,960 VmRSS / 95,284 VmHWM (vs f337f5eb 38,140/97,016: cached
+faces now stay resident under emulation, +19.8 MB RSS).
+Sphinx PASS peak_app_rss_kib 96,324 (f337f5eb: 96,372; flat), journey 38.5 s.
