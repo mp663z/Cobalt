@@ -367,3 +367,16 @@ fn disabled_attribute_on_neutral_wrapper_does_not_disable_controls() {
         .expect("form");
     assert!(matches!(&form.fields[..],[Field::Text{name,..}] if name=="allowed"));
 }
+
+#[test]
+fn textarea_is_a_bounded_successful_control() {
+    use kobo_web_document::{Block, Field};
+    let parsed=parse_document(b"<form><textarea name=note>first\nsecond &amp; third</textarea><textarea disabled name=skip>no</textarea></form>",&Url::parse(BASE).unwrap(),&Limits::DEFAULT);
+    let form=parsed.blocks.iter().find_map(|b|if let Block::Form(f)=b {Some(f)} else {None}).expect("textarea-only form retained");
+    assert_eq!(form.fields.len(),1);
+    assert!(matches!(&form.fields[0],Field::TextArea{name,value,..} if name=="note" && value=="first\nsecond & third"));
+    let html=format!("<form><textarea name=huge>{}</textarea><input name=ok></form>","x".repeat(513));
+    let parsed=parse_document(html.as_bytes(),&Url::parse(BASE).unwrap(),&Limits::DEFAULT);
+    let form=parsed.blocks.iter().find_map(|b|if let Block::Form(f)=b {Some(f)} else {None}).unwrap();
+    assert_eq!(form.fields.len(),1,"oversized textarea is not silently truncated into a different value");
+}

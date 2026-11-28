@@ -55,6 +55,8 @@ pub fn form_mut(blocks: &mut [Block], index: usize) -> Option<&mut Form> {
 
 fn field_title(field: &Field) -> Option<(String, String)> {
     match field {
+        Field::TextArea { label, value, .. } => Some((label.clone(),
+            if value.is_empty() { "Empty multiline text".to_owned() } else { value.clone() })),
         Field::Text {
             label,
             value,
@@ -298,7 +300,7 @@ pub fn body(form: &Form, submit: Option<usize>) -> Option<String> {
     let mut pairs = Vec::new();
     for (index, field) in form.fields.iter().enumerate() {
         let value = match field {
-            Field::Text { name, value, .. } | Field::Hidden { name, value } => {
+            Field::Text { name, value, .. } | Field::TextArea { name, value, .. } | Field::Hidden { name, value } => {
                 Some((name, value.as_str()))
             }
             Field::Checkbox {

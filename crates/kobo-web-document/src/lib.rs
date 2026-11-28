@@ -200,6 +200,8 @@ pub enum Method {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Field {
+    /// A bounded multiline value; line breaks remain meaningful.
+    TextArea { name: String, value: String, label: String },
     Text {
         name: String,
         value: String,

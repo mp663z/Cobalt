@@ -1054,7 +1054,7 @@ impl Browser {
                         match forms::form_mut(&mut loaded.document.blocks, index)
                             .and_then(|form| form.fields.get_mut(field))
                         {
-                            Some(Field::Text { value, .. }) => {
+                            Some(Field::Text { value, .. } | Field::TextArea { value, .. }) => {
                                 self.editing = Some((index, field));
                                 self.form_entry.open_with(value.clone());
                             }
@@ -1304,17 +1304,47 @@ impl Browser {
                     .and_then(|loaded| forms::forms(&loaded.document.blocks).get(index).copied())
                     .and_then(|form| form.fields.get(field))
                     .and_then(|field| match field {
-                        Field::Text { label, .. } => Some(label.as_str()),
+                        Field::Text { label, .. } | Field::TextArea { label, .. } => Some(label.as_str()),
                         _ => None,
                     })
             })
             .unwrap_or("Text");
-        ScreenBuilder::new("browser-form-entry")
-            .top_bar(label)
-            .text_entry(&self.form_entry, label, "Save")
+        if self.editing_multiline() {
+            // Keep a bounded preview above the keyboard. The full value is
+            // retained; long content must not push Save/Cancel off the panel.
+            let lines: Vec<_> = self.form_entry.text().split('\n').collect();
+            let start=lines.len().saturating_sub(3);
+            let preview=lines[start..].iter().map(|line| {
+                let chars: Vec<_>=line.chars().collect();
+                let start=chars.len().saturating_sub(36);
+                format!("{}{}",if start>0 {"..."} else {""},chars[start..].iter().collect::<String>())
+            }).collect::<Vec<_>>().join("\n");
+            ScreenBuilder::new("browser-form-entry").top_bar(label)
+                .top_bar_action("form-newline", "New line")
+                .text(if self.form_entry.text().is_empty() {"Empty"} else {&preview})
+                .secondary("Last lines shown. Save keeps the full text.")
+                .keyboard(self.form_entry.keyboard(), "Save")
+                .button("kb.cancel", "Cancel")
+        } else {
+            ScreenBuilder::new("browser-form-entry").top_bar(label)
+                .text_entry(&self.form_entry, label, "Save")
+        }
+    }
+
+    fn editing_multiline(&self) -> bool {
+        self.editing.and_then(|(index,field)| {
+            let loaded=self.loaded.as_ref()?;
+            let form=forms::forms(&loaded.document.blocks).get(index).copied()?;
+            form.fields.get(field)
+        }).is_some_and(|field| matches!(field,Field::TextArea { .. }))
     }
 
     fn handle_form_entry(&mut self, context: &mut Context, action: ActionId) {
+        if action == action_id("form-newline") && self.editing_multiline() {
+            self.form_entry.insert("\n");
+            self.show(context);
+            return;
+        }
         // Form values are data, not address/search queries. Save whitespace
         // verbatim, including empty text when the reader clears a field.
         let typing = if action == action_id("kb.enter") && self.form_entry.is_open() {
@@ -1329,7 +1359,7 @@ impl Browser {
                 if let (Some((index, field)), Some(loaded)) =
                     (self.editing.take(), self.loaded.as_mut())
                 {
-                    if let Some(Field::Text { value: current, .. }) =
+                    if let Some(Field::Text { value: current, .. } | Field::TextArea { value: current, .. }) =
                         forms::form_mut(&mut loaded.document.blocks, index)
                             .and_then(|form| form.fields.get_mut(field))
                     {

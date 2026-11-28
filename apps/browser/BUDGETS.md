@@ -1495,3 +1495,25 @@ reset and has not been restored for this change, so current binary size is
 unverified, not the earlier 5,273,020-byte measurement. No new full-browser-suite
 or hardware/full-web/proof-gate completion claim. Textarea itself remains absent;
 this fixes ordinary text-field saving discovered during that inspection.
+
+## Bounded textarea editing, November 28, 2026
+
+Textarea-only forms are now retained with decoded default text, labels, disabled
+control exclusion and a 512-character input cap. Oversized defaults are refused,
+not silently truncated. A multiline editor adds New line, exact Save/Cancel and
+a bounded last-three-lines preview. Full values remain available for submission;
+the preview shows the tail of each long line, not a full scrolling editor or
+caret-position visualization. GET serialization normalizes newlines to CRLF.
+No POST/session/protocol change. Readonly/maxlength semantics are not yet modeled.
+
+Real fail-before/pass-after: restoring original converter drops the textarea-only
+form and fails the journey; fixed converter passes defaults/entities/newline,
+Save/Cancel and exact requested GET URL checks. Long-value layout diagnostics
+pass three profiles at all three text scales. Final host pixels inspected:
+New line in header, multiline text, keyboard Save and Cancel all visible.
+Document suite 1,413 passed, 18 ignored across unit/integration/doc executables;
+layout 34 passed. Focused browser textarea, fit and prior exact-save tests pass.
+Scoped browser/document/layout clippy correctness passes with existing warnings.
+Locked stripped ARM 5,278,156 bytes, +4,936, 1,214,104 bytes headroom. No new
+runtime dependency/lock/unsafe change. No full-browser-suite, hardware or full-web
+completion claim; independent lanes continue toward the user's 24-hour target.

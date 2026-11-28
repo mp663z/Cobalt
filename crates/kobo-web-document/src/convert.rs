@@ -1208,6 +1208,20 @@ impl Converter<'_> {
             {
                 continue;
             }
+            if self.tag(node) == Some("textarea") {
+                if let Some(name) = self.attr(node, "name").filter(|name| name.len() <= 128) {
+                    let value: String = self.nodes[node].children.iter()
+                        .map(|&child| self.text_of(child)).collect();
+                    if value.chars().count() <= 512 {
+                        fields.push(Field::TextArea {
+                            name: name.to_owned(), value,
+                            label: self.field_label(handle, node, name),
+                        });
+                        field_colours.push(self.field_label_colour(handle,node));
+                    }
+                }
+                continue;
+            }
             if self.tag(node) == Some("select") {
                 if let Some(field) = self.select_field(handle, node) {
                     fields.push(field);field_colours.push(self.field_label_colour(handle,node));
@@ -1271,7 +1285,7 @@ impl Converter<'_> {
         let has_control = fields.iter().any(|f| {
             matches!(
                 f,
-                Field::Text { .. } | Field::Select { .. } | Field::Checkbox { .. }
+                Field::Text { .. } | Field::TextArea { .. } | Field::Select { .. } | Field::Checkbox { .. }
             )
         });
         if self.colours.is_none(){field_colours.clear();}

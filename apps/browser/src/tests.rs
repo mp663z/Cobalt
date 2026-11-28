@@ -2874,3 +2874,63 @@ fn form_text_save_preserves_spaces_and_can_clear_a_value() {
         for index in 0..surface.pixels.len() { file.write_all(&surface.rgb_at(index).unwrap()).unwrap(); }
     }
 }
+
+#[test]
+fn textarea_defaults_newlines_save_cancel_and_get_submission() {
+    let mut runner=runner(TextScale::Default);
+    runner.app_mut().retry=Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
+    runner.task_outcome(pending_task(&runner),TaskOutcome::Completed(br#"<title>Message</title><form action=/send><label for=note>Message</label><textarea id=note name=note>first
+second &amp; last</textarea><textarea disabled name=ignored>no</textarea><input type=submit value=Send></form>"#.to_vec()));
+    let loaded=runner.app().loaded.as_ref().unwrap();
+    let form=forms::forms(&loaded.document.blocks);
+    assert_eq!(form.len(),1,"textarea-only forms must be retained");
+    assert_eq!(form[0].fields.len(),2,"disabled textarea is not successful");
+    assert_eq!(forms::body(form[0],None).unwrap(),"note=first%0D%0Asecond+%26+last");
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-0"));
+    assert_eq!(runner.app().form_entry.text(),"first\nsecond & last");
+    runner.app_mut().form_entry.open_with("line one");
+    runner.action(action_id("form-newline"));
+    runner.action(action_id("kb.r1c0"));
+    assert_eq!(runner.app().form_entry.text(),"line one\na");
+    if std::env::var_os("COBALT_FORM_EVIDENCE").is_some() {
+        struct Empty;
+        impl kobo_ui::Pictures for Empty { fn get(&self,_:kobo_sdk::PictureHandle)->Option<kobo_ui::PicturePixels<'_>> {None} }
+        let metrics=kobo_ui::CLARA_BW_METRICS;
+        let screen=runner.app().screen(&metrics).build();
+        let errors:Vec<_>=screen.diagnostics(&metrics,&Chrome::measuring(true)).issues.into_iter().filter(|i|i.severity==DiagnosticSeverity::Error).collect();
+        assert!(errors.is_empty(),"{errors:?}");
+        let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+        kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&Empty,&mut surface,None);
+        use std::io::Write as _;
+        let mut file=std::fs::File::create("/tmp/textarea-editor.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+    runner.action(action_id("kb.enter"));
+    runner.action(action_id("field-0"));
+    assert_eq!(runner.app().form_entry.text(),"line one\na");
+    runner.action(action_id("kb.r2c4"));
+    runner.action(action_id("kb.cancel"));
+    let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
+    assert_eq!(forms::body(form,None).unwrap(),"note=line+one%0D%0Aa");
+    let commands=runner.action(action_id("submit-field-1"));
+    assert!(fetches(&commands).iter().any(|(_,url,_)| url=="https://example.com/send?note=line+one%0D%0Aa"));
+}
+
+#[test]
+fn multiline_editor_stays_bounded_on_profiles_with_long_values() {
+    let mut runner=form_runner(TextScale::Default);
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::TextArea{name:"note".into(),label:"Message".into(),value:"word ".repeat(80)};
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-0"));
+    for profile in [kobo_ui::CLARA_BW_METRICS,DisplayMetrics{width:1264,height:1680,..kobo_ui::CLARA_BW_METRICS},DisplayMetrics{width:1404,height:1872,..kobo_ui::CLARA_BW_METRICS}] {
+        for text_scale in [TextScale::Default,TextScale::Large,TextScale::ExtraLarge] {
+            let metrics=DisplayMetrics{text_scale,..profile};
+            let screen=runner.app().screen(&metrics).build();
+            let errors:Vec<_>=screen.diagnostics(&metrics,&Chrome::measuring(true)).issues.into_iter().filter(|i|i.severity==DiagnosticSeverity::Error).collect();
+            assert!(errors.is_empty(),"{metrics:?} {errors:?}");
+        }
+    }
+}
