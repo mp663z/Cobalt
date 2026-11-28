@@ -363,3 +363,32 @@ qemu painted 37,364 VmRSS / 75,400 VmHWM (flat).
 
 ### Sphinx fixture journey
 PASS. peak_app_rss_kib 76,636 (73360e4: 76,348; +288, noise), journey 70.7 s.
+
+
+## 2fdfdea spot-checks (2026-11-29, host x86_64) - deltas vs f1c616b
+
+Head 2fdfdea47b7169012b64ad7e936ab8c219815c23 (chips expand by element
+horizontal padding: basic_text_paint.rs, basic_page.rs; 2-line sdk/ui touches).
+NOTE: sandbox restarted onto a faster box before this section; absolute times
+dropped ~42% across the board (nav-home 5.6 -> 3.06 s). Sheet deltas below come
+from an interleaved A/B vs f1c616b on the new box.
+
+### Sheet probe: interleaved A/B f1c616b vs 2fdfdea
+sheets5 painted: A 1.335/1.334/1.305 (mean 1325 ms), B 1.302/1.304/1.305/1.304/
+1.311 (mean 1305 ms) => ~-20 ms. sheets16 painted: A 1.368/1.334/1.369 (mean
+1357 ms), B 1.334/1.335/1.332/1.364/1.364 (mean 1346 ms) => ~-11 ms. Both within
+spread: chip-padding change is timing-neutral. 5/5 and 16/16 fetches all reps.
+Evidence: evidence/ab-f1c616b-vs-2fdfdea/ + evidence/sheets-2fdfdea/.
+
+### ARM size audit (release, stripped, musl)
+kobo-browser 5,321,108 B (-32 vs f1c616b), kobo-hello 1,265,740, kobod 5,125,300
+(unchanged). Budget delta browser-hello 4,055,368 B, headroom 1,187,512 B:
+WITHIN budget.
+
+### BW RSS journey / qemu-arm
+BW painted-article 62,972 kB VmHWM (-256, noise), form checkpoints flat.
+qemu painted 37,416 VmRSS / 75,368 VmHWM (flat).
+
+### Sphinx fixture journey
+PASS. peak_app_rss_kib 76,256 (f1c616b: 76,636; -380, noise), journey 40.3 s
+(faster box; f1c616b was 70.7 s on the old box).

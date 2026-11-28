@@ -1,0 +1,11 @@
+addr 127.0.0.1:43817 boot 3.9
+{"label": "start-page", "t": 0.0, "app": {"pid": 5216, "VmHWM": 35792, "VmRSS": 35572, "RssAnon": 28580}, "dev_server": {"pid": 5202, "VmHWM": 147408, "VmRSS": 34004, "RssAnon": 17656}}
+LAT nav-home 3.064
+{"label": "fixture-index", "t": 4.2, "app": {"pid": 5216, "VmHWM": 67232, "VmRSS": 62908, "RssAnon": 49988}, "dev_server": {"pid": 5202, "VmHWM": 147408, "VmRSS": 74712, "RssAnon": 56880}}
+LAT nav-sheets5 1.304 painted 1.304 routes 0 0 0 0
+{"label": "sheets5-painted", "t": 8.2, "app": {"pid": 5216, "VmHWM": 67640, "VmRSS": 67640, "RssAnon": 54656}, "dev_server": {"pid": 5202, "VmHWM": 147408, "VmRSS": 80844, "RssAnon": 63012}}
+sheets5: css fetched 5; all: ['/sheets5', '/s5-2.css', '/s5-1.css', '/s5-0.css', '/s5-3.css', '/s5-4.css']
+LAT nav-sheets16 1.332 painted 1.332 routes 0 0 0 0
+{"label": "sheets16-painted", "t": 13.9, "app": {"pid": 5216, "VmHWM": 67640, "VmRSS": 67640, "RssAnon": 54656}, "dev_server": {"pid": 5202, "VmHWM": 147408, "VmRSS": 80944, "RssAnon": 63112}}
+sheets16: css fetched 16; all: ['/sheets16', '/s16-2.css', '/s16-1.css', '/s16-0.css', '/s16-3.css', '/s16-4.css', '/s16-6.css', '/s16-5.css', '/s16-7.css', '/s16-8.css', '/s16-9.css', '/s16-10.css', '/s16-11.css', '/s16-12.css', '/s16-13.css', '/s16-14.css', '/s16-15.css']
+DONE
