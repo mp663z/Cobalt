@@ -66,14 +66,13 @@ fn field_title(field: &Field) -> Option<(String, String)> {
             label,
             value,
             search,
+            readonly,
             ..
         } => Some((
             label.clone(),
-            if value.is_empty() {
-                if *search { "Search words" } else { "Empty" }.to_owned()
-            } else {
-                value.clone()
-            },
+            format!("{}{}", if *readonly { "Read only: " } else { "" },
+                if value.is_empty() { if *search { "Search words" } else { "Empty" } }
+                else { value.as_str() }),
         )),
         Field::Select {
             label,
@@ -363,6 +362,17 @@ mod tests {
             .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
             .collect();
         String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn readonly_text_has_visible_state_and_no_edit_action() {
+        let field = Field::Text { name: "q".into(), value: "fixed".into(),
+            label: "Token".into(), search: false, readonly: true, maxlength: None };
+        assert_eq!(field_title(&field), Some(("Token".into(), "Read only: fixed".into())));
+        let form = Form { action: Url::parse("https://example.com/").unwrap(),
+            method: Method::Get, urlencoded: true, field_colours: vec![], fields: vec![field] };
+        assert_eq!(field_action(&form, action_id("field-0")), None);
+        assert_eq!(body(&form, None).as_deref(), Some("q=fixed"));
     }
 
     #[test]

@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = 'styles.example.test'
@@ -34,6 +35,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--form-edges', action='store_true', help='test textarea cancel/Back, readonly controls and number maxlength semantics')
     parser.add_argument('--textarea', action='store_true', help='test multiline edit, maxlength and GET CRLF encoding')
     parser.add_argument('--via-link', action='store_true', help='open target through the native Links list')
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
@@ -76,6 +78,11 @@ def main():
         args.sheets=2
         expected_paths=['/','/sheet0.css','/sheet1.css']
         page=b'<!doctype html><title>Multiline form</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Multiline form</h1><form action=/search.html><label>Note<textarea name=note maxlength=12>first</textarea></label><button>Send</button></form>'
+    if args.form_edges:
+        assert not args.sphinx and not args.textarea and not args.via_link
+        args.sheets = 2
+        expected_paths = ['/', '/sheet0.css', '/sheet1.css']
+        page = b'<!doctype html><title>Form edges</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Form edges</h1><form action=/search.html><label>Note<textarea name=note maxlength=12>first</textarea></label><label>Token<input name=token value=fixed readonly></label><label>Memo<textarea name=memo readonly>locked</textarea></label><label>Amount<input type=number name=amount value=4 maxlength=1></label><button>Send</button></form>'
     peak_rss_kib = 0
     monitoring = True
 
@@ -104,7 +111,7 @@ def main():
             body = page if self.path == ('/target' if args.via_link else '/') else None
             if args.via_link and self.path=='/':
                 body=b'<!doctype html><title>Fixture index</title><h1>Fixture index</h1><a href=/target>Open styled page</a>'
-            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea):
+            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea or args.form_edges):
                 body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
                 i = int(self.path[6:-4])
@@ -143,7 +150,7 @@ def main():
         if args.via_link:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id links\ntap-id link-0\n'
             expected_paths.append('/target')
-        if args.sphinx or args.textarea:
+        if args.sphinx or args.textarea or args.form_edges:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
                          'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
@@ -158,7 +165,21 @@ def main():
                          'tap-id form-newline\ntype secondx\nshot-colour textarea-limit\n'
                          'tap-id kb.backspace\ntype z\ntap-id kb.enter\nshot-colour textarea-saved\n'
                          'tap-id submit-form\nwait-idle 30000\nshot-colour search-result\n'
-                         if args.textarea else '')))
+                         if args.textarea else (
+                         'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
+                         'tap-id field-0\ntype draft\ntap-id kb.cancel\n'
+                         'tap-id field-0\nexpect first\nexpect-missing draft\n'
+                         'type wrong\ntap Back\n'
+                         'tap-id field-0\nexpect first\nexpect-missing wrong\n'
+                         'tap-id form-newline\ntype saved\ntap-id kb.enter\n'
+                         'shot-colour textarea-back-cancel\n'
+                         'tap-id field-1\nexpect Read only: fixed\nexpect Done\nexpect-missing New line\n'
+                         'tap-id field-2\nexpect Read only: locked\nexpect-missing New line\n'
+                         'shot-colour readonly-controls\n'
+                         'tap-id field-3\ntap ?123\ntype 2\ntap-id kb.enter\n'
+                         'shot-colour number-maxlength\ntap-id submit-form\n'
+                         'wait-idle 30000\nshot-colour search-result\n'
+                         if args.form_edges else ''))))
         env = dict(os.environ, CARGO_TARGET_DIR=str(target),
                    KOBO_SIM_PROFILE='libra-colour-390',
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
@@ -176,7 +197,7 @@ def main():
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
-        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
         assert result['status'] == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
@@ -192,8 +213,14 @@ def main():
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         assert result['status'] == 'pass', result
-        if args.sphinx or args.textarea:
-            assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
+        if args.sphinx or args.textarea or args.form_edges:
+            if args.form_edges:
+                submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
+                             for r in requests if r['path'].startswith('/search.html?')]
+                assert submitted == [{'note': ['first\r\nsaved'], 'token': ['fixed'],
+                                      'memo': ['locked'], 'amount': ['42']}], submitted
+            else:
+                assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
             actual_sheets = [r['path'] for r in requests if r['path'].endswith('.css')]
             assert sorted(actual_sheets) == sorted(expected_paths[1:]), requests
         else:

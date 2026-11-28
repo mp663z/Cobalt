@@ -1763,3 +1763,11 @@ Python96changed pixels in24x18px hamburger bounds. Full live app TLS Sphinx rout
 passes with3light sheets and native GET q=cobalt; painted and result pixels
 inspected. Peak whole-journey RSS76340KiB, not isolated painted RSS. ARM5320220B.
 Worker full suite still awaited. No fullCSS, hardware or broad proof claim.
+
+Live form-edge fixture (--form-edges --typed-address) passes: typed address;
+textarea Cancel and reserved runtime Back discard edits; save preserves newline
+as GET CRLF; readonly input/textarea never open editors and both submit unchanged;
+number maxlength=1 permits42 as required. Exact parsed server query asserted.
+Readonly input now visibly labelled like textarea. Own forms-filter13pass and
+actual saved/readonly/number/result pixels inspected. This is debug TLS simulator
+evidence, not hardware or general HTML validation coverage.
