@@ -32,6 +32,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
+    parser.add_argument('--typed-address', action='store_true')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
     out = args.output.resolve()
@@ -101,8 +102,12 @@ def main():
         seed.mkdir(parents=True)
         (seed / 'browser-home').write_text(f'https://{HOST}/')
         route = private / 'styles.kobo'
-        route.write_text('wait-for Search the web\ntap-id samples\ntap-id browser-more\n'
-                         'tap-id go-home\nwait-for styles.example.test\n'
+        opening = ('wait-for Search the web\ntap-id address\ntype styles\n'
+                   'tap-id url-dot\ntype example\ntap-id url-dot\ntype test\n'
+                   'tap-id kb.enter\nwait-for styles.example.test\n' if args.typed_address else
+                   'wait-for Search the web\ntap-id samples\ntap-id browser-more\n'
+                   'tap-id go-home\nwait-for styles.example.test\n')
+        route.write_text(opening +
                          'shot-colour before-sheet\nwait-idle 30000\n'
                          'shot-colour after-sheet\ntap-id edit-address\n'
                          'tap-id kb.end\ntap-id kb.r0c0\nshot-colour address-edit\n'

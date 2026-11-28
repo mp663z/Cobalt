@@ -1660,3 +1660,10 @@ Host debug same-process eight-publish probe: 1,401,727 us before vs 173,396 us
 after (about 175 ms vs 22 ms per publish). This is not device latency or a claim
 that parse/layout callbacks now meet their deadline. ARM 5,302,004 B, +808 from
 input-maxlength build. Parsing/layout work remains synchronous and unqualified.
+
+Typed navigation acceptance: `check-browser-styles-sim.py --typed-address`
+passes using actual visible address keys, no saved-home path: letters plus dot
+quick keys, then Go, followed by HTML and all five CSS requests. Generic `drive
+type` does not change keyboard layers or choose quick punctuation keys; a failed
+raw URL type followed by Go submits the remaining partial text. That is a driver
+limitation, not evidence that browser navigation is broken. No network bypass.
