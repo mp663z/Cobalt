@@ -320,3 +320,21 @@ textarea leg via browser-more > forms > form-1 > note. form-post-review.png
 inspected: POST form dialog "Review submission - Send form data to
 https://samples.browse.invalid? ... This browser cannot send POST yet." with
 Cancel. Evidence: evidence/drive-forms-d9a8ab9/.
+
+## A/B: 071bb0c vs 02d80c6 back-to-back (2026-11-28, host x86_64)
+
+CSS worker could not reproduce the +240 ms painted delta reported in the 02d80c6
+section. Alternating A/B rerun on this box, quiet, lead's reproduce.py (their
+copy of sheet_compare.py; latency = address change, kobo CLI debug binary as the
+entry), 5 reps each, order A B A B ... with a debug rebuild per switch (cargo
+cache, 16-30 s relink). RESULT: the delta VANISHES.
+sheets5: A 2.310/2.313/2.311/2.273/2.315 (mean 2304 ms), B 2.312/2.313/2.306/
+2.318/2.277 (mean 2305 ms) => +1 ms. sheets16: A 2.412/2.372/2.372/2.409/2.366
+(mean 2386 ms), B 2.406/2.376/2.403/2.370/2.370 (mean 2385 ms) => -1 ms.
+CORRECTION: the +12% painted-time regression attributed to 02d80c6 in the
+section above was MACHINE DRIFT between sessions, not the flex-measurement
+change. Consistent with the CSS worker's identical 1.64/1.64 and 1.70/1.70 s
+and their +0.5-1.3 ms prepare() microbench. Also note this box's absolute
+times drift between sessions: first 071bb0c session 2.03/2.09 s, A/B session
+2.30/2.39 s for the same commit. Cross-session comparisons on this box are not
+valid; only interleaved A/B is. Evidence: evidence/ab-071bb0c-vs-02d80c6/.

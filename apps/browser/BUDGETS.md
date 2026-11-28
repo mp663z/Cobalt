@@ -1832,3 +1832,14 @@ Expanded ClaraBW choices fixture passes disabled-fieldset first-legend exception
 legend=keep survives, disabled sibling/laterlegend fields omitted. Clearx toempty
 submits empty= explicitly. Exact fullGETquery checked and actual empty/legend
 control pixels inspected. Test-only, no runtimechange.
+
+Timing correction: qualification976bf36 interleaved5repA/B071bb0c vs02d80c6
+finds sheets5means2304/2305ms and16means2386/2385ms. Prior+240ms/+12% cross-session
+regression is RETRACTED as hostdrift, not demonstrated flexcost. Evidence-only
+import, not an independent integration rerun. Prior ARM environment deltas remain.
+
+Inline-background chips91ba8a15 integrated: own fullweb-document1431pass18ignored,
+0fail/150groups; corpus13match, fresh top925px composites all5Python inspected.
+Inline chip approximation counts retained; bordered/nested skips remain counted,
+padding not painted. Actual liveSphinx TLS3sheets/GET/dismissalhash pass, apppixels
+inspected. ARM5322180B. Not fullCSS/hardware qualification.
