@@ -1354,6 +1354,7 @@ impl Browser {
                 loaded.painted = None;
             }
             context.drop_picture(page_mode::HANDLE);
+            self.fetch_pictures(context);
         } else {
             return false;
         }

@@ -1,0 +1,50 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-style-lrgq1tiq/styles.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "peak_app_rss_kib": 69412,
+  "whole_journey_seconds": 27.723,
+  "requests": [
+    {
+      "path": "/",
+      "authorization": null,
+      "accept": "text/html,application/xhtml+xml,text/plain;q=0.9"
+    },
+    {
+      "path": "/sheet1.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet0.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/photo.png",
+      "authorization": null,
+      "accept": "image/png,image/jpeg;q=0.9"
+    },
+    {
+      "path": "/photo.png",
+      "authorization": null,
+      "accept": "image/jpeg,image/png;q=0.9"
+    }
+  ],
+  "sphinx": false,
+  "textarea": false,
+  "form_edges": false,
+  "choices": false,
+  "paged_form": false,
+  "post_review": false,
+  "profile": "libra-colour-390",
+  "styled_frame_changed": true,
+  "address_dismissals_restore_frame": true,
+  "sheet_count": 2,
+  "transport": "real TLS/HTTP, debug-only loopback fixture",
+  "dirty": true,
+  "source_sha": "9c7182231c771bbf011e979c2f2c8bbf0641ea0f"
+}

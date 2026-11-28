@@ -2,1783 +2,1789 @@
   "arrival_observation::tests::arrivals_through_the_real_path_are_observed_in_phase": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "arrival_observation::tests::clipping_is_recorded_when_input_exceeds_the_cap": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "arrival_observation::tests::equal_length_distinct_inputs_associate_separately": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "arrival_observation::tests::plain_wrapped_records_wrapper_identity_and_utf8_validity": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "arrival_observation::tests::refusal_is_unchanged_and_reader_toggle_records_no_observation": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.03s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.04s"
     ]
   },
   "arrival_prep_tests::a_disabled_stage_captures_nothing_and_binds_nothing": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "arrival_prep_tests::a_metrics_change_retires_the_artifact": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "arrival_prep_tests::a_same_length_distinct_input_yields_its_own_artifact": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.30s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.28s"
     ]
   },
   "arrival_prep_tests::an_actual_arrival_yields_a_stage_owned_real_artifact": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "arrival_prep_tests::bound_variant_requires_the_consumed_slice_of_the_actual_parse": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.35s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.35s"
     ]
   },
   "arrival_prep_tests::capture_refuses_over_the_ceiling_and_a_big_arrival_is_never_bound": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.39s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.40s"
     ]
   },
   "arrival_prep_tests::failed_fetch_and_lifecycle_clear_the_artifact": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "arrival_prep_tests::foreign_absent_or_mismatched_source_stays_unestablished": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.15s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.15s"
     ]
   },
   "arrival_prep_tests::paint_refusals_fail_whole_with_the_reason_named": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.30s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.30s"
     ]
   },
   "arrival_prep_tests::producer_reprepare_is_a_no_op": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "arrival_prep_tests::real_preparation_is_a_preparation_but_production_installs_null": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.03s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.03s"
     ]
   },
   "arrival_prep_tests::rem_font_size_paints_identically_to_resolved_px_and_fractional_refuses": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "arrival_prep_tests::replacement_clear_and_stale_finish_release_the_payload": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.29s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.30s"
     ]
   },
   "arrival_prep_tests::semantic_ui_works_at_the_synthetic_size": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.20s"
     ]
   },
   "arrival_prep_tests::the_actual_clara_viewport_is_refused_before_fonts": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "arrival_prep_tests::the_artifact_is_never_displayed": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.32s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.32s"
     ]
   },
   "arrival_prep_tests::the_earlier_512x384_profile_is_known_bad_and_preserved": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.38s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.38s"
     ]
   },
   "arrival_prep_tests::the_ready_owned_payload_yields_a_labelled_host_artifact": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "arrival_prep_tests::the_retained_source_never_outlives_admission_or_navigation": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "arrival_timing::tests::arrival_observation_timing_over_frozen_fixtures": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "bundled_pair_adapter::tests::engine_walk_refusals_are_unchanged_with_the_pair": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.03s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.03s"
     ]
   },
   "bundled_pair_adapter::tests::mixed_regular_bold_via_direct_entry_matches_bundled_rasters": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::tests::non_ascii_prediction_is_separate_from_engine_and_provider_results": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "bundled_pair_adapter::tests::non_latin_through_the_provider_is_a_recorded_refusal": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "bundled_pair_adapter::tests::provider_answers_bold_with_the_bold_face_and_old_adapter_refuses": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::tests::regular_control_differs_from_mixed": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::tests::regular_page_is_byte_identical_to_the_existing_adapter": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.03s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.03s"
     ]
   },
   "bundled_pair_adapter::tests::single_entry_still_refuses_mixed_structure": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::exact_fit_boundary_wraps_at_one_pixel_less": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::margin_and_padding_shift_origin_and_narrow_wrap_width": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::mixed_bold_wrap_across_line_break_matches_oracle": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::overlong_word_refusal_is_after_measurement_before_raster": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::top_margin_moves_lines_down_only": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::word_wider_than_line_is_refused_exact_fit_paints": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::wrapped_ascii_lines_match_independent_oracle": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "bundled_pair_adapter::wrap_diag::wrong_pitch_oracle_differs": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "corpus_tests::a_page_cut_short_keeps_what_arrived": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.07s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.07s"
     ]
   },
   "corpus_tests::a_page_in_windows_1252_reads_like_the_same_page_in_utf8": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.04s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.04s"
     ]
   },
   "corpus_tests::corpus_page_counts_on_every_reader_and_text_size": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "corpus_tests::corpus_text_and_links_read_as_expected": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.16s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "css_stage_tests::a_failed_fetch_clears_the_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "css_stage_tests::a_failed_replacement_leaves_no_stale_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "css_stage_tests::a_fragment_turn_keeps_the_frame_and_skips_preparation": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.27s"
     ]
   },
   "css_stage_tests::a_metrics_change_retires_the_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_new_document_replaces_the_frame_with_a_distinct_one": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_nondefault_text_scale_refuses": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "css_stage_tests::a_panel_identity_answer_retires_a_frame_measured_for_another_panel": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_preparation_refusal_leaves_the_semantic_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_publication_failure_leaves_the_semantic_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_replacement_is_installed_before_the_old_frame_is_released": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::a_stale_answer_is_dropped_not_published": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::an_eligible_page_is_a_candidate_and_production_publishes_nothing": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::an_eligible_page_reaches_injected_preparation_exactly_once": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "css_stage_tests::clear_is_idempotent": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::leaving_the_foreground_clears_the_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::links_forms_images_and_parse_loss_refuse_and_the_semantic_page_survives": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.62s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.62s"
     ]
   },
   "css_stage_tests::missing_or_tampered_facts_are_fail_closed": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "css_stage_tests::navigation_start_retires_the_frame_before_the_next_page_lands": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::suspend_and_exit_clear_the_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::the_reader_toggle_clears_the_frame": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "css_stage_tests::unproven_source_refuses_before_anything_else": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "css_stage_tests::validation_rides_task_store_and_page_turn_callbacks": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.71s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.69s"
     ]
   },
   "css_stage_tests::vanished_content_classes_refuse_by_name_and_the_semantic_page_survives": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.96s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.01s"
     ]
   },
   "css_stage_tests::vanished_controls_refuse_by_name_closing_the_documented_gap": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.49s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.49s"
     ]
   },
   "fixture_tests::a_page_opens_where_its_main_content_starts": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.49s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.50s"
     ]
   },
   "fixture_tests::every_kind_of_server_reply_ends_on_a_screen_that_says_what_happened": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 3.06s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 3.02s"
     ]
   },
   "fixture_tests::reader_sections_and_links_only_name_content_in_that_view": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.13s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.15s"
     ]
   },
   "fixture_tests::the_reader_view_keeps_the_article_and_goes_back_to_where_the_page_was": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.24s"
     ]
   },
   "forms::tests::empty_name_and_repeated_names_keep_form_order": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::form_space_and_tilde_are_distinct_from_address_search_encoding": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::get_form_keeps_controls_in_disabled_neutral_wrappers": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::get_form_never_serializes_a_disabled_optgroup_default": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::get_form_serializes_first_legend_exception_but_not_disabled_group": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::get_replaces_existing_query_and_encodes_unicode_and_successful_controls": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::oversized_get_is_refused_rather_than_truncated": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::post_and_unsupported_encodings_never_make_get_urls": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::readonly_text_has_visible_state_and_no_edit_action": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "forms::tests::wpt_urlencoded_utf8_string_entries": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::a_fetched_png_replaces_the_alt_text_and_a_refused_body_keeps_it": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.07s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.05s"
     ]
   },
   "image_supply_tests::an_oversize_body_is_refused_even_if_the_layer_delivered_it": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "image_supply_tests::automatic_colour_page_starts_one_image_get_without_native_prefetch": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.68s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.72s"
     ]
   },
   "image_supply_tests::dump_corpus_page_with_external_images": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::error_pages_svg_failures_and_cancellations_never_become_images": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.21s"
     ]
   },
   "image_supply_tests::fetches_are_https_credential_free_accept_limited_and_byte_capped": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.20s"
     ]
   },
   "image_supply_tests::good_bodies_are_kept_by_authored_src_and_unsupported_formats_are_refused_per_image": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "image_supply_tests::hidden_ancestor_images_do_not_consume_fetch_budget": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::page_view_fetches_external_images_and_repaints_with_them": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.80s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.80s"
     ]
   },
   "image_supply_tests::plain_http_sources_are_never_requested_and_clear_cancels_outstanding_work": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "image_supply_tests::sniff_accepts_only_png_and_jpeg_signatures": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::sources_past_the_per_page_count_are_never_requested": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "image_supply_tests::svg_paths_are_not_requested_even_with_queries_fragments_or_mixed_case": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
+    ]
+  },
+  "image_supply_tests::switching_automatic_page_to_native_reader_starts_visible_picture_work": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.45s"
     ]
   },
   "image_supply_tests::the_census_honours_its_limit": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::the_census_resolves_dedupes_filters_and_skips_hidden_images": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_supply_tests::the_page_total_budget_drops_the_image_that_would_pass_it": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "image_supply_tests::unrelated_task_completion_starts_waiting_image_supply": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.15s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.15s"
     ]
   },
   "image_tests::a_colour_panel_gets_colour_for_colour_pictures_and_grey_for_grey_ones": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.74s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.75s"
     ]
   },
   "image_tests::a_header_claiming_a_huge_picture_is_refused_before_decoding": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_tests::a_turned_photo_keeps_its_turned_shape_in_the_room": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.12s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.11s"
     ]
   },
   "image_tests::damaged_pictures_never_panic_and_never_overflow_their_room": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 6.58s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 6.79s"
     ]
   },
   "image_tests::every_bad_picture_is_refused_without_a_panic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_tests::every_good_picture_decodes_at_its_true_size_and_fits_its_room": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.02s"
     ]
   },
   "image_tests::restricted_css_tile_retains_color_only_on_confirmed_color_path": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "image_tests::transparency_is_drawn_on_white_paper": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.06s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.05s"
     ]
   },
   "image_tests::unsupported_response_formats_are_refused_on_grey_and_colour_paths": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.51s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.52s"
     ]
   },
   "native_font_adapter::tests::a_real_page_paints_real_glyphs_through_the_native_session": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.02s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.02s"
     ]
   },
   "native_font_adapter::tests::adapter_bold_and_shaping_refuse_with_the_reason_recorded": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "native_font_adapter::tests::an_exhausted_budget_fails_the_whole_paint_with_the_reason_recorded": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "native_font_adapter::tests::an_oversize_font_fails_the_whole_paint_with_the_reason_recorded": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "native_font_adapter::tests::bold_markup_and_non_ascii_text_are_refused_whole_by_the_engine_walk": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s"
     ]
   },
   "page_images::tests::canonical_padding_bits_are_checked_exhaustively": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.10s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.10s"
     ]
   },
   "page_images::tests::strict_base64_and_resource_budgets": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_mode::sampling_tests::zoom_sampling_interpolates_without_changing_identity": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_mode::sheet_supply_plumbing_tests::census_matches_the_painter_width_and_skips_dark_scheme_links": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_mode::sheet_supply_plumbing_tests::interleaved_font_phase_probe": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_mode::sheet_supply_plumbing_tests::interleaved_mono_cache_probe": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_mode::sheet_supply_plumbing_tests::supplied_sheets_change_the_painted_page_and_mismatched_counts_do_not_panic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.37s"
     ]
   },
   "page_view::coverage_tests::reconstruction_has_subpixel_edges_not_repeated_blocks": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::light_scheme_regression::page_view_uses_light_scheme_for_embedded_media_rules": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::picture_region_tests::page_cuts_scale_and_keyboard_crop_keep_links_on_visible_pixels": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::authored_colour_survives_regular_bold_italic_code_links_and_backgrounds": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::bundled_page_font_measures_and_rasters": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.27s"
     ]
   },
   "page_view::tests::decoded_image_fit_tracks_nested_edges_and_exif_orientation": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "page_view::tests::decoded_image_in_zero_width_container_has_no_reserved_height": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::decoded_image_relayout_preserves_links_following_text_and_page_cuts": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "page_view::tests::fallback_on_skip_share": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::fallback_on_truncated_intake": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::fallback_on_truncated_output": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::grey_conversion_darkens_ink": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::mono_cache_reuses_one_immutable_pair_and_uncached_path_is_distinct": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.14s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.14s"
     ]
   },
   "page_view::tests::native_caption_and_colspan_keep_links_without_stacking": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::native_cell_wrapper_keeps_link_geometry_without_stacking": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::native_image_budget_is_aggregate_and_refuses_large_headers": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.63s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.63s"
     ]
   },
   "page_view::tests::native_image_compressed_budget_is_shared_across_images": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.17s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.17s"
     ]
   },
   "page_view::tests::native_image_large_attributes_do_not_panic_or_wrap_geometry": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "page_view::tests::native_image_preview_when_requested": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::native_image_raster_handles_pagination_clips_and_sampling": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::native_jpeg_variants_decode_and_malformed_payload_falls_back": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.44s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.40s"
     ]
   },
   "page_view::tests::native_png_data_image_paints_real_rgb_not_marker_black": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "page_view::tests::native_table_links_survive_grid_and_spanning_fallback": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.29s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "page_view::tests::native_wide_image_reserves_fitted_height_inside_its_container": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.28s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.28s"
     ]
   },
   "page_view::tests::page_character_metrics_grow_only_for_used_fallbacks": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "page_view::tests::page_shape_clusters_complex_script": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "page_view::tests::pagination_cuts_between_lines": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::pagination_hard_cuts_a_wall_of_text": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::pagination_ignores_backgrounds_and_does_not_repeat_next_line": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::painted_page_collects_link_targets": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::production_mono_adapter_has_fixed_advance_and_real_bold_ink": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.11s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.11s"
     ]
   },
   "page_view::tests::raster_scales_fills_and_upsizes_the_screen": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::raster_translates_the_second_screen": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::screen_links_follow_source_actions_and_page_boundaries": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "page_view::tests::shaped_missing_glyph_is_not_lost_by_adapter": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "page_view::tests::tap_map_ignores_actionless_commands": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::tap_map_resolves_and_refuses_clusters": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "page_view::tests::unsupported_native_image_is_counted_without_black_marker": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.25s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "s0_native::s0_native_default_characterise": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "s0_native::s0_native_variants_characterise": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "sheet_supply_tests::a_cancelled_sheet_is_a_failure": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "sheet_supply_tests::a_failure_settles_and_cancels_the_rest_and_late_arrivals_change_nothing": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::a_new_begin_replaces_the_previous_supply": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::a_page_without_external_sheets_is_ready_with_none": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::a_refused_page_never_starts_sheet_traffic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.21s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "sheet_supply_tests::an_eligible_page_without_links_has_no_supply_and_no_traffic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "sheet_supply_tests::census_urls_match_what_the_fetch_layer_may_see": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "sheet_supply_tests::clear_cancels_every_outstanding_sheet_and_stale_answers_are_ignored": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::explicit_budget_refuses_seventeenth_sheet_before_traffic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::explicit_budget_rejects_aggregate_bytes_and_cancels_pending_work": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::out_of_order_completion_still_delivers_link_order": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.18s"
     ]
   },
   "sheet_supply_tests::pages_the_parse_is_certain_to_refuse_fetch_nothing": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.60s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.48s"
     ]
   },
   "sheet_supply_tests::production_stage_starts_no_sheet_traffic": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "sheet_supply_tests::shared_task_pressure_queues_without_cancelling_started_work": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.19s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "sheet_supply_tests::spawns_one_bounded_fetch_per_link_in_order": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.18s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.19s"
     ]
   },
   "tests::a_failed_fetch_explains_offers_retry_and_leaves_history_alone": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "tests::a_file_that_is_not_a_page_is_named_and_text_is_shown_as_lines": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.25s"
     ]
   },
   "tests::a_fragment_link_opens_on_the_page_holding_its_section": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.47s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.49s"
     ]
   },
   "tests::a_full_reader_keeps_nothing_and_says_nothing": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::a_kept_copy_that_cannot_be_read_is_forgotten_and_the_error_shown": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::a_kept_picture_that_is_torn_is_forgotten_and_fetched_again": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.37s"
     ]
   },
   "tests::a_long_page_shows_at_once_and_counts_its_pages_in_the_background": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.13s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.10s"
     ]
   },
   "tests::a_long_sections_list_fits_and_pages_on_a_small_screen": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.65s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.65s"
     ]
   },
   "tests::a_packed_picture_reads_back_and_a_short_one_is_refused": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "tests::a_page_never_kept_or_a_slow_site_still_shows_the_error": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.27s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.27s"
     ]
   },
   "tests::a_page_that_arrives_is_kept_and_read_back_when_offline": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.30s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.30s"
     ]
   },
   "tests::a_page_that_fails_on_back_puts_history_where_it_was": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.45s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.44s"
     ]
   },
   "tests::a_picture_that_will_not_decode_leaves_its_description": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::a_saved_copy_reopens_at_the_same_words_though_its_note_moves_the_pages": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.12s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.14s"
     ]
   },
   "tests::a_shown_picture_is_kept_and_comes_back_with_its_page_offline": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.38s"
     ]
   },
   "tests::a_sized_picture_on_the_screen_is_fetched_fitted_and_shown": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.33s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.33s"
     ]
   },
   "tests::a_web_link_is_fetched_and_recorded_once_it_arrives": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::address_cursor_inserts_and_deletes_in_the_middle_without_navigating": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.42s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.42s"
     ]
   },
   "tests::bookmarks_and_recent_pages_survive_restart_and_open": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.84s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.83s"
     ]
   },
   "tests::bottom_toolbar_menu_home_and_url_keys_work": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.09s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.10s"
     ]
   },
   "tests::cancelling_a_load_stays_on_the_page_and_ignores_a_late_answer": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.24s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::cancelling_the_address_field_returns_to_the_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.30s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.30s"
     ]
   },
   "tests::cancelling_the_first_navigation_returns_to_start_not_an_empty_document": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.15s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.15s"
     ]
   },
   "tests::choices_only_accept_the_current_options_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.29s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.29s"
     ]
   },
   "tests::colour_arrivals_default_to_rgb_page_but_bw_and_forms_keep_reader": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.64s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.62s"
     ]
   },
   "tests::colour_identity_change_cancels_pending_native_images_once": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::colour_identity_switch_prefers_existing_rgb_shelf_over_grey": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.27s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.27s"
     ]
   },
   "tests::colour_native_form_page_keeps_authored_prose_rgb_and_controls": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::compact_slider_coordinates_update_zoom_without_affecting_page_taps": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.28s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.29s"
     ]
   },
   "tests::delayed_sheet_keeps_form_editor_and_updates_only_page_preview": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.72s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.78s"
     ]
   },
   "tests::display_reflow_keeps_selected_zoom_and_source_reading_place": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 6.89s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 6.92s"
     ]
   },
   "tests::every_screen_fits_the_clara_at_every_text_size": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.41s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.43s"
     ]
   },
   "tests::explicit_get_submitter_uses_only_the_chosen_button_value": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::failed_pages_are_not_added_and_saved_copy_titles_stay_clean": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::failure_recovery_edits_and_reloads_the_failed_url_not_the_retained_document": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::follow_a_link_turn_pages_and_come_back": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.84s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.87s"
     ]
   },
   "tests::form_control_screen_fits_on_three_profiles_and_sizes": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.43s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.43s"
     ]
   },
   "tests::form_controls_edit_and_keep_their_values_across_the_view": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::form_lists_page_and_only_visible_controls_can_change": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.32s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.32s"
     ]
   },
   "tests::form_text_save_preserves_spaces_and_can_clear_a_value": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::get_form_submits_current_values_and_waits_for_the_result": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::home_without_a_saved_home_retires_pending_navigation": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::identity_picture_transfer_is_byte_exact_rgb_and_grey": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.81s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.81s"
     ]
   },
   "tests::inline_address_keyboard_preserves_page_and_suppresses_page_actions": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.85s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.84s"
     ]
   },
   "tests::inline_keyboard_splits_a_long_first_paragraph_instead_of_hiding_it": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.80s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.80s"
     ]
   },
   "tests::kept_pages_outlive_the_app_and_strays_are_cleared": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::late_colour_identity_ignores_pending_grey_shelf_completion": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.27s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::late_colour_identity_reloads_native_grey_images_as_rgb": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::late_colour_identity_republishes_an_already_visible_rgb_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.53s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.51s"
     ]
   },
   "tests::late_control_label_colour_keeps_edit_and_refreshes_source_style": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::late_native_colour_keeps_saved_notice_fragment_place_and_reader_view": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.89s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.93s"
     ]
   },
   "tests::late_native_text_colour_preserves_edited_form_and_semantic_place": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::launch_is_search_first_and_samples_remain_reachable": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::leaving_a_long_page_stops_its_background_paging": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.52s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.52s"
     ]
   },
   "tests::leaving_a_page_cancels_and_releases_its_pictures": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.32s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.31s"
     ]
   },
   "tests::library_lists_fit_all_profiles_and_text_sizes": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 41.62s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 41.61s"
     ]
   },
   "tests::library_page_turn_and_selection_only_touch_visible_rows": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.40s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.40s"
     ]
   },
   "tests::links_are_reachable_through_navigate_on_every_profile_and_text_size": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.87s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.93s"
     ]
   },
   "tests::links_list_does_not_offer_links_from_other_pages": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.38s"
     ]
   },
   "tests::live_sheet_failure_keeps_readable_page_and_reports_limit": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.48s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.49s"
     ]
   },
   "tests::live_sheet_reflow_keeps_source_anchor_menu_and_cancelled_request_ownership": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 5.17s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 5.14s"
     ]
   },
   "tests::live_sheet_zoom_refetches_at_new_media_width_and_restores_paint": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.33s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.32s"
     ]
   },
   "tests::live_sheets_history_restores_selected_zoom_after_supply": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.52s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.53s"
     ]
   },
   "tests::live_sheets_rebuild_without_overwriting_inline_address_or_view": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.72s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.73s"
     ]
   },
   "tests::live_sheets_respect_reader_choice_and_ignore_stale_arrivals": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.24s"
     ]
   },
   "tests::local_navigation_retires_an_older_network_request": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::multiline_editor_stays_bounded_on_profiles_with_long_values": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::native_colour_uses_computed_css_font_treatments_and_normal_resets": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.35s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.34s"
     ]
   },
   "tests::native_coloured_heading_quote_table_apply_inline_font_styles": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.96s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.96s"
     ]
   },
   "tests::native_control_labels_take_their_own_source_colours_not_generated_names": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.44s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.38s"
     ]
   },
   "tests::native_headings_keep_hierarchy_rgb_and_section_anchor": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::native_inline_code_colours_and_mono_survive_links_form_and_paint": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::native_keyboard_measurement_includes_visible_page_footer": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.79s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.79s"
     ]
   },
   "tests::native_multicolour_link_keeps_each_underline_colour_and_one_action": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.34s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.34s"
     ]
   },
   "tests::native_plain_heading_quote_table_preserve_semantic_style_without_rgb": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.35s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.35s"
     ]
   },
   "tests::native_pre_computed_font_treatments_preserve_raw_utf8_whitespace": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::native_pre_rgb_retains_spaces_blank_line_and_form": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.37s"
     ]
   },
   "tests::native_quote_rgb_preserves_gutters_links_and_form": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.37s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::native_reader_retires_stored_scroll_offsets": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.35s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.34s"
     ]
   },
   "tests::native_rgb_spans_render_with_installed_typefaces": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.31s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.31s"
     ]
   },
   "tests::native_table_rgb_keeps_header_grid_links_and_form": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.38s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.39s"
     ]
   },
   "tests::navigate_grid_has_all_destinations_with_installed_fonts": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.24s"
     ]
   },
   "tests::offscreen_submitter_cannot_submit_and_post_choice_still_never_sends": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::page_has_browser_close_separate_from_keyboard_close": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.31s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.30s"
     ]
   },
   "tests::page_publish_identity_cost_probe": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "tests::painted_form_list_is_bounded_and_returns_with_current_values": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.71s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.71s"
     ]
   },
   "tests::painted_forms_offer_native_controls_without_discarding_authored_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.79s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.83s"
     ]
   },
   "tests::painted_fragment_link_uses_native_anchor_offsets": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.89s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.88s"
     ]
   },
   "tests::painted_links_open_by_touch_at_every_zoom": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 25.60s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 25.75s"
     ]
   },
   "tests::painted_page_buttons_keep_the_reading_place_across_back_and_forward": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 22.88s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 22.95s"
     ]
   },
   "tests::painted_page_journey_keeps_native_reader_and_scoped_links": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 4.20s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 4.22s"
     ]
   },
   "tests::painted_scroll_is_a_real_offset_clamped_to_content_and_keeps_links": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 3.94s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 3.91s"
     ]
   },
   "tests::pending_navigation_keeps_the_browser_header_and_exposes_stop_in_the_row": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::pending_page_panels_do_not_survive_into_a_failure_screen": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.36s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.36s"
     ]
   },
   "tests::persistent_address_field_is_above_native_and_painted_content": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.67s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.66s"
     ]
   },
   "tests::physical_page_keys_do_not_move_the_document_behind_an_open_panel": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 4.52s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 4.52s"
     ]
   },
   "tests::pictures_further_on_wait_until_their_screen_is_read": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::post_review_does_not_send_and_cancel_returns_to_form": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::readonly_single_line_is_successful_but_never_opens_editor": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::readonly_textarea_is_submitted_but_cannot_be_edited": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::runtime_back_closes_inline_keyboard_before_leaving_the_document": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.26s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.27s"
     ]
   },
   "tests::runtime_back_is_offered_to_native_subviews_and_returns_without_leaving_browser": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.98s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.98s"
     ]
   },
   "tests::samples_action_opens_the_sample_index": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::scroll_place_returns_on_back_and_only_visible_scrolled_links_open": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 6.14s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 6.15s"
     ]
   },
   "tests::sections_jump_to_headings_and_return_to_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.95s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.95s"
     ]
   },
   "tests::single_line_maxlength_blocks_growth_but_allows_deletion_and_exact_save": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::sixteen_sheet_queue_preserves_order_and_bounds_total_bytes": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.71s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.73s"
     ]
   },
   "tests::sphinx_page_callback_cost_probe": {
     "exit": 0,
     "result": [
-      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 296 filtered out; finished in 0.00s"
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.00s"
     ]
   },
   "tests::start_search_submits_words_and_library_returns_to_start": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.16s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.16s"
     ]
   },
   "tests::textarea_defaults_newlines_save_cancel_and_get_submission": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::textarea_limit_preserves_overlong_defaults_and_unicode": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.23s"
     ]
   },
   "tests::textarea_maxlength_stops_insertions_without_truncating_defaults": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.23s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::the_address_field_searches_for_words": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.44s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.44s"
     ]
   },
   "tests::the_links_list_follows_links_too": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.28s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.26s"
     ]
   },
   "tests::the_links_list_for_a_page_of_many_links_fits_and_offers_this_page": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.83s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.83s"
     ]
   },
   "tests::the_loading_screen_counts_the_wait_and_stops_when_the_page_arrives": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.22s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.22s"
     ]
   },
   "tests::zoom_anchor_is_a_source_byte_not_a_reflowed_line_number": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 11.67s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 11.73s"
     ]
   },
   "tests::zoom_at_document_start_keeps_the_top_margin": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 6.30s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 6.32s"
     ]
   },
   "tests::zoom_controls_live_in_a_deliberate_panel_not_the_browsing_row": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 2.04s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 2.06s"
     ]
   },
   "tests::zoom_panel_controls_fit_portrait_and_landscape_at_all_text_sizes": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 1.52s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 1.54s"
     ]
   },
   "tests::zoom_reflows_around_the_source_glyph_instead_of_jumping_to_top": {
     "exit": 0,
     "result": [
-      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 6.32s"
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 6.38s"
     ]
   }
 }

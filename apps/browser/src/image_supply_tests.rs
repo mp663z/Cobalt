@@ -562,3 +562,23 @@ fn automatic_colour_page_starts_one_image_get_without_native_prefetch() {
         .filter(|(_, work)| matches!(work, Task::Fetch { url, .. } if url == "https://img.example.test/p.png")).collect();
     assert_eq!(fetched.len(), 1, "only the painted-page supply should request this image");
 }
+
+#[test]
+fn switching_automatic_page_to_native_reader_starts_visible_picture_work() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
+    let mut runner = AppRunner::with_metrics(Browser::default(), DisplayMetrics {
+        width: 930, height: 1236, pixels_per_inch: 300, text_scale: TextScale::Default,
+    });
+    runner.start();
+    runner.app_mut().pictures.set_colour(true);
+    runner.app_mut().view = View::Page;
+    let mut context = runner.context();
+    let url = Url::parse("https://img.example.test/reader.html").unwrap();
+    runner.app_mut().show_document(&mut context, &url,
+        b"<!doctype html><title>Reader picture</title><p>Before</p><img src='/native.png' width=200 height=100 alt=Picture><p>After</p>");
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_some());
+    assert_eq!(runner.app().pictures.state(0), None);
+    runner.action(action_id("native-reader"));
+    assert!(runner.app().loaded.as_ref().unwrap().painted.is_none());
+    assert!(runner.app().pictures.state(0).is_some(), "native Reader must request its visible image");
+}
