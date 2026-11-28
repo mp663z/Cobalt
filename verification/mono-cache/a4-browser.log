@@ -1,0 +1,9 @@
+Kobo app simulator: http://127.0.0.1:34771
+page-font-paint-us=534342
+shot /tmp/cache-timed-a4/browser-shots/before-sheet.png (ideal color; panel appearance uncalibrated)
+page-font-paint-us=403095
+shot /tmp/cache-timed-a4/browser-shots/after-sheet.png (ideal color; panel appearance uncalibrated)
+shot /tmp/cache-timed-a4/browser-shots/address-edit.png (ideal color; panel appearance uncalibrated)
+shot /tmp/cache-timed-a4/browser-shots/address-cancel.png (ideal color; panel appearance uncalibrated)
+shot /tmp/cache-timed-a4/browser-shots/address-back.png (ideal color; panel appearance uncalibrated)
+drive: every step passed; screenshots in /tmp/cache-timed-a4/browser-shots

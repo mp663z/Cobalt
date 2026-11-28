@@ -109,6 +109,8 @@ impl PageMode {
         if u64::from(room_width) * u64::from(room_height) * 3 > kobo_sdk::MAX_PICTURE_BYTES as u64 {
             return None;
         }
+        #[cfg(debug_assertions)]
+        let profile_start = std::time::Instant::now();
         let face = PageFontAdapter::bundled()?;
         let mono = PageFontAdapter::monospace()?;
         let view = PageView::paint_with_sheets(
@@ -122,6 +124,10 @@ impl PageMode {
             &mono,
         )
         .ok()?;
+        #[cfg(debug_assertions)]
+        if std::env::var_os("KOBO_SIM_FONT_PHASE").is_some() {
+            eprintln!("page-font-paint-us={}", profile_start.elapsed().as_micros());
+        }
         if view.falls_back_to_reader() {
             return None;
         }
@@ -317,6 +323,47 @@ mod sheet_supply_plumbing_tests {
 
     fn metrics() -> DisplayMetrics {
         kobo_ui::CLARA_BW_METRICS
+    }
+
+    #[test]
+    #[ignore = "manual interleaved cached/uncached font cost probe"]
+    fn interleaved_mono_cache_probe() {
+        use std::time::Instant;
+        let html = b"<!doctype html><h1>External stylesheet journey</h1><p>Readable before delayed styles.</p><a href=/next>Next page</a>";
+        // Warm once, separately reported by the first-construction test.
+        let _ = PageFontAdapter::monospace().unwrap();
+        for rep in 0..5 {
+            for cached in if rep % 2 == 0 { [false, true] } else { [true, false] } {
+                let face = PageFontAdapter::bundled().unwrap();
+                let start = Instant::now();
+                let mono = if cached { PageFontAdapter::monospace() } else { PageFontAdapter::monospace_uncached() }.unwrap();
+                let construct_us = start.elapsed().as_micros();
+                let start = Instant::now();
+                let view = PageView::paint_with_sheets(html, &[], 489, 524, 2, &face, &face, &mono).unwrap();
+                eprintln!("CACHE rep={rep} cached={cached} construct_us={construct_us} paint_us={} scroll={}",start.elapsed().as_micros(),view.max_scroll());
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual interleaved construction/paint cost probe"]
+    fn interleaved_font_phase_probe() {
+        use std::time::Instant;
+        let html = b"<!doctype html><title>Delayed styles</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><link rel=stylesheet href=/sheet2.css><link rel=stylesheet href=/sheet3.css><link rel=stylesheet href=/sheet4.css><h1>External stylesheet journey</h1><p>Readable before delayed styles.</p><a href=/next>Next page</a>";
+        let sheets = vec![b"h1{color:red;font-size:36px}".to_vec(), b"p{color:blue;margin-top:70px}".to_vec(), b"h1{margin-bottom:2px}".to_vec(), b"h1{margin-bottom:3px}".to_vec(), b"h1{margin-bottom:4px}".to_vec()];
+        for rep in 0..5 {
+            for real_mono in if rep % 2 == 0 { [false, true] } else { [true, false] } {
+                let start = Instant::now();
+                let face = PageFontAdapter::bundled().unwrap();
+                let bundled_us = start.elapsed().as_micros();
+                let start = Instant::now();
+                let mono = real_mono.then(|| PageFontAdapter::monospace_uncached().unwrap());
+                let mono_us = start.elapsed().as_micros();
+                let start = Instant::now();
+                let view = PageView::paint_with_sheets(html, &sheets, 489, 524, 2, &face, &face, mono.as_ref().unwrap_or(&face)).unwrap();
+                eprintln!("PHASE rep={rep} mono={real_mono} bundled_us={bundled_us} mono_us={mono_us} paint_us={} height={}", start.elapsed().as_micros(),view.max_scroll());
+            }
+        }
     }
 
     #[test]

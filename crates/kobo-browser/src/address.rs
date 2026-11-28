@@ -44,14 +44,21 @@ pub fn resolve(typed: &str, search: &str) -> Option<Address> {
     }
     if !typed.contains(char::is_whitespace) {
         if let Some(url) = as_address(typed) {
-            return Some(Address::Page(url));
+            return round_trip(url).map(Address::Page);
         }
     }
-    let url = Url::parse(&format!("{search}{}", encode_query(typed))).ok()?;
+    let url = round_trip(Url::parse(&format!("{search}{}", encode_query(typed))).ok()?)?;
     Some(Address::Search {
         query: typed.to_owned(),
         url,
     })
+}
+
+// Percent-encoding can expand the canonical URL beyond the parser's input
+// ceiling. Never admit an address that history/reload cannot parse again.
+fn round_trip(url: Url) -> Option<Url> {
+    let parsed = Url::parse(&url.to_string()).ok()?;
+    (parsed == url).then_some(url)
 }
 
 fn as_address(typed: &str) -> Option<Url> {

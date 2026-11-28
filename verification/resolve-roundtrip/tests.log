@@ -1,0 +1,188 @@
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> crates/kobo-web-document/src/basic_page.rs:1056:13
+     |
+1056 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:696:25
+    |
+696 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+warning: unexpected `cfg` condition name: `kani`
+   --> crates/kobo-browser/src/lib.rs:264:7
+    |
+264 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `clippy`, `debug_assertions`, `doc`, `docsrs`, `doctest`, `feature`, `fmt_debug`, `miri`, `overflow_checks`, `panic`, `proc_macro`, `relocation_model`, `rustfmt`, `sanitize`, `sanitizer_cfi_generalize_pointers`, `sanitizer_cfi_normalize_integers`, `target_abi`, `target_arch`, `target_endian`, `target_env`, `target_family`, `target_feature`, `target_has_atomic`, `target_has_atomic_equal_alignment`, `target_has_atomic_load_store`, `target_os`, `target_pointer_width`, `target_thread_local`, `target_vendor`, `test`, `ub_checks`, `unix`, and `windows`
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: `kobo-browser-core` (lib) generated 1 warning
+warning: `kobo-browser-core` (lib test) generated 1 warning (1 duplicate)
+   Compiling kobo-browser-core v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-browser)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running unittests src/lib.rs (target/debug/deps/kobo_browser_core-07f5f90270d2e698)
+
+running 27 tests
+test address::tests::a_typed_scheme_is_kept ... ok
+test address::tests::an_address_opens_with_https_supplied ... ok
+test address::tests::nothing_typed_goes_nowhere ... ok
+test address::tests::words_are_searched_for ... ok
+test address::tests::other_schemes_are_never_opened ... ok
+test cache::tests::a_damaged_index_reads_as_what_survives ... ok
+test cache::separator_regression::carriage_return_address_is_refused_without_changing_the_index ... ok
+test cache::tests::blobs_the_index_does_not_know_are_orphans ... ok
+test cache::tests::a_stored_index_over_budget_or_repeating_itself_is_cut_back ... ok
+test cache::tests::keeping_a_page_again_replaces_it ... ok
+test cache::tests::names_are_stable_short_and_shelf_safe ... ok
+test cache::tests::pages_not_worth_keeping_are_refused ... ok
+test cache::tests::the_entry_count_is_bounded_too ... ok
+test cache::tests::the_least_recently_read_page_goes_first ... ok
+test fetch::tests::every_failure_has_words_and_only_some_retry ... ok
+test fetch::tests::files_that_are_not_pages_are_named ... ok
+test fetch::tests::markup_is_html_wherever_the_page_starts ... ok
+test fetch::tests::text_without_markup_is_plain ... ok
+test library::tests::caps_and_corruption ... ok
+test library::tests::round_trip_and_revisit ... ok
+test library::unicode_storage_regression::decode_checks_normalized_address_length_and_keeps_other_records ... ok
+test tests::a_fragment_in_the_same_document_does_not_load ... ok
+test tests::a_step_whose_page_never_came_can_be_undone ... ok
+test tests::back_and_forward_walk_the_entries_and_restore_pages ... ok
+test tests::history_is_bounded ... ok
+test tests::navigating_from_the_middle_drops_what_was_ahead ... ok
+test cache::tests::the_index_survives_being_stored_and_a_full_one_fits_a_store_value ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_model.rs (target/debug/deps/history_model-c16bab307aad8c14)
+
+running 2 tests
+test history_capacity_and_branch_replacement_match_the_model ... ok
+test all_history_action_sequences_through_six_steps_match_the_model ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/resolve_roundtrip.rs (target/debug/deps/resolve_roundtrip-010218b330972826)
+
+running 2 tests
+test fuzzed_encoded_addresses_are_refused_or_round_trip ... ok
+test accepted_encoded_addresses_survive_history_reload_and_back ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_browser_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

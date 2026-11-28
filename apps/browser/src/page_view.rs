@@ -46,7 +46,7 @@ const MAX_CONTENT_HEIGHT_CSS: i64 = 100_000;
 /// Best-effort by contract: coverage is checked before drawing and a
 /// missing glyph draws the session's visible box, never a terminal error.
 pub(crate) struct PageFontAdapter {
-    session: PageFontSession,
+    session: std::rc::Rc<PageFontSession>,
 }
 
 impl PageFontAdapter {
@@ -55,14 +55,36 @@ impl PageFontAdapter {
     pub(crate) fn bundled() -> Option<Self> {
         PageFontSession::bundled()
             .ok()
-            .map(|session| Self { session })
+            .map(|session| Self { session: std::rc::Rc::new(session) })
     }
 
-    pub(crate) fn monospace() -> Option<Self> {
+    fn load_monospace() -> Option<std::rc::Rc<PageFontSession>> {
         PageFontSession::from_bytes(
             include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono.ttf"),
             include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono-Bold.ttf"),
-        ).ok().map(|session| Self { session })
+        ).ok().map(std::rc::Rc::new)
+    }
+
+    /// One immutable regular/bold pair per app thread. No glyph cache or
+    /// document data is retained. Failed construction is not cached.
+    pub(crate) fn monospace() -> Option<Self> {
+        thread_local! {
+            static MONO: std::cell::RefCell<Option<std::rc::Rc<PageFontSession>>> = const { std::cell::RefCell::new(None) };
+        }
+        #[cfg(debug_assertions)]
+        if std::env::var("KOBO_SIM_UNCACHED_MONO").as_deref() == Ok("1") {
+            return Self::load_monospace().map(|session| Self { session });
+        }
+        MONO.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if slot.is_none() { *slot = Self::load_monospace(); }
+            slot.as_ref().map(|session| Self { session: std::rc::Rc::clone(session) })
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn monospace_uncached() -> Option<Self> {
+        Self::load_monospace().map(|session| Self { session })
     }
 
     fn bitmap(&self, character: char, size: u32, bold: bool, italic: bool) -> Option<GlyphBitmap> {
@@ -1057,6 +1079,19 @@ mod tests {
         assert_eq!(clusters.last().expect("last").end, text.len());
         assert!(clusters.len() < text.chars().count());
         assert!(clusters.iter().all(|c| !c.bitmap.coverage.is_empty()));
+    }
+
+    #[test]
+    fn mono_cache_reuses_one_immutable_pair_and_uncached_path_is_distinct() {
+        let a = PageFontAdapter::monospace().unwrap();
+        let b = PageFontAdapter::monospace().unwrap();
+        let c = PageFontAdapter::monospace_uncached().unwrap();
+        assert!(std::rc::Rc::ptr_eq(&a.session, &b.session));
+        assert!(!std::rc::Rc::ptr_eq(&a.session, &c.session));
+        for bold in [false, true] {
+            assert_eq!(a.bitmap('W', 20, bold, false).unwrap().coverage,
+                c.bitmap('W', 20, bold, false).unwrap().coverage);
+        }
     }
 
     #[test]
