@@ -1372,6 +1372,7 @@ fn bookmarks_and_recent_pages_survive_restart_and_open() {
 
 #[test]
 fn library_lists_fit_all_profiles_and_text_sizes() {
+    kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
     for profile in [
         kobo_ui::CLARA_BW_METRICS,
         DisplayMetrics {
@@ -3223,4 +3224,20 @@ fn sphinx_page_callback_cost_probe(){
     let tree=kobo_web_document::parse_basic_style_tree(&norm,&sheets,&Limits{max_input_bytes:8*1024*1024,..Limits::DEFAULT},Some(kobo_web_document::MediaContext::new(width).unwrap().with_light_scheme()),page_mode::SHEET_BUDGET,None);
     eprintln!("Sphinx unsupported={} diagnostics={:?}",tree.unsupported,tree.diagnostics);
 
+}
+
+#[test]
+fn navigate_grid_has_all_destinations_with_installed_fonts(){
+    let r=runner(TextScale::Default);
+    for scale in [TextScale::Default,TextScale::Large,TextScale::ExtraLarge]{
+        let m=DisplayMetrics{text_scale:scale,..kobo_ui::CLARA_BW_METRICS};let screen=r.app().navigate_screen().build();
+        let layout=screen.layout_with(&m,&Chrome::measuring(true));
+        for id in ["page-view","native-reader","forms","sections","links","mark","bookmarks","recent"]{assert!(layout.rect_of_action(action_id(id)).is_some(),"{id} {scale:?}");}
+        assert!(kobo_web_layout::fits(&screen,&m));
+        if std::env::var_os("COBALT_PAGE_EVIDENCE").is_some(){
+            struct Empty;impl kobo_ui::Pictures for Empty{fn get(&self,_:kobo_sdk::PictureHandle)->Option<kobo_ui::PicturePixels<'_>>{None}}
+            let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&Empty,&mut surface,None);
+            use std::io::Write;let mut f=std::fs::File::create(format!("/tmp/nav-grid-{scale:?}.ppm")).unwrap();write!(f,"P6\n{} {}\n255\n",m.width,m.height).unwrap();for i in 0..surface.pixels.len(){f.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+        }
+    }
 }

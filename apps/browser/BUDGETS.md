@@ -1734,3 +1734,13 @@ composited top700px Rust/Python inspected: Python bar centred, Rust unchanged.
 ARM5,317,388B. v5 worker fullsuite1428pass; v5b fullsuite awaited. No claim of
 full flexbox correctness or constant-time layout. Current proofs/hardware gates
 remain open.
+
+Navigate menu correction: full app test run exposed font-dependent overflow.
+The old list-fit test omitted font install, standalone fallback fonts hid it;
+installed fonts reproduce Large/ExtraLarge menu overflow. Kept explicit font
+setup and replaced long rows with two-column destination buttons. Installed
+matrix3profiles x3sizes now passes40.92s; all8destinations reachable in all3sizes,
+actual Default/ExtraLarge pixels inspected. drive-forms corrected for More menu
+and off-screen second form; live route GET submitter and POST review/cancel pass.
+No textarea-editing claim from that route. Full app suite has NOT finished; its
+known failure is corrected, remaining suite pending. v5b workerfull1429pass.

@@ -1670,57 +1670,14 @@ impl Browser {
     }
 
     fn navigate_screen(&self) -> ScreenBuilder {
-        let marked = self
-            .loaded
-            .as_ref()
-            .is_some_and(|loaded| self.library.contains(&loaded.url.without_fragment()));
-        let heading = if self
-            .loaded
-            .as_ref()
-            .is_some_and(|loaded| loaded.paint_refused)
-        {
-            "Reader kept: page paint was incomplete"
-        } else {
-            "Navigate"
-        };
-        ScreenBuilder::new("browser-navigate")
-            .top_bar(heading)
-            .text(if self.loaded.as_ref().is_some_and(|l|l.styling_limited){"Styling limited: external styles unavailable or unsupported."}else{"Choose a page mode or jump within this page."})
-            .top_bar_action("return", "Done")
-            .top_bar_action("native-reader", "Reader")
-            .rows([
-                (
-                    "page-view",
-                    "Page view",
-                    "Paint this page, or keep Reader if unsupported",
-                    Glyph::Note,
-                ),
-                ("forms", "Forms", "Edit and submit controls. Page view shows previews only.", Glyph::Terminal),
-                ("sections", "Sections", "Jump to a heading", Glyph::Bookmark),
-                ("links", "Links", "Links on this page", Glyph::Bookmark),
-                (
-                    "mark",
-                    if marked {
-                        "Remove bookmark"
-                    } else {
-                        "Bookmark this page"
-                    },
-                    "Save or remove this address",
-                    Glyph::Bookmark,
-                ),
-                (
-                    "bookmarks",
-                    "Bookmarks",
-                    "Pages you marked",
-                    Glyph::Bookmark,
-                ),
-                (
-                    "recent",
-                    "History",
-                    "Recently visited pages",
-                    Glyph::Bookmark,
-                ),
-            ])
+        let marked=self.loaded.as_ref().is_some_and(|l|self.library.contains(&l.url.without_fragment()));
+        ScreenBuilder::new("browser-navigate").top_bar("Navigate")
+            .top_bar_action("return","Done")
+            .text(if self.loaded.as_ref().is_some_and(|l|l.styling_limited){"Styling limited: external styles unavailable or unsupported."}
+                else if self.loaded.as_ref().is_some_and(|l|l.paint_refused){"Reader kept: page paint was incomplete."}
+                else{"Choose a page mode or jump within this page."})
+            .grid(2,false,[("page-view","Page view"),("native-reader","Reader"),("forms","Forms"),("sections","Sections"),("links","Links"),
+                ("mark",if marked{"Unbookmark"}else{"Bookmark"}),("bookmarks","Bookmarks"),("recent","History")])
     }
 
     fn handle_form_return(&mut self, context: &mut Context, action: ActionId) -> bool {

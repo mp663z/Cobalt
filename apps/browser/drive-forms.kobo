@@ -1,6 +1,7 @@
 wait-for Search the web
 tap-id samples
 wait-for Sample pages
+tap-id browser-more
 tap-id navigate
 tap-id native-reader
 tap-id link-5
@@ -13,6 +14,8 @@ wait-for A page of many links
 shot form-submitter-result
 tap-id back
 wait-for Sample form
+tap-id browser-more
+tap-id forms
 tap-id form-1
 wait-for note
 tap-id submit-field-1
