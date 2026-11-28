@@ -1810,3 +1810,8 @@ candidate despite visible footer arrow. Driver now prefers an active PageNext
 control before empty-zone fallback; targeted2tests pass, including inert arrow
 refusal. Live route passes and saved/result pixels inspected. No browser runtime
 change or hardware claim; app ARM unchanged.
+
+Pager follow-up at5ca0d7f6: all23driver tests pass. LibraColour paged-form repeat
+also passes (same30options/24fields, exact fullquery and dismissal-frame checks),
+saved-control pixels inspected. Current app suite coverage remains273pass3ignored
+at73360e4f, with later changes limited to fixture/driver/evidence.
