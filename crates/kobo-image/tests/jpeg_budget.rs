@@ -23,3 +23,10 @@ fn marker_scan_budget_and_truncation_are_refused_without_entropy_decode() {
         assert!(kobo_image::decode_colour(&bytes).is_err());
     }
 }
+
+#[test]
+fn existing_browser_best_effort_entropy_eof_remains_decodable() {
+    let bytes = include_bytes!("../../../apps/browser/tests/images/truncated.jpg");
+    assert!(kobo_image::decode(bytes).is_ok());
+    assert!(kobo_image::decode_colour(bytes).is_ok());
+}

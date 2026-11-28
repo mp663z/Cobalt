@@ -1,0 +1,2683 @@
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> crates/kobo-web-document/src/basic_page.rs:1056:13
+     |
+1056 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:696:25
+    |
+696 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+    --> crates/kobo-web-document/src/css.rs:9624:65
+     |
+9624 |                 .matches_checked_scoped_budget(&n, id(&n, "s"), &mut EXT_FUEL, None, None),
+     |                                                                 ^^^^^^^^^^^^^
+     |
+     = note: each usage of a `const` item creates a new temporary
+     = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+    --> crates/kobo-web-document/src/css.rs:10:1
+     |
+10   | pub(crate) const EXT_FUEL: u32 = 4096;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: `#[warn(const_item_mutation)]` on by default
+
+warning: taking a mutable reference to a `const` item
+    --> crates/kobo-web-document/src/css.rs:9878:55
+     |
+9878 |                 .matches_checked_scoped_budget(&n, s, &mut EXT_FUEL, None, None),
+     |                                                       ^^^^^^^^^^^^^
+     |
+     = note: each usage of a `const` item creates a new temporary
+     = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+    --> crates/kobo-web-document/src/css.rs:10:1
+     |
+10   | pub(crate) const EXT_FUEL: u32 = 4096;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+    --> crates/kobo-web-document/src/css.rs:9884:55
+     |
+9884 |                 .matches_checked_scoped_budget(&n, s, &mut EXT_FUEL, None, None),
+     |                                                       ^^^^^^^^^^^^^
+     |
+     = note: each usage of a `const` item creates a new temporary
+     = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+    --> crates/kobo-web-document/src/css.rs:10:1
+     |
+10   | pub(crate) const EXT_FUEL: u32 = 4096;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+    --> crates/kobo-web-document/src/css.rs:9890:55
+     |
+9890 |                 .matches_checked_scoped_budget(&n, s, &mut EXT_FUEL, None, None),
+     |                                                       ^^^^^^^^^^^^^
+     |
+     = note: each usage of a `const` item creates a new temporary
+     = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+    --> crates/kobo-web-document/src/css.rs:10:1
+     |
+10   | pub(crate) const EXT_FUEL: u32 = 4096;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+    --> crates/kobo-web-document/src/css.rs:9896:55
+     |
+9896 |                 .matches_checked_scoped_budget(&n, s, &mut EXT_FUEL, None, None),
+     |                                                       ^^^^^^^^^^^^^
+     |
+     = note: each usage of a `const` item creates a new temporary
+     = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+    --> crates/kobo-web-document/src/css.rs:10:1
+     |
+10   | pub(crate) const EXT_FUEL: u32 = 4096;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+     --> crates/kobo-web-document/src/css.rs:10061:17
+      |
+10061 |                 &mut EXT_FUEL,
+      |                 ^^^^^^^^^^^^^
+      |
+      = note: each usage of a `const` item creates a new temporary
+      = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+     --> crates/kobo-web-document/src/css.rs:10:1
+      |
+10    | pub(crate) const EXT_FUEL: u32 = 4096;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+     --> crates/kobo-web-document/src/css.rs:10070:55
+      |
+10070 |                 .matches_checked_scoped_budget(&n, h, &mut EXT_FUEL, None, None),
+      |                                                       ^^^^^^^^^^^^^
+      |
+      = note: each usage of a `const` item creates a new temporary
+      = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+     --> crates/kobo-web-document/src/css.rs:10:1
+      |
+10    | pub(crate) const EXT_FUEL: u32 = 4096;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+     --> crates/kobo-web-document/src/css.rs:10086:55
+      |
+10086 |                 .matches_checked_scoped_budget(&n, h, &mut EXT_FUEL, None, None),
+      |                                                       ^^^^^^^^^^^^^
+      |
+      = note: each usage of a `const` item creates a new temporary
+      = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+     --> crates/kobo-web-document/src/css.rs:10:1
+      |
+10    | pub(crate) const EXT_FUEL: u32 = 4096;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+     --> crates/kobo-web-document/src/css.rs:10205:21
+      |
+10205 |                     &mut EXT_FUEL,
+      |                     ^^^^^^^^^^^^^
+      |
+      = note: each usage of a `const` item creates a new temporary
+      = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+     --> crates/kobo-web-document/src/css.rs:10:1
+      |
+10    | pub(crate) const EXT_FUEL: u32 = 4096;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: taking a mutable reference to a `const` item
+     --> crates/kobo-web-document/src/css.rs:10215:55
+      |
+10215 |                 .matches_checked_scoped_budget(&n, h, &mut EXT_FUEL, None, None),
+      |                                                       ^^^^^^^^^^^^^
+      |
+      = note: each usage of a `const` item creates a new temporary
+      = note: the mutable reference will refer to this temporary, not the original `const` item
+note: `const` item defined here
+     --> crates/kobo-web-document/src/css.rs:10:1
+      |
+10    | pub(crate) const EXT_FUEL: u32 = 4096;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `i`
+    --> crates/kobo-web-document/src/style_tree.rs:6728:14
+     |
+6728 |         let (i, n) = t
+     |              ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: methods `matches_originating_checked` and `matches_originating_checked_scoped` are never used
+    --> crates/kobo-web-document/src/css.rs:1914:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `original_panic_now_unknown_S_skips_tail_nested_oversize` should have a snake case name
+    --> crates/kobo-web-document/src/css.rs:7780:8
+     |
+7780 |     fn original_panic_now_unknown_S_skips_tail_nested_oversize() {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case (notice the capitalization): `original_panic_now_unknown_s_skips_tail_nested_oversize`
+     |
+     = note: `#[warn(non_snake_case)]` on by default
+
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+warning: `kobo-web-document` (lib test) generated 18 warnings (5 duplicates)
+warning: unused import: `style_diagnostics::RefusalReason as R`
+ --> crates/kobo-web-document/tests/light_scheme_proto.rs:3:78
+  |
+3 | use kobo_web_document::{MediaContext, measure, parse_style_tree_with_supply, style_diagnostics::RefusalReason as R, Limits, SupplyBudget};
+  |                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `kobo-web-document` (test "light_scheme_proto") generated 1 warning (run `cargo fix --test "light_scheme_proto"` to apply 1 suggestion)
+warning: unused variable: `e`
+ --> crates/kobo-web-document/examples/flex_rects.rs:2:246
+  |
+2 | ...paint_backgrounds(&t,600,200){Err(e)=>println!("ERR"),Ok(l)=>{ for c in l.commands(){ if let Command::Fill{rect,color,..}=c{print!(" (...
+  |                                      ^ help: if this is intentional, prefix it with an underscore: `_e`
+  |
+  = note: `#[warn(unused_variables)]` on by default
+
+warning: `kobo-web-document` (example "flex_rects") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (target/debug/deps/kobo_web_document-0d030176cdf033bf)
+
+running 452 tests
+test basic_bidi::tests::css_override_reverses_latin_without_reversing_source ... ok
+test basic_bidi::tests::ancestor_override_stays_open_across_style_leaves ... ok
+test basic_bidi::tests::isolate_keeps_digits_with_its_inline_direction ... ok
+test basic_bidi::tests::nested_isolate_closes_before_surrounding_text ... ok
+test basic_bidi::tests::rtl_reorders_hebrew_but_preserves_latin_and_digits ... ok
+test basic_bidi::tests::paired_neutrals_resolve_rtl_for_mirrored_paint ... ok
+test basic_bidi::tests::source_leaf_identity_survives_visual_reordering ... ok
+test basic_bidi::tests::wrapped_lines_are_reordered_independently ... ok
+test basic_page::basic_breaker_collapses_inter_word_space ... ok
+test basic_page::hgeom_tests::auto_margins_split_free_space ... ok
+test basic_page::hgeom_tests::cap_below_content_does_not_fire_and_one_sided_auto_absorbs ... ok
+test basic_page::hgeom_tests::max_width_cap_recenters ... ok
+test basic_page::hgeom_tests::over_wide_content_overruns_the_right_margin ... ok
+test basic_page::media_eval_tests::media_width_verdicts_at_basic_viewport ... ok
+test basic_text::tests::an_overwide_cluster_keeps_its_zero_advance_continuation ... ok
+test basic_page::media_eval_tests::media_prefilter_drops_false_blocks_and_keeps_true_ones ... ok
+test basic_text::tests::only_overwide_words_break_inside ... ok
+test basic_text::tests::pre_retains_blank_lines_indentation_and_tabs ... ok
+test basic_text::tests::unicode_and_source_run_identity_survive ... ok
+test basic_text::tests::whitespace_collapses_across_style_boundaries ... ok
+test basic_text::tests::zero_advance_marks_do_not_disappear ... ok
+test basic_text::tests::words_move_whole_and_spaces_are_not_doubled ... ok
+test basic_text_paint::tests::chromatic_text_keeps_authored_rgb_even_above_neutral_floor ... ok
+test basic_text_paint::tests::cursor_remeasurement_and_absent_collapsed_space_stay_on_boundaries ... ok
+test basic_text_paint::tests::light_text_on_light_paper_is_darkened ... ok
+test box_tree::float_kernel_tests::cleared_block_y_equals_float_height_but_is_degenerate_with_plain_stacking ... ok
+test box_tree::float_kernel_tests::admitted_float_layout_is_refused_by_the_paint_gate ... ok
+test box_tree::float_kernel_tests::explicit_parent_height_moves_next_block_to_it ... ok
+test box_tree::float_kernel_tests::kernel_layout_numbers_match_recorded_chrome_xwh_and_y ... ok
+test box_tree::float_kernel_tests::no_float_declaration_keeps_normal_flow_identity ... ok
+test box_tree::float_kernel_tests::short_parent_overflow_is_layout_admitted_but_paint_refused_by_default_gate ... ok
+test box_tree::float_kernel_tests::two_kernels_in_one_tree_are_refused ... ok
+test box_tree::float_kernel_tests::everything_outside_the_kernel_is_refused ... ok
+test box_tree::float_kernel_tests::variant_b_negative_shapes_are_refused ... ok
+test box_tree::float_kernel_tests::variant_b_uncleared_float_layout_differs_from_stacking ... ok
+test box_tree::float_kernel_tests::variant_c_right_float_x_is_parent_right_edge ... ok
+test box_tree::float_kernel_tests::variant_d_kernel_predicate_isolated_float32_hole ... ok
+test box_tree::float_kernel_tests::variant_e1_exemptions_do_not_leak_outside_the_kernel ... ok
+test box_tree::float_kernel_tests::variant_e1_zero_height_clear_layout_and_exemptions ... ok
+test box_tree::float_kernel_tests::variant_d_kernel_gate_requires_whole_px_percent ... ok
+test box_tree::float_kernel_tests::variant_e1_zero_height_negatives_stay_refused ... ok
+test box_tree::percent_guard_tests::height_pass_audit_isolated_hole_fraction_exact ... ok
+test box_tree::percent_guard_tests::known_refusals_and_admissions ... ok
+test box_tree::percent_guard_tests::width_pass_refuses_fractional_percent_and_keeps_exact ... ok
+test box_tree::tests::adjoining_margin_equation_handles_positive_negative_and_zero ... ok
+test box_tree::tests::all_inline_children_stay_in_inline_formatting_context ... ok
+test box_tree::tests::auto_block_height_contains_definite_children_but_not_indefinite_percent ... ok
+test box_tree::tests::block_inside_inline_is_explicitly_unsupported ... ok
+test box_tree::tests::block_width_edges_auto_margins_and_direction ... ok
+test box_tree::tests::border_box_height_subtracts_vertical_padding_without_underflow ... ok
+test box_tree::tests::border_box_width_excludes_nonnegative_edges ... ok
+test box_tree::tests::css_2_2_block_width_with_zero_edges ... ok
+test box_tree::tests::definite_height_does_not_guess_auto_or_indefinite_percent ... ok
+test box_tree::tests::definite_sibling_stack_stops_at_first_unknown ... ok
+test box_tree::tests::hidden_subtree_has_no_boxes_or_text ... ok
+test box_tree::tests::horizontal_margins_and_anonymous_blocks_reset_noninherited_values ... ok
+test box_tree::tests::img_becomes_an_image_box_with_its_facts ... ok
+test box_tree::tests::inline_block_width_is_not_guessed ... ok
+test box_tree::tests::measured_direct_text_receives_content_origin_without_background_permission ... ok
+test box_tree::tests::measured_text_height_does_not_turn_background_only_pass_into_text_paint ... ok
+test box_tree::tests::mixed_children_get_anonymous_blocks_in_dom_order ... ok
+test box_tree::tests::normalization_rejects_bad_graphs_atomically ... ok
+test box_tree::tests::normalized_wrappers_keep_sources_order_and_width_geometry ... ok
+test box_tree::tests::padding_changes_content_width_and_x_without_stealing_margin ... ok
+test box_tree::tests::root_children_keep_their_top_margin_and_nested_first_margins_collapse ... ok
+test box_tree::tests::source_exemption_is_only_exact_generated_anonymous_wrapper ... ok
+test box_tree::tests::vertical_padding_moves_content_and_siblings_without_margin_collapse ... ok
+test box_tree::tests::vertical_pass_positions_only_definite_block_subtrees ... ok
+test box_tree::tests::vertical_pass_rejects_unknown_height_and_parent_child_collapse ... ok
+test box_tree::tests::vertical_percentage_margin_uses_containing_width_and_auto_zero ... ok
+test box_tree::tests::width_position_is_known_only_on_block_paths ... ok
+test box_tree::tests::widths_follow_nearest_block_content_width ... ok
+test computed_style::tests::css_wide_keywords_resolve_per_property ... ok
+test computed_style::tests::display_is_not_inherited_but_color_is ... ok
+test computed_style::tests::font_size_inherits_and_css_wide_keywords_keep_their_scope ... ok
+test computed_style::tests::height_is_not_inherited_without_a_declaration ... ok
+test computed_style::tests::importance_origin_specificity_and_order_are_distinct ... ok
+test computed_style::tests::revert_uses_lower_origin_not_earlier_same_origin ... ok
+test computed_style::tests::width_defaults_auto_and_inherits_only_when_requested ... ok
+test css::adjacent_has_tests::browser_truth ... ok
+test css::adjacent_has_tests::candidate_position_none_preflight_and_error_before_later_true ... ok
+test css::adjacent_has_tests::exact_full_scan_repeat_preguard_and_fuel_before_lookup ... ok
+test css::adjacent_has_tests::first_candidate_false_blocks_later_true_unknown_and_unvisited_irrelevant ... ok
+test css::adjacent_has_tests::grammar_rank_flags_bounds ... ok
+test css::adjacent_has_tests::local_selfparent_and_parent_as_next_identity_duplicate_detached ... ok
+test css::attribution_harness::corpus_refused_selector_attribution ... ignored, measurement harness; run explicitly
+test css::checked_structural_correction_tests::both_directions_typed_structural_unknown_through_not_where_and_has ... ok
+test css::checked_structural_correction_tests::detached_invalid_parent_missing_member_text_other_fuel_and_gates ... ok
+test css::checked_structural_correction_tests::invalid_before_after_unknown_tail_both_compound_and_later_valid_true ... ok
+test css::checked_structural_correction_tests::original_panic_now_unknown_S_skips_tail_nested_oversize ... ok
+test css::checked_structural_correction_tests::sibling_combinator_visited_invalid_and_position_membership ... ok
+test css::child_has_bounded_tests::browser_match_actual_html_oracle ... ok
+test css::child_has_bounded_tests::candidate_index_not_anchor_position_repeat_actualcost_and_immediate_error ... ok
+test css::child_has_bounded_tests::every_wrapper_dependency_order_preflight_before_false_and_same_target ... ok
+test css::child_has_bounded_tests::exact_non_element_failed_search_oversize_and_left_error_pins ... ok
+test css::child_has_bounded_tests::genuine_invalid_unknown_then_true_false_parent_mismatch_and_detached ... ok
+test css::child_has_bounded_tests::grammar_whole_refusal_flags_rank_and_bounds ... ok
+test css::desc_has_ascent_refusal_tests::exact_initial_nested_and_rescan_gates_missing_membership_and_invalid_parent ... ok
+test css::desc_has_bounded_tests::browser_match_actual_html_oracle ... ok
+test css::desc_has_bounded_tests::candidate_index_not_anchor_position_repeat_actualcost_and_immediate_error ... ok
+test css::desc_has_bounded_tests::every_wrapper_dependency_order_preflight_before_false_and_same_target ... ok
+test css::desc_has_bounded_tests::exact_non_element_failed_search_oversize_and_left_error_pins ... ok
+test css::desc_has_bounded_tests::genuine_invalid_unknown_then_true_false_parent_mismatch_and_detached ... ok
+test css::desc_has_bounded_tests::grammar_whole_refusal_flags_rank_and_bounds ... ok
+test css::desc_has_cursor_tests::exact_ascent_rescans_repeat_and_budget_bound ... ok
+test css::desc_has_cursor_tests::malformed_cycles_duplicates_boundary_and_detached ... ok
+test css::desc_has_cursor_tests::nested_oversize_before_later_true_and_non_element_leaves ... ok
+test css::desc_has_cursor_tests::rightmost_candidate_position_none_and_grandchild_only ... ok
+test css::embedded_class_bang_tests::all_wrapper_modes_state_preflight_and_indices_unchanged ... ok
+test css::embedded_class_bang_tests::browser_truth_replay ... ok
+test css::embedded_class_bang_tests::exact_charged_decoded_class_work_and_failures ... ok
+test css::embedded_class_bang_tests::exactshape_rawend_and_no_other_identifier_widening ... ok
+test css::embedded_class_bang_tests::rawlength_class_and_wrapper_bounds_rank ... ok
+test css::embedded_class_bang_tests::token_case_backslash_no_prefix_fallback ... ok
+test css::empty_bounded_tests::actual_html_browser17_and_template5_plus_parent_replay ... ok
+test css::empty_bounded_tests::full_ignored_children_cumulative_fuel_and_left_unknown ... ok
+test css::empty_bounded_tests::raw_engine150_unique_ids_complete_chain_not_flattened ... ok
+test css::empty_bounded_tests::specificity_grammar_repeated_census_and_exact_raw_cost ... ok
+test css::empty_bounded_tests::synthetic_empty_text_other_detached_namespace_invalid_none_and_oversize ... ok
+test css::enablement_oracle_replay_tests::enablement_oracle_replay_all_cases_on_engine_parsed_dom ... ok
+test css::enablement_oracle_replay_tests::engine_parsed_ancestry_matches_oracle_disclosure ... ok
+test css::ext_selector_tests::after_pseudo_element_grammar_is_extended_only_trailing_and_exact ... ok
+test css::ext_selector_tests::attribute_operators_follow_selectors_semantics ... ok
+test css::ext_selector_tests::base_entry_still_refuses_enablement ... ok
+test css::ext_selector_tests::default_entry_greedy_descendant_chain_gap_is_unchanged ... ok
+test css::ext_selector_tests::default_entry_still_refuses_attribute_selectors_and_ext_entry_applies_them ... ok
+test box_tree::percent_guard_tests::admitted_percent_is_exactly_the_binary32_integer ... ok
+test css::ext_selector_tests::enablement_grammar_pins ... ok
+test css::ext_selector_tests::first_legend_exemption_and_recursive_fieldset_walk_pins ... ok
+test css::ext_selector_tests::non_face_element_matches_neither_enablement ... ok
+test css::ext_selector_tests::nth_child_actual_path_positions_signs_zero_negative_and_default_identity ... ok
+test css::ext_selector_tests::nth_child_oversize_sibling_gate_is_precise_at_the_exact_boundary ... ok
+test css::ext_selector_tests::nth_child_parser_token_pins ... ok
+test css::ext_selector_tests::nth_ok_detached_element_is_index_one ... ok
+test css::ext_selector_tests::nth_scan_off_the_rightmost_step_is_fuel_charged_and_fails_closed ... ok
+test css::ext_selector_tests::oversize_sibling_list_with_sibling_combinator_refuses_not_mismatches ... ok
+test css::ext_selector_tests::repeated_structural_pseudo_classes_count_each_occurrence_for_specificity ... ok
+test css::ext_selector_tests::select_option_composition_walk_pins ... ok
+test css::ext_selector_tests::sibling_combinators_and_backtracking_descendant_chains ... ok
+test css::ext_selector_tests::sibling_traversal_is_charged_to_the_global_match_work_budget ... ok
+test css::ext_selector_tests::specificity_counts_attributes_and_structural_pseudos_as_classes ... ok
+test css::ext_selector_tests::structural_pseudo_classes_use_element_siblings_not_text_or_comments ... ok
+test css::ext_selector_tests::svg_type_selectors_match_camel_case_elements_case_insensitively ... ok
+test css::ext_selector_tests::unicode_whitespace_around_selectors_does_not_trim_or_split ... ok
+test css::ext_selector_tests::unsupported_selector_forms_still_refuse ... ok
+test css::ext_selector_tests::word_and_class_matching_use_ascii_css_whitespace_only ... ok
+test css::has_class_pair_extra_tests::actual_firsttrue_skips_second_fuel_error_and_full_rescans_charged ... ok
+test css::has_class_pair_oracle_tests::browser182_origin_truths_and_actual_pseudo_rank ... ok
+test css::has_class_pair_tests::actual_four_descendant_combinations_cost_repeat_and_errors ... ok
+test css::has_class_pair_tests::exact_scope_rank_sharedslots_and_provenance ... ok
+test css::has_class_pair_tests::synthetic_or_and_real_topology_unknown ... ok
+test css::has_typed_pair_tests::browser_original11_truths ... ok
+test css::has_typed_pair_tests::strict_scope_rank_slots_provenance_and_legacy_isolation ... ok
+test css::has_typed_pair_tests::typed_charged_predicate_order_unknown_rescans_and_errors ... ok
+test css::is_five_additional_tests::every_newbranch_dependency_walk_and_oldfamily_order ... ok
+test css::is_five_additional_tests::lazy17_and_explicit_provenance_differential ... ok
+test css::is_five_tests::explicit_splitter_fallbacks_and_original_browser_truths ... ok
+test css::is_five_tests::same_node_or_synthetic_unknown_and_actual_charged_work ... ok
+test css::is_five_tests::scope_budget_rank_wrappers_and_comma_provenance ... ok
+test css::leading_class_colon_tests::browser_truth_replay ... ok
+test css::leading_class_colon_tests::leading_only_rawend_state_delimiters_and_other_contexts ... ok
+test css::leading_class_colon_tests::rawcaps_classbounds_rank_and_charged_matchedlength ... ok
+test css::link_matcher_pin::focus_family_parses_and_never_matches_any_element_at_the_matcher ... ok
+test css::link_matcher_pin::has_autofocus_is_engine_observable ... ok
+test css::link_matcher_pin::hover_active_never_match_any_element_at_the_matcher ... ok
+test css::link_matcher_pin::link_matches_only_html_a_area_with_href_at_the_matcher ... ok
+test css::not_bounded_tests::not_bounds_base_refusal_and_separate_inner_state_budget ... ok
+test css::not_bounded_tests::not_charged_attribute_predicates_match_legacy_truth_without_allocations ... ok
+test css::not_bounded_tests::not_charging_exact_work_short_circuits_and_ignores_unread_values ... ok
+test css::not_bounded_tests::not_inner_attribute_structural_enablement_truth ... ok
+test css::not_bounded_tests::not_parser_inventory ... ignored, measurement: NOT_LINES path supplies original 542-line inventory
+test css::not_bounded_tests::not_specificity_replaces_token_and_counts_every_argument_piece ... ok
+test css::not_bounded_tests::not_submatch_fuel_attr_and_structural_exhaustion_never_inverted ... ok
+test css::not_bounded_tests::not_three_valued_and_recursive_enrollment_dependencies ... ok
+test css::not_bounded_tests::not_unknown_left_search_steps_propagate_and_resolved_matches_succeed ... ok
+test css::not_class_pair_oracle_tests::actual_browser147_truths ... ok
+test css::not_class_pair_splitter_tests::actual_group_provenance_and_wrapped_counts ... ok
+test css::not_class_pair_splitter_tests::instrument_disjoint_scan_and_early17 ... ok
+test css::not_class_pair_splitter_tests::legacy_slice_identity_arbitrary_ascii ... ok
+test css::not_class_pair_tests::actual_charged_truth_cost_and_shortcircuit ... ok
+test css::not_class_pair_tests::negated_or_synthetic_unknown_and_lazy_error ... ok
+test css::not_class_pair_tests::syntax_rank_slots_and_raw_bounds ... ok
+test css::of_type_bounded_tests::typed_actual_cost_non_elements_and_ns_local_bytes ... ok
+test css::of_type_bounded_tests::typed_detached_inconsistent_oversize_fuel_and_negation ... ok
+test css::of_type_bounded_tests::typed_html_and_foreign_oracle_21_rows ... ok
+test css::of_type_bounded_tests::typed_scan_cost_reuse_position_and_left_unknown ... ok
+test css::of_type_bounded_tests::typed_specificity_bounds_base_refusal_and_anb ... ok
+test css::of_type_bounded_tests::typed_synthetic_namespace_prefix_and_exact_case_not_html_parse_claim ... ok
+test css::reverse_child_bounded_tests::browser_parsed_html_mixed_type_namespace_truth_21rows ... ok
+test css::reverse_child_bounded_tests::cumulative_scans_fuel_and_left_unknown ... ok
+test css::reverse_child_bounded_tests::exact_raw_cost_detached_unknown_failed_search_oversize_and_negation ... ok
+test css::reverse_child_bounded_tests::specificity_bounds_formula_reuse_and_wrong_forward_position ... ok
+test css::reverse_child_bounded_tests::synthetic_namespace_must_not_filter_all_element_reverse_census ... ok
+test css::selector_control::control_dump ... ignored
+test css::target_tests::base_entry_still_refuses_target ... ok
+test css::target_tests::target_decode_retry_hits_top_id_and_top_fallback_uses_decoded ... ok
+test css::target_tests::target_grammar_pins ... ok
+test css::target_tests::target_resolution_is_charged_and_refuses_on_exhaustion ... ok
+test css::target_tests::target_resolution_truth_table_engine_parsed_dom ... ok
+test css::target_tests::target_selector_match_and_no_assertion_unresolved ... ok
+test css::target_walk_tests::focus_guards_unchanged_by_target_assertion ... ok
+test css::target_walk_tests::fragment_assertion_enrolls_and_matches_resolved_target_only ... ok
+test css::target_walk_tests::fragment_free_assertion_enrolls_and_matches_nothing ... ok
+test css::target_walk_tests::no_assertion_fails_closed_at_enrollment ... ok
+test css::tests::at_rule_blocks_do_not_leak_declarations_outside_their_condition ... ok
+test css::tests::basic_pseudo_hook_accepts_plain_compound_bases ... ok
+test css::tests::basic_pseudo_hook_refuses_everything_else ... ok
+test css::tests::cascade_selector_specificity_important_and_inline ... ok
+test css::tests::grouped_selectors_comments_and_unsupported_syntax_fail_closed ... ok
+test css::tests::wikipedia_fixture_hides_matching_navigation_but_keeps_article ... ok
+test css::two_adjacent_has_tests::both_positions_deps_target_and_both_rawgates ... ok
+test css::two_adjacent_has_tests::browser_truth ... ok
+test css::two_adjacent_has_tests::exact_second_membership_rescan_repeat_fullfailure_and_fuel ... ok
+test css::two_adjacent_has_tests::grammar_rank_inheritedflags_fixedtail_enum ... ok
+test css::two_adjacent_has_tests::invalid_adjacency_false_blocks_later_true_and_unknown_skips_t ... ok
+test css::two_adjacent_has_tests::original_anchor_duplicate_middle_parent_outside_excluded ... ok
+test css::two_child_has_tests::both_position_none_and_both_dependencies_preflight ... ok
+test css::two_child_has_tests::browser_two_child_truth ... ok
+test css::two_child_has_tests::exact_two_loops_cost_duplicate_repeat_and_gates ... ok
+test css::two_child_has_tests::grammar_inherited_flags_both_ranks_and_fixed_bounds ... ok
+test css::two_child_has_tests::real_unknown_middle_leaf_then_true_false_mismatch_and_cycles ... ok
+test css::two_child_has_tests::s_unknown_skips_t_and_errors_before_later_true ... ok
+test css::two_descendant_has_tests::both_indices_flags_target_and_preflight ... ok
+test css::two_descendant_has_tests::browser_truth_replay ... ok
+test css::two_descendant_has_tests::exactcosts_repeated_resume_and_unknown_s_no_t ... ok
+test css::two_descendant_has_tests::fixedgrammar_rank_flags_and_bounds ... ok
+test css::two_descendant_has_tests::malformed_unknown_across_yields_localcycle_and_boundaries ... ok
+test css::two_descendant_has_tests::mismatched_tail_unknown_and_raw4096_exact ... ok
+test css::two_descendant_has_tests::rawgates_and_defensive_resume_missingparent ... ok
+test css::two_descendant_has_tests::strict_boundaries_both_depths_and_later_branches ... ok
+test css::where_bounded_tests::browser_actual_parsed_match_oracle_5rows_16selectors ... ok
+test css::where_bounded_tests::exact_repeat_cost_and_left_unknown_and_cumulative_fuel ... ok
+test css::where_bounded_tests::recursive_deps_preflight_before_false_and_pseudo_guard ... ok
+test css::where_bounded_tests::same_resolved_target_and_mixed_snapshot_dependencies ... ok
+test css::where_bounded_tests::shared_work_unknown_and_errors_never_inverted ... ok
+test css::where_bounded_tests::zero_rank_all_arguments_cross_wrappers_and_bounds ... ok
+test css_border::tests::oversized_edges_refuse_without_returning_a_page ... ok
+test custom_props::tests::budgets_refuse ... ok
+test custom_props::tests::css_wide_keywords_through_var_refuse ... ok
+test custom_props::tests::cycles_and_unresolvable_custom_values_refuse ... ok
+test custom_props::tests::definitions_accept_only_bounded_plain_tokens ... ok
+test custom_props::tests::fallback_may_contain_commas_and_nested_var ... ok
+test custom_props::tests::malformed_and_foreign_function_names ... ok
+test custom_props::tests::map_inherits_overrides_and_resolves_local_references ... ok
+test custom_props::tests::missing_without_fallback_refuses ... ok
+test custom_props::tests::names_are_case_sensitive_and_values_keep_case ... ok
+test custom_props::tests::string_definitions_are_narrow_and_unit_checked ... ok
+test custom_props::tests::substitution_is_token_level_never_glued ... ok
+test data_stylesheet::tests::size_arithmetic_is_checked_before_allocation ... ok
+test dom::profile_mapping_tests::every_refusing_html_tag_has_an_explicit_exact_profile_mapping ... ok
+test dom::profile_saturation_test::saturated_profile_counts_cannot_wrap_to_zero ... ok
+test dom::source_fact_tests::arena_scan_includes_detached_template_and_other_namespaces_once ... ok
+test dom::source_fact_tests::both_attribute_paths_classify_all_rejections_after_duplicates ... ok
+test dom::source_fact_tests::both_paths_reject_oversized_new_but_not_oversized_existing ... ok
+test dom::source_fact_tests::loss_accounting_saturates_on_both_paths ... ok
+test dom::source_fact_tests::namespace_uri_or_prefix_observed_before_any_filter_on_both_paths ... ok
+test flex_units::tests::bounds_refuse ... ok
+test flex_units::tests::exact_px_mode_refuses_fractional_share ... ok
+test flex_units::tests::three_equal_flex_one_in_100px_chrome_units ... ok
+test flex_units_v2::tests::bounds_refuse ... ok
+test flex_units_v2::tests::exact_px_mode_refuses_fractional_share ... ok
+test flex_units_v2::tests::three_equal_flex_one_in_100px_chrome_units ... ok
+test flex_units_v3::tests::bounds_refuse ... ok
+test flex_units_v3::tests::exact_px_mode_refuses_fractional_share ... ok
+test flex_units_v3::tests::three_equal_flex_one_in_100px_chrome_units ... ok
+test font_family::table_tests::dedups_and_roundtrips ... ok
+test font_family::table_tests::independent_builders_with_divergent_appends_never_resolve_each_others_keys ... ok
+test font_family::table_tests::keys_do_not_cross_tables_even_at_equal_index ... ok
+test font_family::table_tests::overflow_refuses_without_wrapping ... ok
+test font_family::table_tests::token_exhaustion_refuses ... ok
+test font_family::table_tests::view_clones_share_immutable_data_and_resolve_same_keys ... ok
+test inline_lines::apostrophe_wrap_tests::internal_ascii_apostrophes_stay_in_sentence_words ... ok
+test inline_lines::apostrophe_wrap_tests::quotes_and_apostrophes_attach_to_their_word ... ok
+test inline_lines::bracket_word_tests::direct_text_refuses_a_bold_run_without_a_bold_face_key ... ok
+test inline_lines::bracket_word_tests::duplicated_boundary_whitespace_collapses_once_and_trims_edges ... ok
+test inline_lines::bracket_word_tests::runs_normal_boundary_space_belongs_to_the_run_that_carries_it ... ok
+test inline_lines::bracket_word_tests::runs_normal_tracks_per_face_advances_positions_and_flags ... ok
+test inline_lines::bracket_word_tests::runs_normal_wraps_across_runs_on_word_boundaries ... ok
+test inline_lines::bracket_word_tests::runs_text_places_strong_with_bold_face_and_flags ... ok
+test inline_lines::bracket_word_tests::runs_text_refuses_unproven_inline_contexts ... ok
+test inline_lines::bracket_word_tests::single_paired_brackets_stay_on_their_word_line ... ok
+test inline_lines::bracket_word_tests::unmatched_nested_and_multiword_brackets_still_refuse ... ok
+test inline_lines::break_opportunity_tests::contraction_still_placed ... ok
+test inline_lines::break_opportunity_tests::fitting_hyphenated_word_stays_whole ... ok
+test inline_lines::break_opportunity_tests::hard_punctuation_stays_attached_to_word ... ok
+test inline_lines::break_opportunity_tests::hyphenated_word_breaks_after_hyphen ... ok
+test inline_lines::break_opportunity_tests::over_wide_piece_still_unbreakable ... ok
+test inline_lines::break_opportunity_tests::paragraph_wraps_at_spaces_and_hyphens ... ok
+test inline_lines::break_opportunity_tests::slashed_word_breaks_after_solidus ... ok
+test inline_lines::leaf_source_tests::actual_leaf_sources_replace_first_leaf_stamping_without_pixel_change ... ok
+test inline_lines::leaf_source_tests::invalid_or_missing_mapping_refuses_before_raster_and_never_guesses ... ok
+test inline_lines::leaf_source_tests::sourced_tokenizer_matches_compatibility_geometry_and_provider_calls ... ok
+test inline_lines::leaf_source_tests::words_spaces_wrap_alignment_and_face_keep_exact_source ... ok
+test inline_lines::nested_inline_tests::caps_are_independent_and_depth_owner_zero ... ok
+test inline_lines::nested_inline_tests::empty_bare_wrappers_do_not_reset_pending_whitespace_or_nbsp ... ok
+test inline_lines::nested_inline_tests::invalid_full_subtree_never_asks_metrics ... ok
+test inline_lines::nested_inline_tests::nested_sources_effective_weights_and_first_space_survive ... ok
+test inline_lines::nonbreaking_space_tests::nonbreaking_space_is_not_trimmed_or_collapsed ... ok
+test inline_lines::nonbreaking_space_tests::nonbreaking_space_uses_its_own_advance_and_stays_in_word ... ok
+test inline_lines::punctuation_tests::punctuation_that_fits_needs_no_line_break_guess ... ok
+test inline_lines::sentence_wrap_tests::exact_single_line_preserves_collapsed_space ... ok
+test inline_lines::sentence_wrap_tests::punctuation_attaches_breaks_at_spaces_and_modelled_marks ... ok
+test inline_lines::sentence_wrap_tests::terminal_marks_stay_with_words_at_whitespace_wraps ... ok
+test inline_lines::tests::collapses_whitespace_and_wraps_on_word_boundary ... ok
+test inline_lines::tests::direct_text_uses_inherited_size_and_rejects_other_inline_contexts ... ok
+test inline_lines::tests::keeps_collapsed_space_inside_line ... ok
+test inline_lines::tests::paints_only_supplied_mask_with_text_source_and_no_partial_result ... ok
+test inline_lines::tests::refuses_unsupported_text_and_unproven_measurements ... ok
+test media_query::tests::compound_and_types ... ok
+test media_query::tests::everything_else_is_unknown_never_a_pass ... ok
+test media_query::tests::fractional_em_boundaries_are_exact_not_rounded ... ok
+test media_query::tests::initial_font_basis_is_the_engines_initial_font_size ... ok
+test media_query::tests::without_a_context_width_queries_refuse_and_type_only_is_unchanged ... ok
+test pinned_family_generated::generated_after_text_follows_the_same_gate ... ok
+test source_text::tests::duplicate_text_and_collapsed_boundary_space_keep_distinct_sources ... ok
+test source_text::tests::empty_and_whitespace_only_have_no_dangling_ranges ... ok
+test source_text::tests::every_small_partition_has_complete_nonoverlapping_utf8_provenance ... ok
+test source_text::tests::limits_are_atomic_and_adjacent_same_source_merges ... ok
+test source_text::tests::unicode_offsets_nbsp_and_synthetic_text_are_not_guessed ... ok
+test style_diagnostics::tests::occurrence_counters_saturate_and_first_follows_pipeline ... ok
+test style_syntax::tests::complete_declarations_reject_silent_drops ... ok
+test style_syntax::tests::conditional_rules_keep_conditions_in_source_order ... ok
+test style_syntax::tests::malformed_and_oversized_inputs_are_explicit ... ok
+test style_syntax::tests::strings_functions_and_comments_do_not_break_rules ... ok
+test style_syntax::tests::unsupported_at_rules_do_not_leak_their_contents ... ok
+test style_tree::background_image_none_tests::explicit_no_image_does_not_reset_background_color ... ok
+test style_tree::before_after_tests::basic_hook_admits_tight_generated_rules_and_counts_skips ... ok
+test style_tree::before_after_tests::before_box_is_first_child_and_after_last_on_one_element ... ok
+test style_tree::before_after_tests::before_content_gate_mirrors_after ... ok
+test style_tree::before_after_tests::before_text_content_still_refused_at_intake ... ok
+test style_tree::before_after_tests::generated_cap_is_aggregate_across_both_families ... ok
+test style_tree::before_after_tests::span_admitted_confined_other_originating_elements_refuse ... ok
+test style_tree::border_functional_colour_tests::malformed_or_unsupported_functions_stay_refused ... ok
+test style_tree::border_functional_colour_tests::spaced_rgb_cascades_like_unspaced ... ok
+test style_tree::border_functional_colour_tests::spaced_rgb_is_one_colour_token ... ok
+test style_tree::currentcolor_tests::currentcolor_follows_cascade_and_not_declaration_order ... ok
+test style_tree::currentcolor_tests::currentcolor_inherits_as_keyword_and_uses_own_foreground ... ok
+test style_tree::custom_property_tests::blocks_without_custom_properties_are_unchanged_by_the_new_path ... ok
+test style_tree::custom_property_tests::cascade_uses_specificity_order_and_important ... ok
+test style_tree::custom_property_tests::child_override_does_not_reresolve_parent_computed_tokens ... ok
+test style_tree::custom_property_tests::closer_definition_overrides_inherited_and_initial_resets ... ok
+test style_tree::custom_property_tests::custom_property_work_is_bounded ... ok
+test style_tree::custom_property_tests::custom_values_can_reference_each_other_and_inline_style_works ... ok
+test style_tree::custom_property_tests::defined_on_root_and_used_below_inherits ... ok
+test style_tree::custom_property_tests::fallback_used_only_when_undefined_and_may_nest ... ok
+test style_tree::custom_property_tests::float_clear_cascade_var_and_non_inheritance ... ok
+test style_tree::custom_property_tests::inline_declaration_order_ties_follow_authored_order_both_directions ... ok
+test style_tree::custom_property_tests::inline_style_outranks_id_selector_for_custom_properties_and_typed_values ... ok
+test style_tree::custom_property_tests::invalid_custom_property_names_and_tokens_refuse ... ok
+test style_tree::custom_property_tests::invalid_winning_var_never_falls_back_to_a_lower_declaration ... ok
+test style_tree::custom_property_tests::names_are_case_sensitive ... ok
+test style_tree::custom_property_tests::raw_comments_in_custom_or_var_values_refuse_instead_of_merging_tokens ... ok
+test style_tree::custom_property_tests::shorthand_and_multi_token_values_substitute_before_parsing ... ok
+test style_tree::custom_property_tests::tree_wide_custom_property_budget_trips_without_unbounded_allocation ... ok
+test style_tree::custom_property_tests::unimplemented_or_invalid_forms_refuse ... ok
+test style_tree::custom_property_tests::var_shorthand_keeps_authored_cascade_position_against_longhands ... ok
+test style_tree::em_font_size_tests::default_and_other_entries_still_refuse_em ... ok
+test style_tree::em_font_size_tests::em_follows_the_normal_cascade ... ok
+test style_tree::em_font_size_tests::em_font_size_does_not_change_other_em_properties_or_em_free_pages ... ok
+test style_tree::em_font_size_tests::em_matches_the_equivalent_percentage_exactly ... ok
+test style_tree::em_font_size_tests::em_resolves_against_the_parent_not_the_root ... ok
+test style_tree::em_font_size_tests::em_through_custom_property_substitution_matches_percentage_and_stays_gated ... ok
+test style_tree::em_font_size_tests::fractional_pixels_are_refused_never_rounded ... ok
+test style_tree::em_font_size_tests::malformed_em_is_refused_as_syntax ... ok
+test style_tree::em_line_height_tests::em_line_height_computes_to_length_before_inheritance ... ok
+test style_tree::foreground_currentcolor_tests::foreground_currentcolor_obeys_important_and_root_initial_color ... ok
+test style_tree::foreground_currentcolor_tests::foreground_currentcolor_uses_parent_not_earlier_declaration ... ok
+test style_tree::link_state_tests::autofocus_in_dom_voids_unfocused_guarantee_engine_side ... ok
+test style_tree::link_state_tests::focus_family_enrolls_only_under_unfocused_and_never_matches ... ok
+test style_tree::link_state_tests::focus_group_member_is_independently_fail_closed ... ok
+test style_tree::link_state_tests::focus_within_multilevel_ancestor_enrolls_and_never_matches ... ok
+test style_tree::link_state_tests::focus_within_two_level_ancestor_chain_actual_path ... ok
+test style_tree::link_state_tests::history_and_input_guarantees_are_independently_scoped ... ok
+test style_tree::link_state_tests::hover_active_enroll_only_under_quiescent_and_never_match ... ok
+test style_tree::link_state_tests::link_applies_to_compounds_and_combinators ... ok
+test style_tree::link_state_tests::link_counts_as_a_class_for_specificity ... ok
+test style_tree::link_state_tests::link_fails_closed_without_the_guarantee ... ok
+test style_tree::link_state_tests::link_matches_only_html_href_elements_under_fresh_guarantee ... ok
+test style_tree::link_state_tests::link_never_matches_svg_a_in_v1 ... ok
+test style_tree::link_state_tests::mixed_family_compounds_refuse_even_with_all_guarantees ... ok
+test style_tree::link_state_tests::other_state_pseudos_stay_refused_under_state_entry ... ok
+test style_tree::link_state_tests::repeated_focus_compounds_are_grammar_bound_refusals ... ok
+test style_tree::link_state_tests::repeated_hover_active_compounds_are_grammar_bound_refusals ... ok
+test style_tree::link_state_tests::repeated_link_compound_is_a_grammar_bound_refusal ... ok
+test style_tree::link_state_tests::visited_enrolls_under_fresh_history_and_never_matches ... ok
+test style_tree::link_state_tests::visited_refuses_without_a_history_guarantee ... ok
+test style_tree::number_line_height_tests::unitless_line_height_is_inherited_before_font_size_multiplication ... ok
+test style_tree::percentage_font_size_tests::percentage_font_size_resolves_parent_then_inherits_length ... ok
+test style_tree::percentage_font_size_tests::rem_font_size_resolves_against_root_and_refuses_subpixel ... ok
+test style_tree::percentage_line_height_tests::percent_line_height_computes_at_owner_size_before_inheritance ... ok
+test style_tree::phrase_tests::user_agent_styles_phrase_elements_and_font_weight_cascades ... ok
+test style_tree::pixel_line_height_tests::pixel_line_height_inherits_and_normal_resets ... ok
+test style_tree::root_selector_tests::other_pseudo_forms_fail_closed_with_selector_refusal ... ok
+test style_tree::root_selector_tests::root_matches_only_the_document_element ... ok
+test style_tree::root_selector_tests::root_specificity_is_a_pseudo_class_not_a_type ... ok
+test style_tree::root_selector_tests::root_with_class_and_parser_normalized_nested_html ... ok
+test style_tree::tests::background_color_is_noninherited_and_transparent_by_default ... ok
+test style_tree::tests::box_sizing_cascade_is_noninherited ... ok
+test style_tree::tests::comment_only_declaration_segments_are_valid_css ... ok
+test style_tree::tests::dropped_data_href_keeps_host_supply_path ... ok
+test style_tree::tests::dropped_href_with_supplied_sheet_is_admitted_under_canonical ... ok
+test style_tree::tests::exact_opaque_css_colors_share_foreground_and_background_parsing ... ok
+test style_tree::tests::external_and_inline_order_share_one_cascade ... ok
+test style_tree::tests::failed_data_decode_consumes_no_ceiling_slot ... ok
+test style_tree::tests::font_size_is_retained_for_future_text_layout ... ok
+test style_tree::tests::height_cascade_keeps_percentage_until_layout ... ok
+test style_tree::tests::horizontal_margins_and_direction_have_distinct_inheritance ... ok
+test style_tree::tests::horizontal_padding_is_noninherited_and_bounded_to_integer_px ... ok
+test style_tree::tests::incomplete_declaration_blocks_refuse_visual_output ... ok
+test style_tree::tests::linked_stylesheet_invalid_utf8_does_not_become_lossy_css ... ok
+test style_tree::tests::linked_stylesheet_oversized_invalid_utf8_keeps_encoding_precedence ... ok
+test style_tree::tests::linked_stylesheet_scan_budget_checked_before_allocation ... ok
+test style_tree::tests::margin_shorthand_expands_in_cascade_order_and_refuses_unknown_values ... ok
+test style_tree::tests::missing_or_excess_linked_sheets_refuse_a_partial_visual_page ... ok
+test style_tree::tests::mixed_data_then_external_keeps_host_supply_index ... ok
+test style_tree::tests::non_ascii_href_never_panics_and_stays_host_supply ... ok
+test style_tree::tests::oversized_selector_list_refuses_partial_style ... ok
+test style_tree::tests::padding_shorthand_expands_in_cascade_order_and_rejects_percent ... ok
+test style_tree::tests::parentage_inheritance_and_display_are_retained ... ok
+test style_tree::tests::print_and_disabled_data_links_skip_before_decode ... ok
+test style_tree::tests::pt_lengths_convert_at_four_thirds_px ... ok
+test style_tree::tests::retained_data_stylesheet_decodes_under_existing_ceilings ... ok
+test style_tree::tests::retained_data_stylesheet_refusals_map_to_existing_reasons ... ok
+test style_tree::tests::single_color_background_shorthand_cascades_and_refuses_other_components ... ok
+test style_tree::tests::source_map_binds_duplicate_text_to_same_dom_not_style_indices ... ok
+test style_tree::tests::source_map_remains_parallel_with_hidden_subtrees ... ok
+test style_tree::tests::stylesheet_media_refuses_unknown_queries_instead_of_dropping_rules ... ok
+test style_tree::tests::typed_style_element_applies_only_css ... ok
+test style_tree::tests::unknown_at_rules_fail_closed_without_leaking_following_rules ... ok
+test style_tree::tests::vertical_margins_are_signed_and_noninherited ... ok
+test style_tree::tests::vertical_padding_is_noninherited_and_rejects_percentage ... ok
+test style_tree::tests::zero_pt_is_zero_px ... ok
+test stylesheet_bytes::tests::embedded_unicode_and_other_at_rules_keep_existing_refusals ... ok
+test stylesheet_bytes::tests::encoding_and_byte_budget_refuse_without_partial_output ... ok
+test stylesheet_bytes::tests::exact_signature_metadata_is_preserved_for_scanner ... ok
+test stylesheet_bytes::tests::lookalikes_are_not_byte_signatures ... ok
+test stylesheet_bytes::tests::precedence_is_bom_protocol_signature_environment_default ... ok
+test stylesheet_bytes::tests::signature_window_is_exact_and_does_not_scan_later_text ... ok
+test table_layout::tests::available_space_interpolates_without_losing_pixels ... ok
+test table_layout::tests::deterministic_mixed_spans_preserve_every_constraint_and_total ... ok
+test table_layout::tests::invalid_and_excessive_inputs_are_refused ... ok
+test table_layout::tests::minimum_content_overflows_instead_of_squeezing_words ... ok
+test table_layout::tests::rows_share_columns_and_auto_shrink_wraps ... ok
+test table_layout::tests::spanning_constraints_and_specified_width_are_preserved ... ok
+test tree_tests::wpt_html_tree_construction ... ok
+test url::numeric_dot_regression::stripping_trailing_dots_cannot_change_numeric_host_meaning ... ok
+test url::tests::non_ascii_is_percent_encoded ... ok
+test url::tests::normalizes_case_default_port_and_whitespace ... ok
+test url::tests::refuses_what_it_cannot_fetch ... ok
+test url::tests::rfc3986_normal_examples ... ok
+test url::tests::same_document_ignores_fragment ... ok
+test css::ext_selector_tests::enablement_ancestor_walk_is_charged_to_the_global_match_work_budget ... ok
+
+test result: ok. 449 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 1.34s
+
+     Running tests/adjacent_has_external.rs (target/debug/deps/adjacent_has_external-90db42420698dcb1)
+
+running 5 tests
+test browser_color_only_cascade8cases ... ok
+test missing_wrong_snapshot_autofocus_and_same_target ... ok
+test public_original4_inventory ... ignored, measurement: ADJACENT_HAS_LINES original4
+test real_error_before_true_exhaustion_and_input_node_text_loss_refusal ... ok
+test real_aggregate_global_work_without_individual_exhaustion ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/art76_dump_rows.rs (target/debug/deps/art76_dump_rows-390a21822fd9a3a1)
+
+running 1 test
+test dump_engine_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.18s
+
+     Running tests/art77_dump_nested.rs (target/debug/deps/art77_dump_nested-2e5ab6ce1cfe35d0)
+
+running 1 test
+test dump_engine_rows_nested ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.40s
+
+     Running tests/attr_ua_refuse.rs (target/debug/deps/attr_ua_refuse-1a006244795a23a1)
+
+running 4 tests
+test anchors_inert_and_listed_attributes_still_admit ... ok
+test every_entry_refuses ... ok
+test body_legacy_attributes_refuse_and_inert_attributes_stay_admitted ... ok
+test hidden_popover_and_non_ltr_dir_refuse_anywhere ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/basic_image_box.rs (target/debug/deps/basic_image_box-dd2b0927061fded4)
+
+running 6 tests
+test image_box_paints_the_sentinel_fill_for_the_blit_step ... ok
+test extreme_image_attributes_are_bounded_without_overflow ... ok
+test img_is_an_image_box_with_marker_geometry ... ok
+test img_without_data_uri_falls_back_to_alt_text ... ok
+test wide_images_scale_to_the_content_width ... ok
+test picture_with_qualifying_img_is_replaced_by_the_image_box ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/basic_table_grid.rs (target/debug/deps/basic_table_grid-c4ef184c04401450)
+
+running 30 tests
+test caption_paints_before_native_grid_without_forcing_a_stack ... ok
+test cell_backgrounds_fill_the_shared_row_height_and_padding_is_reserved ... ok
+test cell_content_can_grow_beyond_a_declared_short_row_height ... ok
+test cell_pixel_min_height_constrains_shared_rows_with_box_sizing ... ok
+test cell_pixel_min_width_constrains_auto_columns_with_box_sizing ... ok
+test colspan_cell_covers_shared_columns_and_internal_gap ... ok
+test declared_border_box_cell_width_already_includes_edges ... ok
+test columns_align_across_rows ... ok
+test declared_cell_content_width_reserves_padding_and_border_edges ... ok
+test direct_cells_receive_an_anonymous_row ... ok
+test declared_cell_content_height_reserves_vertical_edges ... ok
+test formatted_neutral_cell_wrappers_keep_native_columns ... ok
+test native_outer_table_border_surrounds_grid_without_stacking ... ok
+test native_page_table_has_shared_columns_without_model_overrides ... ok
+test nested_block_cell_falls_back_without_losing_text ... ok
+test non_collapsible_or_visible_text_beside_cell_block_still_falls_back ... ok
+test padded_solid_caption_keeps_grid_and_its_own_border_box_above_table ... ok
+test page_intake_retains_native_tables_and_stacks_unsupported_spans ... ok
+test page_table_ua_defaults_do_not_override_authored_display_none ... ok
+test non_neutral_cell_wrappers_still_fall_back_without_losing_text ... ok
+test row_group_background_spans_rows_and_internal_spacing_below_row_colors ... ok
+test row_group_borders_still_use_counted_readable_fallback ... ok
+test row_height_is_a_minimum_shared_by_cells_and_following_rows ... ok
+test separated_solid_cell_borders_use_the_shared_row_border_box ... ok
+test short_rows_leave_empty_slots_without_stacking_or_shifting_columns ... ok
+test stacked_table_fallback_backgrounds_stay_inside_outer_border ... ok
+test table_outer_padding_reserves_space_inside_border_without_stacking ... ok
+test undecorated_block_wrappers_in_cells_keep_native_columns ... ok
+test unsupported_caption_edges_keep_counted_fallback ... ok
+test unsupported_cell_span_uses_counted_content_preserving_fallback ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/basic_unicode.rs (target/debug/deps/basic_unicode-ea75d85a852c4c88)
+
+running 7 tests
+test centered_underlines_follow_the_glyph_run ... ok
+test css_bidi_modes_are_retained_without_enabling_exact_paint ... ok
+test indented_link_uses_its_own_color_from_first_glyph ... ok
+test mixed_sizes_share_a_baseline_and_preserve_ink ... ok
+test pre_css_and_ordered_list_markers_survive_intake ... ok
+test semantic_pre_keeps_indentation_and_blank_lines ... ok
+test three_scripts_and_symbols_keep_all_text_blocks ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/border_opposite_colors.rs (target/debug/deps/border_opposite_colors-56835d5472f19592)
+
+running 8 tests
+test left_right_pair_and_unequal_widths_and_padding ... ok
+test no_box_and_zero_basis_shapes ... ok
+test other_entries_keep_refusing ... ok
+test shorthand_forms_with_zero_width_sides ... ok
+test adjacent_or_patterned_different_colours_stay_refused ... ok
+test top_bottom_pair_paints_each_side_in_its_colour ... ok
+test single_colour_cases_are_unchanged ... ok
+test transparent_and_currentcolor_sides_in_the_pair ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/border_opposite_pattern.rs (target/debug/deps/border_opposite_pattern-123444f5323d7ef5)
+
+running 7 tests
+test dashed_top_solid_bottom_paints_each_side_alone ... ok
+test left_right_pair_and_equal_styles ... ok
+test other_entries_keep_refusing ... ok
+test v1_text_painters_use_the_non_ext_gate_and_refuse_a_dashed_opposite_pair ... ok
+test v2_killer_adjacent_dashed_and_solid_same_colour_fits_yet_refuses ... ok
+test v5_exact_geometry_of_the_adjacent_solid_same_colour_pair ... ok
+test transparent_side_paints_nothing_and_misfits_refuse ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/border_radius_zero.rs (target/debug/deps/border_radius_zero-ac0cabdeb5077ab6)
+
+running 3 tests
+test other_entries_keep_refusing ... ok
+test zero_radius_changes_nothing_in_opt_in_entry ... ok
+test nonzero_and_other_forms_stay_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/border_transparent_rgba.rs (target/debug/deps/border_transparent_rgba-6401b6cbb45e6f9a)
+
+running 3 tests
+test other_entries_keep_refusing_the_new_form ... ok
+test everything_else_stays_refused ... ok
+test zero_alpha_rgba_equals_transparent_in_every_border_form ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/box_shadow_hard.rs (target/debug/deps/box_shadow_hard-64b7c854e0954953)
+
+running 9 tests
+test admitted_spellings ... ok
+test global_keyword_revert_is_no_shadow ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+test important_and_whitespace_spellings_equal_the_bare_value ... ok
+test none_is_a_typed_reset_and_default_entry_is_unchanged ... ok
+test shadow_is_drawn_only_outside_the_border_box ... ok
+test paint_refusals ... ok
+test text_pages_refuse_a_shadowed_box_with_stub_font_anchors ... ok
+test unmodelled_shapes_refuse_at_style ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/calc_px_fold.rs (target/debug/deps/calc_px_fold-9631df90e22a9307)
+
+running 3 tests
+test folded_calc_equals_literal_px ... ok
+test other_entries_keep_refusing_calc ... ok
+test anything_else_keeps_refusing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/charset_media.rs (target/debug/deps/charset_media-22bb3e6fbaef68c1)
+
+running 5 tests
+test charset_and_media_reachable_via_retained_data ... ok
+test charset_exact_prefix_only ... ok
+test media_lists_nested_and_cascade ... ok
+test unknown_dominates_true_false_and_empty_groups ... ok
+test inactive_structure_and_work_still_refuse ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/child_has_external.rs (target/debug/deps/child_has_external-ff9505b08beda464)
+
+running 4 tests
+test browser_color_only_cascade8cases ... ok
+test public_original16_inventory ... ignored, measurement: CHILD_HAS_LINES original16
+test missing_wrong_snapshot_autofocus_and_same_target ... ok
+test real_error_before_true_exhaustion_and_input_node_text_loss_refusal ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/clear_noop.rs (target/debug/deps/clear_noop-19388698fb3f4fb3)
+
+running 4 tests
+test any_float_keeps_every_clear_as_written ... ok
+test other_entries_keep_refusing ... ok
+test zero_basis_and_unparsed_forms_stay_refused ... ok
+test clear_without_floats_is_a_noop ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/containment_v1.rs (target/debug/deps/containment_v1-7507435508ac676c)
+
+running 15 tests
+test f1_clean_baseline_no_flags ... ok
+test f2_v2_colour_supported_sibling_measures ... ok
+test f4_inline_block_stays_whole_pass ... ok
+test f3_no_inline_owner_sibling_isolated ... ok
+test f5_inline_poison_crosses_to_owner_not_sibling ... ok
+test f5_v2_colour_supported_owner_measures ... ok
+test height_refusal_bit_ops ... ok
+test f6_missing_stylesheet_stays_tree_wide ... ok
+test v1_clean_composes_no_flags ... ok
+test v3_no_inline_owner_attribution ... ok
+test v2_v2_colour_supported_composes ... ok
+test v4_inline_block_whole_pass_attribution ... ok
+test v5_owner_poison_attribution ... ok
+test v6_tree_seed_no_attribution ... ok
+test v5_v2_colour_supported_vertical_composes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_absolute.rs (target/debug/deps/css_absolute-990c057fc52aab5e)
+
+running 8 tests
+test auto_offsets_share_static_anchor_without_advancing_flow ... ok
+test negative_explicit_offsets_clip_in_primitive_not_wrap_unsigned ... ok
+test cascade_initial_unset_and_inherit_keep_position_noninherited ... ok
+test opposite_offsets_use_initial_containing_block_and_box_edges ... ok
+test positioned_leaf_removed_from_sibling_flow_and_painted_last ... ok
+test opaque_rgba_is_rgb_but_partial_or_malformed_alpha_refuses ... ok
+test visual_absolute_lab_sources_render ... ok
+test unsupported_position_shapes_do_not_turn_into_normal_flow ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_background.rs (target/debug/deps/css_background-6e542ac70f47fabe)
+
+running 11 tests
+test a_display_none_root_neither_paints_nor_propagates_its_background ... ok
+test empty_list_item_still_requires_marker_paint ... ok
+test malformed_arena_is_refused_before_geometry_passes ... ok
+test opaque_named_and_integer_rgb_colors_paint_exact_channels ... ok
+test canvas_backgrounds_cover_viewport_before_local_boxes ... ok
+test padded_background_covers_padding_box_and_stacks_after_bottom_padding ... ok
+test retained_color_paints_only_proven_content_rectangles ... ok
+test single_color_background_shorthand_paints_only_supported_rectangles ... ok
+test visual_paint_refuses_legacy_decoding_and_truncated_utf8 ... ok
+test unknown_css_and_text_are_not_passed_off_as_rendered ... ok
+test visual_paint_refuses_quirks_and_limited_quirks ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_border.rs (target/debug/deps/css_border-23b4452436a59073)
+
+running 14 tests
+test border_only_root_and_propagated_body_still_paint ... ok
+test currentcolor_resolves_at_element_but_explicit_rgb_inherits_as_rgb ... ok
+test currentcolor_unequal_width_ring_and_clipped_background ... ok
+test descendant_background_covers_parent_border_where_negative_margin_overlaps ... ok
+test differing_side_colours_alpha_and_styles_refuse ... ok
+test fractional_border_snap_applies_in_longhand_and_shorthand_forms ... ok
+test fractional_border_widths_snap_like_blink_floor_min_one ... ok
+test fractional_lengths_other_than_border_width_still_refuse ... ok
+test longhand_colour_cascade_and_shorthand_reset ... ok
+test transparent_none_hidden_and_zero_sides_do_not_add_paint ... ok
+test unsupported_fractional_border_spellings_still_refuse ... ok
+test visual_lab_sources_keep_rendering_without_replacing_wpt ... ok
+test zero_fractional_border_is_zero_not_one ... ok
+test border_command_budget_fails_whole_page ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/css_border_functional_colour.rs (target/debug/deps/css_border_functional_colour-c23aeffd218d7e02)
+
+running 3 tests
+test spaced_rgb_ring_has_exact_pixels ... ok
+test unsupported_forms_still_refuse_before_paint ... ok
+test spaced_and_tight_rgb_rasterize_identically ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_border_pattern.rs (target/debug/deps/css_border_pattern-fe552481a985faca)
+
+running 6 tests
+test currentcolor_and_no_ink_styles_preserve_used_widths ... ok
+test pattern_commands_obey_existing_whole_page_budget ... ok
+test style_cascade_keeps_kind_and_shorthand_reset ... ok
+test unsupported_fits_circles_and_joins_refuse_whole ... ok
+test visual_lab_source_keeps_rendering ... ok
+test complete_single_side_patterns_have_exact_ink_and_gaps ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/css_border_pattern_ring.rs (target/debug/deps/css_border_pattern_ring-be0652ff7287d9fe)
+
+running 5 tests
+test ring_command_exhaustion_refuses_whole ... ok
+test rings_resolve_currentcolor_and_style_reset_without_colour_guess ... ok
+test unproven_ring_joins_and_fit_refuse_whole ... ok
+test visual_ring_and_rectangle_sources_render ... ok
+test uniform_rectangular_rings_have_exact_corners_gaps_and_interiors ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/css_display_list.rs (target/debug/deps/css_display_list-a673339459e3d221)
+
+running 4 tests
+test complete_paint_lists_combine_in_order_without_partial_budget_failure ... ok
+test hard_limits_and_failed_operations_do_not_change_state ... ok
+test negative_oversize_and_empty_intersections_are_safe_and_exact ... ok
+test overlap_nested_clip_and_mask_exact_pixels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_family_retention.rs (target/debug/deps/css_family_retention-6badae89e620d0da)
+
+running 4 tests
+test absent_family_stays_unresolved_with_no_new_ua_binding ... ok
+test generic_family_retains_and_inherits_but_render_stays_refused ... ok
+test family_cascade_global_reset_importance_and_inline_are_retained ... ok
+test named_lists_quotes_fontface_and_other_generics_stay_unsupported ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_link_media.rs (target/debug/deps/css_link_media-0b7a8261327baa66)
+
+running 8 tests
+test handshake_does_not_fire_on_truncated_or_partially_refused_inputs ... ok
+test link_media_known_false_consumes_no_slot_or_host_index ... ok
+test handshake_exact_count_missing_extra_and_skipped_inputs ... ok
+test link_media_unknown_refuses_before_supply_and_known_true_maps_in_order ... ok
+test style_elements_and_links_share_the_same_classifier ... ok
+test unknown_queries_empty_values_and_missing_context_fail_closed ... ok
+test type_lists_true_false_and_unknown_permutations ... ok
+test width_features_follow_the_viewport_exactly ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_media_context.rs (target/debug/deps/css_media_context-091be04a20f090fd)
+
+running 10 tests
+test gov_fractional_em_values_apply_without_rounding ... ok
+test known_false_blocks_hide_nothing_else_and_true_blocks_keep_declaration_policy ... ok
+test known_true_blocks_with_later_supported_declarations_are_clean ... ok
+test no_context_refuses_every_width_query_and_never_defaults_a_width ... ok
+test nested_media_blocks_combine_and_a_false_ancestor_wins ... ok
+test reparse_at_another_width_is_the_resize_contract ... ok
+test pixels_follow_the_media_decision_and_unknown_never_paints ... ok
+test style_media_attribute_without_a_context_still_refuses ... ok
+test width_decides_which_block_applies_exactly_at_the_boundary ... ok
+test unknown_conditions_still_refuse_even_with_a_context ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_nested_absolute.rs (target/debug/deps/css_nested_absolute-d2e05d946290cd28)
+
+running 6 tests
+test child_overflow_is_visible_and_negative_offsets_clip_only_at_viewport ... ok
+test child_border_box_sizing_and_opposite_offsets_preserve_precedence ... ok
+test overflowing_composed_coordinates_refuse_instead_of_wrapping ... ok
+test nested_offsets_use_padding_box_not_content_or_border_box ... ok
+test visual_nested_source_renders_with_uniform_ring_children ... ok
+test unsupported_depth_flow_autosizes_and_offsets_refuse_whole ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_nested_phrases.rs (target/debug/deps/css_nested_phrases-5aa9b1e0323738b6)
+
+running 6 tests
+test anonymous_block_and_nested_replaced_remain_refused ... ok
+test complete_page_nested_paint_and_rectangle_only_refusals_are_atomic ... ok
+test legacy_direct_single_text_tags_keep_pixels_but_new_shapes_stay_closed ... ok
+test phrase_marker_origin_attributes_and_typography_fail_closed ... ok
+test whole_page_depth_and_cap_precedence_before_callbacks ... ok
+test complete_bad_subtree_and_page_cap_fail_before_metrics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/css_normal_metrics.rs (target/debug/deps/css_normal_metrics-20f54c42f4b4a344)
+
+running 5 tests
+test inherited_explicit_line_height_never_calls_new_method ... ok
+test invalid_normal_pair_refuses_without_partial_paint ... ok
+test mismatched_bold_normal_pair_refuses_whole ... ok
+test normal_absent_and_keyword_use_pair_for_height_and_baseline ... ok
+test explicit_px_percent_number_never_consult_new_method_and_stay_identical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_paint_bridge.rs (target/debug/deps/css_paint_bridge-9f6005a7b57afe4e)
+
+running 10 tests
+test auto_block_background_uses_child_flow_height ... ok
+test content_paint_refuses_quirks_even_with_proven_geometry ... ok
+test exact_order_content_boxes_and_source_ids ... ok
+test command_and_box_limits_reject_without_partial_list ... ok
+test oversize_gate_isolates_on_the_truncated_flag_independent_of_box_count ... ok
+test rejects_invalid_tree_structure ... ok
+test rejects_unproven_coordinates_and_selected_unknown_box ... ok
+test rejects_zero_width_and_truncated_input ... ok
+test unsupported_css_never_yields_partial_paint_even_empty_selection ... ok
+test oversize_sibling_gate_blocks_the_whole_page_at_the_paint_bridge ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/css_px_device_px_contract.rs (target/debug/deps/css_px_device_px_contract-9535704518850357)
+
+running 3 tests
+test constant_is_one_and_documented_assumption_holds ... ok
+test a_20_by_10_css_box_covers_exactly_20_by_10_raster_pixels ... ok
+test fractional_border_floor_is_the_1x_rule_with_min_one_device_px ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_rem_render.rs (target/debug/deps/css_rem_render-7e5a037a4fa3dce3)
+
+running 3 tests
+test dump_ppm_when_requested ... ok
+test fractional_rem_is_not_rounded_and_paint_path_refuses ... ok
+test rem_renders_pixel_identical_to_resolved_px ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_root_selector.rs (target/debug/deps/css_root_selector-7c976fed1bf50c6b)
+
+running 4 tests
+test non_root_element_never_matches_root ... ok
+test root_background_equals_html_background_pixels ... ok
+test unsupported_pseudo_classes_refuse_before_paint ... ok
+test root_specificity_beats_html_in_either_order_in_pixels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_text_align.rs (target/debug/deps/css_text_align-40f8e14d6e849555)
+
+running 9 tests
+test empty_text_and_unbreakable_words_do_not_gain_new_layout_paths ... ok
+test css_wide_keywords_and_importance_keep_existing_cascade ... ok
+test explicit_alignment_uses_advance_extent_not_ink ... ok
+test fractional_center_refuses_instead_of_rounding ... ok
+test inherited_alignment_and_inline_override_have_block_scope ... ok
+test mixed_bold_advances_control_offset ... ok
+test shifted_text_respects_content_origin_padding_and_border ... ok
+test wrapped_lines_align_independently_and_trim_boundary_spaces ... ok
+test unsupported_values_and_rtl_remain_whole_page_refusals ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/css_text_decoration_underline.rs (target/debug/deps/css_text_decoration_underline-5dbb2115cd74b562)
+
+running 10 tests
+test default_entry_keeps_text_decoration_unrecognized_like_r1 ... ok
+test none_is_noop_and_default_painter_refuses_decorated ... ok
+test other_forms_stay_refused ... ok
+test overflow_beyond_viewport_refuses_or_stays_inside ... ok
+test rule_matches_recorded_chrome_rows ... ok
+test refusals ... ok
+test supply_variant_matches_plain_optin_under_canonical_budget_and_default_stays_refusing ... ok
+test unbound_or_wrong_face_refuses_at_library_boundary ... ok
+test underscore_refuses_as_skip_ink_unproven ... ok
+test skip_ink_chars_and_unmeasured_chars_refuse_but_plain_letters_pass ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/css_text_page.rs (target/debug/deps/css_text_page-3a1e03fdafba1a35)
+
+running 76 tests
+test background_clipped_to_an_empty_area_paints_nothing ... ok
+test auto_border_box_height_uses_wrapped_content_and_padding ... ok
+test bold_advance_layout_and_bitmap_use_the_same_face_key ... ok
+test bold_runs_refuse_mismatched_bold_line_metrics ... ok
+test bold_runs_refuse_without_a_matching_bold_face ... ok
+test border_box_and_equivalent_content_box_have_identical_complete_rasters ... ok
+test block_indentation_and_trailing_newline_do_not_create_inline_boxes ... ok
+test border_box_height_clamps_to_zero_content_when_padding_exceeds_declaration ... ok
+test contractions_and_possessives_wrap_with_terminal_punctuation ... ok
+test definite_height_overflow_does_not_enable_unproven_clipping ... ok
+test currentcolor_reaches_canvas_and_local_background_pixels ... ok
+test definite_text_block_height_keeps_extra_room_before_the_next_sibling ... ok
+test direction_and_visible_list_markers_are_not_silently_omitted ... ok
+test e_c1_named_and_hex_blue_are_the_same_resolved_colour ... ok
+test direct_text_canvas_background_propagation_and_paint_order ... ok
+test e_c1_uncoloured_inline_inherits_owner_colour ... ok
+test e_c2_mixed_bold_and_coloured_runs_paint_whole_block ... ok
+test e_c3_colour_plus_other_difference_still_refuses ... ok
+test em_and_percent_line_height_produce_same_complete_raster ... ok
+test exact_border_box_percentage_width_subtracts_padding_after_resolution ... ok
+test exact_horizontal_percentage_margins_match_pixels ... ok
+test exact_nested_percentage_height_matches_equivalent_pixel_geometry ... ok
+test e_c1_per_run_colour_paints_each_leaf_in_its_own_resolved_colour ... ok
+test exact_nested_percentage_width_matches_equivalent_pixels ... ok
+test foreground_currentcolor_reaches_glyph_pixels ... ok
+test explicit_pixel_line_height_sets_geometry_and_half_leading ... ok
+test fractional_percentage_heights_refuse_instead_of_flooring_backgrounds ... ok
+test fractional_horizontal_margins_and_half_pixel_centering_refuse ... ok
+test horizontal_ink_at_viewport_edge_clips_only_when_rasterized ... ok
+test fractional_percentage_width_refuses_before_rounding_text_geometry ... ok
+test horizontal_ink_overflows_content_without_changing_wrapped_geometry ... ok
+test horizontal_overhang_does_not_permit_unbreakable_words_or_hidden_overflow ... ok
+test invalid_natural_baselines_still_refuse_before_adjustment ... ok
+test italic_and_unsupported_weight_runs_still_refuse_the_page ... ok
+test large_negative_sibling_margin_clips_above_the_canvas ... ok
+test last_child_bottom_margin_escapes_auto_height_parent ... ok
+test horizontal_margins_position_background_and_text_together ... ok
+test measured_auto_height_does_not_make_percentage_descendant_definite ... ok
+test mixed_inline_strong_paints_with_per_run_faces ... ok
+test malformed_arena_is_refused_before_geometry_passes ... ok
+test multiple_text_blocks_refuse_unsupported_sibling_without_partial_page ... ok
+test multiple_direct_text_blocks_stack_and_paint_in_document_order ... ok
+test negative_adjusted_baseline_and_top_ink_clip_at_viewport_not_line ... ok
+test nested_edge_margins_collapse_through_to_the_largest ... ok
+test negative_sibling_margins_overlap_backgrounds_but_keep_text_on_top ... ok
+test nonbreaking_html_entity_preserves_word_group_during_page_wrap ... ok
+test overconstrained_auto_margins_use_zero_not_fractional_centering ... ok
+test padded_zero_height_ancestor_does_not_expand_to_child_text ... ok
+test padded_zero_content_height_paints_padding_and_visible_text_overflow ... ok
+test paired_single_word_brackets_wrap_without_detaching_marks ... ok
+test percent_float32_hole_is_refused_by_covered_bridge_entries ... ok
+test percent_float32_hole_is_refused_by_the_text_entries ... ok
+test parent_edge_vertical_margins_collapse_and_paint ... ok
+test percent_line_height_inherits_as_length_not_multiplier ... ok
+test percent_float32_hole_is_refused_by_the_text_painter ... ok
+test positioned_leaf_paints_after_glyphs_and_does_not_push_next_block ... ok
+test percentage_font_size_and_explicit_pixels_paint_the_same_page ... ok
+test positive_adjoining_sibling_margins_collapse_to_the_larger_gap ... ok
+test refuses_branches_unknown_css_and_provider_failure_without_partial_page ... ok
+test short_definite_height_keeps_background_and_following_sibling_in_flow ... ok
+test short_line_height_keeps_measured_lines_while_ink_overflows ... ok
+test shorter_even_line_height_uses_negative_half_leading_when_ink_fits ... ok
+test single_text_paint_refuses_quirks ... ok
+test terminal_sentence_punctuation_wraps_and_internal_punctuation_stays_attached ... ok
+test sibling_percentage_gaps_use_containing_width_not_height_or_child_width ... ok
+test ua_body_margin_offsets_direct_text_page ... ok
+test unitless_line_height_paints_and_refuses_fractional_used_values ... ok
+test unsupported_border_join_does_not_return_partial_text_page ... ok
+test visible_borders_paint_before_text ... ok
+test whole_single_text_page_paints_background_before_measured_glyph ... ok
+test wrapped_sentence_marks_keep_next_sibling_after_measured_lines ... ok
+test wrapped_text_overflows_definite_height_without_inflating_ancestor_height ... ok
+test zero_and_indefinite_text_heights_remain_refused ... ok
+test zero_content_width_and_unsupported_borders_still_refuse ... ok
+test zero_height_without_vertical_padding_still_refuses_through_collapse ... ok
+test text_page_refuses_an_oversize_gate_truncated_tree_with_no_other_cause ... ok
+
+test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/css_zero_positioned.rs (target/debug/deps/css_zero_positioned-db553dead618afa1)
+
+running 5 tests
+test auto_container_is_zero_and_child_uses_true_static_flow_anchor ... ok
+test padded_static_ancestor_composes_child_offsets ... ok
+test padding_content_origin_and_negative_right_bottom_use_zero_containing_block ... ok
+test zero_container_visual_source_renders ... ok
+test unproven_auto_containers_refuse_whole ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/custom_prop_string.rs (target/debug/deps/custom_prop_string-63c4c1848006da93)
+
+running 4 tests
+test other_entries_keep_refusing_string_definitions ... ok
+test simple_string_definitions_change_no_computed_style ... ok
+test substitution_of_a_string_value_is_parsed_by_the_receiving_property ... ok
+test unsafe_or_malformed_strings_stay_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_stylesheet.rs (target/debug/deps/data_stylesheet-edb798a5c5165336)
+
+running 8 tests
+test canonical_vectors_and_exact_css_bytes ... ok
+test canonical_ascii_roundtrips_across_every_padding_boundary ... ok
+test header_tokens_casefold_without_changing_payload ... ok
+test illegal_alphabet_padding_and_tail_bits_refuse ... ok
+test invalid_utf8_and_css_nul_refuse_but_bom_is_preserved ... ok
+test unsupported_profiles_never_fall_through_to_network ... ok
+test wired_decoder_changes_link_contract_deterministically ... ok
+test exact_limit_and_both_encoded_decoded_budget_failures ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/delta10_underline_colour.rs (target/debug/deps/delta10_underline_colour-bf9ccbcfce3ec581)
+
+running 3 tests
+test admitted_shape_fill_colour_is_the_establishing_elements_colour ... ok
+test decorated_block_with_divergent_inline_colour_refuses_the_page ... ok
+test ua_underlined_blue_link_in_a_black_container_refuses_the_page ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/desc_has_external.rs (target/debug/deps/desc_has_external-869edb5e5cfd6e7d)
+
+running 6 tests
+test browser_color_only_cascade8cases ... ok
+test missing_wrong_snapshot_autofocus_and_same_target ... ok
+test public_original439_inventory ... ignored, measurement: DESC_HAS_LINES original439
+test real_error_before_true_exhaustion_and_input_node_text_loss_refusal ... ok
+test deep150_real_public_and_broad_exhaustion ... ok
+test real_global_spent_work_without_individual_fuel_exhaustion ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.02s
+
+     Running tests/device_family_list.rs (target/debug/deps/device_family_list-e529d70c2fd7bf62)
+
+running 7 tests
+test admission_is_ext_entries_only ... ok
+test admitted_style_differs_only_in_family ... ok
+test bare_sans_serif_keeps_its_existing_admission ... ok
+test bare_generics_keep_their_existing_refusal ... ok
+test corpus_lists_are_admitted_and_resolve_to_their_generic ... ok
+test resolver_reports_why_it_refuses ... ok
+test every_other_list_keeps_the_refusal ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/em_width_height.rs (target/debug/deps/em_width_height-d1b812d64698063f)
+
+running 12 tests
+test default_entry_does_not_recognise_em_width_height ... ok
+test em_equals_its_resolved_px_twin_using_own_font_size ... ok
+test inexact_em_height_on_display_none_element_refuses_with_visible_sibling ... ok
+test inexact_em_on_after_that_makes_no_box_refuses ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+test percent_colliding_with_em_flag_with_fractional_digits_refuses ... ok
+test later_declaration_wins_between_em_rem_and_px ... ok
+test percent_width_still_works_and_flag_collision_refuses ... ok
+test unresolved_em_is_refused_even_where_width_or_height_would_be_ignored ... ok
+test unresolved_em_on_after_pseudo_refuses ... ok
+test unrepresentable_em_lengths_stay_refused ... ok
+test unresolved_em_on_after_pseudo_refuses_in_inline_and_zero_basis ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/embedded_class_bang_external.rs (target/debug/deps/embedded_class_bang_external-fa8b5e3d6cd0997c)
+
+running 5 tests
+test browser_color_rank9 ... ok
+test default_and_other_identifier_isolation_attribute_loss ... ok
+test original225_public_inventory ... ignored, measurement: EMBEDDED_CLASS_BANG_LINES original225 individual rows
+test state_families_target_autofocus_and_partial_loss ... ok
+test long_class_bytework_and_aggregate_global_work ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/empty_external.rs (target/debug/deps/empty_external-78ae64b93b1f2c9c)
+
+running 6 tests
+test actual_text_cap_loss_emptylooking_retained_candidate_is_refused ... ok
+test complete_dom_cascade_combinators_and_wrapper_composition ... ok
+test input_node_truncation_under_empty_wrappers_refuses ... ok
+test public_original11_inventory ... ignored, measurement: EMPTY_LINES original11
+test real_raw_comment_scan_exhaustion_and_base_refusal ... ok
+test depth_config_unused_here_complete150chain_sentinel_and_empty_leaf ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/family_key_retention.rs (target/debug/deps/family_key_retention-b13d8916926531e6)
+
+running 4 tests
+test list_is_retained_inherited_and_resolves_in_owning_tree_only ... ok
+test keyword_reset_and_unrecognized_lists_carry_no_key_and_no_new_acceptance ... ok
+test pinned_entry_retains_key_for_both_pinned_lists_with_unchanged_admission ... ok
+test var_deferred_path_interns_the_substituted_list_in_the_same_tree ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/family_page.rs (target/debug/deps/family_page-0c7af429cd482e29)
+
+running 11 tests
+test anonymous_block_and_inline_text_inherit_the_key_and_select ... ok
+test catalog_coverage_claims_never_widen_ascii_or_whitespace_gates ... ok
+test empty_text_box_skips_only_the_vote_and_whitespace_only_does_not ... ok
+test catalog_provider_disagreement_refuses ... ok
+test mixed_families_refuse_even_when_each_resolves ... ok
+test missing_keyword_reset_and_foreign_key_refuse ... ok
+test odd_explicit_leading_is_not_inherited_by_a_new_face ... ok
+test text_parent_key_split_refuses_parent_mismatch_and_matching_keys_select ... ok
+test tree_refused_upstream_never_selects_or_paints ... ok
+test partial_coverage_nonascii_style_bold_and_notext_refuse ... ok
+test uniform_page_selects_family_and_paints_same_as_direct_painter ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_admission_probe.rs (target/debug/deps/flex_admission_probe-f7014c653bd8c73f)
+
+running 1 test
+test probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_align_proto.rs (target/debug/deps/flex_align_proto-1cc1a7bebd8cbab4)
+
+running 27 tests
+test a2_flex_end_matches_chrome ... ok
+test a1_flex_start_matches_chrome ... ok
+test a3_center_matches_chrome ... ok
+test a4_stretch_explicit_matches_chrome ... ok
+test a6_center_margins_matches_chrome ... ok
+test a5_flex_start_auto_height_nostretch_matches_chrome ... ok
+test a8_both_matches_chrome ... ok
+test a7_flex_end_padding_matches_chrome ... ok
+test j10_margins_center_even_matches_chrome ... ok
+test j11_overflow_end_shrinks_to_fit_matches_chrome ... ok
+test j1_flex_end_matches_chrome ... ok
+test j2_center_matches_chrome ... ok
+test j4_space_around_matches_chrome ... ok
+test j3_space_between_matches_chrome ... ok
+test j6_margins_center_refused ... ok
+test j5_space_evenly_matches_chrome ... ok
+test j7_single_between_matches_chrome ... ok
+test j8_grow_consumes_free_matches_chrome ... ok
+test z1_odd_center_refused ... ok
+test j9_flex_start_overflow_shrink_matches_chrome ... ok
+test z2_fractional_between_refused ... ok
+test z3_fractional_around_refused ... ok
+test z5_odd_cross_center_refused ... ok
+test z4_overflow_center_refused ... ok
+test z6_baseline_refused ... ok
+test z7_space_left_refused ... ok
+test z8_align_self_refused ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_basis_proto.rs (target/debug/deps/flex_basis_proto-aa7c2e7d05e02e21)
+
+running 20 tests
+test b2_basis_overrides_width_matches_chrome ... ok
+test b1_basis_auto_width_grow_matches_chrome ... ok
+test b3_shrink_zero_item_matches_chrome ... ok
+test b4_shrink_2_vs_1_matches_chrome ... ok
+test b5_basis_below_min_content_matches_chrome ... ok
+test b6_shrink_basis_px_width_auto_matches_chrome ... ok
+test b8_frozen_at_hyp_then_shrink_matches_chrome ... ok
+test b7_grow_and_shrink_declared_matches_chrome ... ok
+test o1_old_r2_overflow_matches_chrome ... ok
+test b9_shrink_zero_all_overflow_matches_chrome ... ok
+test x1_basis_percent_refused ... ok
+test o2_old_h4_overflow_grow_matches_chrome ... ok
+test x2_basis_content_refused ... ok
+test x3_shrink_fraction_refused ... ok
+test x4_auto_basis_auto_width_refused ... ok
+test x5_negative_basis_refused ... ok
+test x7_negative_item_margin_top_refused ... ok
+test x6_negative_item_margin_left_refused ... ok
+test x8_negative_child_margin_shrink_refused ... ok
+test x9_fraction_after_freeze_refused ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_border_family_gen.rs (target/debug/deps/flex_border_family_gen-3a2bb730af8a346d)
+
+running 1 test
+test gen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/flex_column_gap.rs (target/debug/deps/flex_column_gap-6328ce0adbc9f5a3)
+
+running 4 tests
+test default_entry_still_refuses_gap ... ok
+test gap_normal_zero_and_later_declaration_cascade ... ok
+test gap_matches_chrome_fixture_numbers ... ok
+test unmodelled_gap_shapes_refuse ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_grow_proto.rs (target/debug/deps/flex_grow_proto-db292fa9e3781d88)
+
+running 21 tests
+test g10_definite_height_equal_margin_box_matches_chrome ... ok
+test g1_equal_grow_matches_chrome ... ok
+test g2_ratio_1_3_matches_chrome ... ok
+test g3_mixed_margin_padding_refused ... ok
+test g4_single_fill_matches_chrome ... ok
+test g5_container_padding_matches_chrome ... ok
+test g7_grow_zero_and_full_matches_chrome ... ok
+test g6_nested_grow_inside_grown_item_matches_chrome ... ok
+test g8_grow_inherit_keyword_matches_chrome ... ok
+test g9_mixed_margin_padding_divisible_matches_chrome ... ok
+test h10_definite_height_below_tallest_item_refused ... ok
+test h11_definite_height_below_item_margin_box_refused ... ok
+test h1_fractional_share_three_matches_chrome ... ok
+test h2_fractional_grow_refused ... ok
+test h3_negative_grow_refused ... ok
+test h4_overflow_with_grow_superseded_now_shrinks ... ok
+test h5_exponent_refused ... ok
+test h6_calc_refused ... ok
+test h7_flex_shrink_declared_superseded_now_supported ... ok
+test h8_flex_basis_declared_superseded_now_supported ... ok
+test h9_fractional_share_three_in_400_refused ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_initial_values.rs (target/debug/deps/flex_initial_values-e872a952cc57ac85)
+
+running 2 tests
+test other_values_and_default_entry_refuse ... ok
+test initial_values_lay_out_exactly_like_bare_on_flex_and_non_flex ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_nested_basic.rs (target/debug/deps/flex_nested_basic-b3878551ae9f6044)
+
+running 11 tests
+test decorated_empty_item_paints ... ok
+test center_shifts_items_vertically ... ok
+test growing_inline_child_takes_share ... ok
+test deeply_nested_rows_stay_bounded ... ok
+test nested_rows_share_one_line ... ok
+test pure_inline_child_measured_by_content ... ok
+test stretch_extends_item_backgrounds ... ok
+test shrinkable_items_shrink_to_fit ... ok
+test unshrinkable_items_keep_the_overflow_fallback ... ok
+test unshrinkable_nested_overflow_still_stacks ... ok
+test whitespace_children_take_no_slot ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_refusal_diag_probe.rs (target/debug/deps/flex_refusal_diag_probe-6970c1a75c369305)
+
+running 1 test
+test diag ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_row_proto.rs (target/debug/deps/flex_row_proto-4687fe9db19c42ad)
+
+running 26 tests
+test c1_explicit_heights_matches_chrome ... ok
+test c10_two_flex_stacked_matches_chrome ... ok
+test c2_stretch_auto_matches_chrome ... ok
+test c3_margin_padding_matches_chrome ... ok
+test c4_container_padding_matches_chrome ... ok
+test c5_sibling_margins_matches_chrome ... ok
+test c6_child_margin_no_collapse_matches_chrome ... ok
+test c7_definite_height_matches_chrome ... ok
+test c8_nested_in_block_matches_chrome ... ok
+test c9_nested_flex_matches_chrome ... ok
+test r10_wrap_refused ... ok
+test r11_gap_refused ... ok
+test r12_flex_shorthand_superseded_now_supported ... ok
+test r13_inline_flex_refused ... ok
+test r14_relative_item_refused ... ok
+test r15_order_refused ... ok
+test r16_empty_item_refused ... ok
+test r1_flex_grow_superseded_now_supported ... ok
+test r2_overflow_superseded_now_shrinks ... ok
+test r3_auto_width_refused ... ok
+test r4_column_refused ... ok
+test r5_text_item_refused ... ok
+test r6_auto_margin_refused ... ok
+test r7_pct_width_refused ... ok
+test r8_justify_superseded_now_supported ... ok
+test r9_align_items_superseded_now_supported ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_shorthand_proto.rs (target/debug/deps/flex_shorthand_proto-0476fdd38f1e867c)
+
+running 20 tests
+test f10_shrink_zero_form_matches_chrome ... ok
+test f11_zero_basis_three_items_matches_chrome ... ok
+test f12_basis_first_exact_matches_chrome ... ok
+test f1_flex1_two_matches_chrome ... ok
+test f3_none_width_px_matches_chrome ... ok
+test f2_flex_2_1_matches_chrome ... ok
+test f4_auto_width_px_matches_chrome ... ok
+test f5_triple_basis_last_matches_chrome ... ok
+test f6_basis_first_refused ... ok
+test f7_auto_then_grow_matches_chrome ... ok
+test f8_single_basis_matches_chrome ... ok
+test f9_flex_then_longhand_override_matches_chrome ... ok
+test y1_fraction_refused ... ok
+test y2_pct_basis_refused ... ok
+test y3_content_refused ... ok
+test y4_four_tokens_refused ... ok
+test y5_negative_refused ... ok
+test y6_basis_middle_refused ... ok
+test y7_calc_refused ... ok
+test y8_flex_auto_no_width_refused ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_shrink_proto.rs (target/debug/deps/flex_shrink_proto-5a962b5698405690)
+
+running 15 tests
+test s1_equal_shrink_matches_chrome ... ok
+test s10_freeze_then_scale_matches_chrome ... ok
+test s2_scaled_unequal_refused ... ok
+test s3_min_content_freeze_matches_chrome ... ok
+test s5_grow_ignored_when_overflow_matches_chrome ... ok
+test s4_margins_padding_matches_chrome ... ok
+test s7_all_frozen_at_min_matches_chrome ... ok
+test s6_min_content_from_nested_padding_matches_chrome ... ok
+test s8_zero_min_item_matches_chrome ... ok
+test s9_three_exact_matches_chrome ... ok
+test t1_fractional_shrink_refused ... ok
+test t2_percent_child_min_refused ... ok
+test t4_auto_margin_child_refused ... ok
+test t3_flex_child_min_refused ... ok
+test t5_zero_base_all_refused ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/flex_units_diff.rs (target/debug/deps/flex_units_diff-9e3d2dd2a93cae28)
+
+running 1 test
+test units_exactpx_matches_integer_engine_on_random_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s
+
+     Running tests/flex_units_diff_v2.rs (target/debug/deps/flex_units_diff_v2-0d7e88f0bc67452a)
+
+running 1 test
+test v2_units_exactpx_matches_integer_engine_zero_width_omitted ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.02s
+
+     Running tests/flex_units_diff_v3.rs (target/debug/deps/flex_units_diff_v3-34b6da5ba982cfd0)
+
+running 1 test
+test v3_units_v2_exactpx_matches_integer_engine_zero_width_omitted ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.08s
+
+     Running tests/flex_units_precision_fixture.rs (target/debug/deps/flex_units_precision_fixture-6bc0f0502de215b4)
+
+running 3 tests
+test near_tie_detects_exact_and_near_half ... ok
+test guarded_mode_refuses_ties_but_unguarded_resolves ... ok
+test rounding_primitives_diverge_at_the_largest_double_below_half ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/float_kernel_paint.rs (target/debug/deps/float_kernel_paint-804936986a4ca0f0)
+
+running 10 tests
+test explicit_float_kernel_painter_draws_float_above_overflowed_sibling_background ... ok
+test default_painters_still_refuse_float_layout ... ok
+test explicit_painter_fitting_parent_and_other_shapes ... ok
+test explicit_painter_refuses_two_kernels_in_one_tree ... ok
+test variant_b_explicit_painter_pixels ... ok
+test variant_c_right_float_explicit_painter_pixels ... ok
+test variant_c_float_none_reset_and_unparsed_value_are_not_kernels ... ok
+test variant_c_var_right_and_fallback_reach_the_kernel ... ok
+test variant_e1_zero_height_clear_pixels ... ok
+test variant_d_whole_px_percent_float_width ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/font_family_resolve.rs (target/debug/deps/font_family_resolve-824d0dac0663e417)
+
+running 8 tests
+test first_available_face_partial_coverage_refuses_never_skips_to_later_face ... ok
+test css_wide_keyword_in_any_unquoted_word_position_refuses ... ok
+test first_available_wins_in_order_and_absent_names_are_skipped ... ok
+test keyword_and_generic_classification_is_ascii_case_insensitive ... ok
+test quoting_names_generics_and_multiword_idents ... ok
+test strict_grammar_refuses_outside_cases ... ok
+test unknown_coverage_and_family_refusals_propagate ... ok
+test undecidable_unmapped_or_empty_lists_refuse_rather_than_guess ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generic_sans_ext.rs (target/debug/deps/generic_sans_ext-482f9d5488fb5654)
+
+running 7 tests
+test admitted_computed_style_differs_only_in_family ... ok
+test admission_is_ext_entries_only ... ok
+test other_values_keep_the_refusal_under_ext ... ok
+test exact_generic_sans_serif_is_admitted_under_ext ... ok
+test pinned_lane_is_unchanged ... ok
+test var_produced_sans_serif_follows_the_same_flag ... ok
+test with_state_shares_the_ext_gate ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/golden.rs (target/debug/deps/golden-cb45cc404d9de89b)
+
+running 19 tests
+test basic ... ok
+test a_flood_of_links_is_capped ... ok
+test disabled_attribute_on_neutral_wrapper_does_not_disable_controls ... ok
+test disabled_fieldset_keeps_only_controls_inside_its_first_legend ... ok
+test disabled_option_groups_do_not_supply_select_choices ... ok
+test every_link_in_the_model_is_referenced_once_in_reading_order ... ok
+test form_controls_keep_names_values_labels_and_defaults ... ok
+test form_count_and_field_count_are_bounded ... ok
+test latin1 ... ok
+test links ... ok
+test malformed ... ok
+test maxlength_applies_to_text_but_not_number_input ... ok
+test multipart_form_is_modelled_but_marked_as_not_urlencoded ... ok
+test oversized_input_is_cut_and_says_so ... ok
+test radio_and_select_with_the_same_name_remain_separate_controls ... ok
+test sanitize ... ok
+test textarea_is_a_bounded_successful_control ... ok
+test unsupported_and_disabled_form_controls_are_not_submitted ... ok
+test deep_nesting_stops_at_the_depth_limit_and_keeps_the_text ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+
+     Running tests/has_class_pair_external.rs (target/debug/deps/has_class_pair_external-86613261e16ca919)
+
+running 7 tests
+test exact_second_original_on_allowed_div_is_synthetic_dom_only ... ok
+test browser_rank_ordinary_colors_and_expected_table_policy ... ok
+test ordinary_public_four_combinations_self_and_nondescendant ... ok
+test originals_parsed_origin_checked_but_table_th_positives_refused ... ok
+test separate_allowed_div_pseudo_controls_not_original_table_support ... ok
+test sixteen_seventeen_mixed_provenance_default_and_othercomma ... ok
+test global_work_attrloss_and_partial_state ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/has_typed_pair_external.rs (target/debug/deps/has_typed_pair_external-a63bd4edb20df3fc)
+
+running 4 tests
+test browser_rank_colors_max_equal_sourceorder_id_single_sum_and_not ... ok
+test mixed_pair_commas_sixteen_seventeen_othercommas ... ok
+test original11_public_neutral_color_real_article_div_all_combinations ... ok
+test global_work_attrpartial_limits_state_and_default_unchanged ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/host_sheet_links.rs (target/debug/deps/host_sheet_links-552a3181551a83ca)
+
+running 5 tests
+test optional_private_page_cross_check ... ok
+test hrefless_and_non_http_links_take_a_slot_but_are_unfetchable ... ok
+test order_resolution_and_base ... ok
+test unknown_media_is_reported_and_incomplete_is_flagged ... ok
+test skipped_and_special_links ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/host_slot_mask.rs (target/debug/deps/host_slot_mask-7066d3dcb87ec92b)
+
+running 4 tests
+test dark_scheme_link_is_unknown_without_light_profile ... ok
+test dark_scheme_link_takes_no_host_slot_under_light_profile ... ok
+test linked_sheet_prefilter_folds_offcanvas_drawer ... ok
+test prefilter_keeps_rules_for_unquoted_spaced_and_uppercase_attributes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/inert_ui_none.rs (target/debug/deps/inert_ui_none-fdd265ea041946f8)
+
+running 4 tests
+test none_values_change_nothing_in_the_opt_in_entry ... ok
+test other_entries_keep_refusing ... ok
+test every_other_value_and_alias_stays_refused ... ok
+test resolved_none_through_var_is_admitted_on_ordinary_elements ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/initial_value_noops.rs (target/debug/deps/initial_value_noops-b00446c10e2e0b6d)
+
+running 2 tests
+test non_initial_values_of_the_same_properties_still_refuse ... ok
+test every_initial_pair_is_byte_equal_to_bare_under_ext_and_refused_by_default ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/inline_chip_skips.rs (target/debug/deps/inline_chip_skips-d44d1e732e8e214f)
+
+running 5 tests
+test border_without_background_is_not_a_chip_and_counts_nothing ... ok
+test bordered_chip_refuses_and_the_outer_background_is_not_counted_nested ... ok
+test background_on_a_further_inline_ancestor_counts_nested_once_per_element ... ok
+test plain_chip_fires_neither_counter_and_paints ... ok
+test painted_border_refuses_the_chip_and_counts_bordered_once_per_element ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/inline_sheet_href_optin.rs (target/debug/deps/inline_sheet_href_optin-cc63aaa5beb09641)
+
+running 10 tests
+test aggregate_is_per_parse_and_third_sheet_still_refuses ... ok
+test encoded_bound_is_exactly_four_ceil_third_plus_header_and_decoder_stays_authority ... ok
+test header_case_charset_media_and_decoder_refusals_are_the_decoders ... ok
+test html_entities_in_the_href_are_decoded_before_length_and_decoding ... ok
+test inactive_link_keeps_default_semantics ... ok
+test inputs_without_oversize_data_hrefs_are_identical_to_the_default_entry ... ok
+test optin_caps_win_over_the_measurement_globals_and_globals_stay_inert_by_default ... ok
+test canonical_budget_derives_the_documented_cap_and_cap_plus_one_drops ... ok
+test oversize_sheet_is_decoded_by_the_engine_only_when_opted_in ... ok
+test other_attributes_and_elements_still_drop_and_count ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/inset_shorthand.rs (target/debug/deps/inset_shorthand-e4bc06b97d417a0e)
+
+running 5 tests
+test everything_else_refuses_and_other_entries_refuse ... ok
+test expansion_equals_the_longhands_for_every_arity ... ok
+test undefined_var_in_inset_is_not_silently_expanded ... ok
+test var_in_inset_expands_before_the_shorthand_like_the_longhands ... ok
+test leaves_placed_by_inset_match_chrome_bounding_boxes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/is_five_external.rs (target/debug/deps/is_five_external-cb936fb29342427f)
+
+running 4 tests
+test browser_rank_max_not_sum_and_wrappers ... ok
+test faithful_original_p_subjects_neutral_color_no_inherited_coincidence ... ok
+test comma_count_mixed_separate_steps_and_16_17 ... ok
+test global_work_partial_attributes_limits_and_independent_state_guards ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/leading_class_colon_external.rs (target/debug/deps/leading_class_colon_external-a632d7e9e278acb6)
+
+running 6 tests
+test browser_color_rank9 ... ok
+test default_and_other_identifier_isolation_attribute_loss ... ok
+test original2_public_inventory ... ignored, measurement: LEADING_CLASS_COLON_LINES original2 under BOTH explicit guarantees
+test same_browser_original_html_replay_under_explicit_dual_contract ... ok
+test state_families_target_autofocus_and_partial_loss ... ok
+test long_class_bytework_and_aggregate_global_work ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/light_scheme_proto.rs (target/debug/deps/light_scheme_proto-203d7f4dd0b9f8a6)
+
+running 3 tests
+test default_context_still_refuses_prefers_color_scheme ... ok
+test light_context_skips_dark_and_applies_light ... ok
+test width_features_unchanged_and_combine ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/line_height_hp.rs (target/debug/deps/line_height_hp-a00605adb78e097c)
+
+running 9 tests
+test chrome_discriminating_pairs_refuse_not_admit ... ok
+test later_old_domain_declaration_replaces_precise_and_child_inherits_precise_field ... ok
+test old_public_hundredths_domain_is_not_reinterpreted ... ok
+test one_and_two_decimals_are_unchanged ... ok
+test precise_value_inherits_as_number_and_recomputes_at_child_font_size ... ok
+test six_decimals_refuse_even_ext ... ok
+test default_entry_still_refuses_three_to_five_decimals ... ok
+test whole_pixel_results_match_chrome_and_everything_else_refuses ... ok
+test wide_domain_admission_is_chrome_exact_and_never_wrong ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/line_height_rounded.rs (target/debug/deps/line_height_rounded-c2e0fb48b0f657f8)
+
+running 3 tests
+test normal_and_zero_adjacent_forms_keep_the_natural_height ... ok
+test fractional_products_round_to_the_nearest_pixel_and_count_once_per_text_block ... ok
+test whole_pixel_products_are_exact_and_uncounted ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/link_rects_proto.rs (target/debug/deps/link_rects_proto-1c3c4b61fcf1dbab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/links_in_code.rs (target/debug/deps/links_in_code-aa6f8312c694e6ca)
+
+running 1 test
+test links_inside_code_are_kept_and_the_words_stay_code ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/list_style_none.rs (target/debug/deps/list_style_none-2183295817014002)
+
+running 7 tests
+test explicit_none_makes_markerless_block_and_default_stays_list_item ... ok
+test every_other_value_and_the_other_longhands_stay_refused ... ok
+test inheritance_and_cascade ... ok
+test marker_box_and_counter_observers_stay_refused_with_markerless_items ... ok
+test other_entries_keep_refusing ... ok
+test revert_keywords_match_chrome_computed_values ... ok
+test markerless_list_paints_exactly_like_the_block_equivalent_and_default_list_is_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/list_style_shorthand_none.rs (target/debug/deps/list_style_shorthand_none-53fbafb9cfffca18)
+
+running 2 tests
+test default_entry_and_other_shorthand_values_refuse ... ok
+test shorthand_none_equals_type_none_across_cascade_cases ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/max_height_fold.rs (target/debug/deps/max_height_fold-243485518af92f6b)
+
+running 6 tests
+test cascade_not_inherited_and_resets ... ok
+test clamps_height_to_max ... ok
+test float_kernel_members_and_parent_stay_refused_with_height_and_max ... ok
+test other_entries_keep_refusing ... ok
+test nested_and_margin_shapes ... ok
+test out_of_scope_shapes_stay_refused ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/min_height_cascade.rs (target/debug/deps/min_height_cascade-52f8fb2fe6b6fd4e)
+
+running 5 tests
+test decimal_px_lexemes_follow_parse_width_and_apply_like_integers ... ok
+test later_positive_beats_earlier_zero_and_plain_positive_still_applies ... ok
+test resolved_var_zero_resets_and_resolved_positive_applies ... ok
+test later_zero_auto_0px_reset_an_earlier_positive_min_height ... ok
+test specificity_and_importance_decide_not_the_reset_itself ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/min_height_fold.rs (target/debug/deps/min_height_fold-3906b7c70b845668)
+
+running 7 tests
+test float_kernel_members_and_parent_stay_refused_with_height_and_min ... ok
+test folds_to_max_of_height_and_min ... ok
+test other_entries_keep_refusing ... ok
+test nested_and_margin_shapes ... ok
+test out_of_scope_shapes_stay_refused ... ok
+test root_and_absolute_children_stay_refused ... ok
+test zero_min_and_auto_height_unchanged ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/min_height_positive.rs (target/debug/deps/min_height_positive-432c7bd894d8ccba)
+
+running 3 tests
+test last_child_margin_with_min_height_is_refused_not_guessed ... ok
+test inadmissible_positions_refuse ... ok
+test positive_min_height_matches_chrome_fixture_numbers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/min_height_text_page.rs (target/debug/deps/min_height_text_page-c58a2edf0bd702e1)
+
+running 1 test
+test min_height_dominates_a_stub_text_block_and_pushes_the_next_block ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/min_height_zero_noop.rs (target/debug/deps/min_height_zero_noop-eaf633636df270c6)
+
+running 2 tests
+test positive_and_other_min_height_values_refuse_and_default_entry_refuses ... ok
+test zero_and_auto_min_height_lay_out_like_absent ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/minmax_direct_pass_probe.rs (target/debug/deps/minmax_direct_pass_probe-bcf330e5a57f0930)
+
+running 1 test
+test direct_passes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/minmax_raster_dump.rs (target/debug/deps/minmax_raster_dump-f9fd18dcd9551c73)
+
+running 1 test
+test raster ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/narrow_supply_proto.rs (target/debug/deps/narrow_supply_proto-46d1a82aadb7fa18)
+
+running 11 tests
+test bad_payloads_and_dark_media_refuse ... ok
+test aggregate_cap_drops_the_excess_href_not_silently ... ok
+test cascade_link_then_style_later_wins ... ok
+test cascade_specificity_beats_order_and_important_beats_both ... ok
+test cascade_style_then_link_later_wins ... ok
+test link_then_style_document_order_both_retained_clean ... ok
+test narrow_does_not_exempt_other_data_urls ... ok
+test narrow_on_a_large_valid_sheet_is_retained_decoded_and_clean ... ok
+test off_by_default_a_large_sheet_href_is_dropped_loudly ... ok
+test per_href_cap_and_per_sheet_budget_refuse ... ok
+test sheet_count_ceiling_refuses_the_extra_sheet ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/native_colour.rs (target/debug/deps/native_colour-34350751f81a1efb)
+
+running 5 tests
+test computed_treatments_do_not_duplicate_spaces_between_source_slices ... ok
+test adjacent_colours_collapse_shared_spaces_and_keep_background_inheritance ... ok
+test forms_anchors_and_unstyled_entry_are_preserved ... ok
+test duplicate_words_nested_links_and_code_keep_same_dom_colours ... ok
+test raw_coloured_pre_does_not_reveal_hidden_source_text_or_trim_indents ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/noop_decls_ext.rs (target/debug/deps/noop_decls_ext-b8647a819ddb545f)
+
+running 4 tests
+test admitted_values_compute_like_bare_under_ext_and_refuse_by_default ... ok
+test other_values_still_refuse_under_ext ... ok
+test painted_border_is_unaffected_and_competing_unsupported_values_still_refuse ... ok
+test every_cursor_keyword_important_and_defined_vars_compute_like_bare ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/not_bounded_external.rs (target/debug/deps/not_bounded_external-219f1188855a4d86)
+
+running 5 tests
+test competing_rule_specificity_id_class_type_and_no_token_bonus ... ok
+test inner_state_target_and_enablement_rank_and_dependencies ... ok
+test public_production_inventory ... ignored, measurement: NOT_LINES supplies the retained original 542-line set
+test negated_substring_real_work_exhaustion_truncates_and_base_refuses ... ok
+test separate_inner_focus_bound_and_autofocus_guard ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/not_class_pair_external.rs (target/debug/deps/not_class_pair_external-7f9d5a7a9a3124c2)
+
+running 5 tests
+test browser_rank_color8 ... ok
+test original2_four_combinations ... ok
+test sixteen_logical_members_seventeen_refuses_and_legacy_other_commas ... ok
+test state_dependency_and_partial_isolation ... ok
+test global_work_and_partial_attribute_tree ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/odd_leading_gap.rs (target/debug/deps/odd_leading_gap-7c218fc8ced47398)
+
+running 2 tests
+test odd_leading_refuses_without_gap_proof_or_with_disagreeing_strut ... ok
+test odd_leading_floors_with_gap_proof_and_even_is_unchanged ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/of_type_external.rs (target/debug/deps/of_type_external-b10d5ddaa3644008)
+
+running 4 tests
+test public_original62_inventory ... ignored, measurement: OF_TYPE_LINES original62-line proposal set
+test partial_dom_never_becomes_complete_for_type_relative_negation ... ok
+test typed_actual_name_scan_exhaustion_truncates_and_base_refuses ... ok
+test typed_cascade_own_type_not_token_bonus_and_combinators ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/outline_solid.rs (target/debug/deps/outline_solid-03031137612bcdef)
+
+running 4 tests
+test default_entry_unchanged ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+test paint_refusals ... ok
+test spellings_reset_and_unmodelled_shapes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/overflow_axes.rs (target/debug/deps/overflow_axes-ba4eb90ca358cc72)
+
+running 3 tests
+test default_entry_still_refuses_overflow_longhands_and_auto ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+test unmodelled_overflow_shapes_stay_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/overflow_hidden_bfc.rs (target/debug/deps/overflow_hidden_bfc-aa19488c36b06035)
+
+running 6 tests
+test cascade_visible_reset_order_specificity_important ... ok
+test clip_edge_is_the_padding_box_not_the_border_box_fl23 ... ok
+test hidden_contains_child_margins_like_chrome ... ok
+test inherit_keyword_follows_the_typed_value_and_is_gated ... ok
+test rtl_border_band_variant_refuses_fl23 ... ok
+test unproven_or_unmodelled_shapes_refuse ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/overflow_hidden_height.rs (target/debug/deps/overflow_hidden_height-15c9d1833200c19b)
+
+running 5 tests
+test bound_exceeded_or_unmodelled_refuses ... ok
+test fitting_children_admit_and_equal_the_visible_twin ... ok
+test min_height_is_folded_before_the_bound ... ok
+test other_entries_keep_refusing ... ok
+test padding_counts_in_child_bound_but_not_in_hidden_box_height ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/overflow_root.rs (target/debug/deps/overflow_root-e0f054917d550f2c)
+
+running 3 tests
+test default_entry_still_refuses_root_overflow ... ok
+test root_overflow_with_a_second_overflow_box_or_unmodelled_shape_stays_refused ... ok
+test chrome_pixel_verified_root_overflow_fixtures_match_recorded_rects ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/overflow_visible_noop.rs (target/debug/deps/overflow_visible_noop-afe45f3fb2634efb)
+
+running 2 tests
+test default_entry_unchanged_still_refuses_visible ... ok
+test visible_is_byte_equal_to_bare_under_ext_and_other_values_refuse ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/overflow_wrap_break_word.rs (target/debug/deps/overflow_wrap_break_word-32b39300d5a9e11b)
+
+running 2 tests
+test other_values_and_default_entry_refuse ... ok
+test admitted_pages_paint_exactly_like_bare_and_too_wide_words_refuse_either_way ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/padding_em_proto.rs (target/debug/deps/padding_em_proto-2f83ce1f6469c8a8)
+
+running 5 tests
+test em_uses_the_elements_own_font_size_exactly ... ok
+test geometry_equals_the_px_twin ... ok
+test parent_font_is_not_the_basis_for_own_em_padding ... ok
+test rem_and_other_units_stay_refused ... ok
+test inexact_em_refuses_not_rounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/percent_guard_shaped_underline.rs (target/debug/deps/percent_guard_shaped_underline-01bb1e3d9edbd1cc)
+
+running 2 tests
+test underline_entry_refuses_float32_percent_hole_with_same_group_control ... ok
+test shaped_entry_refuses_float32_percent_hole_with_same_group_control ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pinned_font_family.rs (target/debug/deps/pinned_font_family-9d5d0748e2d8d133)
+
+running 9 tests
+test default_provider_has_no_face_catalog ... ok
+test family_bound_shaped_entry_applies_the_same_gate_first ... ok
+test default_entries_and_other_painters_stay_closed ... ok
+test family_bound_shaped_entry_is_single_build_even_for_stateful_shapers ... ok
+test only_exact_lists_are_admitted_by_intake ... ok
+test family_bound_shaped_entry_is_strict_and_observably_shaped ... ok
+test provider_contract_failures_refuse ... ok
+test pinned_lists_admit_and_paint_with_both_hashes_and_coverage ... ok
+test style_weight_text_and_family_states_refuse ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/position_fixed.rs (target/debug/deps/position_fixed-147c73ba65337577)
+
+running 4 tests
+test default_entry_does_not_recognise_position_fixed ... ok
+test fixed_cascade_reset_to_static_is_a_typed_override ... ok
+test fixed_under_a_positioned_ancestor_stays_refused ... ok
+test chrome_pixel_verified_fixed_fixtures_match_recorded_rects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/position_margin_auto_leaf.rs (target/debug/deps/position_margin_auto_leaf-618b73ea6aa20dbc)
+
+running 4 tests
+test default_entry_still_refuses_margin_auto_under_an_absolute_parent ... ok
+test centred_leaves_match_chrome_bounding_boxes ... ok
+test unmodelled_auto_margin_stays_refused ... ok
+test padded_leaf_centres_by_outer_size_for_both_box_sizings_and_borders_are_admitted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/position_relative_auto.rs (target/debug/deps/position_relative_auto-ed7c4135a90f3f6b)
+
+running 5 tests
+test other_entries_keep_refusing_relative ... ok
+test overlap_sources_offsets_and_unsupported_kinds_refuse ... ok
+test relative_box_paints_as_one_layer_after_static_content_children_after_the_box ... ok
+test tree_guard_alone_refuses_float_clear_and_inline_kind ... ok
+test auto_offset_relative_paints_exactly_as_static_in_the_no_overlap_domain ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/position_relative_leaf.rs (target/debug/deps/position_relative_leaf-3d857ba98f322ddf)
+
+running 5 tests
+test leaves_resolve_against_the_relative_padding_box_and_paint_in_the_positioned_layer ... ok
+test markerless_li_is_an_eligible_parent_and_marker_bearing_li_is_refused ... ok
+test border_percent_width_and_left_right_precedence_match_chrome_samples ... ok
+test static_container_uses_the_viewport_instead ... ok
+test unsupported_shapes_refuse ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/position_relative_text_refused.rs (target/debug/deps/position_relative_text_refused-ed98ad64616fe097)
+
+running 8 tests
+test each_background_is_painted_exactly_once_across_layers ... ok
+test absolute_leaf_in_a_relative_parent_paints_above_earlier_text ... ok
+test nested_relative_layers_order ... ok
+test mixed_block_and_raw_text_inline_relative_and_inline_runs_are_refused_or_unchanged ... ok
+test non_relative_absolute_leaf_is_above_text_as_before ... ok
+test non_positioned_descendant_text_is_covered_by_a_later_relative_sibling ... ok
+test text_inside_the_relative_block_paints_above_its_own_background ... ok
+test relative_block_covers_earlier_overflowing_text_like_chrome ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/position_stretch_leaf.rs (target/debug/deps/position_stretch_leaf-9d00a9c7fa612521)
+
+running 9 tests
+test absolute_parent_stretch_matches_chrome ... ok
+test border_box_leaf_with_padding_matches_chrome_and_content_box ... ok
+test default_entry_still_refuses_stretch_under_an_absolute_parent ... ok
+test incomplete_or_unmodelled_stretch_stays_refused ... ok
+test stretch_inside_a_bordered_definite_parent_matches_chrome ... ok
+test stretch_equals_the_equivalent_px_leaf ... ok
+test text_consumer_actual_outcomes_per_leaf_kind_stub_font ... ok
+test stretched_leaves_match_chrome_bounding_boxes ... ok
+test text_consumer_stretch_leaf_covers_earlier_text_dots_stub_font ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/prefilter_ext.rs (target/debug/deps/prefilter_ext-92854642ff260ea2)
+
+running 11 tests
+test base_grammar_unicode_ws_class_matches ... ok
+test attr_key_fold_and_missing_attr_ops ... ok
+test cascade_source_order_preserved_through_index ... ok
+test default_entry_unchanged ... ok
+test duplicate_class_tokens_single_charge ... ok
+test declaration_cap_trips_at_same_position_both_entries ... ok
+test quirks_document_class_stays_case_sensitive ... ok
+test svg_camelcase_tag_key_folds ... ok
+test unicode_ws_class_literal_refused_by_both_grammars ... ok
+test unicode_ws_class_token_still_candidate ... ok
+test matchwork_refusal_stays_reachable ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/pseudo_after.rs (target/debug/deps/pseudo_after-87fdfa62f9c91fd7)
+
+running 17 tests
+test before_box_is_the_first_child_with_its_own_cascaded_style ... ok
+test default_background_painter_percent_guard ... ok
+test everything_else_fails_closed ... ok
+test explicit_painter_draws_the_clearfix_pseudo_element_layout ... ok
+test float_kernel_percent_hole_refused_exact_admitted ... ok
+test generated_before_boxes_stay_closed_to_both_painters ... ok
+test flex_and_absolute_percent_are_currently_refused_by_the_default_background_painter ... ok
+test generated_block_entry_paints_before_real_after_in_order ... ok
+test generated_box_is_the_last_child_with_its_own_cascaded_style ... ok
+test generated_block_entry_refusal_pins ... ok
+test legacy_entry_admits_tight_after_and_counts_skips ... ok
+test no_box_for_none_normal_or_display_none ... ok
+test generated_boxes_do_not_trip_the_dom_node_cap ... ok
+test pseudo_rem_resolves_like_the_equivalent_px_and_unrepresentable_refuses ... ok
+test pseudo_budget_contracts_match_the_element_path ... ok
+test specificity_and_source_order_cascade_inside_the_pseudo_element ... ok
+test review_counterexamples_replaced_rem_and_ordinary_painters ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/rem_lengths_ext.rs (target/debug/deps/rem_lengths_ext-dec9aff1ab61aad0)
+
+running 7 tests
+test default_and_pinned_entries_refuse_rem_minmax ... ok
+test later_declaration_wins_over_rem_and_vice_versa ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+test root_own_rem_resolves_against_initial_16_not_author_root_font ... ok
+test rem_minmax_equals_resolved_px_twin ... ok
+test state_entry_admits_rem_minmax_like_ext ... ok
+test unrepresentable_rem_lengths_stay_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/rem_lengths_proto.rs (target/debug/deps/rem_lengths_proto-ef1535f36a34edd8)
+
+running 6 tests
+test element_font_does_not_change_rem ... ok
+test negative_rem_margin_and_negative_rem_padding ... ok
+test inexact_rem_refuses ... ok
+test other_units_stay_refused ... ok
+test rem_resolves_against_root_font_default_and_changed ... ok
+test rem_geometry_equals_px_twin ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rem_width_height.rs (target/debug/deps/rem_width_height-50fdc986a6bb1e6d)
+
+running 5 tests
+test default_entry_does_not_recognise_rem_width_height ... ok
+test later_declaration_wins_over_rem_and_vice_versa ... ok
+test rem_equals_its_resolved_px_twin ... ok
+test unrepresentable_rem_lengths_stay_refused ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/resource_attr_retention.rs (target/debug/deps/resource_attr_retention-38bedb18cb7faf10)
+
+running 10 tests
+test count_cap_still_applies_to_a_budget_eligible_value ... ok
+test aggregate_cap_is_saturating_and_first_come ... ok
+test data_text_css_href_never_uses_the_resource_budget ... ok
+test default_entry_still_drops_everything_oversize ... ok
+test duplicate_attribute_keeps_the_first_without_dropping ... ok
+test deferred_classes_still_drop_and_taint ... ok
+test img_src_retained_in_full_under_budget ... ok
+test link_href_non_stylesheet_data_retained ... ok
+test retained_value_is_visible_to_attribute_selectors ... ok
+test per_value_cap_is_exact ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/reverse_child_external.rs (target/debug/deps/reverse_child_external-c32a23dbb78019da)
+
+running 3 tests
+test public_original5_inventory ... ignored, measurement: REVERSE_CHILD_LINES original5
+test cascade_specificity_not_and_left_combinator ... ok
+test real_reverse_scan_exhaustion_and_partial_intake_fail_closed ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/shaped_page_integration.rs (target/debug/deps/shaped_page_integration-2bff3c1f98ec2070)
+
+running 7 tests
+test cumulative_x_is_rounded_once_not_summed_pre_rounded ... ok
+test legacy_advances_scaled_give_identical_page ... ok
+test non_left_alignment_is_whole_page_legacy ... ok
+test one_ineligible_block_makes_whole_page_legacy ... ok
+test shaper_none_is_whole_page_legacy ... ok
+test wider_advances_change_wrapping_and_are_not_legacy ... ok
+test eligible_shaped_pages_are_never_silently_legacy ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/shaped_runs_prototype.rs (target/debug/deps/shaped_runs_prototype-466f06d2920179b1)
+
+running 6 tests
+test degenerate_inputs_match_legacy ... ok
+test equivalent_to_legacy_when_advances_are_legacy_times_64 ... ok
+test legacy_hook_is_never_consulted_on_the_shaped_path ... ok
+test non_ascii_or_control_text_defers_to_legacy_whole_block ... ok
+test strict_vs_fitted_rule_is_explicit_and_changes_only_the_fit ... ok
+test every_malformed_provider_output_falls_back_to_byte_identical_legacy ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/source_facts.rs (target/debug/deps/source_facts-d352d967c6102a0e)
+
+running 17 tests
+test allowlist_is_unique_and_excludes_every_refusing_class ... ok
+test all_zero_profile_is_not_missing_or_complete_proof_by_itself ... ok
+test conversion_depth_and_block_caps_do_not_impersonate_scan_loss ... ok
+test both_attribute_paths_feed_existing_style_loss_diagnostics ... ok
+test exact_profile_classes_and_nested_counts ... ok
+test final_feed_ceiling_and_finish_created_nodes_are_reported_honestly ... ok
+test foreign_and_unknown_names_are_not_passive ... ok
+test frames_and_images_and_media_have_distinct_exact_counts ... ok
+test head_furniture_and_unknown_known_html_are_explicitly_classified ... ok
+test input_node_text_and_attribute_limits_are_distinct_loss_evidence ... ok
+test interaction_attributes_are_per_element_not_per_attribute ... ok
+test parsed_merge_losses_and_dedupe_are_distinct ... ok
+test repair_and_finish_counts_are_retained_nodes_not_raw_tags ... ok
+test repaired_attribute_merges_preserve_facts_when_no_storage_loss ... ok
+test styled_parse_and_reader_view_preserve_full_source_provenance ... ok
+test utf8_cut_bom_recovery_and_quirks_are_separate ... ok
+test every_profile_tag_in_retained_contexts_refuses_passive_classification ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sticky_relative.rs (target/debug/deps/sticky_relative-39524049bb3a7890)
+
+running 4 tests
+test default_entry_does_not_recognise_sticky ... ok
+test relative_margin_top_collapses_through_parent_like_static ... ok
+test unmodelled_sticky_offsets_stay_refused ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/style_diagnostics.rs (target/debug/deps/style_diagnostics-6d1d0cfdd268ee2b)
+
+running 7 tests
+test attribute_loss_precedes_missing_resource_and_records_both ... ok
+test clean_parse_has_no_refusal_and_exact_counts ... ok
+test quirks_and_legacy_encoding_are_not_silent ... ok
+test input_bytes_and_text_caps_are_distinct ... ok
+test stylesheet_count_and_utf8_have_specific_reasons ... ok
+test stylesheet_semantics_are_counted_without_storing_external_text ... ok
+test style_complexity_budget_reason_does_not_claim_dom_truncation ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/supply_budget.rs (target/debug/deps/supply_budget-5062e110e1039dbe)
+
+running 8 tests
+test aggregate_gate_is_new_ordered_after_per_sheet_and_in_document_order ... ok
+test aggregate_gate_never_fires_under_canonical_even_at_both_sheets_full ... ok
+test canonical_equals_the_pre_budget_literals ... ok
+test data_arm_per_sheet_budget_is_the_candidate_value_not_a_constant ... ok
+test data_arm_refusal_comes_from_the_decoder_before_the_aggregate_gate ... ok
+test per_sheet_budget_raises_only_when_named ... ok
+test third_sheet_needs_the_sheet_count_budget_each_arm ... ok
+test canonical_entry_matches_the_existing_entry_for_every_gate ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/table_roles.rs (target/debug/deps/table_roles-00ed13cd396e88c4)
+
+running 3 tests
+test hidden_table_subtree_has_no_boxes ... ok
+test explicit_table_roles_survive_box_generation ... ok
+test original_html_spans_are_retained_without_rewriting ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_state_external.rs (target/debug/deps/target_state_external-fd2986acd39c5503)
+
+running 4 tests
+test fragment_asserted_matching_paints_target_rule ... ok
+test all_none_snapshot_full_tree_identity_with_no_snapshot ... ok
+test fragment_free_capture_enrolls_but_matches_nothing ... ok
+test no_guarantee_fails_closed ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/text_size_adjust_identity.rs (target/debug/deps/text_size_adjust_identity-8d055601a5497475)
+
+running 4 tests
+test identity_values_change_nothing_in_the_opt_in_entry ... ok
+test cascade_paths_conflict_inheritance_var ... ok
+test other_entries_keep_refusing ... ok
+test other_values_and_spellings_stay_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/transition_noop.rs (target/debug/deps/transition_noop-79ae79863513251f)
+
+running 3 tests
+test default_entry_still_refuses_transition ... ok
+test bounded_transition_values_are_noops_and_change_no_style ... ok
+test unbounded_or_other_transition_values_refuse ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/two_adjacent_has_external.rs (target/debug/deps/two_adjacent_has_external-303981b2ea82aefc)
+
+running 5 tests
+test original4_public_inventory ... ignored, measurement: TWO_ADJACENT_LINES original4 including2acceptedoneedgecontrols
+test browser_color9_both_compounds_rank ... ok
+test real_first_predicate_error_before_tail_or_later_true ... ok
+test tail_dependencies_wrong_families_autofocus_same_target_and_partial_loss ... ok
+test public_real_tail_error_and_aggregate_global_work ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/two_child_has_external.rs (target/debug/deps/two_child_has_external-3a8633a9f7b24cc4)
+
+running 4 tests
+test original6_public_inventory ... ignored, measurement: TWO_CHILD_LINES original6 including2checkedblockers
+test browser_color9_both_compounds_rank ... ok
+test tail_dependencies_wrong_families_autofocus_same_target_and_partial_loss ... ok
+test public_real_tail_error_and_aggregate_global_work ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/two_descendant_has_external.rs (target/debug/deps/two_descendant_has_external-6ce7e92bf49f82ae)
+
+running 5 tests
+test original2_public_inventory ... ignored, measurement: TWO_DESCENDANT_LINES original2 plus accepted shape controls
+test browser_color9_both_compounds_rank ... ok
+test real_first_predicate_error_before_tail_or_later_true ... ok
+test tail_dependencies_wrong_families_autofocus_same_target_and_partial_loss ... ok
+test public_real_tail_error_and_aggregate_global_work ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/u1_matrix.rs (target/debug/deps/u1_matrix-e039c920cb00b55c)
+
+running 1 test
+test matrix ... ignored, env-driven evidence runner (needs U1_DIR and U2_OUT); run with --ignored on COPY fixtures
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/u2_matrix2.rs (target/debug/deps/u2_matrix2-fc7dcca36b8ca137)
+
+running 1 test
+test matrix2 ... ignored, env-driven evidence runner (needs U1_DIR and U2_OUT); run with --ignored on COPY fixtures
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ua_audit_ext.rs (target/debug/deps/ua_audit_ext-80b3a678bfc9a920)
+
+running 11 tests
+test author_initial_inherit_unset_are_replacements_matching_chrome ... ok
+test author_revert_hands_back_to_the_unmodelled_ua_sheet_and_refuses ... ok
+test bare_listed_elements_refuse_under_ext_and_are_admitted_by_default ... ok
+test inline_style_counts_as_author_and_unlisted_elements_are_untouched ... ok
+test fully_authored_elements_pass_the_audit_and_each_missing_property_refuses ... ok
+test summary_and_legend_refuse_on_their_own_with_no_details_or_fieldset_in_the_markup ... ok
+test replaced_media_and_hgroup_refuse_under_ext_each_in_isolation ... ok
+test unconditional_refusals_stay_refused_even_when_author_sets_everything ... ok
+test unconditional_tags_refuse_on_their_own_not_only_through_a_refused_author_value ... ok
+test var_resolved_revert_and_var_resolved_replacement_are_judged_after_substitution ... ok
+test table_family_and_other_unmodelled_ua_elements_refuse_under_ext_each_in_isolation ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ua_dl_dd_ext.rs (target/debug/deps/ua_dl_dd_ext-fff6f0ad9250d749)
+
+running 6 tests
+test bare_dl_dt_dd_are_admitted_under_ext_with_chrome_defaults ... ok
+test computed_rtl_dd_and_other_u1_guards_still_refuse ... ok
+test neighbour_audited_elements_still_refuse_and_default_entry_is_unchanged ... ok
+test former_missing_property_shapes_are_admitted_per_element ... ok
+test neighbour_missing_property_shapes_still_refuse ... ok
+test nested_and_outside_and_override_cases ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ua_link_underline_ext.rs (target/debug/deps/ua_link_underline_ext-eeb7ddd439798dd9)
+
+running 7 tests
+test abbr_without_title_is_plain ... ok
+test mark_computed_style_is_exact_ua_yellow_and_black_even_under_a_red_parent ... ok
+test mark_gets_ua_yellow_background_and_black_text_or_refuses ... ok
+test line_through_elements_refuse_unless_author_none ... ok
+test other_decoration_forms_refuse_and_default_entry_is_unchanged ... ok
+test raw_links_and_underline_elements_refuse_under_ext_but_not_without_href ... ok
+test text_decoration_none_turns_off_the_underline_and_ua_colour_applies ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ua_lists_ext.rs (target/debug/deps/ua_lists_ext-4843ca73078847fe)
+
+running 9 tests
+test author_margin_overrides_per_property ... ok
+test author_font_size_scales_ua_em_margins ... ok
+test computed_rtl_lists_still_refuse ... ok
+test author_satisfied_lists_unchanged ... ok
+test default_entry_unchanged ... ok
+test dl_and_lists_zero_each_other ... ok
+test flat_lists_get_chrome_ua_defaults ... ok
+test important_author_declarations_override ... ok
+test nested_lists_get_zero_margins ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/visibility_hidden.rs (target/debug/deps/visibility_hidden-d148f7c9c53faada)
+
+running 9 tests
+test hidden_box_keeps_space_and_paints_nothing ... ok
+test display_none_child_under_hidden_parent_is_not_a_box ... ok
+test html_and_body_hidden_refuse ... ok
+test hidden_non_inherit_reset_and_visible_child_refuse ... ok
+test inherited_by_descendants_and_explicit_forms ... ok
+test no_box_and_empty_inline_shapes ... ok
+test other_entries_keep_refusing ... ok
+test unset_and_revert_inherit_the_hidden_parent ... ok
+test other_paint_sources_refuse ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/where_external.rs (target/debug/deps/where_external-78b9586acb06aa5b)
+
+running 4 tests
+test charged_real_exhaustion_partial_dom_and_base_refusal ... ok
+test public_original10_inventory ... ignored, measurement: WHERE_LINES original10
+test computed_browser_color_oracle_7cases ... ok
+test recursive_state_preflight_and_autofocus_guard ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/white_space_nowrap.rs (target/debug/deps/white_space_nowrap-e93db6b5fca110c0)
+
+running 4 tests
+test other_values_and_default_entry_refuse ... ok
+test reviewer_fixture_nowrap_span_edge_pages_refuse_and_normal_controls_do_not_depend_on_nowrap ... ok
+test break_opportunities_refuse_because_chrome_differs ... ok
+test single_word_nowrap_paints_exactly_like_normal ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/width_clamp.rs (target/debug/deps/width_clamp-6160cfb9a2f9f267)
+
+running 3 tests
+test default_entry_still_refuses_block_min_max_width ... ok
+test unmodelled_shapes_stay_refused_in_ext_entry ... ok
+test chrome_pixel_verified_fixtures_match_recorded_rects ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/wpt_base.rs (target/debug/deps/wpt_base-96eee9c706ad238f)
+
+running 7 tests
+test a_base_in_the_body_still_counts ... ok
+test a_relative_base_is_resolved_against_the_page_first ... ok
+test a_base_the_browser_cannot_use_leaves_the_page_address ... ok
+test an_absolute_base_moves_every_link ... ok
+test only_the_first_base_with_an_href_counts ... ok
+test entities_in_a_base_href_are_decoded ... ok
+test without_a_base_links_resolve_against_the_page ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wpt_encoding.rs (target/debug/deps/wpt_encoding-d3579908bf6311d8)
+
+running 2 tests
+test utf8_with_or_without_a_byte_order_mark_is_read_as_utf8 ... ok
+test every_high_byte_decodes_as_the_windows_1252_index_says ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/wpt_entities.rs (target/debug/deps/wpt_entities-b5e5c4888e852a03)
+
+running 2 tests
+test numeric_character_references_are_repaired_as_the_standard_says ... ok
+test every_named_character_reference_reads_as_its_characters ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/wpt_url.rs (target/debug/deps/wpt_url-98870d75be7afaee)
+
+running 1 test
+test wpt_url_parsing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_web_document
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

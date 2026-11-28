@@ -674,7 +674,10 @@ fn jpeg_preflight(bytes: &[u8]) -> Result<(), ImageError> {
         }
         at = end;
     }
-    Err(refuse())
+    // The decoder deliberately recovers an EOF in the final entropy scan.
+    // Keep that existing best-effort behavior; marker headers/segments above
+    // must still be complete, and malformed markers never reach the decoder.
+    if entropy && frame && scans > 0 { Ok(()) } else { Err(refuse()) }
 }
 
 /// Reads a picture that arrived over the network.
