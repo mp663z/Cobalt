@@ -1584,3 +1584,11 @@ external sheets. Prefer that offset over a temporary unstyled anchor. New
 regression first failed at 13 px instead of 120, then passes after the fix. All
 six live-sheet regressions pass; nine selected painted tests passed on 416f3322.
 Locked stripped ARM 5,285,356 B, +504. Full-browser and hardware claims unchanged.
+
+Real TLS/HTTP supply journey: `scripts/quality/check-browser-styles-sim.py`
+passes against debug-only loopback routing with a fresh Libra Colour simulator.
+The runtime fetched HTML and two delayed CSS bodies, skipped the dark-only link,
+and sent no Authorization header. Inspected before/after pixels show readable
+initial text, then large red heading and blue paragraph. Address typing succeeds
+afterward. Capture hashes differ and the request inventory is asserted. This is
+local fixture transport qualification, not public-site or physical-panel proof.
