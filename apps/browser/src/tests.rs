@@ -3124,3 +3124,26 @@ fn single_line_maxlength_blocks_growth_but_allows_deletion_and_exact_save(){
  r.action(action_id("kb.backspace"));r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"aq");r.action(action_id("kb.enter"));
  let l=r.app().loaded.as_ref().unwrap();assert_eq!(forms::body(forms::forms(&l.document.blocks)[0],None).unwrap(),"q=aq");
 }
+
+#[test]
+fn page_publish_identity_cost_probe(){
+ if std::env::var_os("COBALT_PUBLISH_BENCH").is_none(){return;}
+ let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);r.action(action_id("page-view"));
+ let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+ let start=std::time::Instant::now();for _ in 0..8{let mut c=r.context();assert!(p.publish(&mut c,true,None));std::hint::black_box(c.take_commands());}
+ println!("PUBLISH_8_US={}",start.elapsed().as_micros());
+}
+
+#[test]
+fn identity_picture_transfer_is_byte_exact_rgb_and_grey(){
+ let mut r=runner(TextScale::Default);r.action(action_id("page-view"));
+ let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+ let rgb=p.view.raster_page_rgb(0);let (sw,sh)=p.view.screen_device_px();
+ for colour in [false,true]{for typing in [false,true]{
+  let mut c=r.context();assert!(p.publish(&mut c,colour,typing.then(||r.app().address.keyboard())));
+  let commands=c.take_commands();let (w,h,pixels)=commands.iter().find_map(|v|if let kobo_sdk::Command::PutPicture{width,height,pixels,..}=v{Some((*width,*height,pixels))}else{None}).unwrap();
+  assert_eq!(w,sw);assert!(h<=sh);let source=&rgb[..(w*h*3) as usize];
+  let expected=if colour{source.to_vec()}else{source.chunks_exact(3).map(|p|((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128)>>8) as u8).collect()};
+  assert_eq!(*pixels,expected);
+ }}
+}

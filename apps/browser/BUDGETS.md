@@ -1648,3 +1648,15 @@ Input limit correction: number inputs keep maxlength inapplicable, while zero
 on text is retained and negative textarea values are ignored. Focused parser
 regression and both app maxlength tests pass. No numeric constraint-validation
 claim; numeric input still uses the existing bounded text editor.
+
+### Exact-size raster transfer
+
+At 100% zoom, skip bilinear per-channel sampling when the published picture
+already matches the source grid. RGB row copy and grey conversion are byte-exact
+against the original source, including keyboard crop. One byte-exact regression,
+two sampling checks, six live-sheet tests, scoped clippy correctness and real TLS
+five-sheet journey pass. Actual resulting page pixels inspected unchanged.
+Host debug same-process eight-publish probe: 1,401,727 us before vs 173,396 us
+after (about 175 ms vs 22 ms per publish). This is not device latency or a claim
+that parse/layout callbacks now meet their deadline. ARM 5,302,004 B, +808 from
+input-maxlength build. Parsing/layout work remains synchronous and unqualified.

@@ -217,6 +217,14 @@ impl PageMode {
         let height = self.visible_height(keyboard);
         let (source_width, source_height) = self.view.screen_device_px();
         let source = if self.scroll_top.is_some(){self.view.raster_window_rgb(self.top(),self.bottom())}else{self.view.raster_page_rgb(self.page)};
+        // Exact-size transfer is common at 100% zoom. Do not bilinearly sample
+        // every channel when the raster already has the required pixel grid.
+        if source_width==width && source_height==self.viewport.1 {
+            let end=(width as usize)*(height as usize)*3;
+            let Some(rows)=source.get(..end) else{return false;};
+            return if colour{context.put_colour_picture(HANDLE,width,height,rows.to_vec()).is_some()}
+                else{context.put_picture(HANDLE,width,height,rows.chunks_exact(3).map(|p|((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128)>>8) as u8).collect()).is_some()};
+        }
         let mut pixels =
             Vec::with_capacity(width as usize * height as usize * if colour { 3 } else { 1 });
         for y in 0..height {
