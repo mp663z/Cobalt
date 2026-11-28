@@ -1,0 +1,1651 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+    Checking kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> crates/kobo-web-document/src/basic_page.rs:1064:13
+     |
+1064 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/kobo-web-document/src/basic_page.rs:704:25
+    |
+704 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo clippy --fix --lib -p kobo-web-document` to apply 4 suggestions)
+warning: unexpected `cfg` condition name: `kani`
+   --> crates/kobo-browser/src/lib.rs:264:7
+    |
+264 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `clippy`, `debug_assertions`, `doc`, `docsrs`, `doctest`, `feature`, `fmt_debug`, `miri`, `overflow_checks`, `panic`, `proc_macro`, `relocation_model`, `rustfmt`, `sanitize`, `sanitizer_cfi_generalize_pointers`, `sanitizer_cfi_normalize_integers`, `target_abi`, `target_arch`, `target_endian`, `target_env`, `target_family`, `target_feature`, `target_has_atomic`, `target_has_atomic_equal_alignment`, `target_has_atomic_load_store`, `target_os`, `target_pointer_width`, `target_thread_local`, `target_vendor`, `test`, `ub_checks`, `unix`, and `windows`
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: `kobo-browser-core` (lib) generated 1 warning
+    Checking kobo-sdk v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-sdk)
+    Checking kobo-web-layout v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-layout)
+    Checking kobo-browser v0.1.0 (/home/sandbox/cb/measure-basic/apps/browser)
+warning: 5 bindings with single-character names in scope
+  --> apps/browser/examples/page_text_preview.rs:69:27
+   |
+69 |     fn page_raster(&self, c: char, s: u32, b: bool, i: bool) -> Option<GlyphBitmap> {
+   |                           ^        ^       ^        ^
+70 |         let g = self.0.raster(c, s, b, i)?;
+   |             ^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#many_single_char_names
+   = note: `-W clippy::many-single-char-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::many_single_char_names)]`
+
+warning: long literal lacking separators
+   --> apps/browser/examples/page_text_preview.rs:101:30
+    |
+101 |             max_sheet_bytes: 1048576,
+    |                              ^^^^^^^ help: consider: `1_048_576`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unreadable_literal
+    = note: `-W clippy::unreadable-literal` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unreadable_literal)]`
+
+warning: long literal lacking separators
+   --> apps/browser/examples/page_text_preview.rs:102:34
+    |
+102 |             max_aggregate_bytes: 4194304,
+    |                                  ^^^^^^^ help: consider: `4_194_304`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unreadable_literal
+
+warning: `kobo-browser` (example "page_text_preview") generated 3 warnings
+warning: long literal lacking separators
+   --> apps/browser/src/page_mode.rs:295:51
+    |
+295 |         *out = ((top * (512 - fy) + bottom * fy + 131072) / 262144) as u8;
+    |                                                   ^^^^^^ help: consider: `131_072`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unreadable_literal
+    = note: `-W clippy::unreadable-literal` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unreadable_literal)]`
+
+warning: long literal lacking separators
+   --> apps/browser/src/page_mode.rs:295:61
+    |
+295 |         *out = ((top * (512 - fy) + bottom * fy + 131072) / 262144) as u8;
+    |                                                             ^^^^^^ help: consider: `262_144`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unreadable_literal
+
+warning: this looks like you are trying to use `.. != ..`, but you really are doing `.. = (! ..)`
+    --> apps/browser/src/main.rs:1490:28
+     |
+1490 |             self.zoom_panel=!self.zoom_panel;self.browser_menu=false;
+     |                            ^^
+     |
+     = note: to remove this lint, use either `!=` or `= !`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#suspicious_assignment_formatting
+     = note: `-W clippy::suspicious-assignment-formatting` implied by `-W clippy::all`
+     = help: to override `-W clippy::all` add `#[allow(clippy::suspicious_assignment_formatting)]`
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/page_view.rs:1291:18
+     |
+1291 | ...ml=br#"<!doctype html><style>body{margin:0;font-size:16px}p{margin:0;color:#cc2040}strong{color:#2070c0}em{color:#208040}code{color:#8040c0}a{color:#d07010}div{background-color:#20c0d0;width:80px;height:12px}</style><p>Regular</p><p><strong>Bold</strong></p><p><em>Italic</em></p><p><code>Code</code></p><p><a href='/target'>Link</a></p><div></div>...
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+     = note: `-W clippy::needless-raw-string-hashes` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_raw_string_hashes)]`
+help: remove all the hashes around the byte string literal
+     |
+1291 -         let html=br#"<!doctype html><style>body{margin:0;font-size:16px}p{margin:0;color:#cc2040}strong{color:#2070c0}em{color:#208040}code{color:#8040c0}a{color:#d07010}div{background-color:#20c0d0;width:80px;height:12px}</style><p>Regular</p><p><strong>Bold</strong></p><p><em>Italic</em></p><p><code>Code</code></p><p><a href='/target'>Link</a></p><div></div>"#;
+1291 +         let html=br"<!doctype html><style>body{margin:0;font-size:16px}p{margin:0;color:#cc2040}strong{color:#2070c0}em{color:#208040}code{color:#8040c0}a{color:#d07010}div{background-color:#20c0d0;width:80px;height:12px}</style><p>Regular</p><p><strong>Bold</strong></p><p><em>Italic</em></p><p><code>Code</code></p><p><a href='/target'>Link</a></p><div></div>";
+     |
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/page_view.rs:1333:20
+     |
+1333 |         let html = br#"<!doctype html><style>body{margin:0}</style><img src='data:image/svg+xml;base64,PHN2Zy8+' width=20 height=20>"#;
+     |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+help: remove all the hashes around the byte string literal
+     |
+1333 -         let html = br#"<!doctype html><style>body{margin:0}</style><img src='data:image/svg+xml;base64,PHN2Zy8+' width=20 height=20>"#;
+1333 +         let html = br"<!doctype html><style>body{margin:0}</style><img src='data:image/svg+xml;base64,PHN2Zy8+' width=20 height=20>";
+     |
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/page_view.rs:1525:20
+     |
+1525 |         let html = br#"<!doctype html><img src='data:image/jpeg;base64,AQID' width=20 height=20 alt='Fallback'>"#;
+     |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+help: remove all the hashes around the byte string literal
+     |
+1525 -         let html = br#"<!doctype html><img src='data:image/jpeg;base64,AQID' width=20 height=20 alt='Fallback'>"#;
+1525 +         let html = br"<!doctype html><img src='data:image/jpeg;base64,AQID' width=20 height=20 alt='Fallback'>";
+     |
+
+warning: binding's name is too similar to existing binding
+  --> apps/browser/src/s0_native.rs:64:21
+   |
+64 |                 let last = runs.last().copied();
+   |                     ^^^^
+   |
+note: existing binding defined here
+  --> apps/browser/src/s0_native.rs:61:16
+   |
+61 |             Ok(list) => {
+   |                ^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#similar_names
+   = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/tests.rs:2890:70
+     |
+2890 |       runner.task_outcome(pending_task(&runner),TaskOutcome::Completed(br#"<title>Message</title><form action=/send><label for=note>Message...
+     |  ______________________________________________________________________^
+2891 | | second &amp; last</textarea><textarea disabled name=ignored>no</textarea><input type=submit value=Send></form>"#.to_vec()));
+     | |________________________________________________________________________________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+help: remove all the hashes around the byte string literal
+     |
+2890 ~     runner.task_outcome(pending_task(&runner),TaskOutcome::Completed(br"<title>Message</title><form action=/send><label for=note>Message</label><textarea id=note name=note>first
+2891 ~ second &amp; last</textarea><textarea disabled name=ignored>no</textarea><input type=submit value=Send></form>".to_vec()));
+     |
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/tests.rs:3058:61
+     |
+3058 | ...ompleted(br#"<!doctype html><title>Styled</title><link rel=stylesheet href=/page.css><h1>Restored</h1><p>one two three</p>"#.to_vec()));
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+help: remove all the hashes around the byte string literal
+     |
+3058 -     let commands=r.task_outcome(task,TaskOutcome::Completed(br#"<!doctype html><title>Styled</title><link rel=stylesheet href=/page.css><h1>Restored</h1><p>one two three</p>"#.to_vec()));
+3058 +     let commands=r.task_outcome(task,TaskOutcome::Completed(br"<!doctype html><title>Styled</title><link rel=stylesheet href=/page.css><h1>Restored</h1><p>one two three</p>".to_vec()));
+     |
+
+warning: unnecessary hashes around raw string literal
+    --> apps/browser/src/tests.rs:3090:71
+     |
+3090 | ...:Completed(br#"<!doctype html><title>Limit</title><form action=/get><textarea name=note maxlength=3>ab</textarea></form>"#.to_vec()));
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_raw_string_hashes
+help: remove all the hashes around the byte string literal
+     |
+3090 -  let task=pending_task(&r);r.task_outcome(task,TaskOutcome::Completed(br#"<!doctype html><title>Limit</title><form action=/get><textarea name=note maxlength=3>ab</textarea></form>"#.to_vec()));
+3090 +  let task=pending_task(&r);r.task_outcome(task,TaskOutcome::Completed(br"<!doctype html><title>Limit</title><form action=/get><textarea name=note maxlength=3>ab</textarea></form>".to_vec()));
+     |
+
+warning: 5 bindings with single-character names in scope
+    --> apps/browser/src/tests.rs:3146:10
+     |
+3146 |  let mut r=runner(TextScale::Default);r.action(action_id("page-view"));
+     |          ^
+3147 |  let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+     |      ^
+...
+3150 |   let mut c=r.context();assert!(p.publish(&mut c,colour,typing.then(||r.app().address.keyboard())));
+     |           ^
+3151 |   let commands=c.take_commands();let (w,h,pixels)=commands.iter().find_map(|v|if let kobo_sdk::Command::PutPicture{width,height,pixels,.....
+     |                                       ^ ^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#many_single_char_names
+     = note: `-W clippy::many-single-char-names` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::many_single_char_names)]`
+
+warning: item in documentation is missing backticks
+ --> apps/browser/src/arrival_prep.rs:6:42
+  |
+6 | //! graph (fl78) but production installs NullPreparation and enables nothing;
+  |                                          ^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+  = note: `-W clippy::doc-markdown` implied by `-W clippy::pedantic`
+  = help: to override `-W clippy::pedantic` add `#[allow(clippy::doc_markdown)]`
+help: try
+  |
+6 | //! graph (fl78) but production installs `NullPreparation` and enables nothing;
+  |                                          ~~~~~~~~~~~~~~~~~
+
+warning: redundant closure
+   --> apps/browser/src/arrival_prep.rs:169:41
+    |
+169 |     let source = admission.source().map(|s| s.as_slice());
+    |                                         ^^^^^^^^^^^^^^^^ help: replace the closure with the method itself: `super::css_stage::ArrivalSource::as_slice`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure_for_method_calls
+    = note: `-W clippy::redundant-closure-for-method-calls` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::redundant_closure_for_method_calls)]`
+
+warning: item in documentation is missing backticks
+   --> apps/browser/src/arrival_prep.rs:254:71
+    |
+254 | /// creation from the actual parse). No source means the same refusal NullPreparation gives. Compiled in the normal
+    |                                                                       ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+    |
+254 | /// creation from the actual parse). No source means the same refusal `NullPreparation` gives. Compiled in the normal
+    |                                                                       ~~~~~~~~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+   --> apps/browser/src/arrival_prep.rs:255:42
+    |
+255 | /// graph; production never installs it (CssStage::production uses NullPreparation) and nothing enables the stage.
+    |                                          ^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+    |
+255 | /// graph; production never installs it (`CssStage::production` uses NullPreparation) and nothing enables the stage.
+    |                                          ~~~~~~~~~~~~~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+   --> apps/browser/src/arrival_prep.rs:255:68
+    |
+255 | /// graph; production never installs it (CssStage::production uses NullPreparation) and nothing enables the stage.
+    |                                                                    ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+    |
+255 | /// graph; production never installs it (CssStage::production uses `NullPreparation`) and nothing enables the stage.
+    |                                                                    ~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u16` may truncate the value
+   --> apps/browser/src/forms.rs:592:66
+    |
+592 | ...   .page_turns("forms-previous","forms-next").page_position((page+1).min(u16::MAX as usize) as u16,of.max(1).min(u16::MAX as usize) as...
+    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+    = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+help: ... or use `try_from` and handle the error accordingly
+    |
+592 |         .page_turns("forms-previous","forms-next").page_position(u16::try_from((page+1).min(u16::MAX as usize)),of.max(1).min(u16::MAX as usize) as u16)
+    |                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u16` may truncate the value
+   --> apps/browser/src/forms.rs:592:105
+    |
+592 | ...osition((page+1).min(u16::MAX as usize) as u16,of.max(1).min(u16::MAX as usize) as u16)
+    |                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+592 |         .page_turns("forms-previous","forms-next").page_position((page+1).min(u16::MAX as usize) as u16,u16::try_from(of.max(1).min(u16::MAX as usize)))
+    |                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u16` may truncate the value
+  --> apps/browser/src/page_mode.rs:41:24
+   |
+41 |         .page_position((page+1).min(u16::MAX as usize) as u16,pages.max(1).min(u16::MAX as usize) as u16)
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+   |
+41 |         .page_position(u16::try_from((page+1).min(u16::MAX as usize)),pages.max(1).min(u16::MAX as usize) as u16)
+   |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u16` may truncate the value
+  --> apps/browser/src/page_mode.rs:41:63
+   |
+41 |         .page_position((page+1).min(u16::MAX as usize) as u16,pages.max(1).min(u16::MAX as usize) as u16)
+   |                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+   |
+41 |         .page_position((page+1).min(u16::MAX as usize) as u16,u16::try_from(pages.max(1).min(u16::MAX as usize)))
+   |                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `u32` may truncate the value
+   --> apps/browser/src/page_mode.rs:169:17
+    |
+169 |         let top=(i64::from(self.top())+delta).clamp(0,i64::from(self.view.max_scroll())) as u32;
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+169 |         let top=u32::try_from((i64::from(self.top())+delta).clamp(0,i64::from(self.view.max_scroll())));
+    |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `u32` may lose the sign of the value
+   --> apps/browser/src/page_mode.rs:169:17
+    |
+169 |         let top=(i64::from(self.top())+delta).clamp(0,i64::from(self.view.max_scroll())) as u32;
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+    = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_mode.rs:233:90
+    |
+233 | ...t,rows.chunks_exact(3).map(|p|((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128)>>8) as u8).collect()).is_some()};
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+233 |                 else{context.put_picture(HANDLE,width,height,rows.chunks_exact(3).map(|p|u8::try_from((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128) >> 8)).collect()).is_some()};
+    |                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_mode.rs:252:25
+    |
+252 | /                         ((u32::from(rgb[0]) * 77
+253 | |                             + u32::from(rgb[1]) * 150
+254 | |                             + u32::from(rgb[2]) * 29
+255 | |                             + 128)
+256 | |                             >> 8) as u8,
+    | |_______________________________________^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+252 ~                         u8::try_from((u32::from(rgb[0]) * 77
+253 +                             + u32::from(rgb[1]) * 150
+254 +                             + u32::from(rgb[2]) * 29
+255 ~                             + 128) >> 8),
+    |
+
+warning: casting `i64` to `u64` may lose the sign of the value
+   --> apps/browser/src/page_mode.rs:279:13
+    |
+279 | /             (((u64::from(at) * 2 + 1) * u64::from(source) * 256 / u64::from(dest)) as i64 - 256)
+280 | |                 .max(0) as u64;
+    | |______________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `u64` to `i64` may wrap around the value
+   --> apps/browser/src/page_mode.rs:279:14
+    |
+279 |             (((u64::from(at) * 2 + 1) * u64::from(source) * 256 / u64::from(dest)) as i64 - 256)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_wrap
+    = note: `-W clippy::cast-possible-wrap` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_wrap)]`
+
+warning: casting `u64` to `usize` may truncate the value on targets with 32-bit wide pointers
+   --> apps/browser/src/page_mode.rs:284:13
+    |
+284 |             (left + 1).min(u64::from(source - 1)) as usize,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+284 |             usize::try_from((left + 1).min(u64::from(source - 1))),
+    |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `u64` to `u8` may truncate the value
+   --> apps/browser/src/page_mode.rs:295:16
+    |
+295 |         *out = ((top * (512 - fy) + bottom * fy + 131072) / 262144) as u8;
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+295 |         *out = u8::try_from((top * (512 - fy) + bottom * fy + 131072) / 262144);
+    |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: this function has too many lines (104/100)
+   --> apps/browser/src/page_view.rs:434:5
+    |
+434 | /     pub(crate) fn raster_window_rgb(&self, top: u32, bottom: u32) -> Vec<u8> {
+435 | |         let (width, height) = self.screen_device_px();
+436 | |         let mut buffer = vec![255u8; width as usize * height as usize * 3];
+437 | |         let mut clips: Vec<Rect> = vec![Rect {
+...   |
+541 | |         buffer
+542 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_lines
+    = note: `-W clippy::too-many-lines` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::too_many_lines)]`
+
+warning: casting `i64` to `usize` may truncate the value on targets with 32-bit wide pointers
+   --> apps/browser/src/page_view.rs:937:47
+    |
+937 |             let a = sample_coverage(coverage, mask_w as usize, mask_h as usize, mask_x, mask_y);
+    |                                               ^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+937 |             let a = sample_coverage(coverage, usize::try_from(mask_w), mask_h as usize, mask_x, mask_y);
+    |                                               ~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `usize` may lose the sign of the value
+   --> apps/browser/src/page_view.rs:937:47
+    |
+937 |             let a = sample_coverage(coverage, mask_w as usize, mask_h as usize, mask_x, mask_y);
+    |                                               ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i64` to `usize` may truncate the value on targets with 32-bit wide pointers
+   --> apps/browser/src/page_view.rs:937:64
+    |
+937 |             let a = sample_coverage(coverage, mask_w as usize, mask_h as usize, mask_x, mask_y);
+    |                                                                ^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+937 |             let a = sample_coverage(coverage, mask_w as usize, usize::try_from(mask_h), mask_x, mask_y);
+    |                                                                ~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `usize` may lose the sign of the value
+   --> apps/browser/src/page_view.rs:937:64
+    |
+937 |             let a = sample_coverage(coverage, mask_w as usize, mask_h as usize, mask_x, mask_y);
+    |                                                                ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i64` to `u32` may truncate the value
+   --> apps/browser/src/page_view.rs:947:14
+    |
+947 |     let fx = x.rem_euclid(256) as u32;
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+947 |     let fx = u32::try_from(x.rem_euclid(256));
+    |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `u32` may truncate the value
+   --> apps/browser/src/page_view.rs:948:14
+    |
+948 |     let fy = y.rem_euclid(256) as u32;
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+948 |     let fy = u32::try_from(y.rem_euclid(256));
+    |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `i64` may wrap around the value on targets with 64-bit wide pointers
+   --> apps/browser/src/page_view.rs:950:35
+    |
+950 |         if x < 0 || y < 0 || x >= width as i64 || y >= height as i64 {
+    |                                   ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_wrap
+
+warning: casting `usize` to `i64` may wrap around the value on targets with 64-bit wide pointers
+   --> apps/browser/src/page_view.rs:950:56
+    |
+950 |         if x < 0 || y < 0 || x >= width as i64 || y >= height as i64 {
+    |                                                        ^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_wrap
+
+warning: casting `i64` to `usize` may truncate the value on targets with 32-bit wide pointers
+   --> apps/browser/src/page_view.rs:953:28
+    |
+953 |             u32::from(mask[y as usize * width + x as usize])
+    |                            ^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+953 |             u32::from(mask[usize::try_from(y) * width + x as usize])
+    |                            ~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `usize` may lose the sign of the value
+   --> apps/browser/src/page_view.rs:953:28
+    |
+953 |             u32::from(mask[y as usize * width + x as usize])
+    |                            ^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i64` to `usize` may truncate the value on targets with 32-bit wide pointers
+   --> apps/browser/src/page_view.rs:953:49
+    |
+953 |             u32::from(mask[y as usize * width + x as usize])
+    |                                                 ^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+953 |             u32::from(mask[y as usize * width + usize::try_from(x)])
+    |                                                 ~~~~~~~~~~~~~~~~~~
+
+warning: casting `i64` to `usize` may lose the sign of the value
+   --> apps/browser/src/page_view.rs:953:49
+    |
+953 |             u32::from(mask[y as usize * width + x as usize])
+    |                                                 ^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_view.rs:958:5
+    |
+958 |     ((top * (256 - fy) + bottom * fy + 32768) / 65536) as u8
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+958 |     u8::try_from((top * (256 - fy) + bottom * fy + 32768) / 65536)
+    |
+
+warning: item in documentation is missing backticks
+  --> apps/browser/src/sheet_supply.rs:10:9
+   |
+10 | //! App PageMode uses 16 links, 512 KiB per sheet and 4 MiB total; the fetch is https-only with at most five redirects and no truncation ...
+   |         ^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+   |
+10 | //! App `PageMode` uses 16 links, 512 KiB per sheet and 4 MiB total; the fetch is https-only with at most five redirects and no truncation (a body past
+   |         ~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+  --> apps/browser/src/sheet_supply.rs:19:71
+   |
+19 | //! census evaluates must equal the eventual paint width, supplied by PageMode::sheet_census; (4)
+   |                                                                       ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+   |
+19 | //! census evaluates must equal the eventual paint width, supplied by `PageMode::sheet_census`; (4)
+   |                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u32` may truncate the value on targets with 64-bit wide pointers
+   --> apps/browser/src/sheet_supply.rs:138:23
+    |
+138 |         let max_bytes=self.budget.map_or(0,|b|b.max_sheet_bytes).min(u32::MAX as usize) as u32;
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+138 |         let max_bytes=u32::try_from(self.budget.map_or(0,|b|b.max_sheet_bytes).min(u32::MAX as usize));
+    |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: field name starts with the struct's name
+   --> apps/browser/src/main.rs:143:5
+    |
+143 |     browser_menu: bool,
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#struct_field_names
+    = note: `-W clippy::struct-field-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::struct_field_names)]`
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+   --> apps/browser/src/main.rs:205:27
+    |
+205 |             scroll_places:Default::default(),
+    |                           ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+    = note: `-W clippy::default-trait-access` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::default_trait_access)]`
+
+warning: this function has too many lines (145/100)
+   --> apps/browser/src/main.rs:545:5
+    |
+545 | /     fn show_document_noted(
+546 | |         &mut self,
+547 | |         context: &mut Context,
+548 | |         url: &Url,
+...   |
+720 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_lines
+
+warning: assigning the result of `Clone::clone()` may be inefficient
+   --> apps/browser/src/main.rs:744:17
+    |
+744 |                 loaded.linked_sheets=bodies.clone();
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use `clone_from()`: `loaded.linked_sheets.clone_from(bodies)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assigning_clones
+    = note: `-W clippy::assigning-clones` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::assigning_clones)]`
+
+warning: redundant closure
+   --> apps/browser/src/main.rs:747:139
+    |
+747 | ...().and_then(|p|p.reading_anchor())).flatten());
+    |                ^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the method itself: `page_mode::PageMode::reading_anchor`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure_for_method_calls
+
+warning: redundant closure
+    --> apps/browser/src/main.rs:1348:31
+     |
+1348 |                     .and_then(|p|p.reading_anchor());
+     |                               ^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the method itself: `page_mode::PageMode::reading_anchor`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure_for_method_calls
+
+warning: this function has too many lines (109/100)
+    --> apps/browser/src/main.rs:1484:5
+     |
+1484 | /     fn browser_toolbar_action(&mut self, context: &mut Context, action: ActionId) -> bool {
+1485 | |         let slider = action
+1486 | |             .0
+1487 | |             .checked_sub(browser_chrome::SLIDER_BASE.0)
+...    |
+1597 | |         true
+1598 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_lines
+
+warning: redundant closure
+    --> apps/browser/src/main.rs:1551:27
+     |
+1551 |                 .and_then(|p|p.reading_anchor());
+     |                           ^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the method itself: `page_mode::PageMode::reading_anchor`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure_for_method_calls
+
+warning: casting `u32` to `u16` may truncate the value
+    --> apps/browser/src/main.rs:1554:22
+     |
+1554 |                 75 + (value * 125 / 100) as u16
+     |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+     |
+1554 |                 75 + u16::try_from(value * 125 / 100)
+     |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: this function has too many lines (132/100)
+    --> apps/browser/src/main.rs:1929:5
+     |
+1929 | /     fn browser_content(&self, metrics: &DisplayMetrics) -> ScreenBuilder {
+1930 | |         if self.form_entry.is_open() {
+1931 | |             return self.form_entry_screen();
+...    |
+2063 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_lines
+
+warning: this function has too many lines (174/100)
+    --> apps/browser/src/main.rs:2092:5
+     |
+2092 | /     fn on_action(&mut self, context: &mut Context, action: ActionId) {
+2093 | |         self.validate_css(context);
+2094 | |         self.refresh_painted_sheets(context);
+...    |
+2269 | |         self.show(context);
+2270 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_lines
+
+warning: casting `u32` to `i32` may wrap around the value
+    --> apps/browser/src/main.rs:2107:36
+     |
+2107 |                     painted.scroll(value as i32-100);
+     |                                    ^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_wrap
+
+warning: `kobo-browser` (bin "kobo-browser") generated 49 warnings (run `cargo clippy --fix --bin "kobo-browser"` to apply 10 suggestions)
+warning: item in documentation is missing backticks
+   --> apps/browser/src/bundled_pair_adapter.rs:471:70
+    |
+471 |     /// Independent mixed-face wrap oracle. `words` are (word, bold, space_bold):
+    |                                                                      ^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+    |
+471 |     /// Independent mixed-face wrap oracle. `words` are (word, bold, `space_bold)`:
+    |                                                                      ~~~~~~~~~~~~~
+
+warning: calling `RefCell::default()` is more clear than this expression
+   --> apps/browser/src/bundled_pair_adapter.rs:610:72
+    |
+610 |         let c = Counting { inner: &pair, advance: Cell::new(0), chars: Default::default(), metrics: Cell::new(0), raster: Cell::new(0) };
+    |                                                                        ^^^^^^^^^^^^^^^^^^ help: try: `RefCell::default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+    = note: `-W clippy::default-trait-access` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::default_trait_access)]`
+
+warning: calling `RefCell::default()` is more clear than this expression
+   --> apps/browser/src/bundled_pair_adapter.rs:616:72
+    |
+616 |         let n = Counting { inner: &pair, advance: Cell::new(0), chars: Default::default(), metrics: Cell::new(0), raster: Cell::new(0) };
+    |                                                                        ^^^^^^^^^^^^^^^^^^ help: try: `RefCell::default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: items after a test module
+   --> apps/browser/src/forms.rs:354:1
+    |
+354 | mod tests {
+    | ^^^^^^^^^
+...
+588 | fn index_rows(loaded:&Loaded,entries:&[usize],page:usize,of:usize)->ScreenBuilder{
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+598 | pub fn index_pages(loaded:&Loaded,metrics:&DisplayMetrics)->Vec<Vec<usize>>{
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+602 | pub fn index_screen(loaded:&Loaded,page:usize,metrics:&DisplayMetrics)->ScreenBuilder{
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_test_module
+    = note: `-W clippy::items-after-test-module` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::items_after_test_module)]`
+    = help: move the items to before the test module was defined
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1091:21
+     |
+1091 |             images: Default::default(),
+     |                     ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1110:21
+     |
+1110 |             images: Default::default(),
+     |                     ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1136:21
+     |
+1136 |             images: Default::default(),
+     |                     ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1159:21
+     |
+1159 |             images: Default::default(),
+     |                     ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: casting `usize` to `u32` may truncate the value on targets with 64-bit wide pointers
+    --> apps/browser/src/page_view.rs:1573:50
+     |
+1573 |             let png = kobo_image::encode_png_rgb(w as u32, h as u32, &pixels).unwrap();
+     |                                                  ^^^^^^^^
+     |
+     = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+     |
+1573 |             let png = kobo_image::encode_png_rgb(u32::try_from(w), h as u32, &pixels).unwrap();
+     |                                                  ~~~~~~~~~~~~~~~~
+
+warning: casting `usize` to `u32` may truncate the value on targets with 64-bit wide pointers
+    --> apps/browser/src/page_view.rs:1573:60
+     |
+1573 |             let png = kobo_image::encode_png_rgb(w as u32, h as u32, &pixels).unwrap();
+     |                                                            ^^^^^^^^
+     |
+     = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+     |
+1573 |             let png = kobo_image::encode_png_rgb(w as u32, u32::try_from(h), &pixels).unwrap();
+     |                                                            ~~~~~~~~~~~~~~~~
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1720:21
+     |
+1720 |             images: Default::default(),
+     |                     ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: calling `PartialStats::default()` is more clear than this expression
+    --> apps/browser/src/page_view.rs:1747:20
+     |
+1747 |             stats: Default::default(),
+     |                    ^^^^^^^^^^^^^^^^^^ help: try: `PartialStats::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_images.rs:211:51
+    |
+211 |                     assert_eq!(decoded, Some(vec![byte as u8]));
+    |                                                   ^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+211 |                     assert_eq!(decoded, Some(vec![u8::try_from(byte)]));
+    |                                                   ~~~~~~~~~~~~~~~~~~
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_images.rs:227:51
+    |
+227 |                     assert_eq!(decoded, Some(vec![(pair >> 8) as u8, pair as u8]));
+    |                                                   ^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+227 |                     assert_eq!(decoded, Some(vec![u8::try_from(pair >> 8), pair as u8]));
+    |                                                   ~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: casting `u32` to `u8` may truncate the value
+   --> apps/browser/src/page_images.rs:227:70
+    |
+227 |                     assert_eq!(decoded, Some(vec![(pair >> 8) as u8, pair as u8]));
+    |                                                                      ^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+227 |                     assert_eq!(decoded, Some(vec![(pair >> 8) as u8, u8::try_from(pair)]));
+    |                                                                      ~~~~~~~~~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+ --> apps/browser/src/s0_native.rs:2:15
+  |
+2 | //! app path (NativeFontAdapter, AtkinsonHyperlegible-Regular, paint_single_text_page,
+  |               ^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+  |
+2 | //! app path (`NativeFontAdapter`, AtkinsonHyperlegible-Regular, paint_single_text_page,
+  |               ~~~~~~~~~~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+ --> apps/browser/src/s0_native.rs:2:64
+  |
+2 | //! app path (NativeFontAdapter, AtkinsonHyperlegible-Regular, paint_single_text_page,
+  |                                                                ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+  |
+2 | //! app path (NativeFontAdapter, AtkinsonHyperlegible-Regular, `paint_single_text_page`,
+  |                                                                ~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: item in documentation is missing backticks
+ --> apps/browser/src/s0_native.rs:3:47
+  |
+3 | //! no sheets). Writes glyph layout rects to $S0_OUT when set. Asserts nothing about layout.
+  |                                               ^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+  |
+3 | //! no sheets). Writes glyph layout rects to $`S0_OUT` when set. Asserts nothing about layout.
+  |                                               ~~~~~~~~
+
+warning: calling `BTreeMap::default()` is more clear than this expression
+   --> apps/browser/src/main.rs:205:27
+    |
+205 |             scroll_places:Default::default(),
+    |                           ^^^^^^^^^^^^^^^^^^ help: try: `BTreeMap::default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:1609:5
+     |
+1609 | /     struct Picture {
+1610 | |         handle: kobo_sdk::PictureHandle,
+1611 | |         width: u32,
+1612 | |         height: u32,
+1613 | |         grey: Vec<u8>,
+1614 | |         colour: Option<Vec<u8>>,
+1615 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+     = note: `-W clippy::items-after-statements` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::items_after_statements)]`
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:1616:5
+     |
+1616 | /     impl kobo_ui::Pictures for Picture {
+1617 | |         fn get(&self, handle: kobo_sdk::PictureHandle) -> Option<kobo_ui::PicturePixels<'_>> {
+1618 | |             (handle == self.handle).then_some(kobo_ui::PicturePixels {
+1619 | |                 width: self.width,
+...    |
+1625 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:1666:5
+     |
+1666 |     use std::io::Write as _;
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:1657:45
+     |
+1657 |     let mut surface = kobo_ui::Surface::new(metrics.width as usize, metrics.height as usize);
+     |                                             ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:1657:69
+     |
+1657 |     let mut surface = kobo_ui::Surface::new(metrics.width as usize, metrics.height as usize);
+     |                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: calling `ParagraphPresentation::default()` is more clear than this expression
+    --> apps/browser/src/tests.rs:2233:43
+     |
+2233 |         }}],links:Vec::new(),presentation:Default::default(),selection:None,formulae:Vec::new(),
+     |                                           ^^^^^^^^^^^^^^^^^^ help: try: `ParagraphPresentation::default()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#default_trait_access
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2236:43
+     |
+2236 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2236:66
+     |
+2236 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2259:43
+     |
+2259 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2259:66
+     |
+2259 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2284:43
+     |
+2284 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2284:66
+     |
+2284 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2291:23
+     |
+2291 |             let index=(y as usize)*metrics.width as usize+node.rect.x as usize;
+     |                       ^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2291:36
+     |
+2291 |             let index=(y as usize)*metrics.width as usize+node.rect.x as usize;
+     |                                    ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2291:59
+     |
+2291 |             let index=(y as usize)*metrics.width as usize+node.rect.x as usize;
+     |                                                           ^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2324:43
+     |
+2324 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2324:66
+     |
+2324 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2370:43
+     |
+2370 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2370:66
+     |
+2370 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2391:43
+     |
+2391 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2391:66
+     |
+2391 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2411:43
+     |
+2411 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2411:66
+     |
+2411 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2430:43
+     |
+2430 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2430:66
+     |
+2430 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2448:92
+     |
+2448 |     let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                                            ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2448:115
+     |
+2448 |     let screen=runner.app().screen(&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                                                                   ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2474:167
+     |
+2474 | ...&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                            ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2474:190
+     |
+2474 | ...t surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2492:43
+     |
+2492 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2492:66
+     |
+2492 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2505:43
+     |
+2505 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::m...
+     |                                           ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2505:66
+     |
+2505 |     let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::m...
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2519:130
+     |
+2519 | ...&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&m...
+     |                                                            ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2519:153
+     |
+2519 | ...t surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measurin...
+     |                                                           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2531:130
+     |
+2531 | ...&metrics).build();let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&m...
+     |                                                            ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2531:153
+     |
+2531 | ...t surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);kobo_ui::render_all(&screen,&metrics,&Chrome::measurin...
+     |                                                           ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: for loop over a single element
+    --> apps/browser/src/tests.rs:2609:2
+     |
+2609 | /  for action in ["native-reader"]{
+2610 | |   let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+2611 | |   r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+2612 | |   r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+...    |
+2616 | |   assert!(!r.app().scroll_places.contains_key(&key),"{action} retained stale offset");
+2617 | |  }
+     | |__^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#single_element_loop
+     = note: `-W clippy::single-element-loop` implied by `-W clippy::all`
+     = help: to override `-W clippy::all` add `#[allow(clippy::single_element_loop)]`
+help: try
+     |
+2609 ~  {
+2610 +   let action = "native-reader";
+2611 +   let mut r=runner(TextScale::Default);r.app_mut().pictures.set_colour(true);
+2612 +   r.action(link_to(&r,"Notes on reading"));r.action(action_id("page-view"));
+2613 +   r.action(ActionId(page_mode::SCROLL_BASE.0+150));
+2614 +   let key=r.app().loaded.as_ref().unwrap().url.to_string();
+2615 +   assert!(r.app().scroll_places.contains_key(&key));
+2616 +   r.action(action_id(action));
+2617 +   assert!(!r.app().scroll_places.contains_key(&key),"{action} retained stale offset");
+2618 +  }
+     |
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2669:60
+     |
+2669 |   use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+     |                                                            ^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2669:77
+     |
+2669 |   use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+     |                                                                             ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2688:60
+     |
+2688 |   use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+     |                                                            ^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2688:77
+     |
+2688 |   use std::io::Write;let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);
+     |                                                                             ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:2878:9
+     |
+2878 |         use std::io::Write as _;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2876:47
+     |
+2876 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                               ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2876:70
+     |
+2876 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:2913:9
+     |
+2913 |         use std::io::Write as _;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2911:47
+     |
+2911 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                               ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:2911:70
+     |
+2911 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: case-sensitive file extension comparison
+    --> apps/browser/src/tests.rs:3076:143
+     |
+3076 | ...{task,work:Task::Fetch{url,max_bytes,credential,..}} if url.ends_with(".css")=>{assert!(credential.is_none());assert_eq!(*max_bytes,51...
+     |                                                            ^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: consider using a case-insensitive comparison instead
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#case_sensitive_file_extension_comparisons
+     = note: `-W clippy::case-sensitive-file-extension-comparisons` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::case_sensitive_file_extension_comparisons)]`
+help: use std::path::Path
+     |
+3076 ~         let work:Vec<_>=commands.iter().filter_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,max_bytes,credential,..}} if std::path::Path::new(url)
+3077 +             .extension()
+3078 ~             .map_or(false, |ext| ext.eq_ignore_ascii_case("css"))=>{assert!(credential.is_none());assert_eq!(*max_bytes,512*1024);Some((*task,url.clone()))},_=>None}).collect();
+     |
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:3105:9
+     |
+3105 |         use std::io::Write as _;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3103:47
+     |
+3103 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                               ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3103:70
+     |
+3103 |         let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `u32` to `u8` may truncate the value
+    --> apps/browser/src/tests.rs:3153:77
+     |
+3153 | ...source.chunks_exact(3).map(|p|((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128)>>8) as u8).collect()};
+     |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+     |
+3153 |   let expected=if colour{source.to_vec()}else{source.chunks_exact(3).map(|p|u8::try_from((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128) >> 8)).collect()};
+     |                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:3184:9
+     |
+3184 | ...   use std::io::Write;let mut f=std::fs::File::create("/tmp/forms-list.ppm").unwrap();write!(f,"P6\n{} {}\n255\n",m.width,m.height).un...
+     |       ^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3183:47
+     |
+3183 | ...   let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&...
+     |                                             ^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3183:64
+     |
+3183 | ...   let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&...
+     |                                                              ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+    --> apps/browser/src/tests.rs:3240:13
+     |
+3240 | ...   use std::io::Write;let mut f=std::fs::File::create(format!("/tmp/nav-grid-{scale:?}.ppm")).unwrap();write!(f,"P6\n{} {}\n255\n",m.w...
+     |       ^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#items_after_statements
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3239:51
+     |
+3239 | ...   let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&...
+     |                                             ^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: casting `i32` to `usize` may lose the sign of the value
+    --> apps/browser/src/tests.rs:3239:68
+     |
+3239 | ...   let mut surface=kobo_ui::Surface::new(m.width as usize,m.height as usize);kobo_ui::render_all(&screen,&m,&Chrome::measuring(true),&...
+     |                                                              ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_sign_loss
+
+warning: item in documentation is missing backticks
+  --> apps/browser/src/sheet_supply_tests.rs:48:17
+   |
+48 | /// (task, url, max_bytes, headers, credential-free) for each spawned fetch.
+   |                 ^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+   |
+48 | /// (task, url, `max_bytes`, headers, credential-free) for each spawned fetch.
+   |                 ~~~~~~~~~~~
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> apps/browser/src/sheet_supply_tests.rs:98:17
+    |
+98  |   fn started() -> (
+    |  _________________^
+99  | |     Context,
+100 | |     crate::sheet_supply::SheetSupply,
+101 | |     Vec<(TaskId, String, u32, Vec<Header>)>,
+102 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+    = note: `-W clippy::type-complexity` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::type_complexity)]`
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> apps/browser/src/sheet_supply_tests.rs:115:8
+    |
+115 |     o: TaskOutcome,
+    |        ^^^^^^^^^^^ help: consider taking a reference instead: `&TaskOutcome`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+
+warning: item in documentation is missing backticks
+   --> apps/browser/src/sheet_supply_tests.rs:364:17
+    |
+364 | /// `<link>` is HeadAffectingContent today, so every stylesheet-link page is in this class.
+    |                 ^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+help: try
+    |
+364 | /// `<link>` is `HeadAffectingContent` today, so every stylesheet-link page is in this class.
+    |                 ~~~~~~~~~~~~~~~~~~~~~~
+
+warning: use of `format!` to build up a string from an iterator
+   --> apps/browser/src/sheet_supply_tests.rs:405:12
+    |
+405 |  let links=(0..17).map(|i|format!("<link rel=stylesheet href=/{i}.css>")).collect::<String>();
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: call `fold` instead
+   --> apps/browser/src/sheet_supply_tests.rs:405:20
+    |
+405 |  let links=(0..17).map(|i|format!("<link rel=stylesheet href=/{i}.css>")).collect::<String>();
+    |                    ^^^
+help: ... and use the `write!` macro here
+   --> apps/browser/src/sheet_supply_tests.rs:405:27
+    |
+405 |  let links=(0..17).map(|i|format!("<link rel=stylesheet href=/{i}.css>")).collect::<String>();
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+    = note: `-W clippy::format-collect` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::format_collect)]`
+
+warning: `kobo-browser` (bin "kobo-browser" test) generated 139 warnings (48 duplicates) (run `cargo clippy --fix --bin "kobo-browser" --tests` to apply 14 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.23s

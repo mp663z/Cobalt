@@ -20,9 +20,9 @@ use kobo_web_document::css_text_page::{FontProvider, NormalLineMetrics, PageClus
 use kobo_web_document::display_list::{Command, Rect, Rgb};
 use kobo_web_document::inline_lines::GlyphBitmap;
 use kobo_web_document::style_tree::StyleTree;
-use kobo_web_document::{parse_basic_style_tree, Limits, MediaContext};
 #[cfg(test)]
 use kobo_web_document::SupplyBudget;
+use kobo_web_document::{parse_basic_style_tree, Limits, MediaContext};
 
 /// Device pixels per CSS pixel for the first profiles (Clara BW: 536 CSS px
 /// across a 1072 px panel).
@@ -53,16 +53,15 @@ impl PageFontAdapter {
     /// The bundled licensed faces (Atkinson regular and bold). Complex
     /// scripts need a fallback face added on the session first.
     pub(crate) fn bundled() -> Option<Self> {
-        PageFontSession::bundled()
-            .ok()
-            .map(|session| Self { session: std::rc::Rc::new(session) })
+        PageFontSession::bundled().ok().map(|session| Self {
+            session: std::rc::Rc::new(session),
+        })
     }
 
     fn load_monospace() -> Option<std::rc::Rc<PageFontSession>> {
-        PageFontSession::from_bytes(
-            kobo_text::MONO_FONT,
-            kobo_text::MONO_BOLD_FONT,
-        ).ok().map(std::rc::Rc::new)
+        PageFontSession::from_bytes(kobo_text::MONO_FONT, kobo_text::MONO_BOLD_FONT)
+            .ok()
+            .map(std::rc::Rc::new)
     }
 
     /// One immutable regular/bold pair per app thread. No glyph cache or
@@ -77,8 +76,12 @@ impl PageFontAdapter {
         }
         MONO.with(|slot| {
             let mut slot = slot.borrow_mut();
-            if slot.is_none() { *slot = Self::load_monospace(); }
-            slot.as_ref().map(|session| Self { session: std::rc::Rc::clone(session) })
+            if slot.is_none() {
+                *slot = Self::load_monospace();
+            }
+            slot.as_ref().map(|session| Self {
+                session: std::rc::Rc::clone(session),
+            })
         })
     }
 
@@ -214,7 +217,16 @@ impl PageView {
         sans: &F,
         mono: &F,
     ) -> Result<Self, &'static str> {
-        Self::paint_with_sheets(bytes, &[], css_width, page_height_css, scale, serif, sans, mono)
+        Self::paint_with_sheets(
+            bytes,
+            &[],
+            css_width,
+            page_height_css,
+            scale,
+            serif,
+            sans,
+            mono,
+        )
     }
 
     /// Like [`Self::paint`], with the page's external stylesheets. `sheets` must be exactly the bodies of
@@ -240,12 +252,25 @@ impl PageView {
             max_input_bytes: 8 * 1024 * 1024,
             ..Limits::DEFAULT
         };
-        let media = MediaContext::new(css_width).ok_or("viewport")?.with_light_scheme();
-        let sheets: Vec<Vec<u8>> = sheets.iter().map(|sheet| kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0).collect();
+        let media = MediaContext::new(css_width)
+            .ok_or("viewport")?
+            .with_light_scheme();
+        let sheets: Vec<Vec<u8>> = sheets
+            .iter()
+            .map(|sheet| {
+                kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0
+            })
+            .collect();
         let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), budget, None);
         // Incomplete intake cannot become a publishable page. In particular,
         // do not lay out a long unstyled column while its CSS is still pending.
-        if tree.diagnostics.count(kobo_web_document::style_diagnostics::RefusalReason::MissingStylesheet)>0 {return Err("pending stylesheet");}
+        if tree
+            .diagnostics
+            .count(kobo_web_document::style_diagnostics::RefusalReason::MissingStylesheet)
+            > 0
+        {
+            return Err("pending stylesheet");
+        }
         let mut boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
         // covers it, the same two passes the research harness runs.
@@ -340,39 +365,75 @@ impl PageView {
     }
 
     /// Rasters one screen as RGB, three bytes per device pixel.
-    pub(crate) fn raster_page_rgb(&self,page:usize)->Vec<u8>{
-        self.raster_window_rgb(self.page_top(page),self.page_bottom(page))
+    pub(crate) fn raster_page_rgb(&self, page: usize) -> Vec<u8> {
+        self.raster_window_rgb(self.page_top(page), self.page_bottom(page))
     }
-    pub(crate) fn page_top(&self,page:usize)->u32{self.cuts.get(page.min(self.pages().saturating_sub(1))).copied().unwrap_or(0)}
-    fn page_bottom(&self,page:usize)->u32{self.cuts.get(page+1).copied().unwrap_or(self.content_height)}
-    pub(crate) fn viewport_height(&self)->u32{self.page_height_css}
-    pub(crate) fn max_scroll(&self)->u32{self.content_height.saturating_sub(self.page_height_css)}
+    pub(crate) fn page_top(&self, page: usize) -> u32 {
+        self.cuts
+            .get(page.min(self.pages().saturating_sub(1)))
+            .copied()
+            .unwrap_or(0)
+    }
+    fn page_bottom(&self, page: usize) -> u32 {
+        self.cuts
+            .get(page + 1)
+            .copied()
+            .unwrap_or(self.content_height)
+    }
+    pub(crate) fn viewport_height(&self) -> u32 {
+        self.page_height_css
+    }
+    pub(crate) fn max_scroll(&self) -> u32 {
+        self.content_height.saturating_sub(self.page_height_css)
+    }
     /// UTF-8 source byte at the first visible painted text fragment.
-    pub(crate) fn reading_anchor(&self, top:u32)->Option<(usize,usize,u32)> {
+    pub(crate) fn reading_anchor(&self, top: u32) -> Option<(usize, usize, u32)> {
         for c in &self.commands {
-            if let Command::GlyphRun{layout,source,..}=c {
-                let (Some(node),Some((start,_)))=(source.node,source.text_range) else {continue};
-                if i64::from(layout.y)+i64::from(layout.height)>i64::from(top) {
-                    let clipped=i64::from(top).saturating_sub(i64::from(layout.y)).max(0) as u32;
-                    return Some((node,start,clipped.saturating_mul(1000)/layout.height.max(1)));
+            if let Command::GlyphRun { layout, source, .. } = c {
+                let (Some(node), Some((start, _))) = (source.node, source.text_range) else {
+                    continue;
+                };
+                if i64::from(layout.y) + i64::from(layout.height) > i64::from(top) {
+                    let clipped =
+                        u32::try_from(i64::from(top).saturating_sub(i64::from(layout.y)).max(0))
+                            .unwrap_or(u32::MAX);
+                    return Some((
+                        node,
+                        start,
+                        clipped.saturating_mul(1000) / layout.height.max(1),
+                    ));
                 }
             }
         }
         None
     }
-    pub(crate) fn anchor_top(&self, anchor:(usize,usize,u32))->Option<u32> {
+    pub(crate) fn anchor_top(&self, anchor: (usize, usize, u32)) -> Option<u32> {
         self.commands.iter().find_map(|c| {
-            let Command::GlyphRun{layout,source,..}=c else{return None};
-            let (start,end)=source.text_range?;
-            if source.node!=Some(anchor.0)||anchor.1<start||anchor.1>=end{return None;}
-            Some((i64::from(layout.y)+i64::from(layout.height)*i64::from(anchor.2)/1000).max(0) as u32)
+            let Command::GlyphRun { layout, source, .. } = c else {
+                return None;
+            };
+            let (start, end) = source.text_range?;
+            if source.node != Some(anchor.0) || anchor.1 < start || anchor.1 >= end {
+                return None;
+            }
+            Some(
+                u32::try_from(
+                    (i64::from(layout.y) + i64::from(layout.height) * i64::from(anchor.2) / 1000)
+                        .max(0),
+                )
+                .unwrap_or(u32::MAX),
+            )
         })
     }
 
-    pub(crate) fn page_at(&self,top:u32)->usize{self.cuts.partition_point(|cut|*cut<=top).saturating_sub(1)}
-    pub(crate) fn raster_window_rgb(&self,top:u32,bottom:u32)->Vec<u8>{
-        let (width,height)=self.screen_device_px();
-        let mut buffer=vec![255u8;width as usize*height as usize*3];
+    pub(crate) fn page_at(&self, top: u32) -> usize {
+        self.cuts
+            .partition_point(|cut| *cut <= top)
+            .saturating_sub(1)
+    }
+    pub(crate) fn raster_window_rgb(&self, top: u32, bottom: u32) -> Vec<u8> {
+        let (width, height) = self.screen_device_px();
+        let mut buffer = vec![255u8; width as usize * height as usize * 3];
         let mut clips: Vec<Rect> = vec![Rect {
             x: 0,
             y: 0,
@@ -381,21 +442,46 @@ impl PageView {
         }];
         for command in &self.commands {
             match command {
-                Command::Fill { rect, color, source } => {
+                Command::Fill {
+                    rect,
+                    color,
+                    source,
+                } => {
                     let image_rect = *rect;
                     let Some(rect) = shift(rect, top, bottom) else {
                         continue;
                     };
-                    if let Some((marker,image)) = source.node.and_then(|node| self.images.get(&node)) {
+                    if let Some((marker, image)) =
+                        source.node.and_then(|node| self.images.get(&node))
+                    {
                         if color == marker {
-                            fill_rect(&mut buffer,width,height,&rect,self.scale,Rgb(255,255,255),&clips);
+                            fill_rect(
+                                &mut buffer,
+                                width,
+                                height,
+                                &rect,
+                                self.scale,
+                                Rgb(255, 255, 255),
+                                &clips,
+                            );
                             if let Some(image) = image {
-                                paint_image(&mut buffer, width, height, &image_rect, top, self.scale, image, &clips);
+                                paint_image(
+                                    &mut buffer,
+                                    width,
+                                    height,
+                                    &image_rect,
+                                    top,
+                                    self.scale,
+                                    image,
+                                    &clips,
+                                );
                             }
                             continue;
                         }
                         // Alt-text decoration shares the image source too.
-                        if image.is_some() { continue; }
+                        if image.is_some() {
+                            continue;
+                        }
                     }
                     fill_rect(
                         &mut buffer,
@@ -416,8 +502,11 @@ impl PageView {
                 } => {
                     // The image node's text is its alt fallback. Keep it for
                     // refusals, but do not draw it over a decoded picture.
-                    if source.node.and_then(|node| self.images.get(&node))
-                        .is_some_and(|(_,image)| image.is_some()) {
+                    if source
+                        .node
+                        .and_then(|node| self.images.get(&node))
+                        .is_some_and(|(_, image)| image.is_some())
+                    {
                         continue;
                     }
                     let Some(bounds) = shift(bounds, top, bottom) else {
@@ -464,25 +553,81 @@ impl PageView {
 
     /// Visible link regions in source pixels of the uploaded picture. Clip
     /// before scaling, matching the raster crop and keyboard preview exactly.
-    pub(crate) fn picture_links(&self,page:usize,width:u32,height:u32,full_height:u32)->Vec<(kobo_sdk::PictureLink,usize)>{
-        self.window_links(self.page_top(page),self.page_bottom(page),width,height,full_height)
+    pub(crate) fn picture_links(
+        &self,
+        page: usize,
+        width: u32,
+        height: u32,
+        full_height: u32,
+    ) -> Vec<(kobo_sdk::PictureLink, usize)> {
+        self.window_links(
+            self.page_top(page),
+            self.page_bottom(page),
+            width,
+            height,
+            full_height,
+        )
     }
-    pub(crate) fn window_links(&self,top:u32,bottom:u32,width:u32,height:u32,full_height:u32)->Vec<(kobo_sdk::PictureLink,usize)>{
-        let (sw,sh)=self.screen_device_px();
-        let sx=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(width)/u64::from(sw)) as u32;
-        let sy=|n:i64| (n.max(0) as u64*u64::from(self.scale)*u64::from(full_height)/u64::from(sh)) as u32;
-        self.targets.iter().filter_map(|(r,index)|{
-            let x0=sx(i64::from(r.x).max(0)).min(width);
-            let x1=sx((i64::from(r.x)+i64::from(r.width)).min(i64::from(self.css_width))).min(width);
-            let y0=sy(i64::from(r.y).max(i64::from(top))-i64::from(top)).min(height);
-            let y1=sy((i64::from(r.y)+i64::from(r.height)).min(i64::from(bottom))-i64::from(top)).min(height);
-            (x1>x0&&y1>y0).then_some((kobo_sdk::PictureLink{action:kobo_sdk::ActionId(0),x:x0,y:y0,width:x1.saturating_sub(x0),height:y1.saturating_sub(y0)},*index))
-        }).take(128).collect()
+    pub(crate) fn window_links(
+        &self,
+        top: u32,
+        bottom: u32,
+        width: u32,
+        height: u32,
+        full_height: u32,
+    ) -> Vec<(kobo_sdk::PictureLink, usize)> {
+        let (sw, sh) = self.screen_device_px();
+        let sx = |n: i64| {
+            u32::try_from(
+                u64::try_from(n.max(0))
+                    .unwrap_or(u64::MAX)
+                    .saturating_mul(u64::from(self.scale))
+                    .saturating_mul(u64::from(width))
+                    / u64::from(sw.max(1)),
+            )
+            .unwrap_or(u32::MAX)
+        };
+        let sy = |n: i64| {
+            u32::try_from(
+                u64::try_from(n.max(0))
+                    .unwrap_or(u64::MAX)
+                    .saturating_mul(u64::from(self.scale))
+                    .saturating_mul(u64::from(full_height))
+                    / u64::from(sh.max(1)),
+            )
+            .unwrap_or(u32::MAX)
+        };
+        self.targets
+            .iter()
+            .filter_map(|(r, index)| {
+                let x0 = sx(i64::from(r.x).max(0)).min(width);
+                let x1 = sx((i64::from(r.x) + i64::from(r.width)).min(i64::from(self.css_width)))
+                    .min(width);
+                let y0 = sy(i64::from(r.y).max(i64::from(top)) - i64::from(top)).min(height);
+                let y1 = sy(
+                    (i64::from(r.y) + i64::from(r.height)).min(i64::from(bottom)) - i64::from(top),
+                )
+                .min(height);
+                (x1 > x0 && y1 > y0).then_some((
+                    kobo_sdk::PictureLink {
+                        action: kobo_sdk::ActionId(0),
+                        x: x0,
+                        y: y0,
+                        width: x1.saturating_sub(x0),
+                        height: y1.saturating_sub(y0),
+                    },
+                    *index,
+                ))
+            })
+            .take(128)
+            .collect()
     }
 
     /// Link actions with visible geometry on this screen, in paint order.
-    pub(crate) fn screen_links(&self,page:usize)->Vec<usize>{self.window_screen_links(self.page_top(page),self.page_bottom(page))}
-    pub(crate) fn window_screen_links(&self,top:u32,bottom:u32)->Vec<usize>{
+    pub(crate) fn screen_links(&self, page: usize) -> Vec<usize> {
+        self.window_screen_links(self.page_top(page), self.page_bottom(page))
+    }
+    pub(crate) fn window_screen_links(&self, top: u32, bottom: u32) -> Vec<usize> {
         let mut links = Vec::new();
         for (rect, action) in &self.targets {
             if i64::from(rect.y) < i64::from(bottom)
@@ -878,7 +1023,11 @@ mod tests {
                 height: h,
             },
             color: Rgb(0, 0, 0),
-            source: Source { node: None, action, text_range: None },
+            source: Source {
+                node: None,
+                action,
+                text_range: None,
+            },
         }
     }
 
@@ -1089,8 +1238,10 @@ mod tests {
         assert!(std::rc::Rc::ptr_eq(&a.session, &b.session));
         assert!(!std::rc::Rc::ptr_eq(&a.session, &c.session));
         for bold in [false, true] {
-            assert_eq!(a.bitmap('W', 20, bold, false).unwrap().coverage,
-                c.bitmap('W', 20, bold, false).unwrap().coverage);
+            assert_eq!(
+                a.bitmap('W', 20, bold, false).unwrap().coverage,
+                c.bitmap('W', 20, bold, false).unwrap().coverage
+            );
         }
     }
 
@@ -1173,7 +1324,7 @@ mod tests {
         assert_eq!(view.screen_links(0), vec![0]);
         assert!(view.stats.skips.is_empty(), "{:?}", view.stats.skips);
         // No alt glyphs or link underline remain below the one-pixel image.
-        assert!(rgb[100*3..].iter().all(|p| *p == 255));
+        assert!(rgb[100 * 3..].iter().all(|p| *p == 255));
     }
 
     #[test]
@@ -1310,9 +1461,8 @@ mod tests {
             &image.colour().unwrap()[..3]
         );
         if let Ok(path) = std::env::var("COBALT_NESTED_IMAGE_PREVIEW_OUT") {
-            std::fs::write(path, kobo_image::encode_png_rgb(200,100,&rgb).unwrap()).unwrap();
+            std::fs::write(path, kobo_image::encode_png_rgb(200, 100, &rgb).unwrap()).unwrap();
         }
-
     }
 
     #[test]
@@ -1564,11 +1714,46 @@ mod coverage_tests {
 mod picture_region_tests {
     use super::*;
     #[test]
-    fn page_cuts_scale_and_keyboard_crop_keep_links_on_visible_pixels(){
-        let view=PageView{commands:Vec::new(),images:Default::default(),targets:vec![(Rect{x:10,y:90,width:30,height:30},0),(Rect{x:70,y:170,width:20,height:20},1)],links:Vec::new(),css_width:100,content_height:200,page_height_css:100,cuts:vec![0,100],scale:2,stats:Default::default()};
-        let regions=view.picture_links(1,400,200,400);
-        assert_eq!(regions.len(),1);let (r,index)=regions[0];assert_eq!(index,0);assert_eq!((r.x,r.y,r.width,r.height),(40,0,120,80));
-        let regions=view.picture_links(0,400,400,400);assert_eq!(regions.len(),1);assert_eq!((regions[0].0.y,regions[0].0.height),(360,40));
+    fn page_cuts_scale_and_keyboard_crop_keep_links_on_visible_pixels() {
+        let view = PageView {
+            commands: Vec::new(),
+            images: Default::default(),
+            targets: vec![
+                (
+                    Rect {
+                        x: 10,
+                        y: 90,
+                        width: 30,
+                        height: 30,
+                    },
+                    0,
+                ),
+                (
+                    Rect {
+                        x: 70,
+                        y: 170,
+                        width: 20,
+                        height: 20,
+                    },
+                    1,
+                ),
+            ],
+            links: Vec::new(),
+            css_width: 100,
+            content_height: 200,
+            page_height_css: 100,
+            cuts: vec![0, 100],
+            scale: 2,
+            stats: Default::default(),
+        };
+        let regions = view.picture_links(1, 400, 200, 400);
+        assert_eq!(regions.len(), 1);
+        let (r, index) = regions[0];
+        assert_eq!(index, 0);
+        assert_eq!((r.x, r.y, r.width, r.height), (40, 0, 120, 80));
+        let regions = view.picture_links(0, 400, 400, 400);
+        assert_eq!(regions.len(), 1);
+        assert_eq!((regions[0].0.y, regions[0].0.height), (360, 40));
     }
 }
 
@@ -1577,9 +1762,21 @@ mod light_scheme_regression {
     use super::*;
     #[test]
     fn page_view_uses_light_scheme_for_embedded_media_rules() {
-        let face=PageFontAdapter::bundled().unwrap();
+        let face = PageFontAdapter::bundled().unwrap();
         let view=PageView::paint(b"<!doctype html><style>p{color:red}@media(prefers-color-scheme:dark){p{color:blue}}</style><p>Light page</p>",400,600,1,&face,&face,&face).unwrap();
-        assert!(view.commands.iter().any(|command| matches!(command,Command::GlyphRun{color:Rgb(255,0,0),..})));
-        assert!(!view.commands.iter().any(|command| matches!(command,Command::GlyphRun{color:Rgb(0,0,255),..})));
+        assert!(view.commands.iter().any(|command| matches!(
+            command,
+            Command::GlyphRun {
+                color: Rgb(255, 0, 0),
+                ..
+            }
+        )));
+        assert!(!view.commands.iter().any(|command| matches!(
+            command,
+            Command::GlyphRun {
+                color: Rgb(0, 0, 255),
+                ..
+            }
+        )));
     }
 }
