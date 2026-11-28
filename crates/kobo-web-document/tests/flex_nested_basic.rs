@@ -291,3 +291,44 @@ fn growing_inline_child_takes_share() {
         .expect("a glyph run");
     assert!(run_start > 300, "run starts at {run_start}");
 }
+
+/// align-items:stretch (the initial value): an auto-height item with a
+/// background paints that background across the full row height; an item
+/// with a definite px height keeps its own size. Borders are not
+/// stretched (disclosed approximation).
+#[test]
+fn stretch_extends_item_backgrounds() {
+    let (commands, stats, _) = paint(
+        r#"<div style="display:flex"><div style="width:60px;height:40px;background:#123456"></div><div style="width:60px;background:#abcdef"><span style="display:block;height:10px"></span></div><div style="width:60px;height:20px;background:#fedcba"></div></div>"#,
+    );
+    assert_eq!(
+        stats.approximations.get("flex-row-stretch-bg"),
+        Some(&1),
+        "{:?}",
+        stats.approximations
+    );
+    let stretched = fills(&commands, 0xabcdef);
+    assert_eq!(stretched.len(), 1, "{stretched:?}");
+    assert_eq!(stretched[0].height, 40, "{stretched:?}");
+    let definite = fills(&commands, 0xfedcba);
+    assert_eq!(definite.len(), 1, "{definite:?}");
+    assert_eq!(definite[0].height, 20, "{definite:?}");
+}
+
+/// align-items:center shifts an item down by half the row slack instead
+/// of top-aligning it.
+#[test]
+fn center_shifts_items_vertically() {
+    let (commands, stats, _) = paint(
+        r#"<div style="display:flex;align-items:center"><div style="width:60px;height:40px;background:#123456"></div><div style="width:60px;background:#abcdef"><span style="display:block;height:10px"></span></div></div>"#,
+    );
+    assert_eq!(
+        stats.approximations.get("flex-row-item-centered"),
+        Some(&1),
+        "{:?}",
+        stats.approximations
+    );
+    let centered = fills(&commands, 0xabcdef);
+    assert_eq!(centered.len(), 1, "{centered:?}");
+    assert_eq!(centered[0].y, 15, "{centered:?}");
+}

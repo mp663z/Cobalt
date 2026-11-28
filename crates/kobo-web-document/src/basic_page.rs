@@ -81,6 +81,9 @@ struct Painter<'a, F: FontProvider> {
     visits: usize,
     table_stack_depth: usize,
     viewport_w: i64,
+    /// Cross-axis stretch hint for the next flex item laid out: the row's
+    /// measured height. Consumed by that item's own background only.
+    flex_stretch_bg: Option<i64>,
 }
 
 impl<'a, F: FontProvider> Painter<'a, F> {
@@ -451,6 +454,10 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             self.stats.output_truncated = true;
             return 0;
         }
+        // A flex cross-axis stretch hint applies to exactly this box (the
+        // row item), never to anything nested inside it. Table subtrees
+        // do not stretch (disclosed by omission, no counter).
+        let flex_stretch_bg = self.flex_stretch_bg.take();
         // Commands emitted for this subtree start here; the box's own
         // background is INSERTED at this position once its height is known,
         // so it paints behind all descendants (correct stacking order).
@@ -473,6 +480,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 }
             };
         }
+        self.flex_stretch_bg = flex_stretch_bg;
         self.layout_block_contents(index, content_x, top, width, list, abs_origin)
     }
 
@@ -487,6 +495,9 @@ impl<'a, F: FontProvider> Painter<'a, F> {
     ) -> i64 {
         let mut bg_insert_at = list.len();
         let entry_len = list.len();
+        // The stretch hint this box's flex row parent left for it (if
+        // any); consumed here so nested boxes never see it.
+        let flex_stretch_bg = self.flex_stretch_bg.take();
         let node_kind = self.tree.boxes[index].kind;
         let style = self.tree.boxes[index].style;
         // visibility:hidden (FL38 ext, inherited): layout runs and flow
@@ -654,7 +665,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let mr = self.margin_px(cs.margin_right, width);
                     match self.widths.widths.get(c).copied().flatten() {
                         Some(w) => {
-                            let v = i64::from(w.content) + ml + mr;
+                            // The width pass reports a CONTENT width; the
+                            // slot is border-box sized like the block
+                            // path's children and the content-measured
+                            // slots below, so a padded item's own row
+                            // admission sees its true content width (the
+                            // hamburger label keeps 24px, not 8px).
+                            let v = i64::from(w.content)
+                                + pad_or_zero(cs.padding_left)
+                                + pad_or_zero(cs.padding_right)
+                                + ml
+                                + mr;
                             slots.push(v);
                             fixed_total += v;
                         }
@@ -958,6 +979,49 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         } else if flex_row {
             let (slots, share) = flex_slots.take().unwrap();
             let kids = &self.tree.boxes[index].children;
+            let align = style.align_items;
+            // Cross-axis alignment needs the row height before painting:
+            // stretch (the initial value) extends an item background to
+            // the row height, center shifts an item down by half the
+            // slack. Measure into the real list, roll back, then paint
+            // for keeps (the same snapshot pattern the table fallback
+            // above uses); the measured heights drive both alignment
+            // adjustments below.
+            let needs_measure = matches!(align, crate::computed_style::AlignItems::Center)
+                || (matches!(align, crate::computed_style::AlignItems::Stretch)
+                    && kids.iter().any(|&c| {
+                        let cs = self.tree.boxes[c].style;
+                        !matches!(cs.height, Length::Px(_))
+                            && (cs.used_background_color().is_some()
+                                || cs.decor.has_painted_border())
+                    }));
+            let mut measured: Vec<Option<i64>> = vec![None; kids.len()];
+            let mut measured_row_h = 0i64;
+            if needs_measure {
+                let entry = list.len();
+                let before = self.stats.clone();
+                let before_visits = self.visits;
+                let mut x = content_x + pad_left;
+                for (k, &c) in kids
+                    .iter()
+                    .enumerate()
+                    .filter(|(k, _)| slots[*k] != i64::MIN)
+                {
+                    let cs = self.tree.boxes[c].style;
+                    let ml = self.margin_px(cs.margin_left, width);
+                    let mr = self.margin_px(cs.margin_right, width);
+                    let slot = if slots[k] >= 0 { slots[k] } else { share };
+                    let cw = (slot - ml - mr).max(0) as u32;
+                    x += ml;
+                    let h = self.layout_block(c, x, content_top, cw, list, child_abs_origin);
+                    measured[k] = Some(h);
+                    measured_row_h = measured_row_h.max(h);
+                    x += i64::from(cw) + mr;
+                }
+                list.truncate(entry);
+                self.stats = before;
+                self.visits = before_visits;
+            }
             let mut x = content_x + pad_left;
             let mut row_h = 0i64;
             for (k, &c) in kids
@@ -971,7 +1035,29 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 let slot = if slots[k] >= 0 { slots[k] } else { share };
                 let cw = (slot - ml - mr).max(0) as u32;
                 x += ml;
-                let h = self.layout_block(c, x, content_top, cw, list, child_abs_origin);
+                let mut item_top = content_top;
+                if let (true, Some(h0)) = (
+                    matches!(align, crate::computed_style::AlignItems::Center),
+                    measured[k],
+                ) {
+                    let dy = ((measured_row_h - h0) / 2).max(0);
+                    if dy > 0 {
+                        self.stats.approx("flex-row-item-centered");
+                        item_top += dy;
+                    }
+                }
+                // The stretch hint is consumed by the item's own
+                // background below; it never leaks to descendants.
+                if matches!(align, crate::computed_style::AlignItems::Stretch)
+                    && measured[k].is_some()
+                    && !matches!(cs.height, Length::Px(_))
+                    && (cs.used_background_color().is_some()
+                        || cs.decor.has_painted_border())
+                {
+                    self.flex_stretch_bg = Some(measured_row_h);
+                }
+                let h = self.layout_block(c, x, item_top, cw, list, child_abs_origin);
+                self.flex_stretch_bg = None;
                 row_h = row_h.max(h);
                 x += i64::from(cw) + mr;
             }
@@ -1092,7 +1178,17 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 } else {
                     pad_left + i64::from(width) + pad_right
                 };
-                let bh = pad_top + content_height + pad_bot;
+                // align-items:stretch (the initial value): a row item
+                // with an auto height paints its background across the
+                // full row height (CSS Flexbox 1 sec 9.4). Borders stay
+                // at content height, disclosed approximation.
+                let mut bh = pad_top + content_height + pad_bot;
+                if let Some(target) = flex_stretch_bg {
+                    if !matches!(style.height, Length::Px(_)) && target > bh {
+                        self.stats.approx("flex-row-stretch-bg");
+                        bh = target;
+                    }
+                }
                 if bw > 0 && bh > 0 {
                     if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
                         i32::try_from(content_x),
@@ -2620,6 +2716,7 @@ pub fn paint_basic_page_families<F: FontProvider>(
         visits: 0,
         table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
+        flex_stretch_bg: None,
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
@@ -2677,6 +2774,7 @@ pub fn paint_basic_page(
         visits: 0,
         table_stack_depth: 0,
         viewport_w: i64::from(viewport_width),
+        flex_stretch_bg: None,
     };
     painter.stats.intake_truncated = tree.truncated;
     let mut list: Vec<Command> = Vec::new();
