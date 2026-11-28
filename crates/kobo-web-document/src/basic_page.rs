@@ -462,7 +462,21 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         let style = crate::basic_text_paint::Style {
             size,
-            line_height: node.style.used_line_height(size + 4).unwrap_or(size + 4),
+            line_height: match node.style.used_line_height(size + 4) {
+                Some(height) => height,
+                // A unitless multiplier whose product is not a whole pixel
+                // (1.6 x 14px = 22.4px) used to fall back to the natural
+                // height silently, tightening every line by up to 20%.
+                // Round to the nearest whole pixel and count it.
+                None => match node.style.line_height_number {
+                    Some(number) if node.style.line_height_precise.is_none() => {
+                        let product = u64::from(size) * u64::from(number);
+                        self.stats.approx("line-height-rounded");
+                        u32::try_from((product + 50) / 100).map_or(size + 4, |v| v.max(1))
+                    }
+                    _ => size + 4,
+                },
+            },
             align: node.style.text_align,
             direction: node.style.direction,
             pre: node.style.white_space_pre,
