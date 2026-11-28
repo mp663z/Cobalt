@@ -13,7 +13,7 @@
 //! - `https` only, no credentials in the URL, no `Authorization`: the request carries `credential: None` and an
 //!   `Accept` header only. The net layer owns redirects (at most five, never a downgrade to http, same-origin header
 //!   forwarding) and its connect, header and body timeouts; it keeps no cookie jar, so no cookie is sent to any
-//!   third party. Those three are source-verified in `kobo-net`, not re-tested at this seam.
+//!   third party. Redirect count/TLS upgrade and stalled cancellation are covered by `kobo-net/tests/image_transport_limits.rs`; the idle timeout boundary has a unit test.
 //! Pixel budget (1 Mpx across the page) and decode refusal are applied later by `page_images`.
 
 use std::collections::{BTreeMap, VecDeque};
@@ -52,7 +52,11 @@ struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { images: MAX_IMAGES, image_bytes: MAX_IMAGE_BYTES, total_bytes: MAX_TOTAL_BYTES }
+        Self {
+            images: MAX_IMAGES,
+            image_bytes: MAX_IMAGE_BYTES,
+            total_bytes: MAX_TOTAL_BYTES,
+        }
     }
 }
 
@@ -70,7 +74,8 @@ pub struct ImageSupply {
 /// PNG or JPEG by the first bytes. Nothing else is ever decoded.
 #[must_use]
 pub fn sniff(body: &[u8]) -> bool {
-    body.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) || body.starts_with(&[0xff, 0xd8, 0xff])
+    body.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a])
+        || body.starts_with(&[0xff, 0xd8, 0xff])
 }
 
 impl ImageSupply {
@@ -79,14 +84,24 @@ impl ImageSupply {
         for (task, _) in std::mem::take(&mut self.by_task) {
             context.cancel(task);
         }
-        *self = Self { limits: self.limits, ..Self::default() };
+        *self = Self {
+            limits: self.limits,
+            ..Self::default()
+        };
     }
 
     /// Smaller limits, for tests that must reach a budget the runtime's four-task ceiling would otherwise hide.
     #[cfg(test)]
     #[must_use]
     pub fn with_limits(images: usize, image_bytes: usize, total_bytes: usize) -> Self {
-        Self { limits: Limits { images, image_bytes, total_bytes }, ..Self::default() }
+        Self {
+            limits: Limits {
+                images,
+                image_bytes,
+                total_bytes,
+            },
+            ..Self::default()
+        }
     }
 
     /// `Some` once every requested image has been kept or refused.
@@ -122,7 +137,8 @@ impl ImageSupply {
                 continue;
             }
             requested += 1;
-            self.pending.push_back((src.clone(), url.without_fragment().to_string()));
+            self.pending
+                .push_back((src.clone(), url.without_fragment().to_string()));
         }
         self.pump(context);
         self.settle_if_done();

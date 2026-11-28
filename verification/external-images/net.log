@@ -1,0 +1,149 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling kobo-net v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-net)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.29s
+     Running unittests src/lib.rs (target/debug/deps/kobo_net-70e792b2f04c9653)
+
+running 94 tests
+test fixture::tests::other_hosts_and_ports_never_fall_back_to_the_network ... ok
+test fixture::tests::only_explicit_loopback_endpoints_are_accepted ... ok
+test fixture::tests::several_endpoints_install_as_one_specification ... ok
+test gzip::prose_tests::a_body_that_is_not_gzip_is_reported_the_way_any_unreadable_reply_is ... ok
+test gzip::prose_tests::a_body_the_server_compressed_comes_back_as_it_was_written ... ok
+test gzip::prose_tests::a_header_that_promises_a_field_it_never_ends_is_refused ... ok
+test gzip::prose_tests::an_extra_field_longer_than_the_body_is_refused ... ok
+test gzip::prose_tests::the_names_a_server_may_give_this_encoding_are_all_recognised ... ok
+test gzip::prose_tests::the_optional_fields_are_stepped_over_rather_than_read_as_data ... ok
+test lines::tests::a_truncated_sse_event_is_not_returned_as_complete ... ok
+test lines::tests::chunked_ndjson_survives_arbitrary_network_boundaries ... ok
+test lines::tests::close_and_shutdown_interrupt_resolve_or_connect_before_a_socket_exists ... ok
+test gzip::prose_tests::a_body_that_expands_past_the_ceiling_is_too_large_rather_than_unreadable ... ok
+test lines::tests::close_during_request_head_write_prevents_open_reinsertion ... ok
+test lines::tests::malformed_chunking_and_oversized_records_fail_closed ... ok
+test lines::tests::sse_keepalives_are_ignored_and_multiline_events_stay_whole ... ok
+test lines::tests::stale_owner_cannot_close_replacement_but_current_owner_can ... ok
+test pem::tests::a_bundle_yields_every_certificate_in_order ... ok
+test pem::tests::a_certificate_block_is_found_and_decoded ... ok
+test pem::tests::a_key_reports_which_kind_it_was ... ok
+test pem::tests::base64_round_trips_the_usual_cases ... ok
+test pem::tests::corrupt_base64_is_refused_rather_than_truncated ... ok
+test pem::tests::keys_are_not_certificates_and_the_reverse ... ok
+test pem::tests::mismatched_fences_are_ignored ... ok
+test response_idle_timeout_is_exact_and_progress_resets_it ... ok
+test sha256::tests::digests_are_always_sixty_four_lowercase_hex_characters ... ok
+test sha256::tests::matches_the_published_test_vectors ... ok
+test tests::a_bearer_credential_is_spelled_the_usual_way ... ok
+test tests::a_body_is_separated_from_its_headers ... ok
+test tests::a_body_that_ends_mid_chunk_is_a_failure_rather_than_a_short_answer ... ok
+test tests::a_broken_server_is_not_reported_as_a_host_saying_no ... ok
+test tests::a_chunk_extension_is_not_part_of_the_length ... ok
+test tests::a_chunked_body_is_reassembled ... ok
+test tests::a_chunked_body_requires_its_final_header_terminator ... ok
+test tests::a_chunked_reply_carries_its_trailers_to_the_end ... ok
+test tests::a_chunked_reply_is_finished_by_its_terminator_and_not_before ... ok
+test tests::a_compressed_reply_is_measured_after_it_expands_and_not_before ... ok
+test tests::a_compressed_reply_reaches_the_caller_as_the_document_it_is ... ok
+test tests::a_connection_is_kept_only_where_the_server_agrees_to_it ... ok
+test tests::a_credential_actually_reaches_the_request ... ok
+test tests::a_header_that_could_forge_another_one_is_refused ... ok
+test tests::a_json_api_is_asked_for_its_reply_compressed ... ok
+test tests::a_later_piece_starts_where_the_last_one_ended ... ok
+test tests::a_length_framed_body_is_still_borrowed_rather_than_copied ... ok
+test tests::a_length_framed_body_must_arrive_whole ... ok
+test tests::a_non_default_port_is_present_in_the_host_header ... ok
+test tests::a_partial_answer_is_a_success_rather_than_something_to_retry ... ok
+test tests::a_piece_of_a_document_is_still_asked_for_as_it_was_written ... ok
+test tests::a_plain_url_uses_the_default_port_and_root_path ... ok
+test tests::a_plaintext_redirect_is_upgraded_rather_than_followed ... ok
+test tests::a_port_and_path_are_both_kept ... ok
+test tests::a_range_past_the_end_of_a_document_is_the_end_of_the_book_rather_than_a_failure ... ok
+test tests::a_reader_on_wifi_has_a_route ... ok
+test tests::a_reader_with_only_a_subnet_route_has_no_way_out ... ok
+test tests::a_redirect_cannot_downgrade_the_connection ... ok
+test tests::a_redirect_is_reported_with_its_target ... ok
+test tests::a_redirect_without_a_location_is_an_error ... ok
+test tests::a_refused_url_never_reaches_the_network ... ok
+test tests::a_relative_redirect_resolves_against_the_current_directory ... ok
+test tests::a_reply_ends_where_it_said_it_would_and_not_where_the_socket_does ... ok
+test tests::a_reply_in_a_coding_that_was_never_asked_for_is_not_handed_on_as_a_body ... ok
+test tests::a_reply_is_not_finished_until_its_content_length_has_arrived ... ok
+test tests::a_reply_that_cannot_be_parsed_is_refused_rather_than_waited_on ... ok
+test tests::a_reply_that_is_both_chunked_and_compressed_is_unwrapped_in_that_order ... ok
+test tests::a_reply_that_is_not_http_is_unreachable_rather_than_parsed ... ok
+test tests::a_reply_that_says_identity_is_the_body_itself ... ok
+test tests::a_reply_with_no_framing_at_all_ends_only_when_the_socket_does ... ok
+test tests::a_rooted_redirect_keeps_the_original_host ... ok
+test tests::a_route_that_is_not_up_does_not_count ... ok
+test tests::a_second_interface_keeps_its_own_route ... ok
+test tests::a_server_refusal_is_reported_as_such ... ok
+test tests::an_absolute_redirect_is_taken_as_given ... ok
+test tests::an_empty_or_broken_table_is_not_read_as_a_network ... ok
+test tests::asking_for_a_whole_document_sends_no_range_at_all ... ok
+test tests::body_methods_use_the_selected_verb_and_never_request_connection_reuse ... ok
+test tests::conflicting_lengths_are_refused ... ok
+test tests::credentials_in_the_url_are_refused ... ok
+test tests::every_request_shares_one_tls_configuration ... ok
+test tests::loopback_is_not_a_network ... ok
+test tests::nonsense_is_refused_rather_than_guessed_at ... ok
+test tests::only_a_get_offers_to_hold_its_connection_open ... ok
+test tests::ordinary_headers_survive_same_origin_redirects ... ok
+test tests::plain_http_is_refused ... ok
+test tests::rate_limit_exposes_a_bounded_retry_after_delay ... ok
+test tests::rate_limit_metadata_is_bounded_and_contains_no_server_body ... ok
+test tests::repeated_cancelled_resolutions_stay_within_the_worker_and_queue_bounds ... ok
+test tests::request_line_control_characters_are_refused ... ok
+test tests::retained_updates_are_refused_before_connecting ... ok
+test tests::runtime_credentials_are_refused_on_any_redirect ... ok
+test tests::the_first_piece_of_a_document_is_asked_for_by_range_like_every_other_piece ... ok
+test tests::the_location_header_is_matched_whatever_its_case ... ok
+test tests::the_two_statuses_that_carry_no_body_are_not_waited_on ... ok
+test tests::transfer_encoding_and_content_length_cannot_disagree ... ok
+test lines::tests::close_during_next_and_shutdown_do_not_restore_an_old_generation ... ok
+
+test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running tests/fixture_endpoint.rs (target/debug/deps/fixture_endpoint-c711d1d90139f0d1)
+
+running 1 test
+test loopback_route_preserves_tls_http_and_streams_and_denies_other_destinations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/image_transport_limits.rs (target/debug/deps/image_transport_limits-c5940e02373fabd9)
+
+running 1 test
+test image_get_redirect_ceiling_tls_upgrade_and_stalled_cancel ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/lichess_stream_mock.rs (target/debug/deps/lichess_stream_mock-de06a23d201fdbd2)
+
+running 12 tests
+test clean_event_and_game_stream_endings_are_retryable_and_can_reopen ... ok
+test accepted_seek_clean_close_completes_without_a_retryable_failure_or_replay ... ok
+test credentialed_stream_redirects_are_denied_without_contacting_the_target ... ok
+test explicit_update_methods_send_the_exact_body_over_tls ... ok
+test local_https_mock_preserves_auth_and_retry_after_errors ... ok
+test local_https_ndjson_mock_streams_game_start_without_exposing_controls ... ok
+test long_lived_seek_cancels_promptly_and_is_sent_exactly_once ... ok
+test retained_stream_budget_releases_on_error_close_and_shutdown ... ok
+test terminal_framing_drains_every_buffered_record_before_releasing_the_stream ... ok
+test truncated_chunked_stream_is_rejected_instead_of_returned_as_an_event ... ok
+test updates_do_not_replay_after_a_lost_reply_or_follow_redirects ... ok
+test updates_preserve_authentication_rate_limit_and_size_failures ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s
+
+   Doc-tests kobo_net
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -296,7 +296,16 @@ impl PageView {
                 continue;
             }
             if let Ok(url) = base.join(src) {
-                if url.scheme() == kobo_web_document::Scheme::Https && !url.host().contains('@') {
+                if url.scheme() == kobo_web_document::Scheme::Https
+                    && !url.host().contains('@')
+                    && !url
+                        .path()
+                        .split('?')
+                        .next()
+                        .unwrap_or("")
+                        .to_ascii_lowercase()
+                        .ends_with(".svg")
+                {
                     out.push((src.clone(), url.without_fragment()));
                 }
             }

@@ -30,7 +30,7 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 ## Limits
 
 There is no JavaScript. Page view draws bounded PNG/JPEG base64 data images;
-external and SVG images are unavailable. Linked images remain available in
+bounded HTTPS PNG/JPEG external images also load. SVG images are unavailable. Linked images remain available in
 Navigate > Links, not by tapping inside the painted picture. The native
 reader keeps its image/link fallback. Pages are read up to 2 MB. The runtime
 reports only the body of a response, so relative links on a page that was redirected are resolved from
@@ -64,7 +64,7 @@ styles, not authored font-file selection. Late identity refresh retains
 edited form values, notices and native place when retained source is available.
 This is not a claim that all CSS, fonts or image formats are supported.
 Bounded external stylesheets load over the network and can update the painted
-page after its first render. External images, SVG, painted form controls,
+page after its first render. SVG, painted form controls,
 positions across app restarts, and physical-device memory measurements remain
 follow-up work.
 Data-image preparation caps each page at 4 MiB compressed bytes and 1,048,576
@@ -179,3 +179,9 @@ fontdue 0.9.3 changes and its original licenses are in `vendor/fontdue`.
 Host and ARM emulation checks are recorded in `verification/qualification-reports`.
 They do not replace device RSS, latency or physical-panel qualification.
 POST remains review-only and cannot send a request.
+
+External Page-view images use at most 16 sources, 1 MiB per body and 4 MiB
+retained compressed bytes per page, plus the decoder pixel budget. Known SVG
+paths are skipped, and other unsupported formats are refused by byte signature.
+Requests have no credentials or cookies. HTTP source URLs are not requested;
+HTTP redirect locations are upgraded to TLS rather than fetched in plaintext.

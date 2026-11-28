@@ -82,6 +82,29 @@ const RESOLVER_QUEUE: usize = 8;
 /// was the runtime giving up, not the network.
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(180);
 
+fn response_idle_expired(last_progress: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(last_progress) >= RESPONSE_TIMEOUT
+}
+
+#[cfg(test)]
+#[test]
+fn response_idle_timeout_is_exact_and_progress_resets_it() {
+    let start = Instant::now();
+    assert!(!response_idle_expired(
+        start,
+        start + RESPONSE_TIMEOUT - Duration::from_nanos(1)
+    ));
+    assert!(response_idle_expired(start, start + RESPONSE_TIMEOUT));
+    assert!(response_idle_expired(
+        start,
+        start + RESPONSE_TIMEOUT + Duration::from_secs(1)
+    ));
+    assert!(!response_idle_expired(
+        start + Duration::from_secs(1),
+        start + RESPONSE_TIMEOUT
+    ));
+}
+
 /// How often a blocking socket wakes to notice task cancellation.
 const IO_POLL: Duration = Duration::from_millis(250);
 
@@ -998,7 +1021,7 @@ fn post_until_cancelled(
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) =>
             {
-                if last_progress.elapsed() >= RESPONSE_TIMEOUT {
+                if response_idle_expired(last_progress, Instant::now()) {
                     return Err(TaskError::TimedOut);
                 }
             }
@@ -1036,7 +1059,7 @@ fn post_until_cancelled(
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) =>
             {
-                if last_progress.elapsed() >= RESPONSE_TIMEOUT {
+                if response_idle_expired(last_progress, Instant::now()) {
                     return Err(TaskError::TimedOut);
                 }
             }
@@ -1805,7 +1828,7 @@ fn exchange(
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) =>
             {
-                if last_progress.elapsed() >= RESPONSE_TIMEOUT {
+                if response_idle_expired(last_progress, Instant::now()) {
                     return Err(Failed::Real(TaskError::TimedOut));
                 }
             }

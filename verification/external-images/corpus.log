@@ -1,0 +1,203 @@
+   Compiling kobo-ui v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-ui)
+   Compiling kobo-json v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-json)
+   Compiling kobo-dict v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-dict)
+   Compiling kobo-abi v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-abi)
+warning: function `draw_fallback_text` is never used
+     --> /home/sandbox/cb/measure-basic/crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+   Compiling kobo-protocol v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-protocol)
+   Compiling kobo-net v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-net)
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling fontdue v0.9.3 (/home/sandbox/cb/measure-basic/vendor/fontdue)
+   Compiling kobo-policy v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-policy)
+   Compiling kobo-state v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-state)
+   Compiling kobo-web-document v0.1.0 (/home/sandbox/cb/measure-basic/crates/kobo-web-document)
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2718:5
+     |
+2718 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2713:5
+     |
+2713 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+   Compiling kobo-sdk v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-sdk)
+warning: unused variable: `node`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:1064:13
+     |
+1064 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:704:25
+    |
+704 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:827:8
+    |
+603 | impl BoxTree {
+    | ------------ method in this implementation
+...
+827 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2606:19
+     |
+2324 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2606 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2613 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+   Compiling kobo-text v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-text)
+   Compiling cobalt-text-preview v0.1.0 (/home/sandbox/cb/measure-basic/tools/cobalt-text-preview)
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.41s
+width=800 height=10142 height_clamped=false blocks=431 text_blocks=141 glyph_runs=1325 fills=370 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 186, "flex-row-basic": 5, "flex-row-empty-child-skipped": 4, "flex-row-item-centered": 1, "flex-row-natural-width": 3, "flex-row-shrunk": 2, "flex-row-stretch-height": 3, "font-family-mono": 42, "font-family-sans": 231, "inline-background": 91, "inline-background-padding": 91, "inline-font-family": 91, "line-height-length-rounded": 42, "line-height-rounded": 75, "margin-zeroed": 27, "padding-unrepresentable-zeroed": 8, "positioned-basic": 4, "relative-as-static": 3}
+images=0
+saved /tmp/extimg-corpus/python-introduction.png (800, 10142)
+width=800 height=18933 height_clamped=false blocks=688 text_blocks=234 glyph_runs=2890 fills=629 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 242, "flex-row-basic": 5, "flex-row-empty-child-skipped": 4, "flex-row-item-centered": 1, "flex-row-natural-width": 3, "flex-row-shrunk": 2, "flex-row-stretch-height": 3, "font-family-mono": 57, "font-family-sans": 381, "inline-background": 265, "inline-background-padding": 265, "inline-font-family": 265, "line-height-length-rounded": 57, "line-height-rounded": 142, "margin-collapse-adjacent": 5, "margin-zeroed": 27, "missing-glyph-placeholder": 3, "padding-unrepresentable-zeroed": 28, "positioned-basic": 4, "relative-as-static": 3}
+images=0
+saved /tmp/extimg-corpus/python-controlflow.png (800, 18933)
+width=800 height=13533 height_clamped=false blocks=503 text_blocks=171 glyph_runs=2310 fills=439 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 174, "flex-row-basic": 5, "flex-row-empty-child-skipped": 4, "flex-row-item-centered": 1, "flex-row-natural-width": 3, "flex-row-shrunk": 2, "flex-row-stretch-height": 3, "font-family-mono": 51, "font-family-sans": 277, "inline-background": 177, "inline-background-padding": 177, "inline-font-family": 177, "line-height-length-rounded": 40, "line-height-rounded": 95, "margin-collapse-adjacent": 2, "margin-zeroed": 27, "padding-unrepresentable-zeroed": 12, "positioned-basic": 4, "relative-as-static": 3}
+images=0
+saved /tmp/extimg-corpus/python-datastructures.png (800, 13533)
+width=800 height=9867 height_clamped=false blocks=393 text_blocks=133 glyph_runs=981 fills=375 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 134, "flex-row-basic": 5, "flex-row-empty-child-skipped": 4, "flex-row-item-centered": 1, "flex-row-natural-width": 3, "flex-row-shrunk": 2, "flex-row-stretch-height": 3, "font-family-mono": 28, "font-family-sans": 244, "inline-background": 175, "inline-background-padding": 175, "inline-font-family": 175, "line-height-length-rounded": 28, "line-height-rounded": 82, "margin-zeroed": 27, "padding-unrepresentable-zeroed": 12, "positioned-basic": 4, "relative-as-static": 3}
+images=0
+saved /tmp/extimg-corpus/python-modules.png (800, 9867)
+width=800 height=11983 height_clamped=false blocks=360 text_blocks=118 glyph_runs=1575 fills=272 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 118, "flex-row-basic": 5, "flex-row-empty-child-skipped": 4, "flex-row-item-centered": 1, "flex-row-natural-width": 3, "flex-row-shrunk": 2, "flex-row-stretch-height": 3, "font-family-mono": 26, "font-family-sans": 218, "inline-background": 94, "inline-background-padding": 94, "inline-font-family": 94, "line-height-length-rounded": 26, "line-height-rounded": 71, "margin-zeroed": 27, "padding-unrepresentable-zeroed": 2, "positioned-basic": 4, "relative-as-static": 3}
+images=0
+saved /tmp/extimg-corpus/python-errors.png (800, 11983)
+width=800 height=2980 height_clamped=false blocks=78 text_blocks=46 glyph_runs=132 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-inline-grow": 1, "inline-block-as-block": 1, "line-height-length-rounded": 25, "margin-collapse-adjacent": 8, "margin-zeroed": 53, "positioned-basic": 2, "relative-as-static": 13}
+images=0
+saved /tmp/extimg-corpus/rust-installation.png (800, 2980)
+width=800 height=3530 height_clamped=false blocks=88 text_blocks=49 glyph_runs=210 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-inline-grow": 1, "inline-block-as-block": 1, "line-height-length-rounded": 30, "margin-collapse-adjacent": 18, "margin-zeroed": 53, "positioned-basic": 2, "relative-as-static": 13}
+images=0
+saved /tmp/extimg-corpus/rust-hello.png (800, 3530)
+width=800 height=21190 height_clamped=false blocks=253 text_blocks=184 glyph_runs=1398 fills=24 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "border-side": 24, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-inline-grow": 1, "inline-block-as-block": 7, "line-height-length-rounded": 112, "margin-collapse-adjacent": 55, "margin-zeroed": 153, "missing-glyph-placeholder": 1, "positioned-basic": 2, "relative-as-static": 38}
+images=0
+saved /tmp/extimg-corpus/rust-guessing.png (800, 21190)
+width=800 height=4411 height_clamped=false blocks=70 text_blocks=43 glyph_runs=267 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-inline-grow": 1, "inline-block-as-block": 1, "line-height-length-rounded": 29, "margin-collapse-adjacent": 17, "margin-zeroed": 49, "positioned-basic": 2, "relative-as-static": 12}
+images=0
+saved /tmp/extimg-corpus/rust-variables.png (800, 4411)
+width=800 height=6271 height_clamped=false blocks=103 text_blocks=67 glyph_runs=387 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"abs-auto-to-origin": 2, "flex-row-basic": 1, "flex-row-empty-child-skipped": 1, "flex-row-inline-grow": 1, "inline-block-as-block": 1, "line-height-length-rounded": 43, "margin-collapse-adjacent": 21, "margin-zeroed": 77, "positioned-basic": 2, "relative-as-static": 19}
+images=0
+saved /tmp/extimg-corpus/rust-functions.png (800, 6271)
+width=800 height=185 height_clamped=false blocks=5 text_blocks=3 glyph_runs=3 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"margin-collapse-adjacent": 2}
+images=0
+saved /tmp/extimg-corpus/hindi.png (800, 185)
+width=800 height=185 height_clamped=false blocks=5 text_blocks=3 glyph_runs=3 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"margin-collapse-adjacent": 2}
+images=0
+saved /tmp/extimg-corpus/russian.png (800, 185)
+width=800 height=175 height_clamped=false blocks=5 text_blocks=3 glyph_runs=3 fills=0 output_truncated=false intake_truncated=false
+skips={}
+approximations={"margin-collapse-adjacent": 2, "missing-glyph-placeholder": 48}
+images=0
+saved /tmp/extimg-corpus/japanese.png (800, 175)
+All 13 pages match their census baselines. PNG files: /tmp/extimg-corpus
