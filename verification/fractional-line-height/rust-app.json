@@ -1,0 +1,85 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-style-a3n1ouz1/styles.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "peak_app_rss_kib": 79200,
+  "whole_journey_seconds": 47.84,
+  "requests": [
+    {
+      "path": "/",
+      "authorization": null,
+      "accept": "text/html,application/xhtml+xml,text/plain;q=0.9"
+    },
+    {
+      "path": "/sheet0.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet1.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet2.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet4.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet5.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet6.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet7.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet8.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet9.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet10.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet11.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    }
+  ],
+  "sphinx": false,
+  "textarea": false,
+  "form_edges": false,
+  "choices": false,
+  "paged_form": false,
+  "post_review": false,
+  "profile": "libra-colour-390",
+  "styled_frame_changed": true,
+  "address_dismissals_restore_frame": true,
+  "sheet_count": 11,
+  "transport": "real TLS/HTTP, debug-only loopback fixture",
+  "dirty": true,
+  "source_sha": "117459717a1ebfaa59d16b4f8ea99dae1b6aa887"
+}

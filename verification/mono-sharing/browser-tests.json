@@ -1594,5 +1594,89 @@
     "result": [
       "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.82s"
     ]
+  },
+  "tests::sphinx_page_callback_cost_probe": {
+    "exit": 0,
+    "result": [
+      "ok. 0 passed; 0 failed; 1 ignored; 0 measured; 279 filtered out; finished in 0.00s"
+    ]
+  },
+  "tests::start_search_submits_words_and_library_returns_to_start": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.16s"
+    ]
+  },
+  "tests::textarea_defaults_newlines_save_cancel_and_get_submission": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.24s"
+    ]
+  },
+  "tests::textarea_limit_preserves_overlong_defaults_and_unicode": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.23s"
+    ]
+  },
+  "tests::textarea_maxlength_stops_insertions_without_truncating_defaults": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.24s"
+    ]
+  },
+  "tests::the_address_field_searches_for_words": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.45s"
+    ]
+  },
+  "tests::the_links_list_follows_links_too": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.27s"
+    ]
+  },
+  "tests::the_links_list_for_a_page_of_many_links_fits_and_offers_this_page": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.87s"
+    ]
+  },
+  "tests::the_loading_screen_counts_the_wait_and_stops_when_the_page_arrives": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 0.23s"
+    ]
+  },
+  "tests::zoom_anchor_is_a_source_byte_not_a_reflowed_line_number": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 12.03s"
+    ]
+  },
+  "tests::zoom_at_document_start_keeps_the_top_margin": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 6.54s"
+    ]
+  },
+  "tests::zoom_controls_live_in_a_deliberate_panel_not_the_browsing_row": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 2.17s"
+    ]
+  },
+  "tests::zoom_panel_controls_fit_portrait_and_landscape_at_all_text_sizes": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 1.56s"
+    ]
+  },
+  "tests::zoom_reflows_around_the_source_glyph_instead_of_jumping_to_top": {
+    "exit": 0,
+    "result": [
+      "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 279 filtered out; finished in 6.51s"
+    ]
   }
 }
