@@ -556,6 +556,31 @@ pub(crate) fn selector(input: &str) -> Option<Selector> {
         pseudo: Pseudo::None,
     })
 }
+/// BASIC-LANE generated-content hook: parse `<steps>::before` /
+/// `<steps>::after` where `<steps>` is anything the shared basic grammar
+/// ([`selector`]) already accepts. Everything else refuses: a bare
+/// `::before`, any base the shared grammar rejects (pseudo-classes,
+/// attribute selectors, `*`, combinators other than descendant/child),
+/// a `:root` step (the one pseudo-class the shared grammar accepts),
+/// single-colon forms, and other pseudo-elements. The returned selector
+/// keeps `ext: false`; it never matches an element itself - style_tree
+/// enrolls it through the existing pseudo pass with a tight declaration
+/// allowlist.
+pub(crate) fn selector_basic_pseudo(input: &str) -> Option<Selector> {
+    let (base, pseudo) = input
+        .strip_suffix("::before")
+        .map(|base| (base, Pseudo::Before))
+        .or_else(|| input.strip_suffix("::after").map(|base| (base, Pseudo::After)))?;
+    let parsed = selector(base)?;
+    if parsed.steps.iter().any(|(step, _)| step.root) {
+        return None;
+    }
+    Some(Selector {
+        pseudo,
+        ..parsed
+    })
+}
+
 fn simple(part: &str) -> Option<Simple> {
     let mut tag = None;
     let mut id = None;
@@ -1936,6 +1961,11 @@ impl Selector {
             nodes, handle, fuel, position, target, snapshot,
         )
     }
+    /// Whether this selector came from the extended (opt-in) grammar.
+    pub(crate) fn is_extended(&self) -> bool {
+        self.ext
+    }
+
     pub(crate) fn matches_originating_checked_scoped_budget_with_snapshot(
         &self,
         nodes: &[Node],
@@ -3708,6 +3738,58 @@ fn nth_index_charged(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_pseudo_hook_accepts_plain_compound_bases() {
+        for (input, pseudo) in [
+            ("span::before", Pseudo::Before),
+            ("div::after", Pseudo::After),
+            (".toggler__label > span::before", Pseudo::Before),
+            ("#id.class::after", Pseudo::After),
+            ("ul li.item::before", Pseudo::Before),
+        ] {
+            let parsed = selector_basic_pseudo(input).unwrap_or_else(|| panic!("accept:{input}"));
+            assert_eq!(parsed.pseudo, pseudo, "pseudo:{input}");
+            assert!(!parsed.is_extended(), "basic-lane:{input}");
+            // The base is exactly what the shared grammar parses.
+            let base = selector(input.strip_suffix("::before").unwrap_or_else(|| {
+                input.strip_suffix("::after").expect("suffix")
+            }))
+            .expect("base parses");
+            assert_eq!(parsed.steps, base.steps, "steps:{input}");
+            assert_eq!(parsed.specificity, base.specificity, "specificity:{input}");
+        }
+    }
+
+    #[test]
+    fn basic_pseudo_hook_refuses_everything_else() {
+        for input in [
+            "::before",              // empty base
+            "::after",
+            ":root::before",         // the one pseudo-class the shared grammar takes
+            "a:hover::before",       // pseudo-class in the base
+            "a::first-line",         // other pseudo-element
+            "a::before:hover",       // pseudo-class after the hook
+            "a::before::after",      // stacked pseudo-elements
+            "a[hidden]::before",     // attribute selector in the base
+            "*::before",             // universal selector
+            "a + b::before",         // sibling combinator
+            "a ~ b::after",          // sibling combinator
+            "a:before",              // single-colon form
+            "a::BEFORE",             // case stays fail-closed
+            "a::before extra",       // trailing junk
+            "",                      // empty
+        ] {
+            assert!(selector_basic_pseudo(input).is_none(), "refuse:{input}");
+        }
+        // Existing parse behavior is unchanged: the shared grammar still
+        // refuses every colon form except :root.
+        assert!(selector("span::before").is_none());
+        assert!(selector(".a > span::after").is_none());
+    }
+
+
     use crate::{parse_styled_document, Limits, Url};
     fn visible(html: &str) -> String {
         let url = Url::parse("https://example.org/article").unwrap();

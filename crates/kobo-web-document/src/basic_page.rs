@@ -2764,6 +2764,13 @@ pub fn paint_basic_page_families<F: FontProvider>(
         measure_cache: std::collections::HashMap::new(),
     };
     painter.stats.intake_truncated = tree.truncated;
+    if tree.generated_pseudo_skips > 0 {
+        *painter
+            .stats
+            .skips
+            .entry("generated-pseudo-skipped")
+            .or_insert(0) += tree.generated_pseudo_skips;
+    }
     let mut list: Vec<Command> = Vec::new();
     let root = tree.roots[0];
     let body = tree.boxes[root].children.first().copied();
@@ -2828,6 +2835,13 @@ pub fn paint_basic_page(
         measure_cache: std::collections::HashMap::new(),
     };
     painter.stats.intake_truncated = tree.truncated;
+    if tree.generated_pseudo_skips > 0 {
+        *painter
+            .stats
+            .skips
+            .entry("generated-pseudo-skipped")
+            .or_insert(0) += tree.generated_pseudo_skips;
+    }
     let mut list: Vec<Command> = Vec::new();
     let root = tree.roots[0];
     // Canvas background from root (or body) as in the exact painter.

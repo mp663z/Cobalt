@@ -96,6 +96,10 @@ pub struct BoxTree {
     pub ext: bool,
     /// Page-view list markers keyed by box index; exact painters ignore these.
     pub page_list_markers: std::collections::BTreeMap<usize, String>,
+    /// BASIC-LANE generated content: declarations/rules skipped by the tight
+    /// ::before/::after enrollment allowlist, copied from the style tree so
+    /// the basic painter can fold them into its skip census.
+    pub generated_pseudo_skips: usize,
 }
 
 /// CSS 2.2 §10.3.3, restricted to zero margin/padding/border, LTR,
@@ -444,6 +448,34 @@ impl BoxTree {
     /// True for the `clear:both` second child of a valid kernel (variant A shape). Its
     /// zero used height is exempt from the generic empty-block refusal (margins are
     /// zero by the kernel gate, so nothing can collapse through it).
+    /// BASIC-LANE generated admission (default paint mode): only an
+    /// absolutely-positioned, empty generated box with a resolved px height,
+    /// px-or-percent width, zero margins/padding/border and no children or
+    /// text - the generated-decoration shape (e.g. a hamburger bar).
+    /// Everything else keeps refusing, and the explicit ext entries are
+    /// untouched.
+    fn generated_basic_abs_admitted(&self, index: usize) -> bool {
+        let Some(b) = self.boxes.get(index) else {
+            return false;
+        };
+        let s = &b.style;
+        matches!(b.kind, BoxKind::Block | BoxKind::Inline)
+            && s.positioned.position == Position::Absolute
+            && b.children.is_empty()
+            && b.text.is_none()
+            && [s.margin_top, s.margin_right, s.margin_bottom, s.margin_left]
+                .iter()
+                .all(|m| *m == Margin::Px(0))
+            && s.padding_top == 0
+            && s.padding_right == 0
+            && s.padding_bottom == 0
+            && s.padding_left == 0
+            && s.decor.used_border() == [0; 4]
+            && !s.decor.has_painted_border()
+            && matches!(s.height, Length::Px(h) if h > 0)
+            && matches!(s.width, Length::Px(_) | Length::Percent(_))
+    }
+
     /// EXPERIMENTAL generated-block admission (extended-CSS entry only), the
     /// predicate P of the reviewed kernel-B contract. Mirrors the `plain` /
     /// `zero_edges` expressions in `float_kernel` (above) DELIBERATELY
@@ -2623,7 +2655,7 @@ impl BoxTree {
         if self.boxes.iter().enumerate().any(|(i, b)| {
             b.generated
                 && match mode {
-                    PaintMode::Default => true,
+                    PaintMode::Default => !self.generated_basic_abs_admitted(i),
                     PaintMode::FloatKernel => self.unsupported || !self.is_kernel_cleared(i),
                     PaintMode::GeneratedBlock => {
                         self.unsupported
@@ -2711,6 +2743,7 @@ impl BoxTree {
             unsupported: styled.unsupported,
             quirks: styled.quirks,
             ext: styled.ext,
+            generated_pseudo_skips: styled.generated_pseudo_skips,
             ..Self::default()
         };
         let limit = styled.nodes.len().saturating_mul(2);

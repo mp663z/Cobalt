@@ -129,6 +129,11 @@ pub struct StyleTree {
     /// Frozen interned `font-family` list texts; the `FamilyKey`s in computed styles resolve here and only here.
     /// Retention only (FL50 increment 1): nothing consumes the lists yet. `None` for a default-constructed tree.
     pub families: Option<crate::font_family::FamilyView>,
+    /// BASIC-LANE generated content: declarations (and whole rules) skipped
+    /// by the tight ::before/::after enrollment allowlist. Counted, never
+    /// refused, so existing parse behavior is unchanged; the basic painter
+    /// folds this into its skip census.
+    pub generated_pseudo_skips: usize,
 }
 
 struct MatchedRule {
@@ -336,7 +341,7 @@ impl StyleTree {
         let mut tree = Self::default();
         tree.ext = ext_selectors;
         let mut fam = crate::font_family::FamilyTable::new();
-        let (rules, deferred_table, incomplete, claimed) = matched_rules(
+        let (rules, deferred_table, incomplete, claimed, pseudo_skips) = matched_rules(
             nodes,
             sheets,
             &mut tree.diagnostics,
@@ -348,6 +353,7 @@ impl StyleTree {
             &mut fam,
             snapshot,
         );
+        tree.generated_pseudo_skips = pseudo_skips;
         tree.host_sheets_claimed = (!incomplete).then_some(claimed);
         tree.diagnostics.expanded_declarations = rules.len();
         tree.unsupported = incomplete;
@@ -717,7 +723,40 @@ impl StyleTree {
                                     "div" | "section" | "article" | "header" | "footer" | "main"
                                         | "nav" | "aside" | "blockquote" | "figure"
                                 )
+                        )
+                        // Generated decoration on a `span` (the hamburger-bar
+                        // case), EITHER lane. A span-admitted rule is confined
+                        // to the tight basic declaration allowlist below;
+                        // block-container ext rules keep full declarations.
+                        || (true
+                            && matches!(
+                                &nodes[handle].data,
+                                Data::Element { name, .. } if name.local.as_ref() == "span"
+                            ));
+                        let block_allowed = matches!(
+                            &nodes[handle].data,
+                            Data::Element { name, .. }
+                                if matches!(
+                                    name.local.as_ref(),
+                                    "div" | "section" | "article" | "header" | "footer" | "main"
+                                        | "nav" | "aside" | "blockquote" | "figure"
+                                )
                         );
+                        let via_span = allowed && !block_allowed;
+                        // Span-admitted rules enroll ONLY the tight
+                        // generated-decoration allowlist; anything else
+                        // (deferred var() included) is skipped and counted at
+                        // the top level, never refused.
+                        if via_span
+                            && !pseudo_basic_entry_admitted(
+                                rule.property,
+                                &rule.value,
+                                rule.deferred.is_some(),
+                            )
+                        {
+                            tree.generated_pseudo_skips += 1;
+                            continue;
+                        }
                         if rule.deferred.is_some() || !allowed {
                             pseudo_bad = true;
                         } else {
@@ -1690,6 +1729,47 @@ fn data_admission_reason(error: crate::data_stylesheet::AdmissionError) -> Refus
 }
 
 #[allow(clippy::too_many_lines)] // Source-order stylesheet processing with bounded refusal evidence.
+/// Tight BASIC-lane `::before`/`::after` declaration allowlist: empty
+/// generated boxes carrying a background and a resolved size (the
+/// generated-decoration shape, e.g. a hamburger bar). `content` enrolls
+/// only in its modelled forms (the value model has no string variant, so
+/// text content stays skipped); position must be absolute; offsets are px
+/// or auto. Deferred `var()` declarations never enroll. Anything else is
+/// skipped by the caller (counted), never refused: existing parse
+/// behavior is unchanged.
+fn pseudo_basic_entry_admitted(property: Property, value: &Value, deferred: bool) -> bool {
+    if deferred {
+        return false;
+    }
+    match (property, value) {
+        (
+            Property::Content,
+            Value::Content(
+                crate::computed_style::Content::Empty | crate::computed_style::Content::Normal,
+            ),
+        ) => true,
+        (Property::Width, Value::Width(crate::computed_style::Length::Px(_))) => true,
+        (Property::Width, Value::Width(crate::computed_style::Length::Percent(percent))) => {
+            percent & crate::computed_style::LENGTH_EM_FLAG == 0
+        }
+        (Property::Height, Value::Height(crate::computed_style::Length::Px(_))) => true,
+        (
+            Property::BackgroundColor,
+            Value::BackgroundColor(_) | Value::BackgroundCurrentColor | Value::Inherit,
+        ) => true,
+        (Property::BackgroundClip | Property::BackgroundLayers, Value::Initial) => true,
+        (
+            Property::Position,
+            Value::Position(crate::computed_style::Position::Absolute),
+        ) => true,
+        (
+            Property::Top | Property::Right | Property::Bottom | Property::Left,
+            Value::Offset(crate::computed_style::Margin::Px(_) | crate::computed_style::Margin::Auto),
+        ) => true,
+        _ => false,
+    }
+}
+
 fn matched_rules(
     nodes: &[Node],
     sheets: &[Vec<u8>],
@@ -1701,7 +1781,8 @@ fn matched_rules(
     family_bind: bool,
     fam: &mut crate::font_family::FamilyTable,
     snapshot: Option<&crate::css::SnapshotState>,
-) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize) {
+) -> (Vec<MatchedRule>, Vec<Deferred>, bool, usize, usize) {
+    let mut pseudo_skips: usize = 0;
     // Engine-observable focus gate: an `autofocus` attribute anywhere in the
     // DOM voids the caller's `FocusState::UnfocusedInitial` guarantee (the
     // browser focuses that element on load). Fail closed: enroll with the
@@ -1887,7 +1968,7 @@ fn matched_rules(
         for rule in parsed.rules {
             if rules.len() >= MAX_RULES {
                 diagnostics.record(RefusalReason::ExpandedRules);
-                return (rules, deferred_table, true, supplied);
+                return (rules, deferred_table, true, supplied, pseudo_skips);
             }
             match style_syntax::conditions_fit(&rule.conditions, media) {
                 style_syntax::MediaFit::Screen => {}
@@ -1898,15 +1979,36 @@ fn matched_rules(
             } else {
                 Box::new(rule.prelude.split(','))
             };
+            // BASIC-LANE generated content: a basic sheet rule mentioning
+            // `::` parses its block with the content grammar admitted, so
+            // `content: ''` can enroll. The enrollment allowlist below keeps
+            // this tight.
+            let mentions_pseudo = !ext_selectors && rule.prelude.contains("::");
             let (properties, unknown) = block_entries(
                 rule.declarations,
                 &mut deferred_table,
                 text_deco,
                 family_bind,
-                ext_selectors,
+                ext_selectors || mentions_pseudo,
                 fam,
             );
-            let refused = unknown || !style_syntax::declarations_complete(rule.declarations);
+            let decls_incomplete = !style_syntax::declarations_complete(rule.declarations);
+            // A rule whose WHOLE selector group only parses through the
+            // basic ::before/::after hook: declarations outside the
+            // allowlist (or unparseable ones) are skipped and counted, never
+            // refused. Existing refusal behavior everywhere else is
+            // unchanged, including for mixed groups.
+            let all_pseudo = mentions_pseudo
+                && rule.prelude.split(',').all(|member| {
+                    let member = member.trim();
+                    !member.is_empty()
+                        && css::selector(member).is_none()
+                        && css::selector_basic_pseudo(member).is_some()
+                });
+            if all_pseudo && (unknown || decls_incomplete) {
+                pseudo_skips += 1;
+            }
+            let refused = (unknown || decls_incomplete) && !all_pseudo;
             if refused {
                 diagnostics.record(RefusalReason::CssDeclaration);
             }
@@ -1916,6 +2018,7 @@ fn matched_rules(
                     css::selector_ext(selector)
                 } else {
                     css::selector(selector.trim())
+                        .or_else(|| css::selector_basic_pseudo(selector.trim()))
                 };
                 let Some(selector) = parsed_selector else {
                     diagnostics.record(RefusalReason::CssSelector);
@@ -1935,6 +2038,7 @@ fn matched_rules(
                     unsupported = true;
                     continue;
                 }
+                let pseudo_basic = !ext_selectors && selector.pseudo != crate::css::Pseudo::None;
                 for entry in &properties {
                     let (property, value, important, deferred) = match *entry {
                         Entry::Typed(p, v, i) => (p, v, i, None),
@@ -1945,6 +2049,14 @@ fn matched_rules(
                             Some(index),
                         ),
                     };
+                    // BASIC hook: only allowlisted generated-decoration
+                    // declarations enroll; the rest are skipped (counted).
+                    if pseudo_basic
+                        && !pseudo_basic_entry_admitted(property, &value, deferred.is_some())
+                    {
+                        pseudo_skips += 1;
+                        continue;
+                    }
                     rules.push(MatchedRule {
                         selector: selector.clone(),
                         property,
@@ -1955,7 +2067,7 @@ fn matched_rules(
                     });
                     if rules.len() >= MAX_RULES {
                         diagnostics.record(RefusalReason::ExpandedRules);
-                        return (rules, deferred_table, true, supplied);
+                        return (rules, deferred_table, true, supplied, pseudo_skips);
                     }
                 }
             }
@@ -1968,7 +2080,7 @@ fn matched_rules(
             unsupported |= refused;
         }
     }
-    (rules, deferred_table, unsupported, supplied)
+    (rules, deferred_table, unsupported, supplied, pseudo_skips)
 }
 
 /// FL44: longhands that accept a folded px `calc()` (ext only).
@@ -6648,10 +6760,16 @@ mod before_after_tests {
     }
 
     #[test]
-    fn non_block_container_originating_element_refuses() {
-        // CONSERVATIVE LIMIT, not a Chrome claim: Chrome CAN generate on a
-        // span; anything outside the block-container allowlist refuses here.
+    fn span_admitted_confined_other_originating_elements_refuse() {
+        // ITEM 2(a): span is admitted in EITHER lane, confined to the
+        // generated-decoration allowlist with skipped declarations counted.
+        // Anything outside BOTH allowlists still refuses (the conservative
+        // limit, not a Chrome claim).
         let h = sheet("span::before{content:\"\"}", "<p><span>x</span></p>");
+        let t = ext(&h);
+        assert!(!t.unsupported);
+        assert!(t.nodes.iter().any(|n| n.tag == "::before"));
+        let h = sheet("i::before{content:\"\"}", "<p><i>x</i></p>");
         let t = ext(&h);
         assert!(t.unsupported);
         assert_eq!(
@@ -6682,26 +6800,93 @@ mod before_after_tests {
     }
 
     #[test]
-    fn default_entry_still_refuses_before() {
-        // Byte-unchanged default behavior: `content` is checked before the
-        // selector loop, so the unknown declaration reports first (the
-        // ::before selector is refused too) - same as the pristine base.
+    fn basic_hook_admits_tight_generated_rules_and_counts_skips() {
+        // ITEM 2 (basic lane ::before/::after): the default entry now admits
+        // generated-decoration rules through the tight hook. This test pins
+        // the NEW boundary; it replaces the ext-era expectation that the
+        // default entry refuses every ::before selector.
+        // 1. An empty generated box on a block-container: enrolled, no skips.
         let h = sheet("div::before{content:\"\"}", "<div><p>real</p></div>");
+        let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
+        assert!(!d.unsupported);
+        assert_eq!(d.generated_pseudo_skips, 0);
+        assert!(d.nodes.iter().any(|n| n.tag == "::before"));
+        // 2. A non-allowlisted declaration is skipped and counted, never
+        // refused; no rule enrolls, no box is generated.
+        let d = parse_style_tree(
+            b"<!doctype html><style>div::before{font-size:33px}</style><div>x</div>",
+            &[],
+            &Limits::DEFAULT,
+        );
+        assert!(!d.unsupported);
+        assert_eq!(d.generated_pseudo_skips, 1);
+        assert!(!d.nodes.iter().any(|n| n.tag == "::before"));
+        // 3. The hamburger shape on a span: every allowlisted declaration
+        // enrolls; the unknown `inset-inline-start` longhand is the one
+        // counted skip.
+        let h = sheet(
+            "span::before{content:'';position:absolute;top:-8px;left:0;             height:2px;width:100%;background:inherit;inset-inline-start:0}",
+            "<div><span>x</span></div>",
+        );
+        let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
+        assert!(!d.unsupported);
+        assert_eq!(d.generated_pseudo_skips, 1);
+        assert!(d.nodes.iter().any(|n| n.tag == "::before"));
+        // 4. An originating element outside BOTH allowlists still refuses
+        // (existing walker machinery, unchanged).
+        let h = sheet("i::before{content:\"\"}", "<div><i>x</i></div>");
         let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
         assert!(d.unsupported);
         assert_eq!(
             d.diagnostics.first_reason(),
             Some(RefusalReason::CssDeclaration)
         );
-        let d = parse_style_tree(
-            b"<!doctype html><style>div::before{font-size:33px}</style><div>x</div>",
-            &[],
-            &Limits::DEFAULT,
+        // 5. A selector the hook refuses keeps the old refusal: pseudo-class
+        // in the base, other pseudo-elements, junk after the suffix.
+        for sheet_text in [
+            "div:hover::before{content:\"\"}",
+            "div::first-line{content:\"\"}",
+            "div::before:hover{content:\"\"}",
+        ] {
+            let h = sheet(sheet_text, "<div>x</div>");
+            let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
+            assert!(d.unsupported, "refuses:{sheet_text}");
+            assert_eq!(
+                d.diagnostics.first_reason(),
+                Some(RefusalReason::CssSelector),
+                "reason:{sheet_text}"
+            );
+        }
+        // 7. EXT-grammar path (the corpus/harness entry): a span-originating
+        // rule is confined to the same tight allowlist at the walker;
+        // non-allowlisted declarations are skipped and counted, the rest
+        // generate. Block-container ext rules keep full declarations.
+        let h = sheet(
+            "span::before{content:\"\";position:absolute;top:-8px;height:2px;             width:100%;background:inherit;font-size:33px}",
+            "<div><span>x</span></div>",
         );
-        assert!(d.unsupported);
-        assert_eq!(
-            d.diagnostics.first_reason(),
-            Some(RefusalReason::CssSelector)
+        let t = ext(&h);
+        assert!(!t.unsupported);
+        assert_eq!(t.generated_pseudo_skips, 1);
+        assert!(t.nodes.iter().any(|n| n.tag == "::before"));
+        let h = sheet("span::before{content:\"\";width:var(--w)}", "<div><span>x</span></div>");
+        let t = ext(&h);
+        assert!(!t.unsupported);
+        assert!(t.generated_pseudo_skips >= 1);
+        // A block-container ext rule is NOT confined: font-size enrolls.
+        let h = sheet("div::before{content:\"\";font-size:33px}", "<div>x</div>");
+        let t = ext(&h);
+        assert_eq!(t.generated_pseudo_skips, 0);
+        assert!(t.nodes.iter().any(|n| n.tag == "::before"));
+
+        // 6. Deferred var() declarations never enroll through the hook:
+        // skipped and counted, no refusal.
+        let h = sheet(
+            "div::before{content:\"\";width:var(--w)}",
+            "<div>x</div>",
         );
+        let d = parse_style_tree(h.as_bytes(), &[], &Limits::DEFAULT);
+        assert!(!d.unsupported);
+        assert!(d.generated_pseudo_skips >= 1);
     }
 }
