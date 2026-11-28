@@ -60,7 +60,7 @@ impl PageFontAdapter {
 
     fn load_monospace() -> Option<std::rc::Rc<PageFontSession>> {
         PageFontSession::from_bytes(
-            include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono.ttf"),
+            kobo_text::MONO_FONT,
             include_bytes!("../../../crates/kobo-text/fonts/DejaVuSansMono-Bold.ttf"),
         ).ok().map(std::rc::Rc::new)
     }

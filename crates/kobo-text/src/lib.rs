@@ -38,7 +38,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 #[cfg(feature = "diagnostic-font-session")]
 pub mod bundled_face_pair;
@@ -58,6 +58,27 @@ use unicode_segmentation::UnicodeSegmentation;
 ///
 /// See `fonts/LICENSE-DejaVu.txt`, which travels with it.
 pub const MONO_FONT: &[u8] = include_bytes!("../fonts/DejaVuSansMono.ttf");
+
+
+/// Share only the exact embedded mono regular face. A weak slot never keeps the
+/// geometry alive after its last owner is dropped. Other font bytes stay private.
+fn shared_font(bytes: &[u8]) -> Result<Arc<Font>, &'static str> {
+    static MONO: OnceLock<Mutex<Weak<Font>>> = OnceLock::new();
+    #[cfg(debug_assertions)]
+    if std::env::var("KOBO_SIM_UNSHARED_MONO").as_deref() == Ok("1") {
+        return Font::from_bytes(bytes, FontSettings::default()).map(Arc::new);
+    }
+    if bytes == MONO_FONT {
+        let mut slot = MONO.get_or_init(|| Mutex::new(Weak::new())).lock()
+            .map_err(|_| "mono shared face lock poisoned")?;
+        if let Some(font) = slot.upgrade() { return Ok(font); }
+        let font = Arc::new(Font::from_bytes(bytes, FontSettings::default())?);
+        *slot = Arc::downgrade(&font);
+        Ok(font)
+    } else {
+        Font::from_bytes(bytes, FontSettings::default()).map(Arc::new)
+    }
+}
 
 /// Faces to look for on the device, best first.
 ///
@@ -200,7 +221,7 @@ struct Raster {
 
 /// A loaded face, sized for one panel.
 pub struct Typeface {
-    font: Font,
+    font: Arc<Font>,
     metrics: DisplayMetrics,
     source: PathBuf,
     cache: Mutex<HashMap<(char, u32), Raster>>,
@@ -317,7 +338,7 @@ impl Typeface {
     pub fn load(path: impl AsRef<Path>, metrics: DisplayMetrics) -> Result<Self, Error> {
         let path = path.as_ref().to_path_buf();
         let bytes = std::fs::read(&path).map_err(|error| Error::Unreadable(path.clone(), error))?;
-        let font = Font::from_bytes(bytes.as_slice(), FontSettings::default())
+        let font = shared_font(bytes.as_slice())
             .map_err(|reason| Error::Malformed(path.clone(), reason.to_string()))?;
         Ok(Self {
             font,
@@ -334,7 +355,7 @@ impl Typeface {
     /// Returns [`Error::Malformed`] if the bytes are not a usable font.
     pub fn from_bytes(bytes: &[u8], name: &str, metrics: DisplayMetrics) -> Result<Self, Error> {
         let path = PathBuf::from(name);
-        let font = Font::from_bytes(bytes, FontSettings::default())
+        let font = shared_font(bytes)
             .map_err(|reason| Error::Malformed(path.clone(), reason.to_string()))?;
         Ok(Self {
             font,

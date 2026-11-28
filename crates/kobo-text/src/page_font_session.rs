@@ -31,7 +31,7 @@ pub struct PageCluster {
 /// Regular and bold faces, optional true italic cuts, and coverage fallbacks.
 /// No glyph cache is retained, so a long page cannot grow session memory.
 pub struct PageFontSession {
-    regular: Font,
+    regular: std::sync::Arc<Font>,
     bold: Font,
     italic: Option<Font>,
     bold_italic: Option<Font>,
@@ -94,7 +94,7 @@ impl PageFontSession {
     /// Returns the font parser's error for malformed face bytes.
     pub fn from_bytes(regular: &[u8], bold: &[u8]) -> Result<Self, &'static str> {
         Ok(Self {
-            regular: Font::from_bytes(regular, FontSettings::default())?,
+            regular: crate::shared_font(regular)?,
             bold: Font::from_bytes(bold, FontSettings::default())?,
             italic: None,
             bold_italic: None,
@@ -155,7 +155,7 @@ impl PageFontSession {
     fn primary(&self, bold: bool, italic: bool) -> &Font {
         match (bold, italic) {
             (true, true) => self.bold_italic.as_ref().unwrap_or(&self.bold),
-            (false, true) => self.italic.as_ref().unwrap_or(&self.regular),
+            (false, true) => self.italic.as_ref().unwrap_or(self.regular.as_ref()),
             (true, false) => &self.bold,
             (false, false) => &self.regular,
         }
@@ -617,5 +617,32 @@ mod tests {
         );
         assert!(session.advance('A', 0, false, false).is_none());
         assert!(session.raster('A', 257, false, false).is_none());
+    }
+}
+
+#[cfg(test)]
+mod shared_mono_tests {
+    use super::*;
+    #[test]
+    fn shared_mono_identity_and_all_mapped_glyphs_match_uncached() {
+        let ui = crate::shared_font(crate::MONO_FONT).unwrap();
+        let page = PageFontSession::from_bytes(crate::MONO_FONT,
+            include_bytes!("../fonts/DejaVuSansMono-Bold.ttf")).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&ui, &page.regular));
+        let fresh = Font::from_bytes(crate::MONO_FONT, FontSettings::default()).unwrap();
+        let face = rustybuzz::ttf_parser::Face::parse(crate::MONO_FONT, 0).unwrap();
+        let mut count = 0;
+        for sub in face.tables().cmap.unwrap().subtables {
+            sub.codepoints(|cp| {
+                if let Some(ch) = char::from_u32(cp) {
+                    assert_eq!(ui.lookup_glyph_index(ch), fresh.lookup_glyph_index(ch));
+                    for px in [12.0, 18.0, 24.0, 32.0] {
+                        assert_eq!(ui.rasterize(ch, px), fresh.rasterize(ch, px));
+                    }
+                    count += 1;
+                }
+            });
+        }
+        assert!(count > 1000);
     }
 }
