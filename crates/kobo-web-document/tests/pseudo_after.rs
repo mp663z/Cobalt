@@ -103,10 +103,14 @@ fn everything_else_fails_closed() {
 }
 
 #[test]
-fn legacy_and_default_entries_still_refuse_after() {
+fn legacy_entry_admits_tight_after_and_counts_skips() {
+    // ITEM 2: the legacy (default) entry admits ::after through the tight
+    // hook; display:block and clear:both fall outside the generated-
+    // decoration allowlist and are skipped (counted), not refused.
     let t = legacy(GOV, BODY);
-    assert!(t.unsupported);
-    assert!(t.nodes.iter().all(|n| n.tag != "::after"));
+    assert!(!t.unsupported);
+    assert_eq!(t.generated_pseudo_skips, 2);
+    assert!(t.nodes.iter().any(|n| n.tag == "::after"));
     let d = legacy(".p{content:\"\"}", BODY);
     assert!(d.unsupported, "content stays unknown outside the extended entry");
 }
@@ -350,9 +354,14 @@ fn explicit_painter_draws_the_clearfix_pseudo_element_layout() {
     // Without the pseudo-element the float escapes the parent: not a kernel, refused.
     let no = ext(colors, body);
     assert!(paint_backgrounds_float_kernel(&BoxTree::from_style(&no), 785, 600).is_err());
-    // The same document on the legacy entry is refused at intake.
+    // The legacy (default) entry now ADMITS the tight generated-decoration
+    // subset (item 2): content:"" enrolls, display/clear are skipped and
+    // counted, the page is not unsupported. The default painter still
+    // refuses the non-absolute generated box at paint admission.
     let l = legacy(&format!("{colors}{GOV}"), body);
-    assert!(l.unsupported);
+    assert!(!l.unsupported);
+    assert_eq!(l.generated_pseudo_skips, 2);
+    assert!(l.nodes.iter().any(|n| n.tag == "::after"));
     // A nonzero-height pseudo box (b6) lays out as the nonzero cleared kernel.
     let h = ext(&format!("{colors}{GOV}.p::after{{height:4px}}"), body);
     let list = paint_backgrounds_float_kernel(&BoxTree::from_style(&h), 785, 600).expect("b6");

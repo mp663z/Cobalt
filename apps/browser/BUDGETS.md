@@ -1789,3 +1789,11 @@ runtime Back both restore exact painted-frame hash. Form-edge typed-address,
 Sphinx, and Links5sheet routes pass; restored app pixels inspected. Form routes
 now compare complete request multiset with expected page/sheets/single GET,
 rejecting unexpected fetches or duplicate submissions. Test-only, ARM unchanged.
+
+Imported tests-only amended CSS item2 delta10a0acf4: pseudo_after17pass at own
+head, pinning tight decoration admission/counted unsupported decls. Worker
+reports1431pass across150binaries on its pinned worktree; not an origin fullsuite
+claim. Native route helper refactor preserves all5 old route strings byte-for-byte;
+live choices repeat passes. --profile option now allows ClaraBW: typed-address
+form-edges and choices pass with complete exact request/hash checks; small-screen
+control/result pixels inspected. Test-only, no app binary change.

@@ -31,9 +31,99 @@ def module(path, name):
     return value
 
 
+def form_route(args):
+    """Choose one deterministic native-form journey."""
+    if args.sphinx:
+        return (
+            'tap-id browser-more\n'
+            'tap-id forms\n'
+            'shot-colour form-list\n'
+            'tap-id form-0\n'
+            'tap-id field-0\n'
+            'type cobalt\n'
+            'tap-id kb.enter\n'
+            'shot-colour form-edited\n'
+            'tap-id submit-field-1\n'
+            'wait-idle 30000\n'
+            'shot-colour search-result\n'
+        )
+    if args.textarea:
+        return (
+            'tap-id browser-more\n'
+            'tap-id forms\n'
+            'tap-id form-0\n'
+            'tap-id field-0\n'
+            'tap-id form-newline\n'
+            'type secondx\n'
+            'shot-colour textarea-limit\n'
+            'tap-id kb.backspace\n'
+            'type z\n'
+            'tap-id kb.enter\n'
+            'shot-colour textarea-saved\n'
+            'tap-id submit-form\n'
+            'wait-idle 30000\n'
+            'shot-colour search-result\n'
+        )
+    if args.form_edges:
+        return (
+            'tap-id browser-more\n'
+            'tap-id forms\n'
+            'tap-id form-0\n'
+            'tap-id field-0\n'
+            'type draft\n'
+            'tap-id kb.cancel\n'
+            'tap-id field-0\n'
+            'expect first\n'
+            'expect-missing draft\n'
+            'type wrong\n'
+            'tap Back\n'
+            'tap-id field-0\n'
+            'expect first\n'
+            'expect-missing wrong\n'
+            'tap-id form-newline\n'
+            'type saved\n'
+            'tap-id kb.enter\n'
+            'shot-colour textarea-back-cancel\n'
+            'tap-id field-1\n'
+            'expect Read only: fixed\n'
+            'expect Done\n'
+            'expect-missing New line\n'
+            'tap-id field-2\n'
+            'expect Read only: locked\n'
+            'expect-missing New line\n'
+            'shot-colour readonly-controls\n'
+            'tap-id field-3\n'
+            'tap ?123\n'
+            'type 2\n'
+            'tap-id kb.enter\n'
+            'shot-colour number-maxlength\n'
+            'tap-id submit-form\n'
+            'wait-idle 30000\n'
+            'shot-colour search-result\n'
+        )
+    if args.choices:
+        return (
+            'tap-id browser-more\n'
+            'tap-id forms\n'
+            'tap-id form-0\n'
+            'expect-missing excluded\n'
+            'tap-id field-1\n'
+            'tap-id option-1\n'
+            'tap-id field-2\n'
+            'tap-id field-3\n'
+            'tap-id option-1\n'
+            'shot-colour choice-values\n'
+            'tap-id submit-field-5\n'
+            'wait-idle 30000\n'
+            'shot-colour search-result\n'
+        )
+    return ""
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--profile', default='libra-colour-390', help='simulator hardware profile')
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
     parser.add_argument('--choices', action='store_true', help='test native select/radio/checkbox, disabled and hidden controls and explicit submitter')
@@ -166,38 +256,9 @@ def main():
                          'tap-id kb.end\ntap-id kb.r0c0\nshot-colour address-edit\n'
                          'tap-id kb.cancel\nshot-colour address-cancel\n'
                          'tap-id edit-address\ntap-id kb.end\ntap-id kb.r0c1\ntap Back\n'
-                         'shot-colour address-back\n' + (
-                         'tap-id browser-more\ntap-id forms\nshot-colour form-list\n'
-                         'tap-id form-0\ntap-id field-0\ntype cobalt\ntap-id kb.enter\n'
-                         'shot-colour form-edited\ntap-id submit-field-1\nwait-idle 30000\nshot-colour search-result\n'
-                         if args.sphinx else (
-                         'tap-id browser-more\ntap-id forms\ntap-id form-0\ntap-id field-0\n'
-                         'tap-id form-newline\ntype secondx\nshot-colour textarea-limit\n'
-                         'tap-id kb.backspace\ntype z\ntap-id kb.enter\nshot-colour textarea-saved\n'
-                         'tap-id submit-form\nwait-idle 30000\nshot-colour search-result\n'
-                         if args.textarea else (
-                         'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
-                         'tap-id field-0\ntype draft\ntap-id kb.cancel\n'
-                         'tap-id field-0\nexpect first\nexpect-missing draft\n'
-                         'type wrong\ntap Back\n'
-                         'tap-id field-0\nexpect first\nexpect-missing wrong\n'
-                         'tap-id form-newline\ntype saved\ntap-id kb.enter\n'
-                         'shot-colour textarea-back-cancel\n'
-                         'tap-id field-1\nexpect Read only: fixed\nexpect Done\nexpect-missing New line\n'
-                         'tap-id field-2\nexpect Read only: locked\nexpect-missing New line\n'
-                         'shot-colour readonly-controls\n'
-                         'tap-id field-3\ntap ?123\ntype 2\ntap-id kb.enter\n'
-                         'shot-colour number-maxlength\ntap-id submit-form\n'
-                         'wait-idle 30000\nshot-colour search-result\n'
-                         if args.form_edges else (
-                         'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
-                         'expect-missing excluded\ntap-id field-1\ntap-id option-1\n'
-                         'tap-id field-2\ntap-id field-3\ntap-id option-1\n'
-                         'shot-colour choice-values\ntap-id submit-field-5\n'
-                         'wait-idle 30000\nshot-colour search-result\n'
-                         if args.choices else '')))))
+                         'shot-colour address-back\n' + form_route(args))
         env = dict(os.environ, CARGO_TARGET_DIR=str(target),
-                   KOBO_SIM_PROFILE='libra-colour-390',
+                   KOBO_SIM_PROFILE=args.profile,
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
                    KOBO_SIM_TRUST_DIR=str(trust))
         env.pop('KOBO_SIM_OFFLINE', None)
@@ -216,7 +277,7 @@ def main():
         app_status = result['status']
         result['app_status'] = app_status
         result['status'] = 'unverified' if app_status == 'pass' else app_status
-        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges, choices=args.choices)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges, choices=args.choices, profile=args.profile)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
         assert app_status == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
