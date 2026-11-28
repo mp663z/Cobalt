@@ -215,6 +215,7 @@ enum Floating {
 /// What an enabled specimen says when it is pressed. Disabled specimens
 /// stay silent: saying no by being drawn unavailable is their whole point.
 const SPECIMENS: &[(&str, &str)] = &[
+    ("colour-row", "You pressed the coloured row."),
     ("button-primary", "You pressed Download."),
     ("button-one", "You pressed Keep."),
     ("button-two", "You pressed Discard."),
@@ -287,6 +288,8 @@ struct Gallery {
     outcome: Option<String>,
     /// Where the worked example has got to, when it is running.
     step: Option<Step>,
+    browser_demo: Option<u8>,
+    demo_value: u8,
 }
 
 impl Default for Gallery {
@@ -314,6 +317,8 @@ impl Default for Gallery {
             task: None,
             outcome: None,
             step: None,
+            browser_demo: None,
+            demo_value: 50,
         }
     }
 }
@@ -339,6 +344,7 @@ impl Gallery {
                 Gallery::banners_page,
                 Gallery::tone_page,
                 Gallery::waiting_page,
+                Gallery::colour_page,
             ],
             (Tab::Lists, 0) => &[
                 Gallery::rows_page,
@@ -365,7 +371,7 @@ impl Gallery {
                 Gallery::asking_page,
                 Gallery::choice_page,
             ],
-            (Tab::Input, _) => &[Gallery::overlay_page],
+            (Tab::Input, _) => &[Gallery::overlay_page, Gallery::browser_entry],
             (Tab::States, 0) => &[Gallery::nothing_page],
             (Tab::States, 1) => &[Gallery::offline_page],
             (Tab::States, 2) => &[
@@ -563,6 +569,10 @@ impl Gallery {
     }
 
     fn show(&self, context: &mut Context) {
+        if let Some(mode) = self.browser_demo {
+            context.set_screen(self.browser_screen(mode));
+            return;
+        }
         // A raised keyboard is modal: it covers the panel, so nothing else is
         // drawn under it, including the tab bar.
         if self.entry.is_open() {
@@ -934,6 +944,47 @@ impl Gallery {
                 "An attention banner, drawn inverted. This is what replaces flashing \
                  the frontlight.",
             )
+    }
+
+    fn colour_page(_: &Self, screen: ScreenBuilder) -> ScreenBuilder {
+        let span = |end| vec![RichTextSpan { start: 0, end, presentation: TextPresentation {
+            foreground: Some([30, 90, 180]), background: Some([235, 245, 255]),
+            ..TextPresentation::default()
+        }}];
+        screen.coloured_heading_at_level(2, "Authored ink", span(12))
+            .coloured_quote(1, "A coloured quotation.", span(21))
+            .rows_with_colours([("colour-row", "Blue title", "Same native row controls", Glyph::Book,
+                Some(([30, 90, 180], Some([235, 245, 255]))))])
+    }
+
+    fn browser_entry(_: &Self, screen: ScreenBuilder) -> ScreenBuilder {
+        screen.section("Browser controls")
+            .button("demo-browser", "Try browser bars, zoom and picture links")
+    }
+
+    fn browser_screen(&self, mode: u8) -> Screen {
+        let screen = ScreenBuilder::new("gallery-browser")
+            .top_bar("Browser specimen").top_bar_action("demo-exit", "Close")
+            .field("edit-address", "https://example.test/", "Example address")
+            .grid(2, false, [("demo-bar-0", "Zoom bar"), ("demo-bar-1", "Compact"),
+                ("demo-bar-2", "Wait"), ("demo-bar-3", "Recovery")])
+            .secondary("Local specimen. No network request is made.")
+            .slider(ActionId(0x71000000), self.demo_value);
+        let screen = if let Some(picture) = self.card {
+            screen.picture(picture, 25)
+                .picture_scroll(Some(ActionId(0x72000000)))
+                .picture_links(vec![kobo_sdk::PictureLink {
+                    action: action_id("demo-picture-link"), x: 0, y: 0,
+                    width: WEDGE_WIDTH / 2, height: WEDGE_HEIGHT,
+                }])
+        } else { screen.skeleton(1) };
+        let screen = screen.secondary(self.pressed.unwrap_or("Drag the track or tap the left half of the picture."));
+        match mode {
+            0 => screen.browser_bar(self.demo_value, ActionId(0x71000000)),
+            1 => screen.compact_browser_bar().unified_browser_header(),
+            2 => screen.loading_browser_bar().unified_browser_header(),
+            _ => screen.recovery_browser_bar().unified_browser_header(),
+        }.build()
     }
 
     fn tone_page(&self, screen: ScreenBuilder) -> ScreenBuilder {
@@ -1756,6 +1807,23 @@ impl KoboApp for Gallery {
     }
 
     fn on_action(&mut self, context: &mut Context, action: ActionId) {
+        if action == action_id("demo-browser") {
+            self.browser_demo = Some(0); self.pressed = None; self.show(context); return;
+        }
+        if self.browser_demo.is_some() {
+            if action == ActionId::BACK || action == action_id("demo-exit") { self.browser_demo = None; self.pressed = None; }
+            else if let Some(mode) = (0..4).find(|i| action == action_id(&format!("demo-bar-{i}"))) {
+                self.browser_demo = Some(mode); self.pressed = None;
+            } else if (0x71000000..=0x71000064).contains(&action.0) {
+                self.demo_value = (action.0 - 0x71000000) as u8;
+                self.pressed = Some("Zoom track changed.");
+            } else if action == action_id("demo-picture-link") {
+                self.pressed = Some("Picture link followed locally.");
+            } else if (0x72000000..0x72010000).contains(&action.0) {
+                self.pressed = Some("Picture drag received.");
+            } else { self.pressed = Some("Browser control pressed. This specimen stays offline."); }
+            self.show(context); return;
+        }
         // The worked example is answered first. While it is running it owns
         // the panel, including the back the runtime sends: handled further
         // down, back would be swallowed by the rule that closes overlays and
@@ -1962,6 +2030,13 @@ mod tests {
                 .expect("a screen was painted")
         };
         let mut screens = Vec::new();
+        let mut demo = Gallery::default();
+        demo.on_start(&mut runner.context());
+        for mode in 0..4 {
+            demo.browser_demo = Some(mode);
+            screens.push((format!("browser-specimen-{mode}"), painted(&demo)));
+        }
+
         for (tab, _, _) in Tab::ALL {
             for (index, (name, _)) in tab.pages().iter().enumerate() {
                 let mut gallery = Gallery::default();
@@ -2163,7 +2238,7 @@ mod tests {
                                 node.text_lines.first().map(ToString::to_string)
                             )
                         });
-                    format!("{:?} at {}", issue.kind, drawn.unwrap_or_default())
+                    format!("{:?} node {:?} at {}", issue.kind, issue.node, drawn.unwrap_or_default())
                 })
                 .collect::<Vec<_>>();
             if !errors.is_empty() {
@@ -2425,6 +2500,24 @@ mod tests {
                 .any(|node| matches!(node, Node::Band { .. })),
             "the hero drew no band"
         );
+    }
+
+    #[test]
+    fn browser_specimens_answer_slider_links_modes_and_exit_without_network() {
+        let mut runner = kobo_sdk::AppRunner::new(Gallery::default());
+        runner.start();
+        runner.action(action_id("demo-browser"));
+        runner.action(kobo_sdk::ActionId(0x71000049));
+        assert_eq!(runner.app().demo_value, 73);
+        runner.action(action_id("demo-picture-link"));
+        assert_eq!(runner.app().pressed, Some("Picture link followed locally."));
+        for mode in 0..4 {
+            let commands = runner.action(action_id(&format!("demo-bar-{mode}")));
+            assert_eq!(runner.app().browser_demo, Some(mode));
+            assert!(!commands.iter().any(|command| matches!(command, Command::Spawn { .. })));
+        }
+        runner.action(action_id("demo-exit"));
+        assert_eq!(runner.app().browser_demo, None);
     }
 
     /// Every control the toolkit draws is shown here, or is named below with

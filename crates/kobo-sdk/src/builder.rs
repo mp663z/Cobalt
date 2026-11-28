@@ -1394,7 +1394,7 @@ impl ScreenBuilder {
     #[must_use]
     pub fn loading_browser_bar(self)->Self{
         let mut this=self.compact_browser_bar();let stop=this.register("cancel-load");
-        if let Some(bar)=this.nav_bar.as_mut(){if let Some(action)=bar.destinations.get_mut(2){*action=BarAction::new(stop,"Stop loading").with_glyph(Glyph::Close);}}
+        if let Some(bar)=this.nav_bar.as_mut(){if let Some(action)=bar.destinations.get_mut(2){*action=BarAction::new(stop,"Stop").with_glyph(Glyph::Close);}}
         this
     }
 

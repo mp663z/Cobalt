@@ -13624,7 +13624,7 @@ fn node_enabled_interaction_count(node: &Node) -> usize {
 }
 
 const fn is_enabled_interactive(kind: LayoutKind) -> bool {
-    kind.acts_on().is_some()
+    (kind.acts_on().is_some() || matches!(kind, LayoutKind::Slider(..)))
         && !matches!(
             kind,
             LayoutKind::Button(_, ControlState::Disabled, _)

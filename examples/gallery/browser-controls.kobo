@@ -1,0 +1,14 @@
+tap-id tab-input
+tap-id page-over
+tap-id demo-browser
+shot-colour zoom-bar
+tap-id demo-bar-1
+shot-colour compact
+tap-id demo-bar-2
+shot-colour loading
+tap-id demo-bar-3
+shot-colour recovery
+tap-id demo-exit
+tap-id tab-text
+tap-id page-tone
+shot-colour tone
