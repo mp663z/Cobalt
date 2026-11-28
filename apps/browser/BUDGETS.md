@@ -1820,3 +1820,10 @@ Paged-form state guard ClaraBW: editf0 then page options forward and dismiss via
 runtime Back, then repeat via Done. Both retain original selected option0 and
 editedf0; later choose29, traverse form pages and GET asserts f0=v0edited plus
 allother25pairs. Livepass and saved-control pixels inspected. Test-only.
+
+ClaraBW Sphinx typed-address live route passes:3lightCSS, painted3bars, nativeGET
+q=cobalt, exact dismissalhash/requestchecks, authored/result pixels inspected.
+New --post-review fixture passes on ClaraBW: edit note, review then Cancel,
+review then runtime Back, saved note preserved. Server records noPOST/noaction
+GET; complete requestmultiset contains only page/2CSS. Review/returned-form
+pixels inspected. This tests existing refusal gate, does not enablePOST.

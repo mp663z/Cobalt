@@ -33,6 +33,15 @@ def module(path, name):
 
 def form_route(args):
     """Choose one deterministic native-form journey."""
+    if args.post_review:
+        return (
+            'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
+            'tap-id field-0\ntype edited\ntap-id kb.enter\n'
+            'tap-id submit-field-1\nexpect Review submission\nexpect cannot send POST\n'
+            'shot-colour post-review\ntap-id cancel-post\nexpect originaledited\n'
+            'tap-id submit-field-1\nexpect Review submission\ntap Back\n'
+            'expect originaledited\nshot-colour post-cancelled\n'
+        )
     if args.paged_form:
         return (
             'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
@@ -138,6 +147,7 @@ def main():
     parser.add_argument('--profile', default='libra-colour-390', help='simulator hardware profile')
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--post-review', action='store_true', help='test POST remains gated through Cancel and runtime Back')
     parser.add_argument('--paged-form', action='store_true', help='test paginated form fields and select options')
     parser.add_argument('--choices', action='store_true', help='test native select/radio/checkbox, disabled and hidden controls and explicit submitter')
     parser.add_argument('--form-edges', action='store_true', help='test textarea cancel/Back, readonly controls and number maxlength semantics')
@@ -146,8 +156,8 @@ def main():
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
-    assert sum((args.sphinx, args.textarea, args.form_edges, args.choices, args.paged_form)) <= 1, 'choose one form fixture'
-    assert not (args.via_link and (args.textarea or args.form_edges or args.choices or args.paged_form)), 'form edge fixtures open directly'
+    assert sum((args.sphinx, args.textarea, args.form_edges, args.choices, args.paged_form, args.post_review)) <= 1, 'choose one form fixture'
+    assert not (args.via_link and (args.textarea or args.form_edges or args.choices or args.paged_form or args.post_review)), 'form edge fixtures open directly'
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
@@ -202,6 +212,10 @@ def main():
                 + '</select></label>'
                 + ''.join(f'<label>Field {i}<input name=f{i} value=v{i}></label>' for i in range(24))
                 + '<input type=submit name=go value="Send last"></form>').encode()
+    if args.post_review:
+        args.sheets = 2
+        expected_paths = ['/', '/sheet0.css', '/sheet1.css']
+        page = b'<!doctype html><title>POST gate</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>POST gate</h1><form method=post action=/never-send><label>Note<input name=note value=original></label><input type=submit value=Send></form>'
     peak_rss_kib = 0
     monitoring = True
 
@@ -224,13 +238,17 @@ def main():
         def log_message(self, *_args):
             pass
 
+        def do_POST(self):
+            requests.append({'path': self.path, 'method': 'POST', 'authorization': self.headers.get('Authorization')})
+            self.send_error(405)
+
         def do_GET(self):
             requests.append({'path': self.path, 'authorization': self.headers.get('Authorization'),
                              'accept': self.headers.get('Accept')})
             body = page if self.path == ('/target' if args.via_link else '/') else None
             if args.via_link and self.path=='/':
                 body=b'<!doctype html><title>Fixture index</title><h1>Fixture index</h1><a href=/target>Open styled page</a>'
-            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form):
+            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form or args.post_review):
                 body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
                 i = int(self.path[6:-4])
@@ -269,7 +287,7 @@ def main():
         if args.via_link:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id links\ntap-id link-0\n'
             expected_paths.append('/target')
-        if args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form:
+        if args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form or args.post_review:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
                          'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
@@ -298,7 +316,7 @@ def main():
         app_status = result['status']
         result['app_status'] = app_status
         result['status'] = 'unverified' if app_status == 'pass' else app_status
-        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges, choices=args.choices, paged_form=args.paged_form, profile=args.profile)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges, choices=args.choices, paged_form=args.paged_form, post_review=args.post_review, profile=args.profile)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
         assert app_status == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
@@ -316,8 +334,10 @@ def main():
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
         result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        if args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form:
-            if args.paged_form:
+        if args.sphinx or args.textarea or args.form_edges or args.choices or args.paged_form or args.post_review:
+            if args.post_review:
+                assert Counter(r['path'] for r in requests) == Counter(expected_paths), requests
+            elif args.paged_form:
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
                              for r in requests if r['path'].startswith('/search.html?')]
                 expected = {'item': ['29'], **{f'f{i}': [f'v{i}'] for i in range(24)}, 'go': ['Send last']}
@@ -336,10 +356,11 @@ def main():
             else:
                 assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
             submissions = [r['path'] for r in requests if r['path'].startswith('/search.html?')]
-            assert len(submissions) == 1, requests
+            assert len(submissions) == (0 if args.post_review else 1), requests
             assert Counter(r['path'] for r in requests) == Counter(expected_paths + submissions), requests
         else:
             assert sorted(r['path'] for r in requests) == sorted(expected_paths), requests
+        assert not any(r.get('method') == 'POST' for r in requests), requests
         assert all(r['authorization'] is None for r in requests), requests
         result['status'] = 'pass'
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
