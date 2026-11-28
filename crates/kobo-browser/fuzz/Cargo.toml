@@ -58,3 +58,6 @@ path = "fuzz_targets/sniff_body.rs"
 test = false
 doc = false
 bench = false
+
+[patch.crates-io]
+fontdue = { path = "../../../vendor/fontdue" }

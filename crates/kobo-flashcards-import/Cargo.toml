@@ -39,3 +39,6 @@ pedantic = "warn"
 
 [workspace]
 resolver = "2"
+
+[patch.crates-io]
+fontdue = { path = "../../vendor/fontdue" }

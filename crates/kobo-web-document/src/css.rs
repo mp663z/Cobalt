@@ -3107,9 +3107,9 @@ impl Simple {
         }
         if self.tag.as_ref().is_some_and(|tag| {
             if self.ext {
-                !name.local.as_ref().eq_ignore_ascii_case(tag)
+                !AsRef::<str>::as_ref(&name.local).eq_ignore_ascii_case(tag)
             } else {
-                name.local.as_ref() != tag
+                AsRef::<str>::as_ref(&name.local) != tag
             }
         }) {
             return false;
@@ -3204,7 +3204,7 @@ fn tag_is(nodes: &[Node], handle: Handle, names: &[&str]) -> bool {
     match &nodes[handle].data {
         Data::Element { name, .. } => names
             .iter()
-            .any(|t| name.local.as_ref().eq_ignore_ascii_case(t)),
+            .any(|t| AsRef::<str>::as_ref(&name.local).eq_ignore_ascii_case(t)),
         _ => false,
     }
 }

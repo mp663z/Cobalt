@@ -11,7 +11,7 @@ description = "Untrusted HTML into a small, bounded document model for an e-ink 
 # The HTML5 tree builder Servo uses. Malformed markup is the normal case on
 # the web, and recovering from it the way browsers do is the hard part of a
 # parser. Measured on armv7 in the browser measurement spike before adoption.
-html5ever = "=0.39.0"
+html5ever = "=0.40.0"
 unicode-bidi = "=0.3.18"
 unicode-bidi-mirroring = "=0.4.0"
 

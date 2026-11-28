@@ -9,11 +9,14 @@ publish = false
 [dependencies]
 kobo-sdk = { path = "../../crates/kobo-sdk" }
 kobo-doc = { path = "../../crates/kobo-doc" }
-html5ever = "=0.39.0"
-markup5ever_rcdom = "0.39.0"
+html5ever = "=0.40.0"
+markup5ever_rcdom = "0.40.0"
 
 [profile.release]
 codegen-units = 1
 lto = "thin"
 panic = "abort"
 strip = "symbols"
+
+[patch.crates-io]
+fontdue = { path = "../../vendor/fontdue" }

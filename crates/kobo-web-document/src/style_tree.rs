@@ -719,7 +719,7 @@ impl StyleTree {
                             &nodes[handle].data,
                             Data::Element { name, .. }
                                 if matches!(
-                                    name.local.as_ref(),
+                                    AsRef::<str>::as_ref(&name.local),
                                     "div" | "section" | "article" | "header" | "footer" | "main"
                                         | "nav" | "aside" | "blockquote" | "figure"
                                 )
@@ -731,7 +731,7 @@ impl StyleTree {
                         || (true
                             && matches!(
                                 &nodes[handle].data,
-                                Data::Element { name, .. } if name.local.as_ref() == "span"
+                                Data::Element { name, .. } if AsRef::<str>::as_ref(&name.local) == "span"
                             ));
                         let block_allowed = matches!(
                             &nodes[handle].data,
@@ -877,8 +877,8 @@ impl StyleTree {
             // still win by origin): underline is refused by the paint-tree gate unless an author turns it off with
             // `text-decoration: none` (admitted below). `s`/`strike`/`del` get an unpainted decoration below; so do `abbr[title]`/`acronym[title]` (dotted underline); `mark` gets its UA yellow background/black text above. Default entry unchanged.
             if ext_selectors
-                && (matches!(name.local.as_ref(), "s" | "strike" | "del")
-                    || (matches!(name.local.as_ref(), "abbr" | "acronym")
+                && (matches!(AsRef::<str>::as_ref(&name.local), "s" | "strike" | "del")
+                    || (matches!(AsRef::<str>::as_ref(&name.local), "abbr" | "acronym")
                         && css::attribute(nodes, handle, "title").is_some()))
             {
                 // UA line-through (s/strike/del) and dotted underline (abbr/acronym with title): unpainted, so the page
@@ -893,7 +893,7 @@ impl StyleTree {
                 });
             }
             // `mark`: Chrome 156 (unforced, light scheme) computes background rgb(255,255,0) and color rgb(0,0,0).
-            if ext_selectors && name.local.as_ref() == "mark" {
+            if ext_selectors && AsRef::<str>::as_ref(&name.local) == "mark" {
                 for (property, value) in [
                     (
                         Property::BackgroundColor,
@@ -912,8 +912,8 @@ impl StyleTree {
                 }
             }
             if ext_selectors
-                && (matches!(name.local.as_ref(), "u" | "ins")
-                    || (name.local.as_ref() == "a"
+                && (matches!(AsRef::<str>::as_ref(&name.local), "u" | "ins")
+                    || (AsRef::<str>::as_ref(&name.local) == "a"
                         && css::attribute(nodes, handle, "href").is_some()))
             {
                 declarations.push(Declaration {
@@ -924,7 +924,7 @@ impl StyleTree {
                     specificity: (0, 0, 0),
                     source_order: 0,
                 });
-                if name.local.as_ref() == "a" {
+                if AsRef::<str>::as_ref(&name.local) == "a" {
                     declarations.push(Declaration {
                         property: Property::Color,
                         value: Value::Color(0x00_00_ee),
@@ -935,7 +935,7 @@ impl StyleTree {
                     });
                 }
             }
-            if matches!(name.local.as_ref(), "ul" | "ol") {
+            if matches!(AsRef::<str>::as_ref(&name.local), "ul" | "ol") {
                 // The HTML user-agent sheet declares list-style-type on ul/ol (disc, circle for nested
                 // ul, decimal), so an AUTHOR `none` on an ancestor (body, div) does not reach their li
                 // children. Every UA value is the unmodelled default marker (`ListStyleNone(false)`).
@@ -956,7 +956,7 @@ impl StyleTree {
             // a computed RTL ul/ol is refused below (mirroring dd). Admission-by-supply: the required-props audit
             // drops its ul/ol arm in the same gated change, so ul/ol join the dl/dt/dd wildcard class. List markers
             // (disc/decimal) stay unmodelled (the ListStyleType supply above is unchanged); no paint/readiness scope.
-            if ext_selectors && matches!(name.local.as_ref(), "ul" | "ol") {
+            if ext_selectors && matches!(AsRef::<str>::as_ref(&name.local), "ul" | "ol") {
                 let mut list_ancestor = false;
                 let mut up = parent;
                 while let Some(i) = up {
@@ -990,7 +990,7 @@ impl StyleTree {
                     source_order: 0,
                 });
             }
-            if name.local.as_ref() == "p" {
+            if AsRef::<str>::as_ref(&name.local) == "p" {
                 // The HTML user-agent sheet gives paragraphs 1em vertical
                 // margins; the cascade resolves the em against each
                 // paragraph's own computed font size.
@@ -1009,7 +1009,7 @@ impl StyleTree {
             // are bold, em/i are italic. Only weight 400/700 has a real
             // face pair downstream; italic is computed, then refused by the
             // restricted painter rather than rendered upright.
-            if matches!(name.local.as_ref(), "strong" | "b") {
+            if matches!(AsRef::<str>::as_ref(&name.local), "strong" | "b") {
                 declarations.push(Declaration {
                     property: Property::FontWeight,
                     value: Value::FontWeight(700),
@@ -1019,7 +1019,7 @@ impl StyleTree {
                     source_order: 0,
                 });
             }
-            if matches!(name.local.as_ref(), "em" | "i") {
+            if matches!(AsRef::<str>::as_ref(&name.local), "em" | "i") {
                 declarations.push(Declaration {
                     property: Property::FontStyle,
                     value: Value::FontStyle(FontStyle::Italic),
@@ -1035,7 +1035,7 @@ impl StyleTree {
             // The dd 40px is physical margin-left, valid only for horizontal-tb + ltr: a computed RTL dd is refused below, and
             // non-horizontal-tb writing modes / `dir` attributes are refused by their existing paths. The required-props
             // audit below is deliberately UNCHANGED in this batch (these declarations are UserAgent origin and cannot satisfy it).
-            if ext_selectors && name.local.as_ref() == "dl" {
+            if ext_selectors && AsRef::<str>::as_ref(&name.local) == "dl" {
                 let mut list_ancestor = false;
                 let mut up = parent;
                 while let Some(i) = up {
@@ -1061,7 +1061,7 @@ impl StyleTree {
                     }
                 }
             }
-            if ext_selectors && name.local.as_ref() == "dd" {
+            if ext_selectors && AsRef::<str>::as_ref(&name.local) == "dd" {
                 declarations.push(Declaration {
                     property: Property::MarginLeft,
                     value: Value::Margin(Margin::Px(40)),
@@ -1071,7 +1071,7 @@ impl StyleTree {
                     source_order: 0,
                 });
             }
-            if name.local.as_ref() == "body" {
+            if AsRef::<str>::as_ref(&name.local) == "body" {
                 // The HTML user-agent sheet gives the body an 8px margin on
                 // every side (Chrome, Firefox and WebKit all agree).
                 for property in [
@@ -1189,7 +1189,7 @@ impl StyleTree {
             // (audit runs AFTER var() substitution so var-resolved declarations are the ones inspected.
             // A var resolving to `revert` never reaches here (refused upstream by classify, page unsupported).)
             if ext_selectors {
-                let required: Option<&[Property]> = match name.local.as_ref() {
+                let required: Option<&[Property]> = match AsRef::<str>::as_ref(&name.local) {
                     "h1" | "h2" | "h3" | "h5" | "h6" => Some(&[
                         Property::FontSize,
                         Property::FontWeight,
@@ -1247,7 +1247,7 @@ impl StyleTree {
                 }
             }
             let rem_refused = normalize_rem(&mut declarations, root_font_px);
-            if name.local.as_ref() == "pre" {
+            if AsRef::<str>::as_ref(&name.local) == "pre" {
                 declarations.insert(
                     0,
                     Declaration {
@@ -1271,7 +1271,7 @@ impl StyleTree {
             // non-initial value is refused rather than guessed.
             let refused = rem_refused
                 || (ext_selectors
-                    && matches!(name.local.as_ref(), "dd" | "ul" | "ol")
+                    && matches!(AsRef::<str>::as_ref(&name.local), "dd" | "ul" | "ol")
                     && style.direction == crate::computed_style::Direction::Rtl)
                 || style.positioned.content != crate::computed_style::Content::Normal
                 || style.line_height == Some(0)
@@ -1293,7 +1293,7 @@ impl StyleTree {
             // ignored (Chrome oracle private-evidence ul1/at65 w01/w08/w15: the box painted although Chrome hides it, or a child sat at
             // the wrong side). `hidden` (any value but `until-found`, which only sets content-visibility) and `popover` are display:none
             // in the UA sheet; `dir` other than `ltr` sets `direction`. This build models none of them, so the page refuses (all entries).
-            let attr_refused = attrs.iter().any(|(attr, value)| match attr.as_ref() {
+            let attr_refused = attrs.iter().any(|(attr, value)| match AsRef::<str>::as_ref(&attr) {
                 "hidden" => !value.trim().eq_ignore_ascii_case("until-found"),
                 "popover" => true,
                 "dir" => !value.trim().eq_ignore_ascii_case("ltr"),
@@ -1305,7 +1305,7 @@ impl StyleTree {
                 "align" => true,
                 "bgcolor" | "background" | "text" | "link" | "vlink" | "alink" | "leftmargin"
                 | "rightmargin" | "topmargin" | "bottommargin" | "marginwidth" | "marginheight" => {
-                    name.local.as_ref() == "body"
+                    AsRef::<str>::as_ref(&name.local) == "body"
                 }
                 _ => false,
             });
@@ -1319,35 +1319,35 @@ impl StyleTree {
             }
             tree.nodes.push(StyledNode {
                 inline_phrase: matches!(
-                    name.local.as_ref(),
+                    AsRef::<str>::as_ref(&name.local),
                     "span" | "b" | "strong" | "em" | "i" | "code" | "a"
                 ) && attrs.iter().all(|(attr, _)| {
-                    matches!(attr.as_ref(), "id" | "class" | "style" | "title")
-                        || (name.local.as_ref() == "a" && attr.as_ref() == "href")
+                    matches!(AsRef::<str>::as_ref(&attr), "id" | "class" | "style" | "title")
+                        || (AsRef::<str>::as_ref(&name.local) == "a" && AsRef::<str>::as_ref(&attr) == "href")
                 }),
                 // Legacy direct single-text inline shapes ignored inert attrs.
                 // Keep that contract except event/editing behavior deliberately
                 // excluded from this picture-only proposal. New nested shapes
                 // still require the strict inline_phrase allowlist above.
                 inline_attributes: attrs.iter().all(|(attr, _)| {
-                    !attr.as_ref().starts_with("on") && attr.as_ref() != "contenteditable"
+                    !AsRef::<str>::as_ref(&attr).starts_with("on") && AsRef::<str>::as_ref(&attr) != "contenteditable"
                 }),
                 parent,
                 children: Vec::new(),
                 tag: name.local.to_string(),
-                href: if name.local.as_ref() == "a" {
+                href: if AsRef::<str>::as_ref(&name.local) == "a" {
                     attrs
                         .iter()
-                        .find(|(attr, _)| attr.as_ref() == "href")
+                        .find(|(attr, _)| AsRef::<str>::as_ref(&attr) == "href")
                         .map(|(_, value)| value.clone())
                 } else {
                     None
                 },
-                image: if name.local.as_ref() == "img" {
+                image: if AsRef::<str>::as_ref(&name.local) == "img" {
                     let attr = |key: &str| {
                         attrs
                             .iter()
-                            .find(|(attr, _)| attr.as_ref() == key)
+                            .find(|(attr, _)| AsRef::<str>::as_ref(&attr) == key)
                             .map(|(_, value)| value.clone())
                     };
                     let dim = |key: &str| attr(key).and_then(|v| v.parse::<u32>().ok());
@@ -1364,7 +1364,7 @@ impl StyleTree {
                     let span = |key: &str| {
                         attrs
                             .iter()
-                            .find(|(attr, _)| attr.as_ref() == key)
+                            .find(|(attr, _)| AsRef::<str>::as_ref(&attr) == key)
                             .and_then(|(_, value)| value.parse::<u32>().ok())
                             .unwrap_or(1)
                     };
@@ -3587,7 +3587,7 @@ mod tests {
             let Some(handle) = source else {continue};
             match &nodes[*handle].data {
                 Data::Text(text)=>assert_eq!(styled.text.as_deref(),Some(text.as_str())),
-                Data::Element{name,..}=>assert_eq!(styled.tag,name.local.as_ref()),
+                Data::Element{name,..}=>assert_eq!(styled.tag,AsRef::<str>::as_ref(&name.local)),
                 _=>panic!("retained style source must be element or text"),
             }
         }

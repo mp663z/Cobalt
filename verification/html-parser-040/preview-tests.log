@@ -1,0 +1,257 @@
+warning: function `draw_fallback_text` is never used
+     --> /home/sandbox/cb/measure-basic/crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+warning: unused import: `html5ever::tendril::TendrilSink`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3978:9
+     |
+3978 |     use html5ever::tendril::TendrilSink;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused attribute
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2711:5
+     |
+2711 |     #[must_use]
+     |     ^^^^^^^^^^^ help: remove this attribute
+     |
+note: attribute also specified here
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2706:5
+     |
+2706 |     #[must_use]
+     |     ^^^^^^^^^^^
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: `#[warn(unused_attributes)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:199:13
+    |
+199 |         let mut margin = |s: &mut Self, m: Margin| -> Option<i64> {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `node`
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:1064:13
+     |
+1064 |         let node = &self.tree.boxes[index];
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_node`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/basic_page.rs:704:25
+    |
+704 |                     let mut measurable = true;
+    |                         ----^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: method `flex_units_shadow` is never used
+   --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:820:8
+    |
+596 | impl BoxTree {
+    | ------------ method in this implementation
+...
+820 |     fn flex_units_shadow(&self, container: usize, content_width: u32, legacy: &Option<Vec<i64>>) {
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: methods `paint_structure_valid` and `paint_structure_valid_with` are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/box_tree.rs:2599:19
+     |
+2317 | impl BoxTree {
+     | ------------ methods in this implementation
+...
+2599 |     pub(crate) fn paint_structure_valid(&self, limit: usize) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+2606 |     pub(crate) fn paint_structure_valid_with(&self, limit: usize, allow_float_kernel: bool) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:1762:19
+     |
+1757 | impl Selector {
+     | ------------- methods in this implementation
+...
+1762 |     pub(crate) fn matches_checked(&self, nodes: &[Node], handle: Handle) -> Option<bool> {
+     |                   ^^^^^^^^^^^^^^^
+...
+1765 |     pub(crate) fn matches_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1780 |     pub(crate) fn matches_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |     pub(crate) fn matches_checked_target(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+1829 |     fn has_context_wrapper(&self) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^
+...
+1844 |     fn raw_dependencies_satisfied(&self, target: Option<Option<Handle>>) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1914 |     pub(crate) fn matches_originating_checked(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1922 |     pub(crate) fn matches_originating_checked_scoped(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1930 |     pub(crate) fn matches_originating_checked_scoped_budget(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1965 |     pub(crate) fn is_extended(&self) -> bool {
+     |                   ^^^^^^^^^^^
+
+warning: function `preorder` is never used
+    --> /home/sandbox/cb/measure-basic/crates/kobo-web-document/src/css.rs:3979:8
+     |
+3979 |     fn preorder(nodes: &[Node], at: Handle, out: &mut Vec<Handle>) {
+     |        ^^^^^^^^
+
+warning: `kobo-web-document` (lib) generated 9 warnings (run `cargo fix --lib -p kobo-web-document` to apply 4 suggestions)
+   Compiling cobalt-text-preview v0.1.0 (/home/sandbox/cb/measure-basic/tools/cobalt-text-preview)
+warning: unused variable: `ssize`
+   --> examples/fl_engine_path_color.rs:101:21
+    |
+101 |                 let ssize = bt.boxes[sib].style.font_size;
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_ssize`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: `cobalt-text-preview` (example "fl_engine_path_color") generated 1 warning
+warning: unused import: `FontProvider`
+ --> examples/fl_probe_unsupported.rs:2:86
+  |
+2 | use kobo_web_document::{box_tree::BoxTree, css_text_page::{paint_direct_text_blocks, FontProvider}, parse_style_tree_with_inline_sheets_a...
+  |                                                                                      ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `cobalt-text-preview` (example "fl_probe_unsupported") generated 1 warning (run `cargo fix --example "fl_probe_unsupported"` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.14s
+     Running unittests src/lib.rs (tools/cobalt-text-preview/target/debug/deps/cobalt_text_preview-488becb4bd0b54e6)
+
+running 32 tests
+test core_tests::bearing_overhang_at_page_origin_renders_without_dropping_ink ... ok
+test core_tests::bottom_edge_bearing_overhang_clips_at_the_last_row ... ok
+test core_tests::explicit_bundled_source_has_notice_and_consistent_size_metrics ... ok
+test core_tests::multiline_overflow_still_refuses_handoff ... ok
+test core_tests::negative_text_origin_still_refuses_handoff ... ok
+test core_tests::one_pixel_layout_overflow_still_refuses_handoff ... ok
+test core_tests::pure_core_prepares_device_face_without_sdk_dependencies ... ok
+test core_tests::right_edge_bearing_overhang_clips_at_the_last_column ... ok
+test core_tests::room_budget_refuses_before_font_and_frame_accessors_preserve_validation ... ok
+test core_tests::static_capture_renders_links_inert_while_prepare_still_refuses ... ok
+test lazy_bold_tests::in_place_compaction_is_byte_equivalent_for_all_channels_and_identities ... ok
+test lazy_bold_tests::in_place_compaction_rejects_exactly_like_the_borrowing_path ... ok
+test lazy_bold_tests::unused_bold_loader_is_never_called_and_failure_is_cached ... ok
+test media_width_wiring::colour_scheme_input_is_actual_and_absent_keeps_legacy_unknown ... ok
+test media_width_wiring::page_media_queries_see_the_same_width_the_page_is_prepared_with ... ok
+test media_width_wiring::underline_path_parses_text_decoration_and_every_other_path_does_not ... ok
+test nested_interaction_guard_tests::nested_link_never_bypasses_shipping_interaction_guard ... ok
+test normal_constructor_tests::byte_constructor_activates_only_sampled_sizes_and_keeps_explicit_css_legacy ... ok
+test normal_constructor_tests::typo_face_keeps_legacy_contract_and_explicit_css_byte_identity ... ok
+test normal_metrics::tests::bounded_metadata_and_components_are_checked ... ok
+test normal_metrics::tests::paired_eligibility_and_disagreement_are_all_or_nothing ... ok
+test tests::bundled_device_face_paints_into_both_panel_commands ... ok
+test tests::complete_page_preserves_scoped_styles_and_rejects_input_truncation ... ok
+test tests::complete_page_queue_refuses_without_partial_commands ... ok
+test tests::interaction_and_overflow_refuse_without_partial_queue ... ok
+test tests::invalid_panel_metrics_refuse_before_layout_arithmetic ... ok
+test tests::invalid_surfaces_and_fonts_refuse_without_a_picture ... ok
+test tests::native_room_preserves_controls_across_panels_and_refuses_accessibility_mismatch ... ok
+test tests::rgb_and_unknown_identity_use_existing_sdk_picture_commands ... ok
+test tests::slot_rejection_keeps_old_ownership_until_explicit_fallback_clear ... ok
+test tests::slot_replacement_queues_new_before_dropping_old_and_clear_is_idempotent ... ok
+test basic_preview::tests::page_provider_keeps_bold_and_uses_coverage_fallback ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running unittests src/bin/basic-page.rs (tools/cobalt-text-preview/target/debug/deps/basic_page-e0b3dc14576dc451)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (tools/cobalt-text-preview/target/debug/deps/cobalt_text_preview-1027b5e7f7f48645)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/basic_corpus.rs (tools/cobalt-text-preview/target/debug/deps/basic_corpus-ff8d38f7be9bb376)
+
+running 5 tests
+test cli_checks_missing_arguments_and_stylesheet_gaps ... ok
+test language_fixtures_keep_text_and_report_missing_coverage ... ok
+test measured_canvas_background_covers_later_strips ... ok
+test strip_output_is_opaque_and_has_exact_dimensions ... ok
+test frozen_pages_keep_their_reviewed_census_and_height ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.92s
+
+     Running tests/charset_media.rs (tools/cobalt-text-preview/target/debug/deps/charset_media-9062f01cc6a10008)
+
+running 2 tests
+test unsupported_conditions_and_interaction_still_fail_whole_page ... ok
+test leading_charset_screen_media_matches_flat_preview ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/cli_scheme.rs (tools/cobalt-text-preview/target/debug/deps/cli_scheme-4752750d9f798d37)
+
+running 2 tests
+test scheme_without_blocks_is_rejected_not_ignored ... ok
+test dark_is_accepted_with_operator_warning_and_light_paints ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/odd_leading.rs (tools/cobalt-text-preview/target/debug/deps/odd_leading-0ea5639156d16da5)
+
+running 1 test
+test legacy_provider_still_refuses_odd_leading_and_admits_even ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/static_gate_probe.rs (tools/cobalt-text-preview/target/debug/deps/static_gate_probe-ea583d2d8bf978ad)
+
+running 1 test
+test report_real_page_paint_gates ... ignored, requires the private frozen corpus under /downloads/cobalt-real-corpus
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/uniform_family_entry.rs (tools/cobalt-text-preview/target/debug/deps/uniform_family_entry-83bbeb32936d790f)
+
+running 4 tests
+test catalog_mismatch_and_mixed_families_refuse_through_the_entry ... ok
+test entry_refuses_what_the_parts_refuse ... ok
+test media_width_is_the_layout_width ... ok
+test entry_equals_ordinary_masked_render_of_the_same_page_without_the_family ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/wrapper_structure.rs (tools/cobalt-text-preview/target/debug/deps/wrapper_structure-e3edb8e161e3ba0d)
+
+running 1 test
+test normalized_structure_does_not_admit_anonymous_text_or_lists_or_interaction ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests cobalt_text_preview
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
