@@ -463,6 +463,14 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let style = crate::basic_text_paint::Style {
             size,
             line_height: match node.style.used_line_height(size + 4) {
+                // A percent or em length whose product is not a whole pixel
+                // (1.45em x 15px = 21.75px) computes to `Some(0)`, which also
+                // fell back to the natural height. Same rounding, own counter.
+                Some(0) if node.style.line_height_centipx.is_some() => {
+                    let centi = node.style.line_height_centipx.unwrap_or(0);
+                    self.stats.approx("line-height-length-rounded");
+                    (centi.saturating_add(50) / 100).max(1)
+                }
                 Some(height) => height,
                 // A unitless multiplier whose product is not a whole pixel
                 // (1.6 x 14px = 22.4px) used to fall back to the natural

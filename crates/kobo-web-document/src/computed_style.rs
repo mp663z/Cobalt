@@ -605,6 +605,10 @@ pub struct Computed {
     pub line_height_number: Option<u32>,
     /// CANDIDATE (ext entry only): see `Value::LineHeightPrecise`. Mutually exclusive with `line_height`/`line_height_number`.
     pub line_height_precise: Option<u32>,
+    /// Page-view only: a percent or em line-height whose computed length is not a whole pixel, in hundredths of a
+    /// pixel. `line_height` stays `Some(0)` so every exact-geometry gate still refuses it; the Basic page painter rounds
+    /// this to the nearest whole pixel and counts it.
+    pub line_height_centipx: Option<u32>,
     /// Transparent unless explicitly painted; unlike foreground color, not inherited.
     pub background_color: Option<u32>,
     /// Keep the computed keyword until this element's used color is known.
@@ -663,6 +667,7 @@ impl Computed {
         line_height: None,
         line_height_number: None,
             line_height_precise: None,
+            line_height_centipx: None,
         background_color: None,
         background_current_color: false,
         padding_left: 0,
@@ -768,6 +773,7 @@ impl Computed {
             line_height: parent.unwrap_or(initial).line_height,
             line_height_number: parent.unwrap_or(initial).line_height_number,
             line_height_precise: parent.unwrap_or(initial).line_height_precise,
+            line_height_centipx: parent.unwrap_or(initial).line_height_centipx,
             background_color: initial.background_color,
             background_current_color: false,
             padding_left: initial.padding_left,
@@ -1042,21 +1048,35 @@ impl Computed {
                     );
                     computed.line_height_number = None;
                     computed.line_height_precise = None;
+                    // fs * percent / 10_000 px, in hundredths of a pixel.
+                    computed.line_height_centipx = match (product, computed.line_height) {
+                        (Some(p), Some(0)) => Some(p / 100),
+                        _ => None,
+                    };
                 }
                 Value::LineHeightNumber(number) if property == Property::LineHeight => {
                     computed.line_height = None;
                     computed.line_height_number = Some(number);
                     computed.line_height_precise = None;
+                    computed.line_height_centipx = None;
                 }
                 Value::LineHeightPrecise(number) if property == Property::LineHeight => {
                     computed.line_height = None;
                     computed.line_height_number = None;
                     computed.line_height_precise = Some(number);
+                    computed.line_height_centipx = None;
                 }
                 Value::LineHeight(px) if property == Property::LineHeight => {
                     computed.line_height = px;
                     computed.line_height_number = None;
                     computed.line_height_precise = None;
+                    // `Some(0)` only arises from inheriting an unrepresentable fractional length, whose
+                    // exact size the parent carries.
+                    computed.line_height_centipx = if px == Some(0) {
+                        parent.unwrap_or(initial).line_height_centipx
+                    } else {
+                        None
+                    };
                 }
                 Value::BackgroundCurrentColor if property == Property::BackgroundColor => {
                     computed.background_color = None;
@@ -1408,6 +1428,7 @@ mod tests {
             line_height: None,
             line_height_number: None,
             line_height_precise: None,
+            line_height_centipx: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -1459,6 +1480,7 @@ mod tests {
                 line_height: None,
                 line_height_number: None,
             line_height_precise: None,
+            line_height_centipx: None,
                 background_color: None,
                 background_current_color: false,
                 padding_left: 0,
@@ -1617,6 +1639,7 @@ mod tests {
             line_height: None,
             line_height_number: None,
             line_height_precise: None,
+            line_height_centipx: None,
             background_color: None,
             background_current_color: false,
             padding_left: 0,
@@ -1677,6 +1700,7 @@ mod tests {
                     line_height: None,
                     line_height_number: None,
             line_height_precise: None,
+            line_height_centipx: None,
                     background_color: None,
                     background_current_color: false,
                     padding_left: 0,

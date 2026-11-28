@@ -51,3 +51,34 @@ fn normal_and_zero_adjacent_forms_keep_the_natural_height() {
     let (h, s) = paint("normal", 4);
     assert_eq!((h, rounded(&s)), (96, 0));
 }
+fn length_rounded(stats: &PartialStats) -> usize {
+    stats.approximations.get("line-height-length-rounded").copied().unwrap_or(0)
+}
+#[test]
+fn whole_pixel_percent_and_em_lengths_are_exact_and_uncounted() {
+    for lh in ["150%", "1.5em", "30px"] {
+        let (h, s) = paint(lh, 4);
+        assert_eq!((h, length_rounded(&s), rounded(&s)), (120, 0, 0), "{lh}");
+    }
+}
+#[test]
+fn fractional_percent_and_em_lengths_round_to_the_nearest_pixel_and_count_per_block() {
+    let (h, s) = paint("157%", 4); // 31.4px
+    assert_eq!((h, length_rounded(&s), rounded(&s)), (124, 4, 0));
+    let (h, s) = paint("1.58em", 4); // 31.6px
+    assert_eq!((h, length_rounded(&s)), (128, 4));
+    let (h, s) = paint("1.62em", 2); // 32.4px
+    assert_eq!((h, length_rounded(&s)), (64, 2));
+    let (h, s) = paint("1.12em", 2); // 22.4px rounds to 22, then the 24px natural floor applies
+    assert_eq!((h, length_rounded(&s)), (48, 2));
+}
+#[test]
+fn an_inherited_fractional_length_keeps_its_computed_size() {
+    // The child inherits the parent's computed 31.4px, not 157% of its own 10px size.
+    let html = "<!doctype html><style>body{margin:0;font-size:20px}div{line-height:157%}p{margin:0;font-size:10px}</style><div><p>x</p><p>x</p></div>";
+    let styled = kobo_web_document::parse_style_tree_with_inline_sheets_and_selectors(
+        html.as_bytes(), &[], &Limits::DEFAULT, None, SupplyBudget::CANONICAL,
+    );
+    let (_, stats, height) = paint_basic_page(&BoxTree::from_style(&styled), 300, 500, &Face).unwrap();
+    assert_eq!((height, length_rounded(&stats)), (62, 2));
+}
