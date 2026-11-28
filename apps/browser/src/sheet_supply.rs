@@ -87,6 +87,7 @@ impl SheetSupply {
         self.settled.as_ref()
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn in_flight(&self) -> usize {
         self.by_task.len()

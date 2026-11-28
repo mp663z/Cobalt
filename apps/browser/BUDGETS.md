@@ -1702,3 +1702,11 @@ measurements, not hardware timing. Ten painted regressions, three live sheet
 checks and supplied-count regression pass. ARM release 5,307,180 B. Full TLS
 Sphinx journey still stays native at current colour width, investigation open;
 native GET search q=cobalt did reach fixture and result pixels checked.
+
+Actual Sphinx app TLS fixture (--sphinx): frozen Python Introduction, 3 light
+sheets fetched, dark sheets excluded, changed native-to-authored painted frame,
+More > Forms edits q=cobalt then GET reaches fixture search result. App pixels
+inspected. Two fresh completed runs; an earlier unchanged-frame observation
+motivated a short callback-delivery settle before idle/screenshots. Changed hash
+is still mandatory. Static controls remain previews, edit through Forms. Probe
+is debug loopback TLS only, not public-site connectivity/hardware qualification.

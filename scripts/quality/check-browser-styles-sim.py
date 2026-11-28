@@ -10,6 +10,7 @@ import http.server
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import ssl
 import subprocess
@@ -33,6 +34,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
     out = args.output.resolve()
@@ -47,6 +49,26 @@ def main():
             + '<link rel=stylesheet media="(prefers-color-scheme: dark)" href=/dark.css>'
               '<h1>External stylesheet journey</h1><p>Readable before delayed styles.</p>'
               '<a href=/next>Next page</a>').encode()
+    fixture_sheets = None
+    expected_paths = ['/'] + [f'/sheet{i}.css' for i in range(args.sheets)]
+    if args.sphinx:
+        frozen = ROOT / 'tools/cobalt-text-preview/corpus/python-introduction'
+        fixture_sheets = sorted(frozen.glob('sheet-*.css'))
+        html = (frozen / 'page.html').read_text()
+        sheet_index = 0
+        expected_paths = ['/']
+        def local_sheet(match):
+            nonlocal sheet_index
+            tag = match.group(0)
+            if not re.search(r'rel=[\"\']stylesheet[\"\']', tag, re.I):
+                return tag
+            index = sheet_index
+            sheet_index += 1
+            if 'prefers-color-scheme: dark' not in tag:
+                expected_paths.append(f'/sheet{index}.css')
+            return re.sub(r'href=[\"\'][^\"\']*[\"\']', f'href="/sheet{index}.css"', tag)
+        page = re.sub(r'<link\b[^>]*>', local_sheet, html, flags=re.I).encode()
+        assert sheet_index == len(fixture_sheets)
     peak_rss_kib = 0
     monitoring = True
 
@@ -73,9 +95,11 @@ def main():
             requests.append({'path': self.path, 'authorization': self.headers.get('Authorization'),
                              'accept': self.headers.get('Accept')})
             body = page if self.path == '/' else None
+            if self.path.startswith('/search.html?') and args.sphinx:
+                body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
                 i = int(self.path[6:-4])
-                body = (b'h1{color:red;font-size:36px}' if i == 0 else
+                body = fixture_sheets[i].read_bytes() if fixture_sheets else (b'h1{color:red;font-size:36px}' if i == 0 else
                         b'p{color:blue;margin-top:70px}' if i == 1 else
                         f'h1{{margin-bottom:{i}px}}'.encode())
             if self.path.endswith('.css'):
@@ -84,7 +108,7 @@ def main():
                 self.send_error(404)
                 return
             self.send_response(200)
-            self.send_header('Content-Type', 'text/css' if self.path.endswith('.css') else 'text/html')
+            self.send_header('Content-Type', 'text/css' if self.path.endswith('.css') else 'text/html; charset=utf-8')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -107,11 +131,17 @@ def main():
                    'tap-id kb.enter\nwait-for styles.example.test\n' if args.typed_address else
                    'wait-for Search the web\ntap-id samples\ntap-id browser-more\n'
                    'tap-id go-home\nwait-for styles.example.test\n')
+        if args.sphinx:
+            opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
-                         'shot-colour before-sheet\nwait-idle 30000\n'
+                         'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
                          'shot-colour after-sheet\ntap-id edit-address\n'
                          'tap-id kb.end\ntap-id kb.r0c0\nshot-colour address-edit\n'
-                         'tap-id kb.cancel\n')
+                         'tap-id kb.cancel\n' + (
+                         'tap-id browser-more\ntap-id forms\nshot-colour form-list\n'
+                         'tap-id form-0\ntap-id field-0\ntype cobalt\ntap-id kb.enter\n'
+                         'shot-colour form-edited\ntap-id submit-field-1\nwait-idle 30000\nshot-colour search-result\n'
+                         if args.sphinx else ''))
         env = dict(os.environ, CARGO_TARGET_DIR=str(target),
                    KOBO_SIM_PROFILE='libra-colour-390',
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
@@ -129,19 +159,28 @@ def main():
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx)
+        (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
+        assert result['status'] == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
         after = json.loads((out / 'browser-shots/after-sheet.json').read_text())
         assert before['frame']['sha256'] != after['frame']['sha256'], 'delayed CSS did not change the frame'
+        result['styled_frame_changed'] = before['frame']['sha256'] != after['frame']['sha256']
         result['peak_app_rss_kib'] = peak_rss_kib
         result['whole_journey_seconds'] = round(time.monotonic() - started, 3)
-        result['sheet_count'] = args.sheets
+        result['sheet_count'] = len(expected_paths)-1
         result['requests'] = requests
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
         result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         assert result['status'] == 'pass', result
-        assert sorted(r['path'] for r in requests) == sorted(['/'] + [f'/sheet{i}.css' for i in range(args.sheets)]), requests
+        if args.sphinx:
+            assert any(r['path'].startswith('/search.html?') and 'cobalt' in r['path'] for r in requests), requests
+            actual_sheets = [r['path'] for r in requests if r['path'].endswith('.css')]
+            assert sorted(actual_sheets) == sorted(expected_paths[1:]), requests
+        else:
+            assert sorted(r['path'] for r in requests) == sorted(expected_paths), requests
         assert all(r['authorization'] is None for r in requests), requests
         print(json.dumps(result, indent=2))
 
