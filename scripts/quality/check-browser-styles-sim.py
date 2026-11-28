@@ -35,14 +35,15 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sheets', type=int, default=5)
     parser.add_argument('--typed-address', action='store_true')
+    parser.add_argument('--choices', action='store_true', help='test native select/radio/checkbox, disabled and hidden controls and explicit submitter')
     parser.add_argument('--form-edges', action='store_true', help='test textarea cancel/Back, readonly controls and number maxlength semantics')
     parser.add_argument('--textarea', action='store_true', help='test multiline edit, maxlength and GET CRLF encoding')
     parser.add_argument('--via-link', action='store_true', help='open target through the native Links list')
     parser.add_argument('--sphinx', action='store_true', help='serve the frozen Python/Sphinx page and test native search from Page view')
     args = parser.parse_args()
     assert 2 <= args.sheets <= 16
-    assert sum((args.sphinx, args.textarea, args.form_edges)) <= 1, 'choose one form fixture'
-    assert not (args.via_link and (args.textarea or args.form_edges)), 'form edge fixtures open directly'
+    assert sum((args.sphinx, args.textarea, args.form_edges, args.choices)) <= 1, 'choose one form fixture'
+    assert not (args.via_link and (args.textarea or args.form_edges or args.choices)), 'form edge fixtures open directly'
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
@@ -85,6 +86,10 @@ def main():
         args.sheets = 2
         expected_paths = ['/', '/sheet0.css', '/sheet1.css']
         page = b'<!doctype html><title>Form edges</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Form edges</h1><form action=/search.html><label>Note<textarea name=note maxlength=12>first</textarea></label><label>Token<input name=token value=fixed readonly></label><label>Memo<textarea name=memo readonly>locked</textarea></label><label>Amount<input type=number name=amount value=4 maxlength=1></label><button>Send</button></form>'
+    if args.choices:
+        args.sheets = 2
+        expected_paths = ['/', '/sheet0.css', '/sheet1.css']
+        page = b'<!doctype html><title>Choice form</title><link rel=stylesheet href=/sheet0.css><link rel=stylesheet href=/sheet1.css><h1>Choice form</h1><form action="/search.html?old=stale#fragment"><input type=hidden name=secret value="a&amp;b"><input disabled name=excluded value=no><label>Colour<select name=colour><option value=red>Red</option><option value=blue>Blue</option></select></label><label><input type=checkbox name=stock checked>Stock</label><label><input type=radio name=size value=small checked>Small</label><label><input type=radio name=size value=large>Large</label><input type=submit name=go value=First><input type=submit name=go value=Second></form>'
     peak_rss_kib = 0
     monitoring = True
 
@@ -113,7 +118,7 @@ def main():
             body = page if self.path == ('/target' if args.via_link else '/') else None
             if args.via_link and self.path=='/':
                 body=b'<!doctype html><title>Fixture index</title><h1>Fixture index</h1><a href=/target>Open styled page</a>'
-            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea or args.form_edges):
+            if self.path.startswith('/search.html?') and (args.sphinx or args.textarea or args.form_edges or args.choices):
                 body = b'<!doctype html><title>Search received</title><h1>Search received</h1><p>Native GET reached the server.</p>'
             if self.path.startswith('/sheet') and self.path.endswith('.css'):
                 i = int(self.path[6:-4])
@@ -152,7 +157,7 @@ def main():
         if args.via_link:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id links\ntap-id link-0\n'
             expected_paths.append('/target')
-        if args.sphinx or args.textarea or args.form_edges:
+        if args.sphinx or args.textarea or args.form_edges or args.choices:
             opening += 'tap-id browser-more\ntap-id navigate\ntap-id page-view\n'
         route.write_text(opening +
                          'shot-colour before-sheet\nwait 1000\nwait-idle 30000\nwait 500\nwait-idle 30000\n'
@@ -181,7 +186,13 @@ def main():
                          'tap-id field-3\ntap ?123\ntype 2\ntap-id kb.enter\n'
                          'shot-colour number-maxlength\ntap-id submit-form\n'
                          'wait-idle 30000\nshot-colour search-result\n'
-                         if args.form_edges else ''))))
+                         if args.form_edges else (
+                         'tap-id browser-more\ntap-id forms\ntap-id form-0\n'
+                         'expect-missing excluded\ntap-id field-1\ntap-id option-1\n'
+                         'tap-id field-2\ntap-id field-3\ntap-id option-1\n'
+                         'shot-colour choice-values\ntap-id submit-field-5\n'
+                         'wait-idle 30000\nshot-colour search-result\n'
+                         if args.choices else '')))))
         env = dict(os.environ, CARGO_TARGET_DIR=str(target),
                    KOBO_SIM_PROFILE='libra-colour-390',
                    KOBO_SIM_HTTP_FIXTURE=f'{HOST}=127.0.0.1:{server.server_port}',
@@ -202,7 +213,7 @@ def main():
         app_status = result['status']
         result['app_status'] = app_status
         result['status'] = 'unverified' if app_status == 'pass' else app_status
-        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges)
+        result.update(peak_app_rss_kib=peak_rss_kib, whole_journey_seconds=round(time.monotonic()-started,3), requests=requests, sphinx=args.sphinx, textarea=args.textarea, form_edges=args.form_edges, choices=args.choices)
         (out / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
         assert app_status == 'pass', result
         before = json.loads((out / 'browser-shots/before-sheet.json').read_text())
@@ -216,12 +227,17 @@ def main():
         result['transport'] = 'real TLS/HTTP, debug-only loopback fixture'
         result['dirty'] = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
         result['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        if args.sphinx or args.textarea or args.form_edges:
+        if args.sphinx or args.textarea or args.form_edges or args.choices:
             if args.form_edges:
                 submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
                              for r in requests if r['path'].startswith('/search.html?')]
                 assert submitted == [{'note': ['first\r\nsaved'], 'token': ['fixed'],
                                       'memo': ['locked'], 'amount': ['42']}], submitted
+            elif args.choices:
+                submitted = [parse_qs(urlsplit(r['path']).query, keep_blank_values=True)
+                             for r in requests if r['path'].startswith('/search.html?')]
+                assert submitted == [{'secret': ['a&b'], 'colour': ['blue'],
+                                      'size': ['large'], 'go': ['Second']}], submitted
             else:
                 assert any(r['path'].startswith('/search.html?') and ('note=first%0D%0Aseconz' in r['path'] if args.textarea else 'cobalt' in r['path']) for r in requests), requests
             actual_sheets = [r['path'] for r in requests if r['path'].endswith('.css')]

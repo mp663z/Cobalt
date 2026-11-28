@@ -1777,3 +1777,9 @@ assertions finish. Deliberate wrong amount expectation exits1 and leaves
 app_status=pass/status=unverified, not a false pass. Sphinx, textarea and combined
 form-edge positive live routes all pass after this change. Imported qualification
 v5 evidence only; d9a8ab95 ARM delta1168B between worker/own env unresolved.
+
+Live choices fixture (--choices --typed-address) passes: native select Blue,
+checkbox Off omitted, radio Large, hidden a&b retained, disabled omitted, explicit
+second submitter only. GET replaces stale action query and drops its fragment.
+Exact parsed query equals secret=a&b/colour=blue/size=large/go=Second. Native
+choices and GET result pixels inspected. Test-only change, ARM unchanged.
