@@ -1692,3 +1692,13 @@ before/after inspected. Rust title centers; Sphinx gets one short top-aligned
 bar, not a full three-bar 24px hamburger. Approximation counters remain.
 ARM release 5,307,372 B. Worker reports full document suite on b61e426e:
 150 binaries, 1425 tests pass, not independently rerun here.
+
+Missing stylesheet early-out: PageView now returns before box layout only when
+parse diagnostics explicitly record MissingStylesheet. A missing-body page can
+never publish its attempted unstyled paint; avoid two wasted full-column
+layout passes. Manual frozen Sphinx host-debug probe: first build 6361ms before,
+293ms after, census25ms, supplied three-light-sheet build5792ms. Single-run
+measurements, not hardware timing. Ten painted regressions, three live sheet
+checks and supplied-count regression pass. ARM release 5,307,180 B. Full TLS
+Sphinx journey still stays native at current colour width, investigation open;
+native GET search q=cobalt did reach fixture and result pixels checked.

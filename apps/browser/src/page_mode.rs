@@ -339,7 +339,8 @@ mod sheet_supply_plumbing_tests {
     fn supplied_sheets_change_the_painted_page_and_mismatched_counts_do_not_panic() {
         kobo_text::install(kobo_ui::CLARA_BW_METRICS).expect("fonts");
         let face = PageFontAdapter::bundled().expect("bundled font");
-        let plain = PageView::paint(PAGE, 400, 100, 2, &face, &face, &face).expect("plain");
+        assert!(PageView::paint(PAGE,400,100,2,&face,&face,&face).is_err(),"missing CSS must not trigger a doomed full layout");
+        let plain = PageView::paint_with_sheets(PAGE,&[Vec::new(),Vec::new()],400,100,2,&face,&face,&face).expect("plain");
         let tall = b"h1{margin-top:200px;font-size:40px} p{margin:80px 0}".to_vec();
         let styled = PageView::paint_with_sheets(
             PAGE,

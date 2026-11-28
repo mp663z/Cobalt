@@ -3205,3 +3205,22 @@ fn delayed_sheet_keeps_form_editor_and_updates_only_page_preview(){
     r.action(action_id("kb.enter"));r.action(ActionId::BACK);assert_eq!(r.app().view,View::Page);
     assert_eq!(forms::body(forms::forms(&r.app().loaded.as_ref().unwrap().document.blocks)[0],None).unwrap(),"q=originalq");
 }
+
+#[test]
+#[ignore = "manual performance probe, frozen real page"]
+fn sphinx_page_callback_cost_probe(){
+    let source=include_bytes!("../../../tools/cobalt-text-preview/corpus/python-introduction/page.html");
+    let m=kobo_ui::CLARA_BW_METRICS;
+    let start=std::time::Instant::now();
+    let p=page_mode::PageMode::build(source,"Python",&m);eprintln!("sphinx first-build-ms={} painted={}",start.elapsed().as_millis(),p.is_some());
+    let start=std::time::Instant::now();let url=Url::parse("https://styles.example.test/").unwrap();let links=page_mode::PageMode::sheet_census(source,&url,&m,100);eprintln!("sphinx census-ms={} count={}",start.elapsed().as_millis(),links.map_or(0,|c|c.links.len()));
+    let dir=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/cobalt-text-preview/corpus/python-introduction");
+    let all:Vec<Vec<u8>>=[0,2,3].into_iter().map(|i|std::fs::read(dir.join(format!("sheet-{i}.css"))).unwrap()).collect();
+    let start=std::time::Instant::now();let styled=page_mode::PageMode::build_zoom_with_sheets(source,&all,"Python",&m,100);eprintln!("sphinx styled-build-ms={} painted={}",start.elapsed().as_millis(),styled.is_some());
+    let ((norm,_),_,_)=kobo_web_document::basic_page::normalize_for_basic_full(source);
+    let sheets:Vec<Vec<u8>>=all.iter().map(|b|kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&norm,b).0).collect();
+    let width=page_mode::PageMode::css_width(&m,100).unwrap();
+    let tree=kobo_web_document::parse_basic_style_tree(&norm,&sheets,&Limits{max_input_bytes:8*1024*1024,..Limits::DEFAULT},Some(kobo_web_document::MediaContext::new(width).unwrap().with_light_scheme()),page_mode::SHEET_BUDGET,None);
+    eprintln!("Sphinx unsupported={} diagnostics={:?}",tree.unsupported,tree.diagnostics);
+
+}

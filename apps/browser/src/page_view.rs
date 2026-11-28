@@ -214,6 +214,9 @@ impl PageView {
         let media = MediaContext::new(css_width).ok_or("viewport")?.with_light_scheme();
         let sheets: Vec<Vec<u8>> = sheets.iter().map(|sheet| kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0).collect();
         let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), budget, None);
+        // Incomplete intake cannot become a publishable page. In particular,
+        // do not lay out a long unstyled column while its CSS is still pending.
+        if tree.diagnostics.count(kobo_web_document::style_diagnostics::RefusalReason::MissingStylesheet)>0 {return Err("pending stylesheet");}
         let mut boxes = BoxTree::from_style(&tree);
         // Pass 1 measures the column; pass 2 paints with a canvas that
         // covers it, the same two passes the research harness runs.
