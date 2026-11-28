@@ -273,7 +273,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let mut underline = node.style.text_decoration
                         == crate::computed_style::TextDecoration::Underline;
                     let mut scopes=Vec::new();
-                    let mut chip_bg: Option<u32> = None;
+                    let mut chip_bg: Option<(u32, u32, u32)> = None;
                     let mut chip_refused = false;
                     let mut parent = node.parent;
                     while let Some(p) = parent {
@@ -295,7 +295,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                                             chip_bordered += 1;
                                         }
                                     } else {
-                                        chip_bg = Some(bg);
+                                        chip_bg = Some((
+                                            bg,
+                                            style.padding_left,
+                                            style.padding_right,
+                                        ));
                                     }
                                 } else if chip_bg.is_some() && chip_nested_seen.insert(p) {
                                     chip_nested += 1;
@@ -477,7 +481,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 );
             }
         }
-        let (commands, height, missing, chips) =
+        let (commands, height, missing, chips, chips_padded) =
             crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
         if missing > 0 {
             *self
@@ -488,6 +492,9 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         for _ in 0..chips {
             self.stats.approx("inline-background");
+        }
+        for _ in 0..chips_padded {
+            self.stats.approx("inline-background-padding");
         }
         self.stats.fills += usize::try_from(chips).unwrap_or(0);
         self.stats.glyph_runs += commands.len() - usize::try_from(chips).unwrap_or(0);

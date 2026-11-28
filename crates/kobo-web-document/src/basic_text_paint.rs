@@ -5,7 +5,8 @@ use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::GlyphBitmap;
 
-/// Source text, weight, colour, CSS size and optional inline chip background.
+/// Source text, weight, colour, CSS size and optional inline chip background
+/// as (background, horizontal padding left, horizontal padding right).
 pub(crate) type Run = (
     String,
     bool,
@@ -15,7 +16,7 @@ pub(crate) type Run = (
     bool,
     Option<usize>,
     Vec<crate::basic_bidi::Scope>,
-    Option<u32>,
+    Option<(u32, u32, u32)>,
 );
 
 pub(crate) struct Style {
@@ -99,7 +100,7 @@ pub(crate) fn paint(
     style: &Style,
     origin: (i64, i64),
     width: u32,
-) -> Result<(Vec<Command>, i64, usize, u32), &'static str> {
+) -> Result<(Vec<Command>, i64, usize, u32, u32), &'static str> {
     let refs: Vec<_> = runs.iter().map(|r| (r.0.as_str(), r.1)).collect();
     let size_of = |leaf: usize| runs[leaf].3.clamp(1, 256);
     // Shape compatible font spans across DOM/style boundaries. Colour,
@@ -195,7 +196,7 @@ pub(crate) fn paint(
     let scopes: Vec<_> = runs.iter().map(|r| r.7.as_slice()).collect();
     let mirrored = crate::basic_bidi::reorder_scoped(&mut lines, &refs, style.direction, &scopes);
     if lines.glyphs.is_empty() {
-        return Ok((Vec::new(), 0, 0, 0));
+        return Ok((Vec::new(), 0, 0, 0, 0));
     }
     let mut struts = vec![(0_u32, 0_u32); lines.count as usize];
     for g in &lines.glyphs {
@@ -228,6 +229,7 @@ pub(crate) fn paint(
     let mut commands = Vec::new();
     let mut missing = 0;
     let mut chips = 0u32;
+    let mut chips_padded = 0u32;
     let mut paint_offsets = vec![0_usize; runs.len()];
     let mut from = 0;
     while from < lines.glyphs.len() {
@@ -306,20 +308,29 @@ pub(crate) fn paint(
             .max()
             .unwrap_or(seg_left)
             .saturating_sub(seg_left);
-        if let Some(chip) = runs[first.leaf].8 {
+        if let Some((chip, pad_left, pad_right)) = runs[first.leaf].8 {
             // Inline-element background (e.g. `code { background: ... }`): one
-            // fill per (line, run) segment, hugging the glyph-advance extent
-            // over the full line height, painted under the glyphs. Inline
-            // padding is not expanded (counted by the collector).
+            // fill per (line, run) segment under the glyphs, covering the
+            // glyph-advance extent plus the inline's horizontal padding over
+            // the full line height. Vertical padding is not expanded: the
+            // chip already spans the line box.
             if seg_extent > 0 {
                 chips += 1;
+                if pad_left + pad_right > 0 {
+                    chips_padded += 1;
+                }
                 commands.push(Command::Fill {
                     rect: Rect {
-                        x: i32::try_from(origin.0 + i64::from(seg_left) + i64::from(offset))
-                            .map_err(|_| "chip-x")?,
+                        x: i32::try_from(
+                            origin.0 + i64::from(seg_left) - i64::from(pad_left)
+                                + i64::from(offset),
+                        )
+                        .map_err(|_| "chip-x")?,
                         y: i32::try_from(origin.1 + line_tops[first.line as usize])
                             .map_err(|_| "chip-y")?,
-                        width: seg_extent,
+                        width: seg_extent
+                            .saturating_add(pad_left)
+                            .saturating_add(pad_right),
                         height: line_heights[first.line as usize],
                     },
                     color: Rgb(
@@ -430,7 +441,7 @@ pub(crate) fn paint(
         }
         from = to;
     }
-    Ok((commands, total_height, missing, chips))
+    Ok((commands, total_height, missing, chips, chips_padded))
 }
 
 #[cfg(test)]
