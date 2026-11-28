@@ -2452,7 +2452,7 @@ fn native_control_labels_take_their_own_source_colours_not_generated_names(){
 fn late_control_label_colour_keeps_edit_and_refreshes_source_style(){
     let mut runner=runner(TextScale::Default);
     open_web_page(&mut runner,"<!doctype html><form><label for=q style='color:red'>Search</label><input id=q name=q value=original></form>");
-    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::Text{name:"q".into(),label:"Search".into(),value:"edited".into(),search:false,maxlength:None};
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::Text{name:"q".into(),label:"Search".into(),value:"edited".into(),search:false,maxlength:None,readonly:false};
     runner.app_mut().pictures.set_colour(true);let mut context=runner.context();runner.app_mut().refresh_native_colour(&mut context);
     let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];assert_eq!(form.field_colours[0],Some(([255,0,0],None)));assert!(matches!(&form.fields[0],Field::Text{value,..} if value=="edited"));
 }
@@ -3146,4 +3146,12 @@ fn identity_picture_transfer_is_byte_exact_rgb_and_grey(){
   let expected=if colour{source.to_vec()}else{source.chunks_exact(3).map(|p|((u32::from(p[0])*77+u32::from(p[1])*150+u32::from(p[2])*29+128)>>8) as u8).collect()};
   assert_eq!(*pixels,expected);
  }}
+}
+
+#[test]
+fn readonly_single_line_is_successful_but_never_opens_editor(){
+ let mut r=runner(TextScale::Default);r.app_mut().retry=Some(Url::parse("https://form.invalid/").unwrap());r.action(action_id("retry"));let task=pending_task(&r);
+ r.task_outcome(task,TaskOutcome::Completed(b"<!doctype html><title>Readonly</title><form><input name=q value=fixed readonly></form>".to_vec()));
+ r.action(action_id("form-0"));r.action(action_id("field-0"));assert!(!r.app().form_entry.is_open());
+ let l=r.app().loaded.as_ref().unwrap();assert_eq!(forms::body(forms::forms(&l.document.blocks)[0],None).unwrap(),"q=fixed");
 }

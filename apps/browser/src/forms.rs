@@ -187,7 +187,7 @@ pub fn form_screen(
 
 pub fn field_action(form: &Form, action: ActionId) -> Option<usize> {
     form.fields.iter().enumerate().find_map(|(index, field)| {
-        (field_title(field).is_some() && !matches!(field,Field::TextArea { readonly:true,.. })
+        (field_title(field).is_some() && !matches!(field,Field::TextArea { readonly:true,.. }|Field::Text { readonly:true,.. })
             && action_id(&format!("field-{index}")) == action)
             .then_some(index)
     })
@@ -418,13 +418,13 @@ mod tests {
                     name: "tag".into(),
                     value: "one".into(),
                     label: "First".into(),
-                    search: false,maxlength:None,
+                    search: false,maxlength:None,readonly:false,
                 },
                 Field::Text {
                     name: "tag".into(),
                     value: "two".into(),
                     label: "Second".into(),
-                    search: false,maxlength:None,
+                    search: false,maxlength:None,readonly:false,
                 },
                 Field::Submit {
                     name: None,
@@ -458,7 +458,7 @@ mod tests {
                     name: "q".into(),
                     value: "e ink & café".into(),
                     label: "Search".into(),
-                    search: true,maxlength:None,
+                    search: true,maxlength:None,readonly:false,
                 },
                 Field::Hidden {
                     name: "source".into(),
@@ -516,7 +516,7 @@ mod tests {
                 name: "q".into(),
                 value: "x".repeat(4096),
                 label: "Search".into(),
-                search: true,maxlength:None,
+                search: true,maxlength:None,readonly:false,
             }],
         };
         assert!(get_url(&form, None).is_none());
@@ -532,7 +532,7 @@ mod tests {
                 name: "q".into(),
                 value: "x".into(),
                 label: "Search".into(),
-                search: true,maxlength:None,
+                search: true,maxlength:None,readonly:false,
             }],
         };
         assert!(get_url(&form, None).is_none());

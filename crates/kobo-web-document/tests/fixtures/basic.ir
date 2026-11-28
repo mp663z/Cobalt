@@ -353,6 +353,7 @@ blocks:
                     label: "Search notes",
                     search: true,
                     maxlength: None,
+                    readonly: false,
                 },
                 Hidden {
                     name: "src",

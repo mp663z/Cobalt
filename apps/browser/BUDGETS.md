@@ -1667,3 +1667,8 @@ quick keys, then Go, followed by HTML and all five CSS requests. Generic `drive
 type` does not change keyboard layers or choose quick punctuation keys; a failed
 raw URL type followed by Go submits the remaining partial text. That is a driver
 limitation, not evidence that browser navigation is broken. No network bypass.
+
+Readonly input follow-up: readonly single-line fields remain successful controls
+but cannot open the editor, matching textarea handling. Both readonly checks,
+26 form-scoped checks and document golden 19 pass. Golden diff inspected, only
+readonly:false for the existing text field. No layout or protocol change.
