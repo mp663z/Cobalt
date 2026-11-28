@@ -1216,6 +1216,7 @@ impl Converter<'_> {
                         fields.push(Field::TextArea {
                             name: name.to_owned(), value,
                             label: self.field_label(handle, node, name),
+                            readonly: self.attr(node,"readonly").is_some(),
                         });
                         field_colours.push(self.field_label_colour(handle,node));
                     }

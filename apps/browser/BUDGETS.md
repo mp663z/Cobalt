@@ -1517,3 +1517,13 @@ Scoped browser/document/layout clippy correctness passes with existing warnings.
 Locked stripped ARM 5,278,156 bytes, +4,936, 1,214,104 bytes headroom. No new
 runtime dependency/lock/unsafe change. No full-browser-suite, hardware or full-web
 completion claim; independent lanes continue toward the user's 24-hour target.
+
+### Textarea readonly and list bounds follow-up
+
+Readonly textarea values remain successful controls but cannot open the editor.
+A focused browser regression verifies both. Multiline form-list summaries now
+collapse breaks and cap the visible summary at 60 characters; the actual value
+is unchanged. Textarea journey, parser regression, three-profile editor-fit and
+scoped browser clippy correctness checks pass. Locked stripped ARM 5,279,444 B,
++1,288, headroom 1,212,816 B. Maxlength remains unmodeled. No protocol/dependency/
+lock change, hardware or full-web completion claim.

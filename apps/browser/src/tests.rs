@@ -2922,7 +2922,7 @@ second &amp; last</textarea><textarea disabled name=ignored>no</textarea><input 
 #[test]
 fn multiline_editor_stays_bounded_on_profiles_with_long_values() {
     let mut runner=form_runner(TextScale::Default);
-    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::TextArea{name:"note".into(),label:"Message".into(),value:"word ".repeat(80)};
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::TextArea{name:"note".into(),label:"Message".into(),value:"word ".repeat(80),readonly:false};
     runner.action(action_id("form-0"));
     runner.action(action_id("field-0"));
     for profile in [kobo_ui::CLARA_BW_METRICS,DisplayMetrics{width:1264,height:1680,..kobo_ui::CLARA_BW_METRICS},DisplayMetrics{width:1404,height:1872,..kobo_ui::CLARA_BW_METRICS}] {
@@ -2933,4 +2933,17 @@ fn multiline_editor_stays_bounded_on_profiles_with_long_values() {
             assert!(errors.is_empty(),"{metrics:?} {errors:?}");
         }
     }
+}
+
+#[test]
+fn readonly_textarea_is_submitted_but_cannot_be_edited() {
+    let mut runner=runner(TextScale::Default);
+    runner.app_mut().retry=Some(Url::parse("https://example.com/").unwrap());
+    runner.action(action_id("retry"));
+    runner.task_outcome(pending_task(&runner),TaskOutcome::Completed(b"<title>Note</title><form><textarea readonly name=note>unchanged</textarea></form>".to_vec()));
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-0"));
+    assert!(!runner.app().form_entry.is_open());
+    let form=forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
+    assert_eq!(forms::body(form,None).unwrap(),"note=unchanged");
 }

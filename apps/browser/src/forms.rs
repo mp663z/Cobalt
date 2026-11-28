@@ -55,8 +55,13 @@ pub fn form_mut(blocks: &mut [Block], index: usize) -> Option<&mut Form> {
 
 fn field_title(field: &Field) -> Option<(String, String)> {
     match field {
-        Field::TextArea { label, value, .. } => Some((label.clone(),
-            if value.is_empty() { "Empty multiline text".to_owned() } else { value.clone() })),
+        Field::TextArea { label, value, readonly, .. } => {
+            let text=value.replace(['\n','\r']," ");
+            let short:String=text.chars().take(60).collect();
+            let suffix=if text.chars().count()>60 {"..."} else {""};
+            Some((label.clone(),format!("{}{}{}",if *readonly {"Read only: "} else {""},
+                if value.is_empty() {"Empty multiline text"} else {&short},suffix)))
+        },
         Field::Text {
             label,
             value,
@@ -182,7 +187,8 @@ pub fn form_screen(
 
 pub fn field_action(form: &Form, action: ActionId) -> Option<usize> {
     form.fields.iter().enumerate().find_map(|(index, field)| {
-        (field_title(field).is_some() && action_id(&format!("field-{index}")) == action)
+        (field_title(field).is_some() && !matches!(field,Field::TextArea { readonly:true,.. })
+            && action_id(&format!("field-{index}")) == action)
             .then_some(index)
     })
 }
