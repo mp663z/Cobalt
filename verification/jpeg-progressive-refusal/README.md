@@ -12,4 +12,4 @@ Own validation:
 - Actual dirty-head realTLS app: external PNG and two sheets paint; SVG not requested; address Cancel/Back restore frame. app.png pixels inspected. 66160 KiB peak RSS in this single run, not a comparative measurement.
 - ARM/qemu release probe and size/RSS qualification pending parent.
 
-Includes earlier slot-starvation and hidden-ancestor fixes. Prior webdoc/net tests and corpus results belong to d781; no changed webdoc/net implementation here. Fresh corpus check pending at this commit.
+Includes earlier slot-starvation and hidden-ancestor fixes. Prior webdoc/net tests and corpus results belong to d781; no changed webdoc/net implementation here. Post-checkpoint: fresh 13 corpus censuses match and every full PNG pixel array matches pre-mitigation image head. Standalone preview full suite 47 passed, 1 ignored, 11 groups. Exact 853-byte fetched progressive body now also covered by the PageMode external-resource test, preserving pixel-identical readable fallback. Focused updated test passes; production unchanged.

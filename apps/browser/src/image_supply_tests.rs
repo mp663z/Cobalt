@@ -341,6 +341,16 @@ fn a_fetched_png_replaces_the_alt_text_and_a_refused_body_keeps_it() {
         rgb_bad, rgb_without,
         "an undecodable body must leave the page exactly as it was"
     );
+    let mut progressive = External::new();
+    progressive.insert(
+        "https://cdn.example.test/logo.png".into(),
+        include_bytes!("../../../crates/kobo-image/tests/fixtures/progressive-timeout.jpg").to_vec(),
+    );
+    let (_, rgb_progressive) = paint(PAGE, &progressive);
+    assert_eq!(
+        rgb_progressive, rgb_without,
+        "a fetched progressive JPEG must retain the exact readable fallback"
+    );
 }
 
 fn runner_app() -> AppRunner<Browser> {
