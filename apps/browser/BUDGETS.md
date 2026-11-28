@@ -1643,3 +1643,8 @@ textarea limit checks pass; document golden 18 pass, form-scoped app tests pass,
 scoped app correctness clippy passes. Golden basic.ir adds only maxlength: None
 for its existing field. ARM 5,301,196 B, +960 from nested-flex. This adds no visual
 layout, protocol or dependency change. Full constraint validation remains open.
+
+Input limit correction: number inputs keep maxlength inapplicable, while zero
+on text is retained and negative textarea values are ignored. Focused parser
+regression and both app maxlength tests pass. No numeric constraint-validation
+claim; numeric input still uses the existing bounded text editor.

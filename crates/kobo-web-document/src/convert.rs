@@ -1249,7 +1249,7 @@ impl Converter<'_> {
                             value,
                             label,
                             search: kind == "search",
-                            maxlength: self.attr(node,"maxlength").and_then(|s|{let s=s.trim_start_matches(|c:char|c.is_ascii_whitespace());let s=s.strip_prefix('+').unwrap_or(s);let digits=s.chars().take_while(char::is_ascii_digit).collect::<String>();digits.parse::<usize>().ok()}),
+                            maxlength: (kind != "number").then(|| self.attr(node,"maxlength").and_then(|s|{let s=s.trim_start_matches(|c:char|c.is_ascii_whitespace());let s=s.strip_prefix('+').unwrap_or(s);let digits=s.chars().take_while(char::is_ascii_digit).collect::<String>();digits.parse::<usize>().ok()})).flatten(),
                         });
                     }
                     ("hidden", Some(name)) => fields.push(Field::Hidden { name, value }),

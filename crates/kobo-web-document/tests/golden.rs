@@ -380,3 +380,13 @@ fn textarea_is_a_bounded_successful_control() {
     let form=parsed.blocks.iter().find_map(|b|if let Block::Form(f)=b {Some(f)} else {None}).unwrap();
     assert_eq!(form.fields.len(),1,"oversized textarea is not silently truncated into a different value");
 }
+
+#[test]
+fn maxlength_applies_to_text_but_not_number_input(){
+    use kobo_web_document::{Block,Field};
+    let d=parse_document(b"<form><input type=text name=t maxlength=0><input type=number name=n maxlength=1><textarea name=a maxlength=-1></textarea></form>",&Url::parse(BASE).unwrap(),&Limits::DEFAULT);
+    let f=d.blocks.iter().find_map(|b|if let Block::Form(f)=b{Some(f)}else{None}).unwrap();
+    assert!(matches!(f.fields[0],Field::Text{maxlength:Some(0),..}));
+    assert!(matches!(f.fields[1],Field::Text{maxlength:None,..}));
+    assert!(matches!(f.fields[2],Field::TextArea{maxlength:None,..}));
+}
