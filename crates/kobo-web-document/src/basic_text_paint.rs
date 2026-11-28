@@ -5,7 +5,7 @@ use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::GlyphBitmap;
 
-/// Source text, weight, colour and CSS size.
+/// Source text, weight, colour, CSS size and optional inline chip background.
 pub(crate) type Run = (
     String,
     bool,
@@ -15,6 +15,7 @@ pub(crate) type Run = (
     bool,
     Option<usize>,
     Vec<crate::basic_bidi::Scope>,
+    Option<u32>,
 );
 
 pub(crate) struct Style {
@@ -98,7 +99,7 @@ pub(crate) fn paint(
     style: &Style,
     origin: (i64, i64),
     width: u32,
-) -> Result<(Vec<Command>, i64, usize), &'static str> {
+) -> Result<(Vec<Command>, i64, usize, u32), &'static str> {
     let refs: Vec<_> = runs.iter().map(|r| (r.0.as_str(), r.1)).collect();
     let size_of = |leaf: usize| runs[leaf].3.clamp(1, 256);
     // Shape compatible font spans across DOM/style boundaries. Colour,
@@ -194,7 +195,7 @@ pub(crate) fn paint(
     let scopes: Vec<_> = runs.iter().map(|r| r.7.as_slice()).collect();
     let mirrored = crate::basic_bidi::reorder_scoped(&mut lines, &refs, style.direction, &scopes);
     if lines.glyphs.is_empty() {
-        return Ok((Vec::new(), 0, 0));
+        return Ok((Vec::new(), 0, 0, 0));
     }
     let mut struts = vec![(0_u32, 0_u32); lines.count as usize];
     for g in &lines.glyphs {
@@ -209,12 +210,14 @@ pub(crate) fn paint(
         strut.1 = strut.1.max(height.saturating_sub(baseline));
     }
     let mut line_tops = Vec::with_capacity(struts.len());
+    let mut line_heights = Vec::with_capacity(struts.len());
     let mut total_height = 0_i64;
     for strut in &mut struts {
         let natural = strut.0.saturating_add(strut.1).max(style.size + 4);
         let height = style.line_height.max(natural);
         strut.0 += (height - strut.0 - strut.1) / 2;
         line_tops.push(total_height);
+        line_heights.push(height);
         total_height += i64::from(height);
     }
     let mut line_widths = vec![0_u32; struts.len()];
@@ -224,6 +227,7 @@ pub(crate) fn paint(
     }
     let mut commands = Vec::new();
     let mut missing = 0;
+    let mut chips = 0u32;
     let mut paint_offsets = vec![0_usize; runs.len()];
     let mut from = 0;
     while from < lines.glyphs.len() {
@@ -295,6 +299,42 @@ pub(crate) fn paint(
             })
             .collect();
         let baseline = i64::from(struts[first.line as usize].0);
+        let seg_left = glyphs.iter().map(|g| g.x).min().unwrap_or(first.x);
+        let seg_extent = glyphs
+            .iter()
+            .map(|g| g.x.saturating_add(g.advance))
+            .max()
+            .unwrap_or(seg_left)
+            .saturating_sub(seg_left);
+        if let Some(chip) = runs[first.leaf].8 {
+            // Inline-element background (e.g. `code { background: ... }`): one
+            // fill per (line, run) segment, hugging the glyph-advance extent
+            // over the full line height, painted under the glyphs. Inline
+            // padding is not expanded (counted by the collector).
+            if seg_extent > 0 {
+                chips += 1;
+                commands.push(Command::Fill {
+                    rect: Rect {
+                        x: i32::try_from(origin.0 + i64::from(seg_left) + i64::from(offset))
+                            .map_err(|_| "chip-x")?,
+                        y: i32::try_from(origin.1 + line_tops[first.line as usize])
+                            .map_err(|_| "chip-y")?,
+                        width: seg_extent,
+                        height: line_heights[first.line as usize],
+                    },
+                    color: Rgb(
+                        ((chip >> 16) & 255) as u8,
+                        ((chip >> 8) & 255) as u8,
+                        (chip & 255) as u8,
+                    ),
+                    source: Source {
+                        node: runs[first.leaf].6,
+                        action: None,
+                        text_range: None,
+                    },
+                });
+            }
+        }
         let left = glyphs
             .iter()
             .zip(&bitmaps)
@@ -366,21 +406,14 @@ pub(crate) fn paint(
             });
         }
         if runs[first.leaf].5 {
-            let underline_left = glyphs.iter().map(|g| g.x).min().unwrap_or(first.x);
-            let extent = glyphs
-                .iter()
-                .map(|g| g.x.saturating_add(g.advance))
-                .max()
-                .unwrap_or(underline_left)
-                .saturating_sub(underline_left);
             let color = contrast_floor(runs[first.leaf].2, style.background);
             commands.push(Command::Fill {
                 rect: Rect {
-                    x: i32::try_from(origin.0 + i64::from(underline_left) + i64::from(offset))
+                    x: i32::try_from(origin.0 + i64::from(seg_left) + i64::from(offset))
                         .map_err(|_| "underline-x")?,
                     y: i32::try_from(origin.1 + line_tops[first.line as usize] + baseline + 1)
                         .map_err(|_| "underline-y")?,
-                    width: extent,
+                    width: seg_extent,
                     height: (size / 16).max(1),
                 },
                 color: Rgb(
@@ -397,7 +430,7 @@ pub(crate) fn paint(
         }
         from = to;
     }
-    Ok((commands, total_height, missing))
+    Ok((commands, total_height, missing, chips))
 }
 
 #[cfg(test)]

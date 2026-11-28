@@ -250,6 +250,13 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         let mut runs: Vec<crate::basic_text_paint::Run> = Vec::new();
         let mut stack: Vec<usize> = children.iter().rev().copied().collect();
         let mut visited = 0usize;
+        // Inline chip gates: count each gated inline once per block paint.
+        let mut chip_bordered_seen: std::collections::HashSet<usize> =
+            std::collections::HashSet::new();
+        let mut chip_nested_seen: std::collections::HashSet<usize> =
+            std::collections::HashSet::new();
+        let mut chip_bordered = 0u32;
+        let mut chip_nested = 0u32;
         while let Some(index) = stack.pop() {
             visited += 1;
             if visited > 4096 || runs.len() >= 4096 {
@@ -266,13 +273,36 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                     let mut underline = node.style.text_decoration
                         == crate::computed_style::TextDecoration::Underline;
                     let mut scopes=Vec::new();
+                    let mut chip_bg: Option<u32> = None;
+                    let mut chip_refused = false;
                     let mut parent = node.parent;
                     while let Some(p) = parent {
-                        let style=self.tree.boxes[p].style;
+                        let pnode = &self.tree.boxes[p];
+                        let style=pnode.style;
                         if style.unicode_bidi != crate::computed_style::UnicodeBidi::Normal { scopes.push(crate::basic_bidi::Scope { id:p, mode:style.unicode_bidi, direction:style.direction }); }
-                        underline |= self.tree.boxes[p].style.text_decoration
+                        underline |= style.text_decoration
                             == crate::computed_style::TextDecoration::Underline;
-                        parent = self.tree.boxes[p].parent;
+                        // Nearest DOM-sourced inline with an opaque background
+                        // wins the chip; a painted border on it refuses the
+                        // chip (counted), a background on a further inline
+                        // ancestor is dropped (counted nested).
+                        if pnode.kind == BoxKind::Inline && pnode.source.is_some() {
+                            if let Some(bg) = style.used_background_color() {
+                                if chip_bg.is_none() && !chip_refused {
+                                    if style.decor.has_painted_border() {
+                                        chip_refused = true;
+                                        if chip_bordered_seen.insert(p) {
+                                            chip_bordered += 1;
+                                        }
+                                    } else {
+                                        chip_bg = Some(bg);
+                                    }
+                                } else if chip_bg.is_some() && chip_nested_seen.insert(p) {
+                                    chip_nested += 1;
+                                }
+                            }
+                        }
+                        parent = pnode.parent;
                     }
                     scopes.reverse();
                     runs.push((
@@ -284,6 +314,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         underline,
                         node.source,
                         scopes,
+                        chip_bg,
                     ));
                 }
                 BoxKind::Inline => {
@@ -293,6 +324,12 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 }
                 _ => return Err("other-kind"),
             }
+        }
+        for _ in 0..chip_bordered {
+            self.stats.skip("inline-background-bordered");
+        }
+        for _ in 0..chip_nested {
+            self.stats.skip("inline-background-nested");
         }
         if runs.is_empty() {
             return Err("no-runs");
@@ -320,7 +357,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize, _, _, _, _) in &runs {
+        for (text, bold, _, rsize, _, _, _, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char
@@ -440,7 +477,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 );
             }
         }
-        let (commands, height, missing) =
+        let (commands, height, missing, chips) =
             crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
         if missing > 0 {
             *self
@@ -449,7 +486,11 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 .entry("missing-glyph-placeholder")
                 .or_insert(0) += missing;
         }
-        self.stats.glyph_runs += commands.len();
+        for _ in 0..chips {
+            self.stats.approx("inline-background");
+        }
+        self.stats.fills += usize::try_from(chips).unwrap_or(0);
+        self.stats.glyph_runs += commands.len() - usize::try_from(chips).unwrap_or(0);
         self.stats.text_blocks_painted += usize::from(!commands.is_empty());
         list.extend(commands);
         Ok(height)
