@@ -1391,7 +1391,7 @@ impl Browser {
             ScreenBuilder::new("browser-form-entry").top_bar(label)
                 .top_bar_action("form-newline", "New line")
                 .text(if self.form_entry.text().is_empty() {"Empty"} else {&preview})
-                .secondary("Last lines shown. Save keeps the full text.")
+                .secondary(self.editing_maxlength().map_or_else(||"Last lines shown. Save keeps the full text.".to_owned(),|limit|format!("Last lines shown. Limit: {limit} UTF-16 units.")))
                 .keyboard(self.form_entry.keyboard(), "Save")
                 .button("kb.cancel", "Cancel")
         } else {
@@ -1408,9 +1408,20 @@ impl Browser {
         }).is_some_and(|field| matches!(field,Field::TextArea { .. }))
     }
 
+    fn editing_maxlength(&self)->Option<usize>{
+        let (index,field)=self.editing?;
+        match forms::forms(&self.loaded.as_ref()?.document.blocks).get(index)?.fields.get(field)?{
+            Field::TextArea{maxlength,..}=>*maxlength,
+            _=>None,
+        }
+    }
+
     fn handle_form_entry(&mut self, context: &mut Context, action: ActionId) {
+        let before=self.form_entry.clone();
+        let before_units=before.text().encode_utf16().count();
+        let max=self.editing_maxlength();
         if action == action_id("form-newline") && self.editing_multiline() {
-            self.form_entry.insert("\n");
+            if max.is_none_or(|limit|before_units<limit){self.form_entry.insert("\n");}
             self.show(context);
             return;
         }
@@ -1439,7 +1450,10 @@ impl Browser {
             Some(Typing::Cancelled) => {
                 self.editing = None;
             }
-            Some(Typing::Changed) | None => {}
+            Some(Typing::Changed) | None => {
+                let units=self.form_entry.text().encode_utf16().count();
+                if max.is_some_and(|limit|units>limit && units>before_units){self.form_entry=before;}
+            }
         }
         self.show(context);
     }

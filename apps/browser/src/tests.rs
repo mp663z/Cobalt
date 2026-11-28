@@ -2922,7 +2922,7 @@ second &amp; last</textarea><textarea disabled name=ignored>no</textarea><input 
 #[test]
 fn multiline_editor_stays_bounded_on_profiles_with_long_values() {
     let mut runner=form_runner(TextScale::Default);
-    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::TextArea{name:"note".into(),label:"Message".into(),value:"word ".repeat(80),readonly:false};
+    forms::form_mut(&mut runner.app_mut().loaded.as_mut().unwrap().document.blocks,0).unwrap().fields[0]=Field::TextArea{name:"note".into(),label:"Message".into(),value:"word ".repeat(80),readonly:false,maxlength:None};
     runner.action(action_id("form-0"));
     runner.action(action_id("field-0"));
     for profile in [kobo_ui::CLARA_BW_METRICS,DisplayMetrics{width:1264,height:1680,..kobo_ui::CLARA_BW_METRICS},DisplayMetrics{width:1404,height:1872,..kobo_ui::CLARA_BW_METRICS}] {
@@ -3075,4 +3075,43 @@ fn sixteen_sheet_queue_preserves_order_and_bounds_total_bytes(){
     }
     assert_eq!(total,16);let l=r.app().loaded.as_ref().unwrap();assert!(l.painted.is_some());assert_eq!(l.linked_sheets.len(),16);
     for (i,body) in l.linked_sheets.iter().enumerate(){assert_eq!(body,format!("h1{{margin-top:{i}px}}").as_bytes());}
+}
+
+#[test]
+fn textarea_maxlength_stops_insertions_without_truncating_defaults(){
+ let mut r=runner(TextScale::Default);r.app_mut().retry=Some(Url::parse("https://form.invalid/").unwrap());r.action(action_id("retry"));
+ let task=pending_task(&r);r.task_outcome(task,TaskOutcome::Completed(br#"<!doctype html><title>Limit</title><form action=/get><textarea name=note maxlength=3>ab</textarea></form>"#.to_vec()));
+ r.action(action_id("form-0"));r.action(action_id("field-0"));r.action(action_id("kb.end"));
+ r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"abq");
+ r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"abq");
+ r.action(action_id("form-newline"));assert_eq!(r.app().form_entry.text(),"abq");
+ r.action(action_id("kb.backspace"));r.action(action_id("form-newline"));assert_eq!(r.app().form_entry.text(),"ab\n");
+    if std::env::var_os("COBALT_FORM_EVIDENCE").is_some() {
+        struct Empty;
+        impl kobo_ui::Pictures for Empty { fn get(&self,_:kobo_sdk::PictureHandle)->Option<kobo_ui::PicturePixels<'_>> {None} }
+        let metrics=kobo_ui::CLARA_BW_METRICS;
+        let screen=r.app().screen(&metrics).build();
+        let errors:Vec<_>=screen.diagnostics(&metrics,&Chrome::measuring(true)).issues.into_iter().filter(|i|i.severity==DiagnosticSeverity::Error).collect();
+        assert!(errors.is_empty(),"{errors:?}");
+        let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+        kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&Empty,&mut surface,None);
+        use std::io::Write as _;
+        let mut file=std::fs::File::create("/tmp/textarea-maxlength.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for i in 0..surface.pixels.len(){file.write_all(&surface.rgb_at(i).unwrap()).unwrap();}
+    }
+ r.action(action_id("kb.enter"));
+ let l=r.app().loaded.as_ref().unwrap();assert_eq!(forms::body(forms::forms(&l.document.blocks)[0],None).unwrap(),"note=ab%0D%0A");
+}
+
+#[test]
+fn textarea_limit_preserves_overlong_defaults_and_unicode(){
+ let mut r=runner(TextScale::Default);r.app_mut().retry=Some(Url::parse("https://form.invalid/").unwrap());r.action(action_id("retry"));
+ let task=pending_task(&r);r.task_outcome(task,TaskOutcome::Completed("<!doctype html><title>Limit</title><form><textarea name=n maxlength=1>éab</textarea></form>".as_bytes().to_vec()));
+ r.action(action_id("form-0"));r.action(action_id("field-0"));assert_eq!(r.app().form_entry.text(),"éab");
+ r.action(action_id("kb.end"));r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"éab");
+ r.action(action_id("kb.backspace"));assert_eq!(r.app().form_entry.text(),"éa");
+ r.action(action_id("kb.enter"));let l=r.app().loaded.as_ref().unwrap();assert!(matches!(&forms::forms(&l.document.blocks)[0].fields[0],Field::TextArea{value,maxlength:Some(1),..} if value=="éa"));
+ r.action(action_id("field-0"));r.app_mut().form_entry.open_with("é");r.action(action_id("kb.r0c0"));assert_eq!(r.app().form_entry.text(),"é");
+ let commands=r.action(action_id("kb.backspace"));let _=commands;assert_eq!(r.app().form_entry.text(),"");
 }

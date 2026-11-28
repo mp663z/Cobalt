@@ -1613,3 +1613,14 @@ device budget. Fixture script records exact source revision and dirty state.
 Previous two-sheet-only and NoSlot-on-pressure notes describe old checkpoints.
 Beyond 16 sheets, 512 KiB each or 4 MiB total still keeps readable simplified
 content; resource limits and no JS remain, not full-web completion.
+
+### Textarea maxlength
+
+Retain textarea maxlength and enforce keyboard insertions/newlines in UTF-16
+units; preserve server defaults even if already longer, and allow deletion/Save
+without truncation. Four textarea regressions pass (defaults, readonly, limit,
+overlong Unicode default). Scoped browser/document correctness clippy passes.
+Actual editor pixels inspected: limit explanation, New line, Save and Cancel
+visible. ARM 5,288,388 B, +1,800. Single-line input maxlength and full browser
+constraint validation remain gaps. The existing 512-character editor ceiling
+still applies. No protocol or runtime dependency change.
