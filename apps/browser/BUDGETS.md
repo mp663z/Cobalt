@@ -1797,3 +1797,8 @@ claim. Native route helper refactor preserves all5 old route strings byte-for-by
 live choices repeat passes. --profile option now allows ClaraBW: typed-address
 form-edges and choices pass with complete exact request/hash checks; small-screen
 control/result pixels inspected. Test-only, no app binary change.
+
+Current73360e4f independently verified: full document suite1431pass/18ignored,
+0fail,150resultgroups including empty doctests. Browser all276names reconciled
+273pass/3ignored,0fail using exact per-name invocations across4bounded batches,
+not one uninterrupted cargo suite. Evidence retained in browser-suite-73360e4f.
