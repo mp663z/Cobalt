@@ -2838,3 +2838,39 @@ fn zoom_anchor_is_a_source_byte_not_a_reflowed_line_number(){
  r.action(ActionId(page_mode::SCROLL_BASE.0+150));
  assert_ne!(r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap().reading_anchor(),Some(a));
 }
+
+#[test]
+fn form_text_save_preserves_spaces_and_can_clear_a_value() {
+    let mut runner = form_runner(TextScale::Default);
+    runner.action(action_id("form-0"));
+    runner.action(action_id("field-0"));
+    runner.app_mut().form_entry.open_with("  exact words  ");
+    runner.action(action_id("kb.enter"));
+    let current = |runner: &AppRunner<Browser>| {
+        let form = forms::forms(&runner.app().loaded.as_ref().unwrap().document.blocks)[0];
+        match &form.fields[0] { Field::Text { value, .. } => value.clone(), _ => panic!("text") }
+    };
+    assert_eq!(current(&runner), "  exact words  ");
+    runner.action(action_id("field-0"));
+    runner.app_mut().form_entry.open_with("");
+    runner.action(action_id("kb.enter"));
+    assert_eq!(current(&runner), "");
+    runner.action(action_id("field-0"));
+    runner.app_mut().form_entry.open_with("not saved");
+    runner.action(action_id("kb.cancel"));
+    assert_eq!(current(&runner), "");
+    if std::env::var_os("COBALT_FORM_EVIDENCE").is_some() {
+        struct Empty;
+        impl kobo_ui::Pictures for Empty {
+            fn get(&self, _: kobo_sdk::PictureHandle) -> Option<kobo_ui::PicturePixels<'_>> { None }
+        }
+        let metrics=kobo_ui::CLARA_BW_METRICS;
+        let screen=runner.app().screen(&metrics).build();
+        let mut surface=kobo_ui::Surface::new(metrics.width as usize,metrics.height as usize);
+        kobo_ui::render_all(&screen,&metrics,&Chrome::measuring(true),&Empty,&mut surface,None);
+        use std::io::Write as _;
+        let mut file=std::fs::File::create("/tmp/form-clear-evidence.ppm").unwrap();
+        write!(file,"P6\n{} {}\n255\n",metrics.width,metrics.height).unwrap();
+        for index in 0..surface.pixels.len() { file.write_all(&surface.rgb_at(index).unwrap()).unwrap(); }
+    }
+}

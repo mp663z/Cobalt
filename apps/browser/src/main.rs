@@ -1315,7 +1315,16 @@ impl Browser {
     }
 
     fn handle_form_entry(&mut self, context: &mut Context, action: ActionId) {
-        match self.form_entry.handle(action) {
+        // Form values are data, not address/search queries. Save whitespace
+        // verbatim, including empty text when the reader clears a field.
+        let typing = if action == action_id("kb.enter") && self.form_entry.is_open() {
+            let value = self.form_entry.text().to_owned();
+            self.form_entry.close();
+            Some(Typing::Submitted(value))
+        } else {
+            self.form_entry.handle_verbatim(action)
+        };
+        match typing {
             Some(Typing::Submitted(value)) => {
                 if let (Some((index, field)), Some(loaded)) =
                     (self.editing.take(), self.loaded.as_mut())

@@ -1477,3 +1477,21 @@ not claim a newly verified complete browser suite. Locked stripped ARM:
 5,273,020 bytes, 8 bytes smaller, 1,219,240 bytes headroom. No dependency/lock
 change or visual change. The prior Unicode library regression also passed one
 exact Miri test; full-cache Miri and broader gates remain incomplete.
+
+## Form values can be cleared without losing whitespace, November 28, 2026
+
+Form Save incorrectly used the address field's trim-and-empty-cancel behavior.
+A regression fails before the fix: edge spaces disappear, and clearing a value
+leaves its old contents. Form Save now preserves exact text, including empty
+values. Cancel still discards edits. Address/search behavior is unchanged.
+Genuine fail-before/pass-after test covers these cases; existing edit and GET
+submit tests pass. Scoped browser clippy correctness passes with existing
+warnings. Rendered the cleared-field form through actual UI pixels and inspected
+it: the prior value is gone, the empty search placeholder is visible, and rows
+remain readable. This is host rendering, not physical panel evidence.
+
+No dependency/lock/protocol change. ARM build tooling was lost in the environment
+reset and has not been restored for this change, so current binary size is
+unverified, not the earlier 5,273,020-byte measurement. No new full-browser-suite
+or hardware/full-web/proof-gate completion claim. Textarea itself remains absent;
+this fixes ordinary text-field saving discovered during that inspection.
