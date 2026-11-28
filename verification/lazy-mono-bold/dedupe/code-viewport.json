@@ -1,0 +1,50 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-style-h8ckar19/styles.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "peak_app_rss_kib": 78548,
+  "whole_journey_seconds": 53.972,
+  "requests": [
+    {
+      "path": "/",
+      "authorization": null,
+      "accept": "text/html,application/xhtml+xml,text/plain;q=0.9"
+    },
+    {
+      "path": "/sheet0.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet2.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/sheet3.css",
+      "authorization": null,
+      "accept": "text/css,*/*;q=0.1"
+    },
+    {
+      "path": "/search.html?q=cobalt",
+      "authorization": null,
+      "accept": "text/html,application/xhtml+xml,text/plain;q=0.9"
+    }
+  ],
+  "sphinx": true,
+  "textarea": false,
+  "form_edges": false,
+  "choices": false,
+  "paged_form": false,
+  "post_review": false,
+  "profile": "libra-colour-390",
+  "styled_frame_changed": true,
+  "address_dismissals_restore_frame": true,
+  "sheet_count": 3,
+  "transport": "real TLS/HTTP, debug-only loopback fixture",
+  "dirty": true,
+  "source_sha": "173cc996189d49093a85eff44ca3ef373eb3c03e"
+}

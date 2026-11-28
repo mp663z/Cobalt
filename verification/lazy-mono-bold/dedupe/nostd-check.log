@@ -1,0 +1,9 @@
+     Locking 6 packages to latest compatible versions
+    Checking allocator-api2 v0.2.21
+    Checking equivalent v1.0.3
+    Checking foldhash v0.1.5
+    Checking ttf-parser v0.21.1
+    Checking hashbrown v0.15.5
+    Checking fontdue v0.9.3 (/home/sandbox/cb/measure-basic/vendor/fontdue)
+    Checking fontdue-nostd-probe v0.0.0 (/tmp/fontdue-nostd-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.99s

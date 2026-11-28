@@ -542,3 +542,39 @@ Sphinx PASS peak_app_rss_kib 87,216 (9ca294bb: 86,652; +564, drift-range),
 journey 38.7 s.
 Evidence: evidence/bw-journey-d18e898/, evidence/qemu-arm-d18e898/,
 evidence/sphinx-d18e898/.
+
+
+## 5114f722 vs d18e898 (2026-11-29, host x86_64 + qemu-arm) - lazy vendored mono bold A/B
+
+Head 5114f72286ddc88bd637fa32e3a5c835149c2ee8 (vendored fontdue 0.9.3,
+bounded opt-in lazy mono-bold geometry). Interleaved, same box, same session.
+
+### Paint time (sheets, interleaved, 3 pairs): FLAT
+sheets5 painted: A(d18e898) mean 1324 ms vs B(5114f722) mean 1298 ms (-26 ms);
+sheets16: A mean 1340 ms vs B mean 1325 ms (-15 ms). Within the +/-20-30 ms
+noise band. Evidence: evidence/ab-5114f722-vs-d18e898/.
+
+### RSS (painted-only 12-page sessions, alternating): -8 MB, bold code included
+Standard pages: A(d18e898) flat 72,712 KiB; B(5114f722) flat 64,700 KiB =>
+-8.0 MB. Bold-code pages (Pygments-style .highlight with font-weight:bold
+keyword spans in <pre>, probes/session_boldcode.py): A flat 72,480 KiB; B flat
+64,588 KiB => -7.9 MB. Bold-first variant (code at top of every page, visually
+verified bold mono rendering, evidence shot boldfirst-page1.png): B flat
+64,512 KiB. Bold mono rendering under lazy loading adds no measurable RSS over
+the new baseline; the eager bold face was ~8 MB resident at d18e898.
+Glyph parity test (lazy vs eager, all glyphs, 4 sizes): PASS on host.
+Evidence: evidence/session-painted-ab-5114f722/.
+
+### ARM sizes (release, stripped, musl): BIG JUMP, budget much tighter
+kobo-browser 6,349,340 B (+341,400 vs d18e898; vendored fontdue + std);
+kobo-hello 1,275,700 (+8,688); kobod 5,135,348 (+8,584).
+Budget (browser vs hello + 5 MiB = 6,518,580): headroom 169,240 B (was
+501,952; -332,712). WITHIN budget, but two-thirds of headroom consumed.
+
+### BW / qemu / sphinx at 5114f722
+BW painted-article 64,792 VmRSS / 65,604 VmHWM (d18e898: 72,604/73,216; -7.8 MB).
+qemu-arm painted 39,236 VmRSS / 77,320 VmHWM (d18e898: 48,976/86,300; -9.7 MB
+RSS, -9.0 MB HWM).
+Sphinx PASS peak_app_rss_kib 78,920 (d18e898: 87,216; -8.3 MB), journey 39.0 s.
+Evidence: evidence/bw-journey-5114f722/, evidence/qemu-arm-5114f722/,
+evidence/sphinx-5114f722/.
