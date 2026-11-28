@@ -25,6 +25,7 @@ impl Faces {
         let regular = std::fs::read(directory.join("AtkinsonHyperlegible-Regular.ttf"))?;
         let bold = std::fs::read(directory.join("AtkinsonHyperlegible-Bold.ttf"))?;
         let mono = std::fs::read(directory.join("DejaVuSansMono.ttf"))?;
+        let mono_bold = std::fs::read(directory.join("DejaVuSansMono-Bold.ttf"))?;
         let mut regular_session = PageFontSession::from_bytes(&regular, &bold)?;
         // The bundled mono face covers additional scripts, including Cyrillic.
         // Missing glyphs in every face remain visible boxes, never dropped text.
@@ -45,7 +46,7 @@ impl Faces {
         regular_session.add_fallback(&mono)?;
         Ok(Self {
             regular: PageFace(regular_session),
-            mono: PageFace(PageFontSession::from_bytes(&mono, &mono)?),
+            mono: PageFace(PageFontSession::from_bytes(&mono, &mono_bold)?),
         })
     }
 }
