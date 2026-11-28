@@ -5,8 +5,9 @@ use crate::css_text_page::FontProvider;
 use crate::display_list::{Command, Rect, Rgb, Source};
 use crate::inline_lines::GlyphBitmap;
 
-/// Source text, weight, colour, CSS size and optional inline chip background
-/// as (background, horizontal padding left, horizontal padding right).
+/// Source text, weight, colour, CSS size, optional inline chip background
+/// as (background, horizontal padding left, horizontal padding right), and
+/// the leaf's resolved generic font family (None follows the block face).
 pub(crate) type Run = (
     String,
     bool,
@@ -17,6 +18,7 @@ pub(crate) type Run = (
     Option<usize>,
     Vec<crate::basic_bidi::Scope>,
     Option<(u32, u32, u32)>,
+    Option<crate::computed_style::GenericFamily>,
 );
 
 pub(crate) struct Style {
@@ -94,13 +96,24 @@ fn next_occurrence(text: &str, offset: &mut usize, ch: char) -> usize {
 }
 
 #[allow(clippy::too_many_lines)] // Measurement, baseline and mask placement share the same run data.
-pub(crate) fn paint(
+pub(crate) fn paint<F: FontProvider>(
     runs: &[Run],
-    font: &impl FontProvider,
+    font: &F,
+    font_sans: Option<&F>,
+    font_mono: Option<&F>,
     style: &Style,
     origin: (i64, i64),
     width: u32,
-) -> Result<(Vec<Command>, i64, usize, u32, u32), &'static str> {
+) -> Result<(Vec<Command>, i64, usize, u32, u32, u32), &'static str> {
+    // Per-leaf family: generic sans/mono map to the supplied faces when the
+    // caller provides them; anything else stays on the block face.
+    let face_of = |leaf: usize| -> &F {
+        match runs[leaf].9 {
+            Some(crate::computed_style::GenericFamily::SansSerif) => font_sans.unwrap_or(font),
+            Some(crate::computed_style::GenericFamily::Monospace) => font_mono.unwrap_or(font),
+            _ => font,
+        }
+    };
     let refs: Vec<_> = runs.iter().map(|r| (r.0.as_str(), r.1)).collect();
     let size_of = |leaf: usize| runs[leaf].3.clamp(1, 256);
     // Shape compatible font spans across DOM/style boundaries. Colour,
@@ -115,6 +128,7 @@ pub(crate) fn paint(
             && runs[group_end].3 == runs[group_start].3
             && runs[group_end].4 == runs[group_start].4
             && runs[group_end].7 == runs[group_start].7
+            && runs[group_end].9 == runs[group_start].9
         {
             group_end += 1;
         }
@@ -122,7 +136,7 @@ pub(crate) fn paint(
             .iter()
             .map(|r| r.0.as_str())
             .collect();
-        if let Some(clusters) = font.page_shape(
+        if let Some(clusters) = face_of(group_start).page_shape(
             &text,
             runs[group_start].3.clamp(1, 256),
             runs[group_start].1,
@@ -183,11 +197,12 @@ pub(crate) fn paint(
                 });
             }
         }
-        if font.has_glyph(ch, runs[leaf].1) == Some(false) {
+        if face_of(leaf).has_glyph(ch, runs[leaf].1) == Some(false) {
             return Some((size / 2).max(3));
         }
         Some(
-            font.page_advance(ch, size, runs[leaf].1, runs[leaf].4)
+            face_of(leaf)
+                .page_advance(ch, size, runs[leaf].1, runs[leaf].4)
                 .unwrap_or((size / 2).max(3)),
         )
     };
@@ -196,12 +211,12 @@ pub(crate) fn paint(
     let scopes: Vec<_> = runs.iter().map(|r| r.7.as_slice()).collect();
     let mirrored = crate::basic_bidi::reorder_scoped(&mut lines, &refs, style.direction, &scopes);
     if lines.glyphs.is_empty() {
-        return Ok((Vec::new(), 0, 0, 0, 0));
+        return Ok((Vec::new(), 0, 0, 0, 0, 0));
     }
     let mut struts = vec![(0_u32, 0_u32); lines.count as usize];
     for g in &lines.glyphs {
         let size = size_of(g.leaf);
-        let (height, baseline) = font
+        let (height, baseline) = face_of(g.leaf)
             .page_character_metrics(g.character, size, g.bold, runs[g.leaf].4)
             .map(|m| (m.height, m.baseline))
             .unwrap_or((size + 4, i32::try_from(size).unwrap_or(16)));
@@ -230,6 +245,7 @@ pub(crate) fn paint(
     let mut missing = 0;
     let mut chips = 0u32;
     let mut chips_padded = 0u32;
+    let mut inline_family = 0u32;
     let mut paint_offsets = vec![0_usize; runs.len()];
     let mut from = 0;
     while from < lines.glyphs.len() {
@@ -260,7 +276,9 @@ pub(crate) fn paint(
                 text_start=text_start.min(byte);text_end=text_end.max(byte+g.character.len_utf8());
                 if mirrored[from + local_index] {
                     if let Some(ch) = unicode_bidi_mirroring::get_mirrored(g.character) {
-                        if let Some(bitmap) = font.page_raster(ch, size, g.bold, runs[g.leaf].4) {
+                        if let Some(bitmap) =
+                            face_of(g.leaf).page_raster(ch, size, g.bold, runs[g.leaf].4)
+                        {
                             return bitmap;
                         }
                     }
@@ -289,9 +307,9 @@ pub(crate) fn paint(
                         };
                     }
                 }
-                if font.has_glyph(g.character, g.bold) != Some(false) {
+                if face_of(g.leaf).has_glyph(g.character, g.bold) != Some(false) {
                     if let Some(bitmap) =
-                        font.page_raster(g.character, size, g.bold, runs[g.leaf].4)
+                        face_of(g.leaf).page_raster(g.character, size, g.bold, runs[g.leaf].4)
                     {
                         return bitmap;
                     }
@@ -308,6 +326,11 @@ pub(crate) fn paint(
             .max()
             .unwrap_or(seg_left)
             .saturating_sub(seg_left);
+        if !std::ptr::eq(face_of(first.leaf), font) {
+            // Segment painted in a family other than the block's (e.g.
+            // inline code in a prose paragraph): counted, never refused.
+            inline_family += 1;
+        }
         if let Some((chip, pad_left, pad_right)) = runs[first.leaf].8 {
             // Inline-element background (e.g. `code { background: ... }`): one
             // fill per (line, run) segment under the glyphs, covering the
@@ -441,7 +464,14 @@ pub(crate) fn paint(
         }
         from = to;
     }
-    Ok((commands, total_height, missing, chips, chips_padded))
+    Ok((
+        commands,
+        total_height,
+        missing,
+        chips,
+        chips_padded,
+        inline_family,
+    ))
 }
 
 #[cfg(test)]

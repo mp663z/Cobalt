@@ -2768,6 +2768,7 @@ pub(crate) fn properties_with(
                         Some((Property::FontFamily, v))
                     }
                     None => {
+                        let mut return_family = None;
                         let generic = match value {
                             "serif" => Some(crate::computed_style::GenericFamily::Serif),
                             "sans-serif" => Some(crate::computed_style::GenericFamily::SansSerif),
@@ -2799,7 +2800,29 @@ pub(crate) fn properties_with(
                                 Some((_, Value::FontFamily(_, Some(_))))
                             )
                         );
-                        produced
+                        // CANDIDATE (ext entries only): a NAMED list whose first honorable
+                        // entry is sans-serif or monospace per `font_family::device_generic`
+                        // (named entries before it must be known-absent on the basic painter;
+                        // see that function for every refusal). Intern failure keeps the
+                        // refusal. The painter maps the generic to its own sans/mono face.
+                        if em_font && generic.is_none() {
+                            if let Ok(g) = crate::font_family::device_generic(value) {
+                                if let Some(key) = fam.intern(value) {
+                                    unsupported = false;
+                                    let g = match g {
+                                        crate::font_family::Generic::Monospace => {
+                                            crate::computed_style::GenericFamily::Monospace
+                                        }
+                                        _ => crate::computed_style::GenericFamily::SansSerif,
+                                    };
+                                    return_family = Some((
+                                        Property::FontFamily,
+                                        Value::FontFamily(Some(g), Some(key)),
+                                    ));
+                                }
+                            }
+                        }
+                        return_family.or(produced)
                     }
                 }
             }

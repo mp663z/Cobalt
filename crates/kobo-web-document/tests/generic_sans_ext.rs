@@ -111,7 +111,9 @@ fn other_values_keep_the_refusal_under_ext() {
         // multi-item lists, including repeated generic
         "sans-serif, sans-serif",
         "monospace, monospace",
-        "arial, sans-serif",
+        // `arial, sans-serif` moved to tests/device_family_list.rs: a NAMED list whose
+        // named entries are all known-absent on the basic painter and whose first honorable
+        // entry is sans-serif is now admitted under ext. Its refusals stay pinned there.
         // other generics (no proven profile)
         "serif",
         "monospace",

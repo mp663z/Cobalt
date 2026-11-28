@@ -192,6 +192,49 @@ pub fn resolve_family(value: &str, catalog: &(impl FaceCatalog + ?Sized)) -> Res
     Err(Refusal::NothingAvailable)
 }
 
+/// Family names the Kobo basic painter is KNOWN not to have. The basic painter owns exactly three
+/// faces (serif, sans, mono) and performs no host font lookup, so a name outside its bundle can
+/// never match a face there; it is `Absent` for that renderer. This says nothing about any browser
+/// host (a Chrome host may well have Menlo or Helvetica); the corpus has no Chrome reference.
+/// Names the bundle might answer to (Atkinson Hyperlegible, DejaVu, Noto*, KoboPage*) and every
+/// webfont-style name (declared by `@font-face` or unknown) are deliberately NOT listed: they refuse.
+const DEVICE_ABSENT: &[&str] = &[
+    // Sans system stack
+    "-apple-system", "blinkmacsystemfont", "avenir next", "avenir", "segoe ui", "helvetica neue",
+    "helvetica", "cantarell", "ubuntu", "roboto", "noto", "arial",
+    // Monospace system stack
+    "menlo", "consolas", "monaco", "liberation mono", "lucida console", "courier new", "courier",
+    "sf mono", "sfmono-regular",
+];
+
+/// Resolve a lowercased `font-family` LIST to the generic the basic painter can honor.
+///
+/// Admits only a list with at least one named entry, every named entry before the first generic
+/// being in [`DEVICE_ABSENT`], resolving to the first generic keyword, which must be `sans-serif`
+/// or `monospace`. Everything else refuses: a bare generic (existing handling unchanged), a name
+/// outside the absent set (undecidable), `serif` or an unmapped generic as the first honorable
+/// entry, a list with no generic, and anything outside the strict list grammar (`var()`,
+/// escapes, CSS-wide keywords, >16 entries, >256 bytes).
+///
+/// # Errors
+/// A [`Refusal`] naming why the list is not admitted.
+pub fn device_generic(value: &str) -> Result<Generic, Refusal> {
+    let entries = parse_family_list(value)?;
+    if !entries.iter().any(|e| matches!(e, Entry::Named(_))) {
+        return Err(Refusal::Undecidable);
+    }
+    for entry in entries {
+        match entry {
+            Entry::Named(name) if DEVICE_ABSENT.contains(&name.as_str()) => {}
+            Entry::Named(_) => return Err(Refusal::Undecidable),
+            Entry::Generic(g @ (Generic::SansSerif | Generic::Monospace)) => return Ok(g),
+            Entry::Generic(Generic::Serif) => return Err(Refusal::Undecidable),
+            Entry::UnsupportedGeneric => return Err(Refusal::UnsupportedGeneric),
+        }
+    }
+    Err(Refusal::NothingAvailable)
+}
+
 /// A catalog that can also state, per family, whether a face maps a character to a real glyph.
 /// `None` = unknown coverage.
 pub trait FaceCoverage: FaceCatalog {

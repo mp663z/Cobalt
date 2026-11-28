@@ -319,6 +319,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                         node.source,
                         scopes,
                         chip_bg,
+                        node.style.font_family,
                     ));
                 }
                 BoxKind::Inline => {
@@ -361,7 +362,7 @@ impl<'a, F: FontProvider> Painter<'a, F> {
             .collect_runs_of(&self.tree.boxes[index].children, color)
             .ok()?;
         let mut total = 0i64;
-        for (text, bold, _, rsize, _, _, _, _, _) in &runs {
+        for (text, bold, _, rsize, _, _, _, _, _, _) in &runs {
             let sz = if *rsize == 0 { size } else { *rsize };
             // Estimate only: non-folding text (wiki LRM marks, emoji)
             // and glyphs without an advance charge half an em per char
@@ -481,8 +482,18 @@ impl<'a, F: FontProvider> Painter<'a, F> {
                 );
             }
         }
-        let (commands, height, missing, chips, chips_padded) =
-            crate::basic_text_paint::paint(&runs, face, &style, (content_x, top), width)?;
+        let font_sans = self.font_sans;
+        let font_mono = self.font_mono;
+        let (commands, height, missing, chips, chips_padded, inline_family) =
+            crate::basic_text_paint::paint(
+                &runs,
+                face,
+                font_sans,
+                font_mono,
+                &style,
+                (content_x, top),
+                width,
+            )?;
         if missing > 0 {
             *self
                 .stats
@@ -495,6 +506,9 @@ impl<'a, F: FontProvider> Painter<'a, F> {
         }
         for _ in 0..chips_padded {
             self.stats.approx("inline-background-padding");
+        }
+        for _ in 0..inline_family {
+            self.stats.approx("inline-font-family");
         }
         self.stats.fills += usize::try_from(chips).unwrap_or(0);
         self.stats.glyph_runs += commands.len() - usize::try_from(chips).unwrap_or(0);
