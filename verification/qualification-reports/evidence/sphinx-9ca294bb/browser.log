@@ -1,0 +1,10 @@
+Kobo app simulator: http://127.0.0.1:43779
+shot /tmp/sphinx-9ca294bb/browser-shots/before-sheet.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/after-sheet.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/address-edit.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/address-cancel.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/address-back.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/form-list.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/form-edited.png (ideal color; panel appearance uncalibrated)
+shot /tmp/sphinx-9ca294bb/browser-shots/search-result.png (ideal color; panel appearance uncalibrated)
+drive: every step passed; screenshots in /tmp/sphinx-9ca294bb/browser-shots

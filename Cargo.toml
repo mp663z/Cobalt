@@ -119,3 +119,6 @@ codegen-units = 1
 lto = "thin"
 panic = "abort"
 strip = "symbols"
+
+[patch.crates-io]
+fontdue = { path = "vendor/fontdue" }

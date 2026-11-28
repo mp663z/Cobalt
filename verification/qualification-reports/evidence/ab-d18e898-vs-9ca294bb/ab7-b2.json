@@ -1,0 +1,133 @@
+{
+  "rep": "B2",
+  "boot_s": 9.01,
+  "checkpoints": [
+    {
+      "label": "start-page",
+      "t": 0.0,
+      "app": {
+        "pid": 106313,
+        "VmHWM": 29184,
+        "VmRSS": 29184,
+        "RssAnon": 19368
+      },
+      "dev_server": {
+        "pid": 105679,
+        "VmHWM": 148216,
+        "VmRSS": 40868,
+        "RssAnon": 24424
+      }
+    },
+    {
+      "label": "fixture-index",
+      "t": 4.7,
+      "app": {
+        "pid": 106313,
+        "VmHWM": 73268,
+        "VmRSS": 73268,
+        "RssAnon": 59612
+      },
+      "dev_server": {
+        "pid": 105679,
+        "VmHWM": 148216,
+        "VmRSS": 74232,
+        "RssAnon": 56888
+      }
+    },
+    {
+      "label": "sheets5-painted",
+      "t": 9.2,
+      "app": {
+        "pid": 106313,
+        "VmHWM": 82404,
+        "VmRSS": 73728,
+        "RssAnon": 59988
+      },
+      "dev_server": {
+        "pid": 105679,
+        "VmHWM": 148216,
+        "VmRSS": 78300,
+        "RssAnon": 60956
+      }
+    },
+    {
+      "label": "sheets16-painted",
+      "t": 15.6,
+      "app": {
+        "pid": 106313,
+        "VmHWM": 83284,
+        "VmRSS": 74676,
+        "RssAnon": 60936
+      },
+      "dev_server": {
+        "pid": 105679,
+        "VmHWM": 148216,
+        "VmRSS": 78360,
+        "RssAnon": 61016
+      }
+    }
+  ],
+  "latencies": {
+    "nav-home": 3.48,
+    "nav-sheets5": 1.471,
+    "painted-sheets5": 1.471,
+    "settled-sheets5": 1.643,
+    "nav-sheets16": 1.498,
+    "painted-sheets16": 1.498,
+    "settled-sheets16": 1.669
+  },
+  "fetches": {
+    "sheets5": [
+      "/s5-2.css",
+      "/s5-0.css",
+      "/s5-1.css",
+      "/s5-3.css",
+      "/s5-4.css"
+    ],
+    "sheets5-all": [
+      "/sheets5",
+      "/s5-2.css",
+      "/s5-0.css",
+      "/s5-1.css",
+      "/s5-3.css",
+      "/s5-4.css"
+    ],
+    "sheets16": [
+      "/s16-2.css",
+      "/s16-0.css",
+      "/s16-1.css",
+      "/s16-3.css",
+      "/s16-4.css",
+      "/s16-5.css",
+      "/s16-6.css",
+      "/s16-7.css",
+      "/s16-8.css",
+      "/s16-9.css",
+      "/s16-10.css",
+      "/s16-11.css",
+      "/s16-12.css",
+      "/s16-13.css",
+      "/s16-14.css",
+      "/s16-15.css"
+    ],
+    "sheets16-all": [
+      "/sheets16",
+      "/s16-2.css",
+      "/s16-0.css",
+      "/s16-1.css",
+      "/s16-3.css",
+      "/s16-4.css",
+      "/s16-5.css",
+      "/s16-6.css",
+      "/s16-7.css",
+      "/s16-8.css",
+      "/s16-9.css",
+      "/s16-10.css",
+      "/s16-11.css",
+      "/s16-12.css",
+      "/s16-13.css",
+      "/s16-14.css",
+      "/s16-15.css"
+    ]
+  }
+}

@@ -471,3 +471,74 @@ BW painted-article 82,956 VmRSS/VmHWM (matches session B exactly).
 qemu-arm painted 57,960 VmRSS / 95,284 VmHWM (vs f337f5eb 38,140/97,016: cached
 faces now stay resident under emulation, +19.8 MB RSS).
 Sphinx PASS peak_app_rss_kib 96,324 (f337f5eb: 96,372; flat), journey 38.5 s.
+
+
+## 9ca294bb vs 77677c6f (2026-11-29, host x86_64 + qemu-arm) - shared mono regular face A/B
+
+Head 9ca294bb0b076a1828b14ded6eb7db506c55ae3e (share exact regular mono
+geometry between UI and Page fonts). Interleaved, same box, same session.
+
+### Paint time (sheets, interleaved, 3 pairs): FLAT
+sheets5 painted: A(77677c6f) 1.274/1.273/1.303 (mean 1283 ms) vs B(9ca294bb)
+1.302/1.270/1.274 (steady mean 1282 ms) => ~0 ms. sheets16: A mean 1314 ms vs
+B mean 1322 ms => +8 ms, within run noise (+-20 ms). No warmup outlier this
+session. Evidence: evidence/ab-9ca294bb-vs-77677c6f/.
+
+### RSS (painted-only 12-page session, alternating, 2 pairs): -10.2 MB
+A(77677c6f): flat 82,956 / 82,700-82,964 KiB. B(9ca294bb): flat 72,708 /
+72,544 KiB => -10.2 MB (-12.4%) resident. Flat across 12 pages at both heads.
+Sharing the regular mono face between UI and Page undoes about half of the
+font-era +19.6 MB RSS increase. Evidence: evidence/session-painted-ab-9ca294bb/.
+
+### ARM sizes (release, stripped, musl)
+kobo-browser 6,007,228 B (+2,240 vs 77677c6f); kobo-hello 1,267,012 (+1,272);
+kobod 5,126,764 (+1,464) - first move in hello/kobod (kobo-text lib change
+compiled into all three). Budget (browser vs hello + 5 MiB = 6,509,892):
+headroom 502,664 B (was 503,632): WITHIN budget.
+
+### BW / qemu / sphinx at 9ca294bb
+BW painted-article 73,748 VmRSS / 74,192 VmHWM (77677c6f: 82,956/82,956;
+-9.2 MB RSS). Two exit-navigation steps after the final checkpoint failed
+(tap-id return/done route names); all RSS checkpoints captured.
+qemu-arm painted 49,172 VmRSS / 86,444 VmHWM (77677c6f: 57,960/95,284;
+-8.8 MB RSS, -8.8 MB HWM). First qemu attempt returned null snapshots
+(app spawn raced); rerun with identical script succeeded, same pid throughout.
+Sphinx PASS peak_app_rss_kib 86,652 (77677c6f: 96,324; -9.7 MB), journey
+41.2 s (38.5 s prior; not interleaved, drift-range).
+Evidence: evidence/bw-journey-9ca294bb/, evidence/qemu-arm-9ca294bb/,
+evidence/sphinx-9ca294bb/.
+
+
+## d18e898 vs 9ca294bb (2026-11-29, host x86_64 + qemu-arm) - fractional line-height rounding A/B
+
+Head d18e898abad571843468b5cd24bb767da4da10ab (round fractional percent/em
+line-heights to nearest pixel; crates/kobo-web-document). Interleaved, same
+box, same session.
+
+### Paint time (sheets, interleaved, 4 pairs): FLAT
+Pairwise painted deltas (B-A): -4/-22, +138/+98 (globally slow pair, nav-home
+elevated for both: box noise), +2/+30, -3/0 ms. Steady means: sheets5 A 1332 /
+B 1329 ms; sheets16 A 1332 / B 1382 ms skewed by the noisy pair, +0 ms on
+clean pairs. Evidence: evidence/ab-d18e898-vs-9ca294bb/.
+
+### RSS (painted-only 12-page session, alternating): FLAT
+A(9ca294bb) flat 72,760 KiB; B(d18e898) flat 72,704/72,456 KiB => ~0 (-0.1 MB,
+noise). Line-height rounding adds no resident memory.
+Evidence: evidence/session-painted-ab-d18e898/.
+
+### bw_journey.py route-name fix (reported to lead)
+Links list publishes BarAction id return (2246981567) labelled "Done"; done is
+not an id. Field editor's only action is Button Cancel (3172482064); no
+reachable return id there. Script exits fixed: links list `tap-id return`,
+editor `tap Cancel`. Rerun clean, zero failed steps.
+
+### ARM / BW / qemu / sphinx at d18e898
+ARM kobo-browser 6,007,940 B (+712 vs 9ca294bb); hello 1,267,012 / kobod
+5,126,764 unchanged. Budget (hello + 5 MiB = 6,509,892): headroom 501,952 B:
+WITHIN budget.
+BW painted-article 72,604 VmRSS / 73,216 VmHWM (9ca294bb: 73,748/74,192).
+qemu-arm painted 48,976 VmRSS / 86,300 VmHWM (9ca294bb: 49,172/86,444; flat).
+Sphinx PASS peak_app_rss_kib 87,216 (9ca294bb: 86,652; +564, drift-range),
+journey 38.7 s.
+Evidence: evidence/bw-journey-d18e898/, evidence/qemu-arm-d18e898/,
+evidence/sphinx-d18e898/.

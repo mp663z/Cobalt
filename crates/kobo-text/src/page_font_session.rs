@@ -95,7 +95,10 @@ impl PageFontSession {
     pub fn from_bytes(regular: &[u8], bold: &[u8]) -> Result<Self, &'static str> {
         Ok(Self {
             regular: crate::shared_font(regular)?,
-            bold: Font::from_bytes(bold, FontSettings::default())?,
+            bold: if bold == include_bytes!("../fonts/DejaVuSansMono-Bold.ttf") &&
+                !(cfg!(debug_assertions) && std::env::var("KOBO_SIM_EAGER_MONO_BOLD").as_deref() == Ok("1")) {
+                Font::from_bytes_lazy(bold, FontSettings::default())?
+            } else { Font::from_bytes(bold, FontSettings::default())? },
             italic: None,
             bold_italic: None,
             fallback: Vec::new(),
@@ -644,5 +647,25 @@ mod shared_mono_tests {
             });
         }
         assert!(count > 1000);
+    }
+}
+
+#[cfg(test)]
+mod lazy_geometry_parity {
+    use super::*;
+    #[test]
+    fn every_regular_and_bold_glyph_matches_eager_at_four_sizes() {
+        for bytes in [crate::MONO_FONT, include_bytes!("../fonts/DejaVuSansMono-Bold.ttf").as_slice()] {
+            let eager = Font::from_bytes(bytes, FontSettings::default()).unwrap();
+            let lazy = Font::from_bytes_lazy(bytes, FontSettings::default()).unwrap();
+            assert_eq!(eager.glyph_count(), lazy.glyph_count());
+            for id in 0..eager.glyph_count() {
+                for px in [12.0,18.0,24.0,32.0] {
+                    assert_eq!(eager.rasterize_indexed(id, px), lazy.rasterize_indexed(id, px), "glyph {id} at {px}");
+                    let (count, bytes) = lazy.lazy_geometry_usage().unwrap();
+                    assert!(count <= 256 && bytes <= 1_048_576);
+                }
+            }
+        }
     }
 }

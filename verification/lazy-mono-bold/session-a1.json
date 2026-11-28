@@ -1,0 +1,355 @@
+{
+  "app": "browser",
+  "launched": true,
+  "status": "pass",
+  "route": "/tmp/cb-session-i0x1e1u5/session.kobo",
+  "exit_code": 0,
+  "app_status": "pass",
+  "profile": "clara-bw-391",
+  "pages": 12,
+  "render_scope": "mixed-mode; screenshots are not a painted-mode assertion",
+  "requests": [
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 25936,
+          "hwm_kib": 26464
+        }
+      ]
+    },
+    {
+      "path": "/page/1",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 73184,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/2",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 73184,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/3",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/4",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/5",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/6",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/7",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/8",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/9",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/10",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/11",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/10",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/11",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    },
+    {
+      "path": "/page/0",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "shot": "first-run.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 25936,
+          "hwm_kib": 26464
+        }
+      ],
+      "elapsed_seconds": 5.598
+    },
+    {
+      "shot": "session-00.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 73184,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 11.21
+    },
+    {
+      "shot": "session-01.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 73184,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 13.936
+    },
+    {
+      "shot": "session-02.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 16.362
+    },
+    {
+      "shot": "session-03.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 18.83
+    },
+    {
+      "shot": "session-04.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 21.194
+    },
+    {
+      "shot": "session-05.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 23.614
+    },
+    {
+      "shot": "session-06.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 26.146
+    },
+    {
+      "shot": "session-07.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 28.565
+    },
+    {
+      "shot": "session-08.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 31.049
+    },
+    {
+      "shot": "session-09.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 33.469
+    },
+    {
+      "shot": "session-10.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 35.94
+    },
+    {
+      "shot": "session-11.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 38.361
+    },
+    {
+      "shot": "session-back.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 39.955
+    },
+    {
+      "shot": "session-forward.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 41.55
+    },
+    {
+      "shot": "session-history.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 43.359
+    },
+    {
+      "shot": "session-final.png",
+      "rss": [
+        {
+          "pid": 96200,
+          "rss_kib": 72992,
+          "hwm_kib": 73884
+        }
+      ],
+      "elapsed_seconds": 45.009
+    }
+  ],
+  "peak_rss_kib": 73884,
+  "source_sha": "d18e898abad571843468b5cd24bb767da4da10ab",
+  "dirty": true
+}
