@@ -82,6 +82,7 @@ struct Loaded {
     styling_limited: bool,
     paint_requested: bool,
     style_anchor: Option<(usize,usize,u32)>,
+    style_scroll: Option<u32>,
     painted: Option<page_mode::PageMode>,
     paint_refused: bool,
     url: Url,
@@ -637,6 +638,7 @@ impl Browser {
             styling_limited: false,
             paint_requested: false,
             style_anchor: None,
+            style_scroll: None,
             painted: None,
             paint_refused: false,
             url: url.clone(),
@@ -698,6 +700,8 @@ impl Browser {
         if let Some((zoom,top))=self.scroll_places.get(&url.to_string()).copied(){
             if url.fragment().is_none(){if let Some(loaded)=self.loaded.as_mut(){if loaded.note.is_none() && forms::forms(&loaded.document.blocks).is_empty(){
                 loaded.paint_requested=true;
+                loaded.style_scroll=Some(top);
+                self.zoom=zoom;
                 loaded.painted=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom(bytes,&loaded.title,&metrics,zoom));
                 if let Some(painted)=loaded.painted.as_mut(){painted.restore_scroll(top);self.zoom=zoom;}
             }}}
@@ -739,9 +743,9 @@ impl Browser {
                 loaded.linked_sheets=bodies.clone();
                 // Reader/form/menu/keyboard choice stays untouched. Never force a page-mode switch.
                 if loaded.paint_requested && loaded.url.fragment().is_none() && loaded.note.is_none() && loaded.full.is_none() && forms::forms(&loaded.document.blocks).is_empty(){
-                    let anchor=loaded.style_anchor.take().or_else(||loaded.painted.as_ref().and_then(|p|p.reading_anchor()));
+                    let anchor=loaded.style_anchor.take().or_else(||loaded.style_scroll.is_none().then(||loaded.painted.as_ref().and_then(|p|p.reading_anchor())).flatten());
                     if let Some(mut styled)=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom_with_sheets(bytes,bodies,&loaded.title,&context.metrics(),self.zoom)){
-                        if let Some(anchor)=anchor{styled.restore_anchor(anchor);}
+                        if let Some(anchor)=anchor{styled.restore_anchor(anchor);}else if let Some(top)=loaded.style_scroll.take(){styled.restore_scroll(top);}
                         if styled.scroll_position()>0{
                             if self.scroll_places.len()>=64 && !self.scroll_places.contains_key(url){if let Some(first)=self.scroll_places.keys().next().cloned(){self.scroll_places.remove(&first);}}
                             self.scroll_places.insert(url.clone(),(self.zoom,styled.scroll_position()));

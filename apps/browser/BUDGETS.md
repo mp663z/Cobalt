@@ -1577,3 +1577,10 @@ This is actual app task-result seam coverage, not live-site transport or device
 qualification; callback timing warnings, full HTML/CSS, physical panel/RSS and
 independent proof gates remain open. The separate qualification allocator stays
 unmerged.
+
+Delayed-styles history follow-up: preserve the selected zoom and retained scroll
+offset while returning to a page whose initial paint is unavailable pending
+external sheets. Prefer that offset over a temporary unstyled anchor. New
+regression first failed at 13 px instead of 120, then passes after the fix. All
+six live-sheet regressions pass; nine selected painted tests passed on 416f3322.
+Locked stripped ARM 5,285,356 B, +504. Full-browser and hardware claims unchanged.

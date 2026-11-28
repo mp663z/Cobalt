@@ -3037,3 +3037,21 @@ fn live_sheet_reflow_keeps_source_anchor_menu_and_cancelled_request_ownership(){
     r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:purple}".to_vec()));
     assert_eq!(r.app().loaded.as_ref().unwrap().url.to_string(),"https://style.invalid/long");
 }
+
+#[test]
+fn live_sheets_history_restores_selected_zoom_after_supply(){
+    let (mut r,sheet)=styled_supply_runner();
+    r.task_outcome(sheet,TaskOutcome::Completed(b"h1{color:red}".to_vec()));
+    r.app_mut().scroll_places.insert("https://style.invalid/page".into(),(150,120));
+    let commands=r.action(action_id("reload"));
+    let _=commands;
+    // Reload intentionally retires the reading place. A later visit uses the retained history slot.
+    r.app_mut().scroll_places.insert("https://style.invalid/page".into(),(150,120));
+    let task=pending_task(&r);
+    let commands=r.task_outcome(task,TaskOutcome::Completed(br#"<!doctype html><title>Styled</title><link rel=stylesheet href=/page.css><h1>Restored</h1><p>one two three</p>"#.to_vec()));
+    assert_eq!(r.app().zoom,150);
+    let sheet=commands.iter().find_map(|c|match c{kobo_sdk::Command::Spawn{task,work:Task::Fetch{url,..}} if url.ends_with("page.css")=>Some(*task),_=>None}).unwrap();
+    r.task_outcome(sheet,TaskOutcome::Completed(b"p{margin-bottom:600px}".to_vec()));
+    let p=r.app().loaded.as_ref().unwrap().painted.as_ref().unwrap();
+    assert_eq!(r.app().zoom,150);assert_eq!(p.scroll_position(),120.min(p.view.max_scroll()));
+}
