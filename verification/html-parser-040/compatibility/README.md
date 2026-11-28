@@ -1,0 +1,1 @@
+Independent current parser compatibility sweep, sourceb7e3da76/runtimef19c4535. SDK166PASS,UI302PASS2ignored,SDKdoc2ignored,ABI18PASS,protocol123PASS,image25unit4integrationPASS,HTML42PASS,net93unit+1integration+12integrationPASS,weblayout34PASS. See gallery.log for galleryresults. Notwholeworkspacererun,nophysicaldeviceclaim.

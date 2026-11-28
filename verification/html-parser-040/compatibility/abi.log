@@ -1,0 +1,32 @@
+   Compiling kobo-abi v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-abi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running unittests src/lib.rs (target/debug/deps/kobo_abi-3568cb9879f748ab)
+
+running 18 tests
+test pty_tests::a_program_started_on_a_terminal_answers_what_is_typed_at_it ... ok
+test process_group_tests::signalling_a_group_stops_a_child_that_started_another_process ... ok
+test pty_tests::closing_stops_a_program_that_would_otherwise_run_forever ... ok
+test pty_tests::the_grid_can_change_while_the_program_is_running ... ok
+test pty_tests::the_program_is_told_the_grid_it_has ... ok
+test sandbox::tests::a_denied_syscall_is_replaced_then_reported_as_permission_denied ... ok
+test sandbox::tests::a_denied_syscall_result_rewrite_failure_does_not_resume_the_tracee ... ok
+test sandbox::tests::a_denied_syscall_selection_failure_does_not_resume_the_tracee ... ok
+test sandbox::tests::a_register_read_failure_does_not_resume_the_tracee ... ok
+test space_tests::a_path_that_is_not_there_is_not_an_answer ... ok
+test space_tests::a_path_with_a_nul_in_it_is_refused_rather_than_truncated ... ok
+test space_tests::a_real_filesystem_reports_something_plausible ... ok
+test tests::both_backends_wait_on_the_same_request ... ok
+test tests::hwtcon_offsets_match_vendor_c_layout ... ok
+test tests::ioctl_numbers_match_vendor_arm_uapi ... ok
+test tests::mxcfb_offsets_match_vendor_c_layout ... ok
+test tests::the_two_backends_number_their_waveforms_differently ... ok
+test pty_tests::a_program_that_ends_is_reported_rather_than_read_forever ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+   Doc-tests kobo_abi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

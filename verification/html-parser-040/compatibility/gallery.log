@@ -1,0 +1,31 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling kobo-gallery v0.3.25 (/home/sandbox/cb/measure-basic/examples/gallery)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.20s
+     Running unittests src/main.rs (target/debug/deps/kobo_gallery-8d78c92ddce82417)
+
+running 14 tests
+test tests::a_tab_remembers_which_of_its_pages_was_open ... ok
+test tests::every_control_the_toolkit_draws_is_somewhere_in_this_gallery ... ok
+test tests::every_glyph_is_on_the_panel_somewhere ... ok
+test tests::browser_specimens_answer_slider_links_modes_and_exit_without_network ... ok
+test tests::every_node_the_system_has_is_drawn_somewhere ... ok
+test tests::every_page_lays_out_without_an_error ... ok
+test tests::every_warning_this_reference_provokes_is_one_it_means_to ... ok
+test tests::tapping_away_from_the_menu_closes_it ... ok
+test tests::the_answer_already_given_is_marked_on_the_row_that_gave_it ... ok
+test tests::the_free_text_row_raises_the_keyboard_rather_than_answering_for_the_reader ... ok
+test tests::the_generated_pictures_are_exactly_the_size_they_claim ... ok
+test tests::the_pictures_are_handed_over_once_and_then_drawn_by_handle ... ok
+test tests::what_was_typed_becomes_the_answer ... ok
+test tests::every_page_fits_every_supported_panel_at_every_text_size ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 31.48s
+

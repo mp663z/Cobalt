@@ -1,0 +1,193 @@
+warning: function `draw_fallback_text` is never used
+     --> crates/kobo-ui/src/lib.rs:16885:4
+      |
+16885 | fn draw_fallback_text(surface: &mut Surface,text: &str,x:i32,y:i32,size:FontSize,tone:u8,clip:Rect) {
+      |    ^^^^^^^^^^^^^^^^^^
+      |
+      = note: `#[warn(dead_code)]` on by default
+
+warning: `kobo-ui` (lib) generated 1 warning
+   Compiling kobo-protocol v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-protocol)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.81s
+     Running unittests src/lib.rs (target/debug/deps/kobo_image-ecf0cbb2e11e089f)
+
+running 25 tests
+test jpeg_preflight_tests::segment_payload_is_not_scanned_for_false_markers ... ok
+test jpeg_preflight_tests::scan_budget_is_checked_before_the_entropy_decoder ... ok
+test tests::a_box_with_no_area_is_refused_rather_than_producing_nothing ... ok
+test tests::a_colour_picture_scales_both_planes_together_and_can_drop_one ... ok
+test tests::a_half_transparent_pixel_lands_between_its_colour_and_the_paper ... ok
+test tests::a_picture_smaller_than_its_box_is_left_alone ... ok
+test tests::a_predicted_fit_is_the_fit_that_happens ... ok
+test tests::a_real_jpeg_decodes_to_grey_bytes ... ok
+test tests::an_enormous_claim_is_refused_before_it_is_believed ... ok
+test tests::colour_is_reduced_by_perceptual_weight_rather_than_by_average ... ok
+test tests::cover_fills_the_box_and_crops_from_the_centre ... ok
+test tests::decoding_in_colour_keeps_the_colour_and_the_very_same_grey ... ok
+test tests::dithering_keeps_the_overall_brightness ... ok
+test tests::dithering_leaves_only_the_greys_the_panel_can_hold ... ok
+test tests::enlargement_stops_before_a_picture_becomes_a_blur ... ok
+test tests::a_cover_given_a_tile_of_its_own_is_enlarged_to_most_of_it ... ok
+test tests::fitting_keeps_the_shape_of_the_picture ... ok
+test tests::grey_bytes_that_are_not_the_size_they_claim_are_refused ... ok
+test tests::jpeg_exif_orientation_is_applied_before_layout ... ok
+test tests::one_grey_is_not_a_picture_so_the_floor_is_two ... ok
+test tests::resize_targets_are_bounded_before_allocation ... ok
+test tests::something_that_is_not_a_picture_is_refused_rather_than_guessed_at ... ok
+test tests::the_size_read_from_a_header_is_the_size_the_decoder_returns ... ok
+test tests::transparent_pixels_are_composited_onto_paper ... ok
+test tests::enlarging_still_never_overflows_a_box_a_picture_already_exceeds ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+     Running tests/jpeg_budget.rs (target/debug/deps/jpeg_budget-048f7e4dad3b6e9a)
+
+running 4 tests
+test malformed_progressive_fuzz_input_is_refused_in_both_public_paths ... ok
+test marker_scan_budget_and_truncation_are_refused_without_entropy_decode ... ok
+test ordinary_progressive_jpeg_still_decodes ... ok
+test existing_browser_best_effort_entropy_eof_remains_decodable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/lib.rs (target/debug/deps/kobo_protocol-20ca6cfe147e7f27)
+
+running 123 tests
+test board::tests::installed_grid_payloads_keep_their_version_13_bytes ... ok
+test board::tests::malformed_board_counts_flags_marks_and_actions_are_refused ... ok
+test colour_rich_text_tests::colour_tag_has_separate_flags_and_rejects_bad_ranges_and_truncation ... ok
+test board::tests::board_round_trip_is_bounded_and_versioned ... ok
+test coloured_heading_tests::heading_plain_wire_stays_identical_and_payload_bounds_hold ... ok
+test coloured_heading_tests::heading_rgb_roundtrip_retains_none_and_refuses_old_peers ... ok
+test colour_rich_text_tests::rgb_spans_round_trip_and_refuse_old_versions_without_changing_plain_bytes ... ok
+test compact_browser_wire_tests::compact_style_requires_its_explicit_version ... ok
+test inline_code_tests::inline_mono_is_versioned_without_changing_existing_style_byte_semantics ... ok
+test node_coverage_tests::a_choice_offering_no_answers_is_rejected ... ok
+test mono_rich_block_tests::mono_block_has_its_own_tag_and_never_silently_changes_old_peers ... ok
+test node_coverage_tests::a_grid_cell_carries_its_glyph_across_the_wire ... ok
+test node_coverage_tests::a_folding_byline_survives_the_wire_with_its_count ... ok
+test node_coverage_tests::a_nav_bar_with_one_destination_is_rejected ... ok
+test node_coverage_tests::a_mark_on_any_bar_entry_survives_the_wire ... ok
+test node_coverage_tests::a_reading_screen_keeps_its_publisher_font_handle ... ok
+test node_coverage_tests::a_reply_deeper_than_the_cap_arrives_at_the_cap_rather_than_being_refused ... ok
+test node_coverage_tests::an_answer_naming_no_option_arrives_unmarked_rather_than_refused ... ok
+test node_coverage_tests::an_out_of_range_selection_clamps_rather_than_losing_navigation ... ok
+test node_coverage_tests::an_overlay_survives_the_wire ... ok
+test node_coverage_tests::bars_survive_independently_of_each_other ... ok
+test node_coverage_tests::compact_browser_bar_round_trips_with_vector_icons ... ok
+test node_coverage_tests::a_screen_holding_every_node_round_trips ... ok
+test node_coverage_tests::no_destination_being_current_survives_the_wire ... ok
+test node_coverage_tests::numbered_boards_round_trip_without_changing_installed_grid_frames ... ok
+test node_coverage_tests::the_reserved_back_action_cannot_arrive_from_an_application ... ok
+test node_coverage_tests::unknown_tags_are_rejected_rather_than_guessed ... ok
+test pencil::tests::candidates_and_peer_marks_round_trip_and_validate ... ok
+test pencil::tests::malformed_pencil_marks_counts_and_edges_are_refused ... ok
+test node_coverage_tests::every_node_kind_round_trips_byte_for_byte ... ok
+test picture_link_tests::picture_regions_are_bounded_versioned_and_roundtrip ... ok
+test pencil::tests::pencil_payload_round_trips_and_refuses_truncation_and_old_versions ... ok
+test picture_scroll_tests::scroll_metadata_is_bounded_and_versioned ... ok
+test picture_tests::a_colour_picture_travels_on_its_own_tag_at_three_bytes_a_pixel ... ok
+test picture_tests::a_basic_credential_survives_an_encode_decode_round_trip ... ok
+test picture_tests::a_grey_picture_is_the_same_bytes_it_was_before_colour_existed ... ok
+test picture_tests::a_picture_chunk_is_independently_bounded ... ok
+test picture_tests::a_picture_larger_than_a_frame_is_refused ... ok
+test picture_tests::a_picture_on_a_shelf_survives_the_wire ... ok
+test picture_tests::a_picture_whose_size_disagrees_with_its_bytes_is_refused ... ok
+test picture_tests::an_unknown_tile_shape_is_refused_rather_than_guessed ... ok
+test picture_tests::a_publisher_font_travels_once_and_is_bounded ... ok
+test picture_tests::handing_over_a_picture_survives_the_wire ... ok
+test picture_tests::every_phase_of_a_large_picture_upload_survives_the_wire ... ok
+test picture_tests::protocol_11_cannot_send_orientation_requests ... ok
+test picture_tests::orientation_request_round_trips_and_keeps_portrait_as_the_default ... ok
+test picture_tests::releasing_a_picture_survives_the_wire ... ok
+test quote_rgb_tests::quote_rgb_wire_bounds_folds_and_old_plain_bytes ... ok
+test rgb_flag_variants_tests::foreground_background_and_style_only_spans_share_a_versioned_colour_node ... ok
+test row_rgb_wire_tests::row_colour_wire_preserves_actions_state_and_plain_bytes ... ok
+test store_tests::a_chunk_over_the_ceiling_is_refused_by_both_ends ... ok
+test store_tests::a_fetch_that_carries_headers_survives_an_encode_decode_round_trip ... ok
+test store_tests::a_fetch_header_carrying_a_newline_in_its_name_or_value_is_refused ... ok
+test store_tests::a_fetch_whose_header_count_exceeds_the_bound_is_refused_rather_than_truncated ... ok
+test store_tests::a_finished_flag_that_is_neither_yes_nor_no_is_refused ... ok
+test store_tests::a_never_written_key_is_distinct_from_an_empty_one ... ok
+test store_tests::a_terminal_chunk_exactly_at_the_bound_is_carried ... ok
+test store_tests::a_terminal_chunk_larger_than_the_bound_is_refused_rather_than_sent ... ok
+test store_tests::a_text_hold_survives_the_wire_without_losing_its_range ... ok
+test store_tests::an_oversized_value_is_refused_before_it_is_encoded ... ok
+test store_tests::every_shelf_message_survives_the_wire_at_the_length_it_predicted ... ok
+test store_tests::every_store_message_survives_the_wire ... ok
+test store_tests::every_task_message_encodes_to_exactly_the_length_it_claims ... ok
+test store_tests::keys_that_could_name_somewhere_else_are_refused ... ok
+test store_tests::offline_dictionary_requests_and_entries_are_bounded_and_typed ... ok
+test suspend_tests::suspend_messages_are_bounded_generation_scoped_and_version_gated ... ok
+test table_rgb_wire_tests::table_rgb_roundtrip_plain_compatibility_and_bounds ... ok
+test task_error_tests::a_missing_key_and_a_refused_permission_do_not_share_a_sentence ... ok
+test task_error_tests::a_tag_from_the_future_is_refused_rather_than_guessed ... ok
+test task_error_tests::every_task_error_survives_the_wire ... ok
+test task_error_tests::no_two_task_errors_share_a_tag ... ok
+test task_error_tests::only_the_failures_that_could_pass_next_time_are_worth_retrying ... ok
+test task_error_tests::the_tags_that_were_already_on_the_wire_did_not_move ... ok
+test task_error_tests::the_two_network_failures_do_not_read_the_same ... ok
+test tests::a_held_finger_survives_the_wire ... ok
+test tests::a_kepub_is_listed_and_not_offered_as_readable ... ok
+test tests::a_kepub_listing_survives_the_wire ... ok
+test tests::a_reading_screens_middle_column_survives_the_wire ... ok
+test tests::a_request_for_first_refusal_on_back_survives_the_wire ... ok
+test tests::a_screen_can_ask_for_a_text_size_and_most_do_not ... ok
+test tests::a_shared_failure_code_never_blames_a_part_of_the_system_it_cannot_know_about ... ok
+test tests::an_update_that_could_not_be_verified_is_refused_at_the_encoder ... ok
+test tests::app_compatibility_uses_numeric_cobalt_versions ... ok
+test tests::app_link_and_remote_install_payloads_are_bounded_and_validated ... ok
+test tests::app_requests_and_results_are_bounded_and_validated ... ok
+test tests::app_updates_are_only_strictly_newer_numeric_versions ... ok
+test tests::application_secret_debug_output_is_redacted ... ok
+test store_tests::a_request_body_may_be_far_larger_than_a_label ... ok
+test tests::encoder_rejects_node_and_list_counts_decoder_would_reject ... ok
+test tests::every_app_link_result_round_trips ... ok
+test tests::every_auto_update_result_round_trips ... ok
+test tests::every_device_request_round_trips ... ok
+test tests::every_device_result_round_trips ... ok
+test tests::every_glyph_has_a_wire_tag_and_gets_it_back ... ok
+test tests::identity_results_round_trip ... ok
+test tests::invalid_utf8_is_rejected ... ok
+test tests::malformed_app_link_payloads_are_rejected ... ok
+test tests::malformed_device_payloads_are_rejected_without_panic ... ok
+test tests::malformed_frames_are_rejected_before_allocation ... ok
+test tests::oversized_identity_field_is_refused ... ok
+test tests::protocol_11_cannot_encode_or_decode_application_secret_requests ... ok
+test tests::protocol_12_auto_update_frames_keep_their_payload_shape ... ok
+test tests::screen_round_trip_is_deterministic ... ok
+test tests::secret_presence_round_trips_and_stays_bounded ... ok
+test tests::server_accounts_roundtrip_only_with_scope_aware_protocol ... ok
+test tests::stream_rejects_oversized_length_before_allocation ... ok
+test tests::stream_round_trip_reads_exactly_one_frame ... ok
+test tests::unknown_update_channels_are_refused ... ok
+test tests::update_channel_variants_round_trip ... ok
+test tests::version_11_encoder_rejects_folio_only_fields ... ok
+test tests::version_11_screen_frames_survive_the_0_3_4_compatibility_window ... ok
+test tests::version_11_sections_and_tiles_use_the_legacy_wire_layout ... ok
+test tests::version_12_folio_fields_round_trip ... ok
+test tests::versions_outside_the_window_are_refused ... ok
+test unified_browser_tests::unified_header_style_is_explicitly_versioned ... ok
+test update_task_tests::a_bar_hidden_by_a_protocol_that_has_no_such_flag_is_refused ... ok
+test update_task_tests::an_application_published_before_this_protocol_still_speaks_to_it ... ok
+test update_task_tests::an_auto_hidden_top_bar_costs_nothing_for_the_screens_that_never_ask ... ok
+test update_task_tests::suspend_still_reaches_an_application_built_before_this_protocol ... ok
+test update_task_tests::update_tasks_enforce_existing_body_and_header_bounds ... ok
+test update_task_tests::update_wire_round_trips_and_refuses_unknown_methods_and_old_versions ... ok
+test zoom_panel_wire_tests::standalone_slider_is_versioned_bounded_and_round_trips ... ok
+test tests::encoder_preflights_payload_limit ... ok
+
+test result: ok. 123 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests kobo_image
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kobo_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
