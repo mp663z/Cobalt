@@ -1,0 +1,21 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.1
+   Compiling cfg-if v1.0.4
+   Compiling miniz_oxide v0.9.1
+   Compiling num-traits v0.2.19
+   Compiling flate2 v1.1.10
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling zune-core v0.4.12
+   Compiling pxfm v0.1.30
+   Compiling bitflags v2.13.1
+   Compiling png v0.18.1
+   Compiling zune-jpeg v0.4.21
+   Compiling moxcms v0.7.11
+   Compiling byteorder-lite v0.1.0
+   Compiling bytemuck v1.25.2
+   Compiling image v0.25.8
+   Compiling kobo-image v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-image)
+    Finished `release` profile [optimized] target(s) in 18.74s
+     Running `target/release/examples/decode_budget_probe /downloads/decode_image-timeout-36cb32f5-c6b04767.jpg`

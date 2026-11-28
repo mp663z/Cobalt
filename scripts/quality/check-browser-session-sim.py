@@ -41,6 +41,16 @@ def rss():
     return found
 
 
+def verify_painted(layout, metadata, number):
+    assert any(node.get('kind') == 'Picture(PictureHandle(2147418113))'
+               for node in layout.get('nodes', [])), 'painted page absent'
+    assert int(metadata['paints']) == int(layout['paints']), 'layout changed after screenshot'
+    assert any(f'https://{HOST}/page/{number}' in node.get('lines', [])
+               for node in layout['nodes']), 'wrong page'
+    assert not any(str(node.get('kind', '')).startswith(('Text', 'RichText', 'Heading'))
+                   for node in layout['nodes']), 'native prose under painted assertion'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -156,15 +166,13 @@ def main():
     assert [r['path'] for r in requests] == expected, requests
     assert any(c['shot'] == 'session-final.png' and len(c['rss']) == 1 for c in checkpoints), checkpoints
     assert all(len(c['rss']) == 1 for c in checkpoints), 'RSS not attributable to a single app'
+    assert len({c['rss'][0]['pid'] for c in checkpoints}) == 1, 'app restarted during session'
     if args.painted_only:
         for number in range(args.pages):
             point = next(c for c in checkpoints if c['shot'] == f'session-{number:02}.png')
             layout = point.get('layout', {})
-            assert any(str(node.get('kind', '')) == 'Picture(PictureHandle(2147418113))' for node in layout.get('nodes', [])), point
             metadata = json.loads((out / 'browser-shots' / f'session-{number:02}.json').read_text())
-            assert int(metadata['paints']) == int(layout['paints']), 'layout changed after screenshot'
-            assert any(f'https://{HOST}/page/{number}' in node.get('lines', []) for node in layout['nodes']), 'wrong page'
-            assert not any(str(node.get('kind', '')).startswith(('Text', 'RichText', 'Heading')) for node in layout['nodes']), 'native prose under painted assertion'
+            verify_painted(layout, metadata, number)
         result['render_scope'] = 'painted-only for all sequential page checkpoints; history navigation is separate'
     result['status'] = 'pass'
     destination.write_text(json.dumps(result, indent=2)+'\n')

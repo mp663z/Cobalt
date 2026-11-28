@@ -574,6 +574,7 @@ pub fn size(bytes: &[u8]) -> Result<(u32, u32), ImageError> {
     if bytes.len() > MAX_SOURCE_BYTES {
         return Err(ImageError::TooManyBytes { bytes: bytes.len() });
     }
+    jpeg_preflight(bytes)?;
     let reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|error| ImageError::Undecodable(error.to_string()))?;
@@ -635,6 +636,47 @@ pub fn fitted_size(source: (u32, u32), width: u32, height: u32) -> (u32, u32) {
     }
 }
 
+/// Reject malformed JPEG framing before entering the entropy decoder. Linear
+/// in compressed input bytes; this is not a general wall-clock decode deadline.
+fn jpeg_preflight(bytes: &[u8]) -> Result<(), ImageError> {
+    if !bytes.starts_with(&[0xff, 0xd8]) { return Ok(()); }
+    let refuse = || ImageError::Undecodable("invalid or over-budget JPEG marker stream".into());
+    let mut at = 2usize;
+    let mut entropy = false;
+    let mut scans = 0usize;
+    let mut frame = false;
+    while at < bytes.len() {
+        if entropy {
+            while at < bytes.len() && bytes[at] != 0xff { at += 1; }
+        } else if bytes[at] != 0xff { return Err(refuse()); }
+        if at == bytes.len() { break; }
+        while at < bytes.len() && bytes[at] == 0xff { at += 1; }
+        let marker = *bytes.get(at).ok_or_else(refuse)?;
+        at += 1;
+        if entropy && (marker == 0 || (0xd0..=0xd7).contains(&marker)) { continue; }
+        entropy = false;
+        if marker == 0xd9 { return if frame && scans > 0 { Ok(()) } else { Err(refuse()) }; }
+        // JPEG's reserved markers do not acquire authority from arbitrary
+        // following bytes. Repeated SOI/SOF frames are not one supported image.
+        if marker < 0xc0 || marker == 0xd8 || (0xd0..=0xd7).contains(&marker) { return Err(refuse()); }
+        let length_bytes = bytes.get(at..at.checked_add(2).ok_or_else(refuse)?).ok_or_else(refuse)?;
+        let length = usize::from(u16::from_be_bytes([length_bytes[0], length_bytes[1]]));
+        if length < 2 { return Err(refuse()); }
+        let end = at.checked_add(length).filter(|end| *end <= bytes.len()).ok_or_else(refuse)?;
+        if matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
+            if frame { return Err(refuse()); }
+            frame = true;
+        }
+        if marker == 0xda {
+            scans += 1;
+            if !frame || scans > 64 { return Err(refuse()); }
+            entropy = true;
+        }
+        at = end;
+    }
+    Err(refuse())
+}
+
 /// Reads a picture that arrived over the network.
 ///
 /// # Errors
@@ -646,6 +688,7 @@ pub fn decode(bytes: &[u8]) -> Result<Picture, ImageError> {
     if bytes.len() > MAX_SOURCE_BYTES {
         return Err(ImageError::TooManyBytes { bytes: bytes.len() });
     }
+    jpeg_preflight(bytes)?;
     let reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|error| ImageError::Undecodable(error.to_string()))?;
@@ -713,6 +756,7 @@ pub fn decode_colour(bytes: &[u8]) -> Result<Picture, ImageError> {
     if bytes.len() > MAX_SOURCE_BYTES {
         return Err(ImageError::TooManyBytes { bytes: bytes.len() });
     }
+    jpeg_preflight(bytes)?;
     let reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|error| ImageError::Undecodable(error.to_string()))?;
@@ -1113,5 +1157,25 @@ mod tests {
     fn average(values: &[u8]) -> f64 {
         let count = u32::try_from(values.len()).expect("a short fixture");
         values.iter().map(|value| f64::from(*value)).sum::<f64>() / f64::from(count)
+    }
+}
+
+#[cfg(test)]
+mod jpeg_preflight_tests {
+    use super::jpeg_preflight;
+    #[test]
+    fn scan_budget_is_checked_before_the_entropy_decoder() {
+        for count in [1, 64, 65] {
+            let mut bytes = vec![0xff, 0xd8, 0xff, 0xc2, 0, 2];
+            for _ in 0..count { bytes.extend_from_slice(&[0xff, 0xda, 0, 2, 5, 0xff, 0, 7, 0xff, 0xd0]); }
+            bytes.extend_from_slice(&[0xff, 0xd9]);
+            assert_eq!(jpeg_preflight(&bytes).is_ok(), count <= 64);
+        }
+    }
+    #[test]
+    fn segment_payload_is_not_scanned_for_false_markers() {
+        let bytes = [0xff, 0xd8, 0xff, 0xe1, 0, 6, 0xff, 0x93, 0xff, 0xda,
+            0xff, 0xc0, 0, 2, 0xff, 0xda, 0, 2, 0xff, 0xd9];
+        assert!(jpeg_preflight(&bytes).is_ok());
     }
 }

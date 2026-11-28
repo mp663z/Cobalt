@@ -1,0 +1,5 @@
+   Compiling kobo-image v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-image)
+    Finished `release` profile [optimized] target(s) in 4.40s
+     Running `target/release/examples/decode_budget_probe /downloads/decode_image-timeout-36cb32f5-c6b04767.jpg`
+colour=false elapsed_us=4 result=Err(Undecodable("invalid or over-budget JPEG marker stream"))
+colour=true elapsed_us=1 result=Err(Undecodable("invalid or over-budget JPEG marker stream"))
