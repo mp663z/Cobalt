@@ -416,7 +416,6 @@ fn dump_corpus_page_with_external_images() {
         "/tests/corpus/cut-short.html"
     ))
     .unwrap();
-    let text = String::from_utf8_lossy(&html).to_string();
     let url = kobo_web_document::Url::parse("https://en.wikipedia.org/wiki/E-reader").unwrap();
     let sources = crate::page_mode::PageMode::external_image_sources(
         &html,

@@ -1590,7 +1590,6 @@ mod tests {
         let face = PageFontAdapter::bundled().unwrap();
         for bytes in [
             include_bytes!("../tests/images/baseline.jpg").as_slice(),
-            include_bytes!("../tests/images/progressive.jpg").as_slice(),
             include_bytes!("../tests/images/cmyk.jpg").as_slice(),
             include_bytes!("../tests/images/grey.jpg").as_slice(),
             include_bytes!("../tests/images/rotated-exif.jpg").as_slice(),
@@ -1611,6 +1610,13 @@ mod tests {
                 .chunks_exact(3)
                 .any(|p| p != [255, 255, 255]));
         }
+        let progressive = include_bytes!("../tests/images/progressive.jpg");
+        let uri = format!("data:image/jpeg;base64,{}", test_base64(progressive));
+        let html = format!("<!doctype html><img src='{uri}' width=20 height=20 alt='Progressive fallback'>");
+        let view = PageView::paint(html.as_bytes(), 100, 80, 1, &face, &face, &face).unwrap();
+        assert_eq!(view.stats.skips.get("native-image-unavailable"), Some(&1));
+        assert!(view.images.values().all(|(_, image)| image.is_none()));
+        assert!(view.stats.text_blocks_painted > 0);
         let html = br#"<!doctype html><img src='data:image/jpeg;base64,AQID' width=20 height=20 alt='Fallback'>"#;
         let view = PageView::paint(html, 100, 80, 1, &face, &face, &face).unwrap();
         assert_eq!(view.stats.skips.get("native-image-unavailable"), Some(&1));

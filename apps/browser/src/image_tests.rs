@@ -16,9 +16,8 @@ fn image(name: &str) -> Vec<u8> {
 }
 
 /// Pictures that must show, and the size they decode to.
-const GOOD: [(&str, u32, u32); 13] = [
+const GOOD: [(&str, u32, u32); 12] = [
     ("baseline.jpg", 320, 240),
-    ("progressive.jpg", 320, 240),
     ("grey.jpg", 320, 240),
     ("cmyk.jpg", 160, 120),
     // Stored landscape, tagged to be turned a quarter clockwise.
@@ -34,7 +33,8 @@ const GOOD: [(&str, u32, u32); 13] = [
 ];
 
 /// Pictures that must be refused, leaving the description in their place.
-const BAD: [&str; 5] = [
+const BAD: [&str; 6] = [
+    "progressive.jpg",
     "truncated.png",
     "error-page.jpg",
     "not-supported.gif",

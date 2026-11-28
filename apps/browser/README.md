@@ -30,7 +30,7 @@ Read web pages the way you read a book: laid out in pages, turned with a tap.
 ## Limits
 
 There is no JavaScript. Page view draws bounded PNG/JPEG base64 data images;
-bounded HTTPS PNG/JPEG external images also load. SVG images are unavailable. Linked images remain available in
+bounded HTTPS PNG/JPEG external images also load. Progressive and other non-sequential JPEG frames are refused until the decoder has a work budget. Baseline JPEG remains supported. SVG images are unavailable. Linked images remain available in
 Navigate > Links, not by tapping inside the painted picture. The native
 reader keeps its image/link fallback. Pages are read up to 2 MB. The runtime
 reports only the body of a response, so relative links on a page that was redirected are resolved from

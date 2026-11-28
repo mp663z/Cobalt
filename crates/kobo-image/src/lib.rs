@@ -637,7 +637,8 @@ pub fn fitted_size(source: (u32, u32), width: u32, height: u32) -> (u32, u32) {
 }
 
 /// Reject malformed JPEG framing before entering the entropy decoder. Linear
-/// in compressed input bytes; this is not a general wall-clock decode deadline.
+/// in compressed input bytes. Non-sequential frames are refused before the
+/// entropy decoder; this is not a general wall-clock decode deadline.
 fn jpeg_preflight(bytes: &[u8]) -> Result<(), ImageError> {
     if !bytes.starts_with(&[0xff, 0xd8]) { return Ok(()); }
     let refuse = || ImageError::Undecodable("invalid or over-budget JPEG marker stream".into());
@@ -665,6 +666,14 @@ fn jpeg_preflight(bytes: &[u8]) -> Result<(), ImageError> {
         let end = at.checked_add(length).filter(|end| *end <= bytes.len()).ok_or_else(refuse)?;
         if matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
             if frame { return Err(refuse()); }
+            // Pixel and input caps do not bound progressive entropy work in
+            // the current decoder. Admit sequential Huffman frames only until
+            // the decoder has an independently enforced work budget.
+            if !matches!(marker, 0xc0 | 0xc1) {
+                return Err(ImageError::Undecodable(
+                    "non-sequential JPEG is refused without a decoder work budget".into(),
+                ));
+            }
             frame = true;
         }
         if marker == 0xda {
@@ -1169,7 +1178,7 @@ mod jpeg_preflight_tests {
     #[test]
     fn scan_budget_is_checked_before_the_entropy_decoder() {
         for count in [1, 64, 65] {
-            let mut bytes = vec![0xff, 0xd8, 0xff, 0xc2, 0, 2];
+            let mut bytes = vec![0xff, 0xd8, 0xff, 0xc0, 0, 2];
             for _ in 0..count { bytes.extend_from_slice(&[0xff, 0xda, 0, 2, 5, 0xff, 0, 7, 0xff, 0xd0]); }
             bytes.extend_from_slice(&[0xff, 0xd9]);
             assert_eq!(jpeg_preflight(&bytes).is_ok(), count <= 64);

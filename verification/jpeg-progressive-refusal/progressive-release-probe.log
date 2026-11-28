@@ -1,0 +1,5 @@
+   Compiling kobo-image v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-image)
+    Finished `release` profile [optimized] target(s) in 4.78s
+     Running `target/release/examples/decode_budget_probe crates/kobo-image/tests/fixtures/progressive-timeout.jpg`
+colour=false elapsed_us=2 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))
+colour=true elapsed_us=0 result=Err(Undecodable("non-sequential JPEG is refused without a decoder work budget"))

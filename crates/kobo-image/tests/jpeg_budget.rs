@@ -5,13 +5,13 @@ fn malformed_progressive_fuzz_input_is_refused_in_both_public_paths() {
     assert!(matches!(kobo_image::decode_colour(bytes), Err(kobo_image::ImageError::Undecodable(_))));
 }
 #[test]
-fn ordinary_progressive_jpeg_still_decodes() {
+fn ordinary_progressive_jpeg_is_refused_until_decoder_work_is_bounded() {
     let bytes = include_bytes!("fixtures/progressive-valid.jpg");
-    let grey = kobo_image::decode(bytes).expect("progressive grey");
-    let colour = kobo_image::decode_colour(bytes).expect("progressive colour");
-    assert_eq!((grey.width(), grey.height()), (32, 24));
-    assert_eq!((colour.width(), colour.height()), (32, 24));
+    assert!(kobo_image::size(bytes).is_err());
+    assert!(kobo_image::decode(bytes).is_err());
+    assert!(kobo_image::decode_colour(bytes).is_err());
 }
+
 #[test]
 fn marker_scan_budget_and_truncation_are_refused_without_entropy_decode() {
     let mut stream = vec![0xff, 0xd8, 0xff, 0xc2, 0, 2];

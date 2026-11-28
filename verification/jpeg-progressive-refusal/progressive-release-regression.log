@@ -1,0 +1,11 @@
+   Compiling kobo-image v0.3.25 (/home/sandbox/cb/measure-basic/crates/kobo-image)
+    Finished `release` profile [optimized] target(s) in 5.02s
+     Running tests/progressive_work_limit.rs (target/release/deps/progressive_work_limit-6ae4281e9165d8ce)
+
+running 2 tests
+3000 preflight refusals: 71.896µs
+test progressive_timeout_refusal_repeats_without_entropy_work ... ok
+test progressive_jpeg_refused_at_every_shared_entry ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
