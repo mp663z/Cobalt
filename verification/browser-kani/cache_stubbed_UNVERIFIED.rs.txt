@@ -1,0 +1,104 @@
+// NOT COMPILED. STATUS: UNVERIFIED. With blob_name stubbed, unwind 5, every cache harness OOMs in CBMC
+// (single Index::insert alone is ~192k symex steps; cost is the eviction while-loop, str::contains
+// over a char array, retain/min_by_key). Needs a bigger box or a cfg(kani) split of Index::insert.
+
+// ---- Cache-bound harnesses, RELATIVE TO A blob_name STUB. ----
+// STUB ASSUMPTION: `blob_name` (FNV-1a hash + format!) is replaced by `stub_blob`, which maps an
+// address to "p" + address. That is injective, so the proofs below exclude hash collisions between
+// different addresses (the real code handles a collision by replacing the older blob; not covered here).
+// Addresses are the literals "a" and "b"; sizes, fetch stamps and touch order are symbolic.
+use super::cache::{Index, MAX_BYTES, MAX_ENTRIES, MAX_URL};
+fn stub_blob(url: &str) -> String {
+    let mut s = String::from("p");
+    s.push_str(url);
+    s
+}
+
+/// One insert of any size into an index holding one page of any size.
+#[kani::proof]
+#[kani::stub(super::cache::blob_name, stub_blob)]
+#[kani::unwind(5)]
+fn cache_insert_after_populated_keeps_byte_bound() {
+    let mut idx = Index::default();
+    let b1: u64 = kani::any();
+    kani::assume(b1 <= MAX_BYTES);
+    let (name1, ev1) = idx.insert("a", b1, kani::any()).unwrap();
+    assert!(ev1.is_empty());
+    let b2: u64 = kani::any();
+    let result = idx.insert("b", b2, kani::any());
+    if b2 > MAX_BYTES {
+        assert!(result.is_none());
+        assert_eq!(idx.entries().len(), 1);
+        assert_eq!(idx.bytes(), b1);
+    } else {
+        let (name2, evicted) = result.unwrap();
+        assert!(idx.bytes() <= MAX_BYTES);
+        assert!(idx.entries().len() <= MAX_ENTRIES);
+        assert!(idx.find("b").is_some());
+        assert!(!evicted.contains(&name2));
+        let fits = b1 + b2 <= MAX_BYTES;
+        assert_eq!(idx.find("a").is_some(), fits);
+        assert_eq!(evicted.contains(&name1), !fits);
+    }
+}
+
+/// Re-inserting a kept address replaces it.
+#[kani::proof]
+#[kani::stub(super::cache::blob_name, stub_blob)]
+#[kani::unwind(5)]
+fn cache_reinsert_replaces_not_duplicates() {
+    let mut idx = Index::default();
+    let b1: u64 = kani::any();
+    let b2: u64 = kani::any();
+    kani::assume(b1 <= MAX_BYTES && b2 <= MAX_BYTES);
+    let _ = idx.insert("a", b1, 1).unwrap();
+    let _ = idx.insert("a", b2, 2).unwrap();
+    assert_eq!(idx.entries().len(), 1);
+    assert_eq!(idx.bytes(), b2);
+    assert_eq!(idx.find("a").unwrap().fetched, 2);
+}
+
+/// Refused inserts change nothing (oversize bytes; address containing a tab).
+#[kani::proof]
+#[kani::stub(super::cache::blob_name, stub_blob)]
+#[kani::unwind(5)]
+fn cache_refused_insert_changes_nothing() {
+    let mut idx = Index::default();
+    let b1: u64 = kani::any();
+    kani::assume(b1 <= MAX_BYTES);
+    let _ = idx.insert("a", b1, 0).unwrap();
+    let big: u64 = kani::any();
+    kani::assume(big > MAX_BYTES);
+    assert!(idx.insert("b", big, 0).is_none());
+    assert!(idx.insert("c\td", 1, 0).is_none());
+    assert_eq!(idx.entries().len(), 1);
+    assert_eq!(idx.bytes(), b1);
+    assert!(MAX_URL == 1_000);
+}
+
+/// touch never changes sizes or the entry set.
+#[kani::proof]
+#[kani::stub(super::cache::blob_name, stub_blob)]
+#[kani::unwind(5)]
+fn cache_touch_preserves_bytes_and_entries() {
+    let mut idx = Index::default();
+    let b1: u64 = kani::any();
+    kani::assume(b1 <= MAX_BYTES);
+    let _ = idx.insert("a", b1, 0).unwrap();
+    idx.touch("a");
+    idx.touch("zzz");
+    assert_eq!(idx.entries().len(), 1);
+    assert_eq!(idx.bytes(), b1);
+}
+
+
+#[kani::proof]
+#[kani::stub(super::cache::blob_name, stub_blob)]
+#[kani::unwind(5)]
+fn probe_single_insert() {
+    let mut idx = Index::default();
+    let b1: u64 = kani::any();
+    kani::assume(b1 <= MAX_BYTES);
+    let _ = idx.insert("a", b1, 0).unwrap();
+    assert_eq!(idx.bytes(), b1);
+}

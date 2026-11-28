@@ -1,0 +1,29 @@
+// NOT COMPILED. STATUS: UNVERIFIED. Needs the stubs/helpers in kani_checks.rs. Unwind 102: CBMC segfaults (status 139)
+// with the default stack; with ulimit -s unlimited it OOMs after 74 s (585k symex steps) on the 2 GB box.
+
+/// Capacity transition: a full (MAX_HISTORY) history navigated from the tip. The oldest entry
+/// (marked page 7) must fall off, exactly one entry, and the length stays MAX_HISTORY.
+/// Relative to the same three stubs as above.
+#[kani::proof]
+#[kani::stub(kobo_web_document::url::Url::parse, stub_parse)]
+#[kani::stub(kobo_web_document::url::Url::same_document, stub_same_document)]
+#[kani::stub(<Url as PartialEq>::eq, stub_url_eq)]
+#[kani::unwind(102)]
+fn full_history_navigate_from_tip_drops_exactly_the_oldest() {
+    let mut entries = Vec::with_capacity(MAX_HISTORY + 1);
+    for i in 0..MAX_HISTORY {
+        entries.push(Entry { url: the_url(), page: i, place: None });
+    }
+    let mut h = History { entries, current: MAX_HISTORY - 1 };
+    let go = h.navigate(the_url());
+    if !matches!(go, Go::Stay) {
+        assert_eq!(h.entries.len(), MAX_HISTORY);
+        assert_eq!(h.current, MAX_HISTORY - 1);
+        assert_eq!(h.entries[0].page, 1); // old entry 0 fell off, old entry 1 is now oldest
+        assert_eq!(h.entries[MAX_HISTORY - 2].page, MAX_HISTORY - 1);
+        assert_eq!(h.entries[MAX_HISTORY - 1].page, 0); // fresh entry
+        assert_eq!(h.entries[MAX_HISTORY - 1].place, None);
+    } else {
+        assert_eq!(h.entries.len(), MAX_HISTORY);
+    }
+}
