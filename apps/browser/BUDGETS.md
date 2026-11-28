@@ -1802,3 +1802,11 @@ Current73360e4f independently verified: full document suite1431pass/18ignored,
 0fail,150resultgroups including empty doctests. Browser all276names reconciled
 273pass/3ignored,0fail using exact per-name invocations across4bounded batches,
 not one uninterrupted cargo suite. Evidence retained in browser-suite-73360e4f.
+
+Live paged-form ClaraBW fixture:30selectoptions/24textfields; option29 reached
+through5optionpages then submitter through4formpages; exact complete GET query
+checked. Initial driver tap-paged failed because rows covered every turn-zone
+candidate despite visible footer arrow. Driver now prefers an active PageNext
+control before empty-zone fallback; targeted2tests pass, including inert arrow
+refusal. Live route passes and saved/result pixels inspected. No browser runtime
+change or hardware claim; app ARM unchanged.

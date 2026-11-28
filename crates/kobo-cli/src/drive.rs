@@ -1272,6 +1272,13 @@ fn json_number(object: &str, key: &str) -> Option<i64> {
 /// The candidates favour the far right because a screen that split the
 /// content into turn columns still keeps that edge as the next page.
 fn forward_point(controls: &[Control], content: (i32, i32, i32, i32)) -> Option<(i32, i32)> {
+    // A visible footer arrow is an explicit target and remains reachable
+    // when full-width list rows cover the content's page-turn zones.
+    if let Some(next) = controls.iter().find(|control| {
+        control.kind.starts_with("PageNext(") && control.tappable()
+    }) {
+        return Some(next.centre);
+    }
     let (cx, cy, cw, ch) = content;
     for across in [90, 80] {
         for down in [50, 25, 75, 12, 88] {
@@ -1491,6 +1498,17 @@ mod tests {
         // A wall of controls over every candidate leaves no spot at all.
         let wall = [control(460, 0, 140, 800)];
         assert_eq!(super::forward_point(&wall, content), None);
+    }
+
+    #[test]
+    fn forward_point_uses_visible_pager_when_rows_cover_turn_zone() {
+        let wall = super::Control { kind: "Row".into(), rect: (0, 0, 600, 800),
+            centre: (300, 400), lines: vec![], action: Some(1) };
+        let arrow = super::Control { kind: "PageNext(ActionId(17))".into(),
+            rect: (520, 810, 60, 60), centre: (550, 840), lines: vec![], action: Some(17) };
+        assert_eq!(super::forward_point(&[wall.clone(), arrow.clone()], (0,0,600,800)), Some((550,840)));
+        let inert = super::Control { action: None, ..arrow };
+        assert_eq!(super::forward_point(&[wall, inert], (0,0,600,800)), None);
     }
 
     #[test]
