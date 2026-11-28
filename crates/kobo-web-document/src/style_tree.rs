@@ -80,9 +80,19 @@ const MAX_SUBSTITUTED_BYTES_PER_ELEMENT: usize = 64 * 1024;
 /// Replaced-content facts captured from an `img` element's attributes.
 /// `src_data_uri` keeps only `data:image/` sources; every other source is
 /// out of scope for the offline basic engine.
+/// Longest external `src` retained on an `img`.
+pub const MAX_EXTERNAL_SRC: usize = 2048;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ImageFacts {
     pub src_data_uri: Option<String>,
+    /// The authored `src` of an image that is not a `data:image/` URI, kept (up to `MAX_EXTERNAL_SRC` bytes) so a
+    /// host that fetched it can supply the bytes. The engine itself never fetches: without `external_dims` the image
+    /// is the alt-text fallback, exactly as before.
+    pub src_external: Option<String>,
+    /// Pixel size of a host-fetched external image, set by the host after it sized the bytes. This is the only way
+    /// an external source becomes an image box.
+    pub external_dims: Option<(u32, u32)>,
     pub alt: Option<String>,
     pub attr_width: Option<u32>,
     pub attr_height: Option<u32>,
@@ -1353,6 +1363,10 @@ impl StyleTree {
                     let dim = |key: &str| attr(key).and_then(|v| v.parse::<u32>().ok());
                     Some(ImageFacts {
                         src_data_uri: attr("src").filter(|s| s.starts_with("data:image/")),
+                        src_external: attr("src").filter(|s| {
+                            !s.starts_with("data:") && !s.is_empty() && s.len() <= MAX_EXTERNAL_SRC
+                        }),
+                        external_dims: None,
                         alt: attr("alt"),
                         attr_width: dim("width"),
                         attr_height: dim("height"),

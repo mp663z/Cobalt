@@ -60,7 +60,14 @@ pub struct CssBox {
 /// Mirrors the deleted intake rewrite exactly: the source must be a
 /// `data:image/` URI AND dimensions must resolve one way or the other.
 fn image_intrinsic(facts: &crate::style_tree::ImageFacts) -> Option<(u32, u32)> {
-    facts.src_data_uri.as_ref()?;
+    if facts.src_data_uri.is_none() {
+        // A host-fetched external image is usable only once the host sized it.
+        let (w, h) = facts.external_dims.filter(|_| facts.src_external.is_some())?;
+        return match (facts.attr_width, facts.attr_height) {
+            (Some(aw), Some(ah)) if aw > 0 && ah > 0 => Some((aw, ah)),
+            _ => Some((w, h)),
+        };
+    }
     match (facts.attr_width, facts.attr_height) {
         (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
         _ => facts

@@ -243,6 +243,79 @@ impl PageView {
         sans: &F,
         mono: &F,
     ) -> Result<Self, &'static str> {
+        Self::paint_with_resources(
+            bytes,
+            sheets,
+            &crate::page_images::External::new(),
+            css_width,
+            page_height_css,
+            scale,
+            serif,
+            sans,
+            mono,
+        )
+    }
+
+    /// External `img` sources of the document, in document order, first occurrence only, as `(authored src, address)`
+    /// pairs: the exact inventory [`Self::paint_with_resources`] can use. `display:none` images are excluded (the
+    /// same sheets drive both), only `https` addresses without credentials are kept, and at most `limit` are returned.
+    pub(crate) fn external_image_sources(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        css_width: u32,
+        base: &kobo_web_document::Url,
+        limit: usize,
+    ) -> Vec<(String, kobo_web_document::Url)> {
+        let ((bytes, _), _, _) = normalize_for_basic_full(bytes);
+        let limits = Limits {
+            max_input_bytes: 8 * 1024 * 1024,
+            ..Limits::DEFAULT
+        };
+        let Some(media) = MediaContext::new(css_width) else {
+            return Vec::new();
+        };
+        let media = media.with_light_scheme();
+        let sheets: Vec<Vec<u8>> = sheets
+            .iter()
+            .map(|sheet| kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0)
+            .collect();
+        let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), crate::page_mode::SHEET_BUDGET, None);
+        let mut seen = std::collections::BTreeSet::new();
+        let mut out = Vec::new();
+        for node in &tree.nodes {
+            if out.len() >= limit {
+                break;
+            }
+            if node.style.display == kobo_web_document::computed_style::Display::None {
+                continue;
+            }
+            let Some(src) = node.image.as_ref().and_then(|f| f.src_external.as_ref()) else {
+                continue;
+            };
+            if !seen.insert(src.clone()) {
+                continue;
+            }
+            if let Ok(url) = base.join(src) {
+                if url.scheme() == kobo_web_document::Scheme::Https && !url.host().contains('@') {
+                    out.push((src.clone(), url.without_fragment()));
+                }
+            }
+        }
+        out
+    }
+
+    /// Like [`Self::paint_with_sheets`], with fetched external image bodies keyed by authored `src`.
+    pub(crate) fn paint_with_resources<F: FontProvider>(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        external: &crate::page_images::External,
+        css_width: u32,
+        page_height_css: u32,
+        scale: u32,
+        serif: &F,
+        sans: &F,
+        mono: &F,
+    ) -> Result<Self, &'static str> {
         if css_width == 0 || page_height_css == 0 || scale == 0 {
             return Err("viewport");
         }
@@ -261,7 +334,8 @@ impl PageView {
                 kobo_web_document::basic_page::prefilter_linked_sheet_for_basic(&bytes, sheet).0
             })
             .collect();
-        let tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), budget, None);
+        let mut tree = parse_basic_style_tree(&bytes, &sheets, &limits, Some(media), budget, None);
+        crate::page_images::size_external(&mut tree, external);
         // Incomplete intake cannot become a publishable page. In particular,
         // do not lay out a long unstyled column while its CSS is still pending.
         if tree
@@ -280,7 +354,7 @@ impl PageView {
         let (mut commands, mut stats, _) =
             paint_basic_page_families(&boxes, css_width, content_height, serif, sans, mono)?;
         let mut image_stats = PartialStats::default();
-        let images = crate::page_images::prepare(&boxes, &mut image_stats);
+        let images = crate::page_images::prepare(&boxes, &mut image_stats, external);
         if crate::page_images::fit_geometry(&mut boxes, &commands, &images) {
             let (_, _, measured) =
                 paint_basic_page_families(&boxes, css_width, 1, serif, sans, mono)?;
@@ -1556,7 +1630,7 @@ mod tests {
             }
         }
         let mut stats = PartialStats::default();
-        let images = crate::page_images::prepare(&boxes, &mut stats);
+        let images = crate::page_images::prepare(&boxes, &mut stats, &crate::page_images::External::new());
         assert_eq!(images.len(), 2);
         assert_eq!(
             images.values().filter(|(_, image)| image.is_some()).count(),

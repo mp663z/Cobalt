@@ -94,6 +94,32 @@ impl PageMode {
         metrics: &DisplayMetrics,
         zoom: u16,
     ) -> Option<Self> {
+        Self::build_zoom_with_resources(bytes, sheets, &crate::page_images::External::new(), title, metrics, zoom)
+    }
+
+    /// External image sources the painter can use for `bytes`, as `(authored src, address)` pairs, evaluated with
+    /// the same sheets and width as the paint.
+    pub(crate) fn external_image_sources(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        url: &kobo_web_document::Url,
+        metrics: &DisplayMetrics,
+        zoom: u16,
+    ) -> Vec<(String, kobo_web_document::Url)> {
+        let Some(width) = Self::css_width(metrics, zoom) else {
+            return Vec::new();
+        };
+        PageView::external_image_sources(bytes, sheets, width, url, crate::image_supply::MAX_IMAGES + 8)
+    }
+
+    pub(crate) fn build_zoom_with_resources(
+        bytes: &[u8],
+        sheets: &[Vec<u8>],
+        external: &crate::page_images::External,
+        title: &str,
+        metrics: &DisplayMetrics,
+        zoom: u16,
+    ) -> Option<Self> {
         let width = u32::try_from(metrics.width).ok()?;
         let height = u32::try_from(metrics.height).ok()?;
         // Measure actual chrome, never subtract remembered toolbar dimensions.
@@ -113,9 +139,10 @@ impl PageMode {
         let profile_start = std::time::Instant::now();
         let face = PageFontAdapter::bundled()?;
         let mono = PageFontAdapter::monospace()?;
-        let view = PageView::paint_with_sheets(
+        let view = PageView::paint_with_resources(
             bytes,
             sheets,
+            external,
             room_width * 100 / u32::from(zoom) / 2,
             room_height * 100 / u32::from(zoom) / 2,
             2,

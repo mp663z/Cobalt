@@ -1,13 +1,42 @@
-//! Bounded native data-image decoding for Page view. No network requests.
+//! Bounded native image decoding for Page view. Data images come from the page itself; external images arrive as
+//! already-fetched bytes (see `image_supply`). This module never touches the network.
 use kobo_web_document::{basic_page::PartialStats, box_tree::BoxTree};
 use std::collections::BTreeMap;
 
 const MAX_BYTES: usize = 4 * 1024 * 1024;
 const MAX_PIXELS: u64 = 1_048_576;
 
+/// Fetched external image bodies keyed by the `src` exactly as the page authored it.
+pub(crate) type External = BTreeMap<String, Vec<u8>>;
+
+/// Gives every external `img` whose body was fetched its pixel size, which is what makes it an image box. Bodies the
+/// decoder cannot size are left out, so those images keep their alt text.
+pub(crate) fn size_external(tree: &mut kobo_web_document::style_tree::StyleTree, external: &External) {
+    if external.is_empty() {
+        return;
+    }
+    for node in &mut tree.nodes {
+        let Some(facts) = node.image.as_mut() else {
+            continue;
+        };
+        if facts.src_data_uri.is_some() {
+            continue;
+        }
+        let Some(body) = facts.src_external.as_ref().and_then(|src| external.get(src)) else {
+            continue;
+        };
+        if let Ok((w, h)) = kobo_image::size(body) {
+            if w > 0 && h > 0 {
+                facts.external_dims = Some((w, h));
+            }
+        }
+    }
+}
+
 pub(super) fn prepare(
     tree: &BoxTree,
     stats: &mut PartialStats,
+    external: &External,
 ) -> BTreeMap<
     usize,
     (
@@ -28,8 +57,17 @@ pub(super) fn prepare(
         let marker = kobo_web_document::display_list::Rgb(red, green, blue);
         let result = (|| {
             let source = node.source?;
-            let uri = node.image.as_ref()?.src_data_uri.as_deref()?;
-            let bytes = decode_uri(uri, bytes_left)?;
+            let facts = node.image.as_ref()?;
+            let bytes: std::borrow::Cow<'_, [u8]> = match facts.src_data_uri.as_deref() {
+                Some(uri) => decode_uri(uri, bytes_left)?.into(),
+                None => {
+                    let body = external.get(facts.src_external.as_deref()?)?;
+                    if body.len() > bytes_left {
+                        return None;
+                    }
+                    body.as_slice().into()
+                }
+            };
             bytes_left = bytes_left.checked_sub(bytes.len())?;
             let (w, h) = kobo_image::size(&bytes).ok()?;
             let pixels = u64::from(w).checked_mul(u64::from(h))?;

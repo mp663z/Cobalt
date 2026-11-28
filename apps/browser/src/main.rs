@@ -40,6 +40,7 @@ mod pictures;
 #[cfg(test)]
 mod s0_native;
 mod saved;
+mod image_supply;
 mod sheet_supply;
 use css_stage::CssStage;
 use pictures::Pictures;
@@ -79,6 +80,8 @@ fn sample(url: &Url) -> Option<&'static str> {
 struct Loaded {
     page_source: Option<Vec<u8>>,
     linked_sheets: Vec<Vec<u8>>,
+    /// Fetched external image bodies keyed by authored `src`; empty until the image supply settles.
+    linked_images: page_images::External,
     styling_limited: bool,
     paint_requested: bool,
     style_anchor: Option<(usize,usize,u32)>,
@@ -174,6 +177,8 @@ struct Browser {
     css: CssStage,
     sheets: sheet_supply::SheetSupply,
     sheet_owner: Option<(String,u32)>,
+    images: image_supply::ImageSupply,
+    image_owner: Option<(String,u32)>,
     /// TEST-ONLY (116): drop-order log for producer-mode frames.
     #[cfg(test)]
     frame_drops: std::rc::Rc<std::cell::RefCell<Vec<u64>>>,
@@ -219,6 +224,8 @@ impl Default for Browser {
             css: CssStage::production(),
             sheets: sheet_supply::SheetSupply::default(),
             sheet_owner: None,
+            images: image_supply::ImageSupply::default(),
+            image_owner: None,
             #[cfg(test)]
             frame_drops: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
             #[cfg(test)]
@@ -329,6 +336,8 @@ impl Browser {
         // page lands: until then the old page's frame matches nothing.
         self.css.clear();
         self.sheets.clear(context);
+        self.images.clear(context);
+        self.image_owner=None;
         self.sheet_owner=None;
         let task = context.spawn(Task::Fetch {
             url: url.without_fragment().to_string(),
@@ -562,6 +571,8 @@ impl Browser {
         // A new document replaces any staged frame before it is parsed.
         self.css.clear();
         self.sheets.clear(context);
+        self.images.clear(context);
+        self.image_owner=None;
         // The arrival's parse. Enabled stage only: it owns a copy (<= the input ceiling) that the parse and
         // preparation both read. Disabled keeps the exact existing call and allocates nothing.
         #[cfg(not(test))]
@@ -636,6 +647,7 @@ impl Browser {
         self.loaded = Some(Loaded {
             page_source: page_mode::retain_source(bytes),
             linked_sheets: Vec::new(),
+            linked_images: page_images::External::new(),
             styling_limited: false,
             paint_requested: false,
             style_anchor: None,
@@ -727,15 +739,32 @@ impl Browser {
         let Some(bytes)=loaded.page_source.as_deref() else{return;};
         let Some(width)=page_mode::PageMode::css_width(&context.metrics(),self.zoom) else{return;};
         let key=(loaded.url.to_string(),width);
-        if self.sheet_owner.as_ref()==Some(&key){return;}
+        if self.sheet_owner.as_ref()==Some(&key){self.begin_painted_images(context);return;}
         let Some(census)=page_mode::PageMode::sheet_census(bytes,&loaded.url,&context.metrics(),self.zoom) else{return;};
         self.sheet_owner=Some(key);
         self.sheets.begin_with_budget(context,&census,page_mode::SHEET_BUDGET);
-        if let Some(loaded)=self.loaded.as_mut(){loaded.linked_sheets.clear();loaded.styling_limited=false;}
+        self.images.clear(context);
+        self.image_owner=None;
+        if let Some(loaded)=self.loaded.as_mut(){loaded.linked_sheets.clear();loaded.linked_images.clear();loaded.styling_limited=false;}
         if !census.links.is_empty() || matches!(self.sheets.outcome(),Some(sheet_supply::Outcome::Failed(_))){self.settle_painted_sheets(context);}
+        self.begin_painted_images(context);
     }
 
-    fn settle_painted_sheets(&mut self, context: &Context) {
+    /// Once the sheets are in and a styled page is on screen, asks for its external images (once per page and
+    /// width). The readable frame is already up; the images repaint it when they settle.
+    fn begin_painted_images(&mut self, context: &mut Context) {
+        let Some(owner)=self.sheet_owner.clone() else{return;};
+        if self.image_owner.as_ref()==Some(&owner){return;}
+        let Some(sheet_supply::Outcome::Ready(bodies))=self.sheets.outcome() else{return;};
+        let Some(loaded)=self.loaded.as_ref() else{return;};
+        if loaded.url.to_string()!=owner.0 || page_mode::PageMode::css_width(&context.metrics(),self.zoom)!=Some(owner.1){return;}
+        if !loaded.paint_requested || loaded.painted.is_none() || loaded.note.is_some() || loaded.full.is_some(){return;}
+        let sources=loaded.page_source.as_deref().map(|bytes|page_mode::PageMode::external_image_sources(bytes,bodies,&loaded.url,&context.metrics(),self.zoom)).unwrap_or_default();
+        self.image_owner=Some(owner);
+        if !sources.is_empty(){self.images.begin(context,&sources);self.settle_painted_images(context);}
+    }
+
+    fn settle_painted_sheets(&mut self, context: &mut Context) {
         let Some((url,width))=self.sheet_owner.as_ref() else{return;};
         let Some(loaded)=self.loaded.as_mut() else{return;};
         if loaded.url.to_string()!=*url || page_mode::PageMode::css_width(&context.metrics(),self.zoom)!=Some(*width){return;}
@@ -758,6 +787,23 @@ impl Browser {
             }
             Some(sheet_supply::Outcome::Failed(_))=>loaded.styling_limited=true,
             None=>{}
+        }
+    }
+
+    /// Repaints once with the settled external images, keeping the reading place. Nothing changes when no image
+    /// survived the refusals.
+    fn settle_painted_images(&mut self, context: &Context) {
+        let Some((url,width))=self.sheet_owner.as_ref() else{return;};
+        let Some(loaded)=self.loaded.as_mut() else{return;};
+        if loaded.url.to_string()!=*url || page_mode::PageMode::css_width(&context.metrics(),self.zoom)!=Some(*width){return;}
+        let Some(bodies)=self.images.outcome() else{return;};
+        if bodies.is_empty() || !loaded.paint_requested || loaded.painted.is_none() || loaded.note.is_some() || loaded.full.is_some(){return;}
+        loaded.linked_images=bodies.clone();
+        let anchor=loaded.painted.as_ref().and_then(|p|p.reading_anchor());
+        let top=loaded.painted.as_ref().map(|p|p.scroll_position());
+        if let Some(mut styled)=loaded.page_source.as_deref().and_then(|bytes|page_mode::PageMode::build_zoom_with_resources(bytes,&loaded.linked_sheets,&loaded.linked_images,&loaded.title,&context.metrics(),self.zoom)){
+            if let Some(anchor)=anchor.filter(|_|top.unwrap_or(0)>0){styled.restore_anchor(anchor);}
+            loaded.painted=Some(styled);
         }
     }
 
@@ -1283,11 +1329,13 @@ impl Browser {
                 loaded.paint_requested=true;
                 // Controls stay editable in Navigate > Forms; painted controls are previews.
                 loaded.painted = loaded.page_source.as_deref().and_then(|bytes| {
-                    page_mode::PageMode::build_zoom_with_sheets(bytes,&loaded.linked_sheets,
+                    page_mode::PageMode::build_zoom_with_resources(bytes,&loaded.linked_sheets,&loaded.linked_images,
                         &loaded.title,&context.metrics(),self.zoom)
                 });
                 loaded.paint_refused = loaded.painted.is_none();
             }
+            // Sheets and images are asked for as soon as the styled frame exists, not at the next event.
+            self.refresh_painted_sheets(context);
         } else if action == action_id("native-reader") {
             if let Some(loaded)=self.loaded.as_ref(){self.scroll_places.remove(&loaded.url.to_string());}
             if let Some(loaded) = self.loaded.as_mut() {
@@ -1347,11 +1395,11 @@ impl Browser {
                 let anchor=loaded.painted.as_ref().filter(|p|p.scroll_position()>0)
                     .and_then(|p|p.reading_anchor());
                 loaded.style_anchor=anchor;
-                if self.sheet_owner.as_ref().map(|(_,w)|Some(*w))!=Some(page_mode::PageMode::css_width(&metrics,self.zoom)){loaded.linked_sheets.clear();}
+                if self.sheet_owner.as_ref().map(|(_,w)|Some(*w))!=Some(page_mode::PageMode::css_width(&metrics,self.zoom)){loaded.linked_sheets.clear();loaded.linked_images.clear();}
                 loaded.painted = loaded
                     .page_source
                     .as_deref()
-                    .and_then(|bytes| page_mode::PageMode::build_zoom_with_sheets(bytes, &loaded.linked_sheets, &loaded.title, &metrics,self.zoom));
+                    .and_then(|bytes| page_mode::PageMode::build_zoom_with_resources(bytes, &loaded.linked_sheets, &loaded.linked_images, &loaded.title, &metrics,self.zoom));
                 loaded.paint_refused = loaded.painted.is_none();
                 let key=loaded.url.to_string();self.scroll_places.remove(&key);
                 if let Some(painted)=loaded.painted.as_mut(){
@@ -1560,14 +1608,15 @@ impl Browser {
             if let Some(loaded) = self.loaded.as_mut() {
                 loaded.paint_requested=true;
                 loaded.style_anchor=anchor;
-                if self.sheet_owner.as_ref().map(|(_,w)|Some(*w))!=Some(page_mode::PageMode::css_width(&context.metrics(),self.zoom)){loaded.linked_sheets.clear();}
+                if self.sheet_owner.as_ref().map(|(_,w)|Some(*w))!=Some(page_mode::PageMode::css_width(&context.metrics(),self.zoom)){loaded.linked_sheets.clear();loaded.linked_images.clear();}
                 loaded.painted = loaded
                     .page_source
                     .as_deref()
                     .and_then(|bytes| {
-                        page_mode::PageMode::build_zoom_with_sheets(
+                        page_mode::PageMode::build_zoom_with_resources(
                             bytes,
                             &loaded.linked_sheets,
+                            &loaded.linked_images,
                             &loaded.title,
                             &context.metrics(),
                             self.zoom,
@@ -2282,6 +2331,12 @@ impl KoboApp for Browser {
         }
         if self.sheets.on_task(context, task, &outcome) {
             self.settle_painted_sheets(context);
+            self.begin_painted_images(context);
+            self.show(context);
+            return;
+        }
+        if self.images.on_task(context, task, &outcome) {
+            self.settle_painted_images(context);
             self.show(context);
             return;
         }
@@ -2639,6 +2694,8 @@ mod fixture_tests;
 mod image_tests;
 #[cfg(test)]
 mod sheet_supply_tests;
+#[cfg(test)]
+mod image_supply_tests;
 
 /// Pages `document`, with the saved-copy note first when there is one.
 /// Returns the paginator and how many pieces come before the document's own.
